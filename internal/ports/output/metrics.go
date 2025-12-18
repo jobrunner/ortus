@@ -26,9 +26,20 @@ type MetricsCollector interface {
 // NoOpMetrics is a no-op implementation of MetricsCollector.
 type NoOpMetrics struct{}
 
-func (n *NoOpMetrics) IncQueryCount(_ string, _ bool)                   {}
-func (n *NoOpMetrics) ObserveQueryDuration(_ string, _ time.Duration)   {}
-func (n *NoOpMetrics) SetPackagesLoaded(_ int)                          {}
-func (n *NoOpMetrics) SetPackagesReady(_ int)                           {}
-func (n *NoOpMetrics) IncStorageOperations(_ string, _ bool)            {}
+// IncQueryCount implements MetricsCollector.
+func (n *NoOpMetrics) IncQueryCount(_ string, _ bool) {}
+
+// ObserveQueryDuration implements MetricsCollector.
+func (n *NoOpMetrics) ObserveQueryDuration(_ string, _ time.Duration) {}
+
+// SetPackagesLoaded implements MetricsCollector.
+func (n *NoOpMetrics) SetPackagesLoaded(_ int) {}
+
+// SetPackagesReady implements MetricsCollector.
+func (n *NoOpMetrics) SetPackagesReady(_ int) {}
+
+// IncStorageOperations implements MetricsCollector.
+func (n *NoOpMetrics) IncStorageOperations(_ string, _ bool) {}
+
+// ObserveStorageDuration implements MetricsCollector.
 func (n *NoOpMetrics) ObserveStorageDuration(_ string, _ time.Duration) {}

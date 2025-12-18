@@ -88,6 +88,7 @@ func (g *Geometry) IsLine() bool {
 // GeometryType represents the type of a geometry.
 type GeometryType string
 
+// Geometry type constants.
 const (
 	GeomPoint              GeometryType = "POINT"
 	GeomLineString         GeometryType = "LINESTRING"

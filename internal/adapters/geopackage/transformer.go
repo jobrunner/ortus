@@ -45,7 +45,7 @@ func (t *Transformer) Transform(ctx context.Context, coord domain.Coordinate, ta
 }
 
 // IsSupported checks if a transformation is supported.
-func (t *Transformer) IsSupported(sourceSRID, targetSRID int) bool {
+func (t *Transformer) IsSupported(ctx context.Context, sourceSRID, targetSRID int) bool {
 	// Check if both SRIDs are in the spatial_ref_sys table
 	query := `
 		SELECT COUNT(*)
@@ -53,7 +53,7 @@ func (t *Transformer) IsSupported(sourceSRID, targetSRID int) bool {
 		WHERE srid IN (?, ?)
 	`
 	var count int
-	err := t.db.QueryRow(query, sourceSRID, targetSRID).Scan(&count)
+	err := t.db.QueryRowContext(ctx, query, sourceSRID, targetSRID).Scan(&count)
 	if err != nil {
 		return false
 	}

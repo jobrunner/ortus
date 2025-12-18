@@ -69,7 +69,7 @@ func (s *HTTPStorage) List(ctx context.Context) ([]output.StorageObject, error) 
 	if err != nil {
 		return nil, fmt.Errorf("fetching index file: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("index file returned status %d", resp.StatusCode)
@@ -106,7 +106,7 @@ func (s *HTTPStorage) List(ctx context.Context) ([]output.StorageObject, error) 
 // Download downloads a file from HTTP to the local filesystem.
 func (s *HTTPStorage) Download(ctx context.Context, key string, dest string) error {
 	// Create destination directory
-	if err := os.MkdirAll(filepath.Dir(dest), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(dest), 0750); err != nil {
 		return err
 	}
 
@@ -125,18 +125,18 @@ func (s *HTTPStorage) Download(ctx context.Context, key string, dest string) err
 	if err != nil {
 		return fmt.Errorf("downloading %s: %w", key, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("download returned status %d for %s", resp.StatusCode, key)
 	}
 
 	// Write to file
-	f, err := os.Create(dest)
+	f, err := os.Create(dest) //#nosec G304 -- dest is a controlled local path
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	_, err = io.Copy(f, resp.Body)
 	return err
@@ -161,7 +161,7 @@ func (s *HTTPStorage) GetReader(ctx context.Context, key string) (io.ReadCloser,
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		return nil, fmt.Errorf("HTTP %d for %s", resp.StatusCode, key)
 	}
 
@@ -183,9 +183,9 @@ func (s *HTTPStorage) Exists(ctx context.Context, key string) (bool, error) {
 
 	resp, err := s.client.Do(req)
 	if err != nil {
-		return false, nil
+		return false, nil //nolint:nilerr // intentionally ignoring error when connection fails
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	return resp.StatusCode == http.StatusOK, nil
 }

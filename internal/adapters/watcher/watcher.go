@@ -21,6 +21,7 @@ type Event struct {
 // Operation represents the type of file operation.
 type Operation int
 
+// File operation types.
 const (
 	OpCreate Operation = iota
 	OpModify

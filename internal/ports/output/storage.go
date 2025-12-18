@@ -32,6 +32,7 @@ type StorageObject struct {
 // StorageType represents the type of storage backend.
 type StorageType string
 
+// Storage type constants.
 const (
 	StorageTypeS3    StorageType = "s3"
 	StorageTypeAzure StorageType = "azure"

@@ -22,7 +22,7 @@ func NewLocalStorage(basePath string) *LocalStorage {
 }
 
 // List returns all GeoPackage files in the local directory.
-func (s *LocalStorage) List(ctx context.Context) ([]output.StorageObject, error) {
+func (s *LocalStorage) List(_ context.Context) ([]output.StorageObject, error) {
 	var objects []output.StorageObject
 
 	err := filepath.Walk(s.basePath, func(path string, info os.FileInfo, err error) error {
@@ -61,7 +61,7 @@ func (s *LocalStorage) List(ctx context.Context) ([]output.StorageObject, error)
 }
 
 // Download copies a file to the destination (no-op for local storage).
-func (s *LocalStorage) Download(ctx context.Context, key string, dest string) error {
+func (s *LocalStorage) Download(_ context.Context, key string, dest string) error {
 	srcPath := filepath.Join(s.basePath, key)
 
 	// If source and dest are the same, nothing to do
@@ -70,34 +70,34 @@ func (s *LocalStorage) Download(ctx context.Context, key string, dest string) er
 	}
 
 	// Create destination directory if needed
-	if err := os.MkdirAll(filepath.Dir(dest), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(dest), 0750); err != nil {
 		return err
 	}
 
 	// Copy file
-	src, err := os.Open(srcPath)
+	src, err := os.Open(srcPath) //#nosec G304 -- srcPath is constructed from basePath
 	if err != nil {
 		return err
 	}
-	defer src.Close()
+	defer func() { _ = src.Close() }()
 
-	dst, err := os.Create(dest)
+	dst, err := os.Create(dest) //#nosec G304 -- dest is a controlled local path
 	if err != nil {
 		return err
 	}
-	defer dst.Close()
+	defer func() { _ = dst.Close() }()
 
 	_, err = io.Copy(dst, src)
 	return err
 }
 
 // GetReader returns a reader for the given object.
-func (s *LocalStorage) GetReader(ctx context.Context, key string) (io.ReadCloser, error) {
-	return os.Open(filepath.Join(s.basePath, key))
+func (s *LocalStorage) GetReader(_ context.Context, key string) (io.ReadCloser, error) {
+	return os.Open(filepath.Join(s.basePath, key)) //#nosec G304 -- path is constructed from basePath
 }
 
 // Exists checks if a file exists.
-func (s *LocalStorage) Exists(ctx context.Context, key string) (bool, error) {
+func (s *LocalStorage) Exists(_ context.Context, key string) (bool, error) {
 	_, err := os.Stat(filepath.Join(s.basePath, key))
 	if err == nil {
 		return true, nil

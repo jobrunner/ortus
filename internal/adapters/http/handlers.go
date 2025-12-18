@@ -189,7 +189,7 @@ func (s *Server) handleGetLayers(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleOpenAPI returns the OpenAPI specification.
-func (s *Server) handleOpenAPI(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleOpenAPI(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	_, _ = w.Write([]byte(openAPISpec))
 }

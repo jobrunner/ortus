@@ -112,7 +112,7 @@ func (r *PackageRegistry) UnloadPackage(ctx context.Context, packageID string) e
 }
 
 // ListPackages returns all registered GeoPackages.
-func (r *PackageRegistry) ListPackages(ctx context.Context) ([]domain.GeoPackage, error) {
+func (r *PackageRegistry) ListPackages(_ context.Context) ([]domain.GeoPackage, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -125,7 +125,7 @@ func (r *PackageRegistry) ListPackages(ctx context.Context) ([]domain.GeoPackage
 }
 
 // GetPackage returns a specific GeoPackage by ID.
-func (r *PackageRegistry) GetPackage(ctx context.Context, id string) (*domain.GeoPackage, error) {
+func (r *PackageRegistry) GetPackage(_ context.Context, id string) (*domain.GeoPackage, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -138,7 +138,7 @@ func (r *PackageRegistry) GetPackage(ctx context.Context, id string) (*domain.Ge
 }
 
 // GetPackageStatus returns the status of a GeoPackage.
-func (r *PackageRegistry) GetPackageStatus(ctx context.Context, id string) (domain.GeoPackageStatus, error) {
+func (r *PackageRegistry) GetPackageStatus(_ context.Context, id string) (domain.GeoPackageStatus, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 

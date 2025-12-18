@@ -160,7 +160,7 @@ func (a *App) Shutdown(ctx context.Context) error {
 
 	// Stop watcher
 	if a.Watcher != nil {
-		a.Watcher.Stop()
+		_ = a.Watcher.Stop()
 	}
 
 	// Shutdown HTTP server

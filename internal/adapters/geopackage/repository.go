@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 
+	// Import sqlite3 driver for database/sql.
 	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/jobrunner/ortus/internal/domain"
@@ -43,7 +44,7 @@ func (r *Repository) Open(ctx context.Context, path string) (*domain.GeoPackage,
 	}
 
 	// Open database with SpatiaLite extension
-	db, err := r.openDB(path)
+	db, err := r.openDB(ctx, path)
 	if err != nil {
 		return nil, &domain.StorageError{
 			Operation: "open",
@@ -53,15 +54,15 @@ func (r *Repository) Open(ctx context.Context, path string) (*domain.GeoPackage,
 	}
 
 	// Load SpatiaLite extension
-	if err := r.loadSpatiaLite(db); err != nil {
-		db.Close()
+	if err := r.loadSpatiaLite(ctx, db); err != nil {
+		_ = db.Close()
 		return nil, fmt.Errorf("loading SpatiaLite: %w", err)
 	}
 
 	// Read GeoPackage metadata
 	pkg, err := r.readPackageMetadata(ctx, db, packageID, path)
 	if err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, err
 	}
 
@@ -73,7 +74,7 @@ func (r *Repository) Open(ctx context.Context, path string) (*domain.GeoPackage,
 }
 
 // Close closes a GeoPackage connection.
-func (r *Repository) Close(ctx context.Context, packageID string) error {
+func (r *Repository) Close(_ context.Context, packageID string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -92,7 +93,7 @@ func (r *Repository) Close(ctx context.Context, packageID string) error {
 }
 
 // GetLayers returns all layers in a GeoPackage.
-func (r *Repository) GetLayers(ctx context.Context, packageID string) ([]domain.Layer, error) {
+func (r *Repository) GetLayers(_ context.Context, packageID string) ([]domain.Layer, error) {
 	r.mu.RLock()
 	pkg, ok := r.packages[packageID]
 	r.mu.RUnlock()
@@ -151,7 +152,7 @@ func (r *Repository) CreateSpatialIndex(ctx context.Context, packageID string, l
 	}
 
 	// Create spatial index using SpatiaLite
-	query := fmt.Sprintf("SELECT CreateSpatialIndex('%s', '%s')", layerName, layer.GeometryColumn)
+	query := fmt.Sprintf("SELECT CreateSpatialIndex('%s', '%s')", layerName, layer.GeometryColumn) //#nosec G201 -- layer names from trusted database source
 	_, err = db.ExecContext(ctx, query)
 	if err != nil {
 		return &domain.IndexError{
@@ -204,7 +205,7 @@ func (r *Repository) HasSpatialIndex(ctx context.Context, packageID string, laye
 }
 
 // openDB opens the SQLite database with appropriate settings.
-func (r *Repository) openDB(path string) (*sql.DB, error) {
+func (r *Repository) openDB(ctx context.Context, path string) (*sql.DB, error) {
 	// Open in read-only mode with shared cache
 	dsn := fmt.Sprintf("file:%s?mode=ro&cache=shared", path)
 	db, err := sql.Open("sqlite3", dsn)
@@ -213,8 +214,8 @@ func (r *Repository) openDB(path string) (*sql.DB, error) {
 	}
 
 	// Test connection
-	if err := db.Ping(); err != nil {
-		db.Close()
+	if err := db.PingContext(ctx); err != nil {
+		_ = db.Close()
 		return nil, err
 	}
 
@@ -222,7 +223,7 @@ func (r *Repository) openDB(path string) (*sql.DB, error) {
 }
 
 // loadSpatiaLite loads the SpatiaLite extension.
-func (r *Repository) loadSpatiaLite(db *sql.DB) error {
+func (r *Repository) loadSpatiaLite(ctx context.Context, db *sql.DB) error {
 	// Try common SpatiaLite library names
 	libs := []string{
 		"mod_spatialite",
@@ -234,7 +235,7 @@ func (r *Repository) loadSpatiaLite(db *sql.DB) error {
 
 	var lastErr error
 	for _, lib := range libs {
-		_, err := db.Exec(fmt.Sprintf("SELECT load_extension('%s')", lib))
+		_, err := db.ExecContext(ctx, fmt.Sprintf("SELECT load_extension('%s')", lib))
 		if err == nil {
 			return nil
 		}
@@ -285,7 +286,7 @@ func (r *Repository) readLayers(ctx context.Context, db *sql.DB) ([]domain.Layer
 	if err != nil {
 		return nil, fmt.Errorf("reading layers: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var layers []domain.Layer
 	for rows.Next() {
@@ -310,7 +311,7 @@ func (r *Repository) readLayers(ctx context.Context, db *sql.DB) ([]domain.Layer
 		}
 
 		// Count features
-		countQuery := fmt.Sprintf("SELECT COUNT(*) FROM %s", l.Name)
+		countQuery := fmt.Sprintf("SELECT COUNT(*) FROM %s", l.Name) //#nosec G201 -- table name from trusted database source
 		var count int64
 		if err := db.QueryRowContext(ctx, countQuery).Scan(&count); err == nil {
 			l.FeatureCount = count
@@ -330,7 +331,7 @@ func (r *Repository) readMetadata(ctx context.Context, db *sql.DB, pkg *domain.G
 		"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='gpkg_metadata'",
 	).Scan(&exists)
 	if err != nil || exists == 0 {
-		return nil
+		return nil //nolint:nilerr // intentionally returning nil for optional metadata
 	}
 
 	// Read first metadata entry
@@ -374,7 +375,7 @@ func (r *Repository) executePointQuery(ctx context.Context, db *sql.DB, layer *d
 			Err:   err,
 		}
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	// Get column names for property mapping
 	columns, err := rows.Columns()

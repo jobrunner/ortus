@@ -74,6 +74,7 @@ func (l *Layer) IsLineLayer() bool {
 // GeoPackageStatus represents the status of a GeoPackage.
 type GeoPackageStatus string
 
+// GeoPackage status constants.
 const (
 	StatusLoading   GeoPackageStatus = "loading"
 	StatusIndexing  GeoPackageStatus = "indexing"

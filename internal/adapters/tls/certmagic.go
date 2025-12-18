@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/caddyserver/certmagic"
 )
@@ -76,7 +77,12 @@ func NewServer(cfg Config, handler http.Handler, logger *slog.Logger) (*Server, 
 func (s *Server) ListenAndServe(addr string) error {
 	if !s.config.Enabled {
 		s.logger.Info("starting HTTP server (TLS disabled)", "address", addr)
-		return http.ListenAndServe(addr, s.handler)
+		server := &http.Server{
+			Addr:              addr,
+			Handler:           s.handler,
+			ReadHeaderTimeout: 10 * time.Second,
+		}
+		return server.ListenAndServe()
 	}
 
 	s.logger.Info("starting HTTPS server",
@@ -85,15 +91,21 @@ func (s *Server) ListenAndServe(addr string) error {
 	)
 
 	server := &http.Server{
-		Addr:      addr,
-		Handler:   s.handler,
-		TLSConfig: s.tlsConfig,
+		Addr:              addr,
+		Handler:           s.handler,
+		TLSConfig:         s.tlsConfig,
+		ReadHeaderTimeout: 10 * time.Second,
 	}
 
 	// Start HTTP-01 challenge handler on port 80
 	go func() {
 		s.logger.Info("starting HTTP-01 challenge handler on :80")
-		if err := http.ListenAndServe(":80", certmagic.DefaultACME.HTTPChallengeHandler(http.HandlerFunc(redirectHTTPS))); err != nil {
+		challengeServer := &http.Server{
+			Addr:              ":80",
+			Handler:           certmagic.DefaultACME.HTTPChallengeHandler(http.HandlerFunc(redirectHTTPS)),
+			ReadHeaderTimeout: 10 * time.Second,
+		}
+		if err := challengeServer.ListenAndServe(); err != nil {
 			s.logger.Error("HTTP-01 handler error", "error", err)
 		}
 	}()
@@ -102,7 +114,7 @@ func (s *Server) ListenAndServe(addr string) error {
 }
 
 // Shutdown gracefully shuts down the server.
-func (s *Server) Shutdown(ctx context.Context) error {
+func (s *Server) Shutdown(_ context.Context) error {
 	// CertMagic handles its own cleanup
 	return nil
 }

@@ -113,7 +113,7 @@ func (s *S3Storage) List(ctx context.Context) ([]output.StorageObject, error) {
 // Download downloads a file from S3 to the local filesystem.
 func (s *S3Storage) Download(ctx context.Context, key string, dest string) error {
 	// Create destination directory
-	if err := os.MkdirAll(filepath.Dir(dest), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(dest), 0750); err != nil {
 		return err
 	}
 
@@ -125,14 +125,14 @@ func (s *S3Storage) Download(ctx context.Context, key string, dest string) error
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// Write to file
-	f, err := os.Create(dest)
+	f, err := os.Create(dest) //#nosec G304 -- dest is a controlled local path
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	_, err = io.Copy(f, resp.Body)
 	return err
@@ -158,7 +158,7 @@ func (s *S3Storage) Exists(ctx context.Context, key string) (bool, error) {
 	})
 	if err != nil {
 		// Check if it's a not found error
-		return false, nil
+		return false, nil //nolint:nilerr // error indicates object doesn't exist, which is not an error condition for Exists
 	}
 	return true, nil
 }

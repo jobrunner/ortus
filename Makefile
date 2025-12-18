@@ -96,7 +96,7 @@ gosec: ## Security Scanner (via golangci-lint)
 ## Format Targets
 fmt: ## Formatiere Go Code
 	$(GO) fmt ./...
-	goimports -w -local $(MODULE) .
+	goimports -w -local $(MODULE) ./cmd ./internal ./pkg ./api
 
 format: fmt ## Alias für fmt
 

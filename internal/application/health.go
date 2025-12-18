@@ -20,7 +20,7 @@ func NewHealthService(registry *PackageRegistry) *HealthService {
 }
 
 // IsHealthy returns true if the service is healthy.
-func (s *HealthService) IsHealthy(ctx context.Context) bool {
+func (s *HealthService) IsHealthy(_ context.Context) bool {
 	return true // Basic health check
 }
 
