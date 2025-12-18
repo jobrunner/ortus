@@ -64,8 +64,12 @@ func (s *LocalStorage) List(_ context.Context) ([]output.StorageObject, error) {
 func (s *LocalStorage) Download(_ context.Context, key string, dest string) error {
 	srcPath := filepath.Join(s.basePath, key)
 
+	// Normalize paths for comparison to handle ./path vs path differences
+	cleanSrc := filepath.Clean(srcPath)
+	cleanDest := filepath.Clean(dest)
+
 	// If source and dest are the same, nothing to do
-	if srcPath == dest {
+	if cleanSrc == cleanDest {
 		return nil
 	}
 

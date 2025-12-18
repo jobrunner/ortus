@@ -4,6 +4,7 @@ package application
 import (
 	"context"
 	"log/slog"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -203,8 +204,8 @@ func (r *PackageRegistry) LoadAll(ctx context.Context) error {
 	}
 
 	for _, obj := range objects {
-		// Download to local path
-		localPath := r.localPath + "/" + obj.Key
+		// Download to local path using filepath.Join for consistent path handling
+		localPath := filepath.Join(r.localPath, obj.Key)
 		if err := r.storage.Download(ctx, obj.Key, localPath); err != nil {
 			r.logger.Error("failed to download package", "key", obj.Key, "error", err)
 			continue
