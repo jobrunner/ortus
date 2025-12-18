@@ -226,6 +226,9 @@ make ci-dry
 
 # Mit amd64-Emulation (exakt wie GitHub Actions)
 make ci-amd64
+
+# Workflows syntaktisch validieren (ohne Docker)
+make ci-check
 ```
 
 **Architektur:**

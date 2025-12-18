@@ -1,12 +1,16 @@
 # ortels Makefile
 # Alle Standardaufgaben für Entwicklung und CI/CD
 
-.PHONY: all build test lint check clean install run help
-.PHONY: test-unit test-integration test-coverage
-.PHONY: lint-go lint-all security-check vuln-check
+.PHONY: all build build-all install run clean help
+.PHONY: test test-unit test-integration test-coverage test-race test-bench
+.PHONY: lint lint-go lint-fix vet
+.PHONY: security-check vuln-check gosec
 .PHONY: fmt format
-.PHONY: doc doc-serve release
-.PHONY: ci-local ci-lint ci-test ci-build ci-amd64
+.PHONY: check check-ci
+.PHONY: deps deps-update deps-verify
+.PHONY: doc doc-serve
+.PHONY: release release-dry
+.PHONY: ci-local ci-lint ci-test ci-build ci-dry ci-amd64 ci-check
 
 # Variablen
 BINARY_NAME := ortels
@@ -162,6 +166,9 @@ ci-dry: ## Zeige welche Jobs ausgeführt würden (dry-run)
 
 ci-amd64: ## CI mit amd64-Emulation (wie GitHub Actions)
 	act --container-architecture linux/amd64
+
+ci-check: ## Validiere GitHub Actions Workflows (actionlint)
+	actionlint
 
 ## Hilfe
 help: ## Zeige diese Hilfe

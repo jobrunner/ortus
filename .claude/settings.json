@@ -34,7 +34,31 @@
             "timeout": 60
           }
         ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/check-docs.sh",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/check-makefile-targets.sh",
+            "timeout": 10
+          }
+        ]
       }
     ]
+  },
+  "enabledPlugins": {
+    "commit-commands@claude-plugins-official": true,
+    "context7@claude-plugins-official": true
   }
 }

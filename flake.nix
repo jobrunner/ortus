@@ -36,6 +36,7 @@
 
           # CI/CD
           act                      # GitHub Actions lokal ausführen
+          actionlint               # GitHub Actions Linter
 
           # Utilities
           jq                       # JSON Verarbeitung
