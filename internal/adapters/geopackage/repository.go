@@ -24,14 +24,18 @@ func init() {
 
 // getSpatiaLiteLibraryPaths returns a list of paths to try for loading SpatiaLite.
 func getSpatiaLiteLibraryPaths() []string {
-	paths := []string{}
+	var paths []string
 
 	// First, check environment variable (set by Nix shell)
+	// The env var should point to the library without extension
 	if envPath := os.Getenv("SPATIALITE_LIBRARY_PATH"); envPath != "" {
+		// Only use the env path when set (Nix environment)
+		// go-sqlite3 needs the exact path to load
 		paths = append(paths, envPath)
+		return paths
 	}
 
-	// Common library names and paths
+	// Fallback: Common library names and paths for non-Nix environments
 	paths = append(paths,
 		"mod_spatialite",                              // System default
 		"mod_spatialite.so",                           // Linux
