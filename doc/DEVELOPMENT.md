@@ -40,6 +40,7 @@ ortels/
 ├── go.sum              # Go Module Checksums
 ├── Makefile            # Build-Automatisierung
 ├── .golangci.yml       # Linter-Konfiguration
+├── .actrc              # act Konfiguration (lokale CI)
 ├── .claude/            # Claude Code Konfiguration
 │   └── settings.json   # Claude Code Hooks
 └── .envrc              # direnv Konfiguration
@@ -56,6 +57,7 @@ ortels/
 | `make test-coverage` | Tests mit Coverage-Report |
 | `make security-check` | Security-Analyse |
 | `make clean` | Räume Build-Artefakte auf |
+| `make ci-local` | GitHub Actions lokal ausführen |
 | `make help` | Zeige alle verfügbaren Targets |
 
 ## Qualitätsstandards
@@ -205,6 +207,34 @@ make release-dry
 git tag v1.0.0
 make release
 ```
+
+## GitHub Actions lokal validieren
+
+Mit [act](https://github.com/nektos/act) können GitHub Actions vor dem Commit lokal getestet werden. Docker muss installiert und gestartet sein.
+
+```bash
+# Alle CI-Jobs lokal ausführen (native Architektur)
+make ci-local
+
+# Nur bestimmte Jobs ausführen
+make ci-lint    # Nur Linting
+make ci-test    # Nur Tests
+make ci-build   # Nur Build
+
+# Dry-Run: Zeige welche Jobs ausgeführt würden
+make ci-dry
+
+# Mit amd64-Emulation (exakt wie GitHub Actions)
+make ci-amd64
+```
+
+**Architektur:**
+- `make ci-local` verwendet die native Architektur (ARM64 auf M1 Macs, AMD64 auf PCs)
+- `make ci-amd64` erzwingt amd64-Emulation für exakte GitHub-Kompatibilität (langsamer auf ARM)
+
+**Konfiguration:**
+- `.actrc` enthält projektweite act-Einstellungen
+- Secrets können via `.secrets` Datei oder `-s` Flag übergeben werden
 
 ## Troubleshooting
 

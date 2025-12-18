@@ -1,0 +1,11 @@
+# act Konfiguration für lokale GitHub Actions
+# Dokumentation: https://github.com/nektos/act
+
+# Medium-sized image (guter Kompromiss zwischen Größe und Kompatibilität)
+-P ubuntu-latest=catthehacker/ubuntu:act-latest
+-P ubuntu-22.04=catthehacker/ubuntu:act-22.04
+-P ubuntu-20.04=catthehacker/ubuntu:act-20.04
+
+# Keine Architektur-Override: act verwendet native Architektur
+# M1/ARM64 Macs: linux/arm64
+# x86 PCs: linux/amd64

@@ -6,6 +6,7 @@
 .PHONY: lint-go lint-all security-check vuln-check
 .PHONY: fmt format
 .PHONY: doc doc-serve release
+.PHONY: ci-local ci-lint ci-test ci-build ci-amd64
 
 # Variablen
 BINARY_NAME := ortels
@@ -142,6 +143,25 @@ release-dry: ## Teste Release (dry-run)
 
 release: ## Erstelle Release
 	goreleaser release --clean
+
+## GitHub Actions lokal (via act)
+ci-local: ## Führe alle CI-Jobs lokal aus (native Architektur)
+	act
+
+ci-lint: ## Führe nur Lint-Job lokal aus
+	act -j lint
+
+ci-test: ## Führe nur Test-Job lokal aus
+	act -j test
+
+ci-build: ## Führe nur Build-Job lokal aus
+	act -j build
+
+ci-dry: ## Zeige welche Jobs ausgeführt würden (dry-run)
+	act -n
+
+ci-amd64: ## CI mit amd64-Emulation (wie GitHub Actions)
+	act --container-architecture linux/amd64
 
 ## Hilfe
 help: ## Zeige diese Hilfe

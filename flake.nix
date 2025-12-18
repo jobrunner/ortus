@@ -34,6 +34,9 @@
           # Build & Release
           goreleaser               # Release Automation
 
+          # CI/CD
+          act                      # GitHub Actions lokal ausführen
+
           # Utilities
           jq                       # JSON Verarbeitung
           sqlite                   # SQLite CLI (für Debugging)
