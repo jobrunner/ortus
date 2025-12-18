@@ -64,3 +64,5 @@ coverage/
 dist/
 
 settings.local.*
+
+data

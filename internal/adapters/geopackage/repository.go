@@ -5,15 +5,45 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 
-	// Import sqlite3 driver for database/sql.
-	_ "github.com/mattn/go-sqlite3"
+	"github.com/mattn/go-sqlite3"
 
 	"github.com/jobrunner/ortus/internal/domain"
 )
+
+// Ensure sqlite3 driver is registered with extension support.
+func init() {
+	sql.Register("sqlite3_with_extensions", &sqlite3.SQLiteDriver{
+		Extensions: getSpatiaLiteLibraryPaths(),
+	})
+}
+
+// getSpatiaLiteLibraryPaths returns a list of paths to try for loading SpatiaLite.
+func getSpatiaLiteLibraryPaths() []string {
+	paths := []string{}
+
+	// First, check environment variable (set by Nix shell)
+	if envPath := os.Getenv("SPATIALITE_LIBRARY_PATH"); envPath != "" {
+		paths = append(paths, envPath)
+	}
+
+	// Common library names and paths
+	paths = append(paths,
+		"mod_spatialite",                              // System default
+		"mod_spatialite.so",                           // Linux
+		"mod_spatialite.dylib",                        // macOS
+		"/usr/lib/mod_spatialite.so",                  // Linux system
+		"/usr/lib/x86_64-linux-gnu/mod_spatialite.so", // Debian/Ubuntu
+		"/usr/local/lib/mod_spatialite.dylib",         // macOS Homebrew
+		"/opt/homebrew/lib/mod_spatialite.dylib",      // macOS ARM Homebrew
+	)
+
+	return paths
+}
 
 // Repository implements the GeoPackageRepository port using SpatiaLite.
 type Repository struct {
@@ -206,9 +236,9 @@ func (r *Repository) HasSpatialIndex(ctx context.Context, packageID string, laye
 
 // openDB opens the SQLite database with appropriate settings.
 func (r *Repository) openDB(ctx context.Context, path string) (*sql.DB, error) {
-	// Open in read-only mode with shared cache
+	// Open in read-only mode with shared cache using the custom driver with extensions
 	dsn := fmt.Sprintf("file:%s?mode=ro&cache=shared", path)
-	db, err := sql.Open("sqlite3", dsn)
+	db, err := sql.Open("sqlite3_with_extensions", dsn)
 	if err != nil {
 		return nil, err
 	}
@@ -222,27 +252,16 @@ func (r *Repository) openDB(ctx context.Context, path string) (*sql.DB, error) {
 	return db, nil
 }
 
-// loadSpatiaLite loads the SpatiaLite extension.
+// loadSpatiaLite verifies that SpatiaLite extension is loaded.
+// The extension is loaded automatically by the sqlite3_with_extensions driver.
 func (r *Repository) loadSpatiaLite(ctx context.Context, db *sql.DB) error {
-	// Try common SpatiaLite library names
-	libs := []string{
-		"mod_spatialite",
-		"mod_spatialite.so",
-		"mod_spatialite.dylib",
-		"/usr/lib/mod_spatialite.so",
-		"/usr/local/lib/mod_spatialite.dylib",
+	// Verify SpatiaLite is loaded by checking its version
+	var version string
+	err := db.QueryRowContext(ctx, "SELECT spatialite_version()").Scan(&version)
+	if err != nil {
+		return fmt.Errorf("SpatiaLite extension not available: %w", err)
 	}
-
-	var lastErr error
-	for _, lib := range libs {
-		_, err := db.ExecContext(ctx, fmt.Sprintf("SELECT load_extension('%s')", lib))
-		if err == nil {
-			return nil
-		}
-		lastErr = err
-	}
-
-	return fmt.Errorf("could not load SpatiaLite extension: %w", lastErr)
+	return nil
 }
 
 // readPackageMetadata reads metadata from a GeoPackage.
