@@ -9,8 +9,8 @@
 
 ```bash
 # Repository klonen
-git clone https://github.com/jobrunner/ortels.git
-cd ortels
+git clone https://github.com/jobrunner/ortus.git
+cd ortus
 
 # direnv erlauben (aktiviert automatisch die Nix-Umgebung)
 direnv allow
@@ -25,9 +25,9 @@ make check
 ## Projektstruktur
 
 ```
-ortels/
+ortus/
 ├── cmd/
-│   └── ortels/         # Hauptanwendung Entry-Point
+│   └── ortus/         # Hauptanwendung Entry-Point
 │       └── main.go
 ├── internal/           # Private Packages (nicht exportiert)
 ├── pkg/                # Öffentliche Packages (exportiert)

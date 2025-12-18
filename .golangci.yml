@@ -1,4 +1,4 @@
-# golangci-lint Konfiguration für ortels
+# golangci-lint Konfiguration für ortus
 # Dokumentation: https://golangci-lint.run/usage/configuration/
 
 version: "2"

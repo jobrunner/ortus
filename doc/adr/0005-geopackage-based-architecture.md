@@ -6,7 +6,7 @@ Akzeptiert
 
 ## Kontext
 
-Ortels soll Punktabfragen auf Geodaten ermoeglichen. Es muss ein Datenformat gewaehlt werden, das:
+Ortus soll Punktabfragen auf Geodaten ermoeglichen. Es muss ein Datenformat gewaehlt werden, das:
 
 1. Effiziente raeumliche Abfragen unterstuetzt
 2. Selbstbeschreibend ist (Metadaten, Lizenzinformationen)

@@ -109,7 +109,7 @@ type GeoPackageRepository interface {
 ### Dependency Injection im Main
 
 ```go
-// cmd/ortels/main.go
+// cmd/ortus/main.go
 func main() {
     // Config laden
     cfg := config.Load()

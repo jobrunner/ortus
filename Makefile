@@ -1,4 +1,4 @@
-# ortels Makefile
+# ortus Makefile
 # Alle Standardaufgaben für Entwicklung und CI/CD
 
 .PHONY: all build build-all install run clean help
@@ -13,8 +13,8 @@
 .PHONY: ci-local ci-lint ci-test ci-build ci-dry ci-amd64 ci-check
 
 # Variablen
-BINARY_NAME := ortels
-MODULE := github.com/jobrunner/ortels
+BINARY_NAME := ortus
+MODULE := github.com/jobrunner/ortus
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 BUILD_TIME := $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 LDFLAGS := -ldflags "-X main.Version=$(VERSION) -X main.BuildTime=$(BUILD_TIME)"
@@ -172,7 +172,7 @@ ci-check: ## Validiere GitHub Actions Workflows (actionlint)
 
 ## Hilfe
 help: ## Zeige diese Hilfe
-	@echo "ortels - Verfügbare Make-Targets:\n"
+	@echo "ortus - Verfügbare Make-Targets:\n"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 	@echo ""

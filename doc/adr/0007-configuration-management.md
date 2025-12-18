@@ -44,13 +44,13 @@ CLI Flags  >  Umgebungsvariablen  >  Config-File  >  Defaults
 | Quelle | Format | Beispiel |
 |--------|--------|----------|
 | CLI Flag | kebab-case | `--rate-limit` |
-| Env Variable | SCREAMING_SNAKE_CASE mit Prefix | `ORTELS_RATE_LIMIT` |
+| Env Variable | SCREAMING_SNAKE_CASE mit Prefix | `ORTUS_RATE_LIMIT` |
 | Config-File | camelCase oder kebab-case | `rateLimit: 10` |
 
 ### Cobra CLI-Struktur
 
 ```go
-// cmd/ortels/main.go
+// cmd/ortus/main.go
 package main
 
 import (
@@ -61,9 +61,9 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-    Use:   "ortels",
+    Use:   "ortus",
     Short: "GeoPackage Point Query Service",
-    Long:  `Ortels ist ein Go-Service für Punktabfragen auf GeoPackage-Dateien.`,
+    Long:  `Ortus ist ein Go-Service für Punktabfragen auf GeoPackage-Dateien.`,
 }
 
 var serveCmd = &cobra.Command{
@@ -103,11 +103,11 @@ func initConfig() {
         viper.SetConfigName("config")
         viper.SetConfigType("yaml")
         viper.AddConfigPath(".")
-        viper.AddConfigPath("/etc/ortels")
+        viper.AddConfigPath("/etc/ortus")
     }
 
-    // Umgebungsvariablen mit Prefix ORTELS_
-    viper.SetEnvPrefix("ORTELS")
+    // Umgebungsvariablen mit Prefix ORTUS_
+    viper.SetEnvPrefix("ORTUS")
     viper.AutomaticEnv()
 
     // Config-Datei lesen (optional)
@@ -169,7 +169,7 @@ func setDefaults() {
     // TLS
     viper.SetDefault("tls.enabled", false)
     viper.SetDefault("tls.letsEncrypt", false)
-    viper.SetDefault("tls.cacheDir", "/var/cache/ortels/certs")
+    viper.SetDefault("tls.cacheDir", "/var/cache/ortus/certs")
 
     // Logging
     viper.SetDefault("logging.level", "info")
@@ -239,7 +239,7 @@ tls:
   letsEncrypt: true
   letsEncryptEmail: "admin@example.com"
   domains:
-    - "ortels.example.com"
+    - "ortus.example.com"
 
 logging:
   level: "info"
@@ -275,19 +275,19 @@ rateLimit:
 
 | Variable | Default | Beschreibung |
 |----------|---------|--------------|
-| `ORTELS_HOST` | `0.0.0.0` | HTTP-Server-Host |
-| `ORTELS_PORT` | `8080` | HTTP-Server-Port |
-| `ORTELS_GPKG_DIR` | `/data/gpkg` | GeoPackage-Verzeichnis |
-| `ORTELS_STORAGE_TYPE` | `local` | Storage-Typ (local/s3/azure/http) |
-| `ORTELS_S3_BUCKET` | - | AWS S3-Bucket-Name |
-| `ORTELS_S3_REGION` | - | AWS S3-Region |
-| `ORTELS_HTTP_BASE_URL` | - | Base-URL für HTTP-Download |
-| `ORTELS_TLS_ENABLED` | `false` | TLS aktivieren |
-| `ORTELS_LETSENCRYPT` | `false` | Let's Encrypt aktivieren |
-| `ORTELS_LOG_LEVEL` | `info` | Log-Level |
-| `ORTELS_RATE_LIMIT` | `10` | Requests pro Sekunde |
-| `ORTELS_METRICS_ENABLED` | `true` | Prometheus-Metriken |
-| `ORTELS_METRICS_PORT` | `9090` | Metriken-Port |
+| `ORTUS_HOST` | `0.0.0.0` | HTTP-Server-Host |
+| `ORTUS_PORT` | `8080` | HTTP-Server-Port |
+| `ORTUS_GPKG_DIR` | `/data/gpkg` | GeoPackage-Verzeichnis |
+| `ORTUS_STORAGE_TYPE` | `local` | Storage-Typ (local/s3/azure/http) |
+| `ORTUS_S3_BUCKET` | - | AWS S3-Bucket-Name |
+| `ORTUS_S3_REGION` | - | AWS S3-Region |
+| `ORTUS_HTTP_BASE_URL` | - | Base-URL für HTTP-Download |
+| `ORTUS_TLS_ENABLED` | `false` | TLS aktivieren |
+| `ORTUS_LETSENCRYPT` | `false` | Let's Encrypt aktivieren |
+| `ORTUS_LOG_LEVEL` | `info` | Log-Level |
+| `ORTUS_RATE_LIMIT` | `10` | Requests pro Sekunde |
+| `ORTUS_METRICS_ENABLED` | `true` | Prometheus-Metriken |
+| `ORTUS_METRICS_PORT` | `9090` | Metriken-Port |
 
 ## Referenzen
 

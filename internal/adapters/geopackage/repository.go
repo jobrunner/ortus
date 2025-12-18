@@ -1,0 +1,454 @@
+// Package geopackage provides the SpatiaLite-based GeoPackage repository.
+package geopackage
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"path/filepath"
+	"strings"
+	"sync"
+
+	_ "github.com/mattn/go-sqlite3"
+
+	"github.com/jobrunner/ortus/internal/domain"
+)
+
+// Repository implements the GeoPackageRepository port using SpatiaLite.
+type Repository struct {
+	mu          sync.RWMutex
+	connections map[string]*sql.DB
+	packages    map[string]*domain.GeoPackage
+}
+
+// NewRepository creates a new GeoPackage repository.
+func NewRepository() *Repository {
+	return &Repository{
+		connections: make(map[string]*sql.DB),
+		packages:    make(map[string]*domain.GeoPackage),
+	}
+}
+
+// Open opens a GeoPackage file and returns its metadata.
+func (r *Repository) Open(ctx context.Context, path string) (*domain.GeoPackage, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	// Derive package ID from filename
+	packageID := derivePackageID(path)
+
+	// Check if already open
+	if pkg, ok := r.packages[packageID]; ok {
+		return pkg, nil
+	}
+
+	// Open database with SpatiaLite extension
+	db, err := r.openDB(path)
+	if err != nil {
+		return nil, &domain.StorageError{
+			Operation: "open",
+			Key:       path,
+			Err:       err,
+		}
+	}
+
+	// Load SpatiaLite extension
+	if err := r.loadSpatiaLite(db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("loading SpatiaLite: %w", err)
+	}
+
+	// Read GeoPackage metadata
+	pkg, err := r.readPackageMetadata(ctx, db, packageID, path)
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
+
+	// Store connection and package
+	r.connections[packageID] = db
+	r.packages[packageID] = pkg
+
+	return pkg, nil
+}
+
+// Close closes a GeoPackage connection.
+func (r *Repository) Close(ctx context.Context, packageID string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	db, ok := r.connections[packageID]
+	if !ok {
+		return nil
+	}
+
+	if err := db.Close(); err != nil {
+		return err
+	}
+
+	delete(r.connections, packageID)
+	delete(r.packages, packageID)
+	return nil
+}
+
+// GetLayers returns all layers in a GeoPackage.
+func (r *Repository) GetLayers(ctx context.Context, packageID string) ([]domain.Layer, error) {
+	r.mu.RLock()
+	pkg, ok := r.packages[packageID]
+	r.mu.RUnlock()
+
+	if !ok {
+		return nil, domain.ErrPackageNotFound
+	}
+
+	return pkg.Layers, nil
+}
+
+// QueryPoint performs a point query on a specific layer.
+func (r *Repository) QueryPoint(ctx context.Context, packageID string, layerName string, coord domain.Coordinate) ([]domain.Feature, error) {
+	r.mu.RLock()
+	db, ok := r.connections[packageID]
+	pkg := r.packages[packageID]
+	r.mu.RUnlock()
+
+	if !ok {
+		return nil, domain.ErrPackageNotFound
+	}
+
+	// Find layer
+	layer, found := pkg.GetLayer(layerName)
+	if !found {
+		return nil, domain.ErrLayerNotFound
+	}
+
+	// Build and execute query
+	return r.executePointQuery(ctx, db, layer, coord)
+}
+
+// CreateSpatialIndex creates a spatial index for a layer.
+func (r *Repository) CreateSpatialIndex(ctx context.Context, packageID string, layerName string) error {
+	r.mu.RLock()
+	db, ok := r.connections[packageID]
+	pkg := r.packages[packageID]
+	r.mu.RUnlock()
+
+	if !ok {
+		return domain.ErrPackageNotFound
+	}
+
+	layer, found := pkg.GetLayer(layerName)
+	if !found {
+		return domain.ErrLayerNotFound
+	}
+
+	// Check if index already exists
+	hasIndex, err := r.HasSpatialIndex(ctx, packageID, layerName)
+	if err != nil {
+		return err
+	}
+	if hasIndex {
+		return nil
+	}
+
+	// Create spatial index using SpatiaLite
+	query := fmt.Sprintf("SELECT CreateSpatialIndex('%s', '%s')", layerName, layer.GeometryColumn)
+	_, err = db.ExecContext(ctx, query)
+	if err != nil {
+		return &domain.IndexError{
+			PackageID: packageID,
+			Layer:     layerName,
+			Err:       err,
+		}
+	}
+
+	// Update layer status
+	r.mu.Lock()
+	for i := range r.packages[packageID].Layers {
+		if r.packages[packageID].Layers[i].Name == layerName {
+			r.packages[packageID].Layers[i].HasIndex = true
+			break
+		}
+	}
+	r.mu.Unlock()
+
+	return nil
+}
+
+// HasSpatialIndex checks if a layer has a spatial index.
+func (r *Repository) HasSpatialIndex(ctx context.Context, packageID string, layerName string) (bool, error) {
+	r.mu.RLock()
+	db, ok := r.connections[packageID]
+	pkg := r.packages[packageID]
+	r.mu.RUnlock()
+
+	if !ok {
+		return false, domain.ErrPackageNotFound
+	}
+
+	layer, found := pkg.GetLayer(layerName)
+	if !found {
+		return false, domain.ErrLayerNotFound
+	}
+
+	// Check for RTree index table
+	indexTable := fmt.Sprintf("rtree_%s_%s", layerName, layer.GeometryColumn)
+	query := `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?`
+
+	var count int
+	err := db.QueryRowContext(ctx, query, indexTable).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+
+	return count > 0, nil
+}
+
+// openDB opens the SQLite database with appropriate settings.
+func (r *Repository) openDB(path string) (*sql.DB, error) {
+	// Open in read-only mode with shared cache
+	dsn := fmt.Sprintf("file:%s?mode=ro&cache=shared", path)
+	db, err := sql.Open("sqlite3", dsn)
+	if err != nil {
+		return nil, err
+	}
+
+	// Test connection
+	if err := db.Ping(); err != nil {
+		db.Close()
+		return nil, err
+	}
+
+	return db, nil
+}
+
+// loadSpatiaLite loads the SpatiaLite extension.
+func (r *Repository) loadSpatiaLite(db *sql.DB) error {
+	// Try common SpatiaLite library names
+	libs := []string{
+		"mod_spatialite",
+		"mod_spatialite.so",
+		"mod_spatialite.dylib",
+		"/usr/lib/mod_spatialite.so",
+		"/usr/local/lib/mod_spatialite.dylib",
+	}
+
+	var lastErr error
+	for _, lib := range libs {
+		_, err := db.Exec(fmt.Sprintf("SELECT load_extension('%s')", lib))
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+	}
+
+	return fmt.Errorf("could not load SpatiaLite extension: %w", lastErr)
+}
+
+// readPackageMetadata reads metadata from a GeoPackage.
+func (r *Repository) readPackageMetadata(ctx context.Context, db *sql.DB, packageID, path string) (*domain.GeoPackage, error) {
+	pkg := &domain.GeoPackage{
+		ID:   packageID,
+		Name: packageID,
+		Path: path,
+	}
+
+	// Read layers from gpkg_contents
+	layers, err := r.readLayers(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+	pkg.Layers = layers
+
+	// Try to read metadata from gpkg_metadata if available
+	_ = r.readMetadata(ctx, db, pkg)
+
+	return pkg, nil
+}
+
+// readLayers reads layer information from gpkg_contents.
+func (r *Repository) readLayers(ctx context.Context, db *sql.DB) ([]domain.Layer, error) {
+	query := `
+		SELECT
+			c.table_name,
+			COALESCE(c.description, ''),
+			g.column_name,
+			g.geometry_type_name,
+			g.srs_id,
+			COALESCE(c.min_x, 0), COALESCE(c.min_y, 0),
+			COALESCE(c.max_x, 0), COALESCE(c.max_y, 0)
+		FROM gpkg_contents c
+		JOIN gpkg_geometry_columns g ON c.table_name = g.table_name
+		WHERE c.data_type = 'features'
+	`
+
+	rows, err := db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("reading layers: %w", err)
+	}
+	defer rows.Close()
+
+	var layers []domain.Layer
+	for rows.Next() {
+		var l domain.Layer
+		var minX, minY, maxX, maxY float64
+
+		err := rows.Scan(
+			&l.Name, &l.Description, &l.GeometryColumn,
+			&l.GeometryType, &l.SRID,
+			&minX, &minY, &maxX, &maxY,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("scanning layer: %w", err)
+		}
+
+		if minX != 0 || minY != 0 || maxX != 0 || maxY != 0 {
+			l.Extent = &domain.Extent{
+				MinX: minX, MinY: minY,
+				MaxX: maxX, MaxY: maxY,
+				SRID: l.SRID,
+			}
+		}
+
+		// Count features
+		countQuery := fmt.Sprintf("SELECT COUNT(*) FROM %s", l.Name)
+		var count int64
+		if err := db.QueryRowContext(ctx, countQuery).Scan(&count); err == nil {
+			l.FeatureCount = count
+		}
+
+		layers = append(layers, l)
+	}
+
+	return layers, rows.Err()
+}
+
+// readMetadata reads optional metadata from gpkg_metadata.
+func (r *Repository) readMetadata(ctx context.Context, db *sql.DB, pkg *domain.GeoPackage) error {
+	// Check if metadata table exists
+	var exists int
+	err := db.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='gpkg_metadata'",
+	).Scan(&exists)
+	if err != nil || exists == 0 {
+		return nil
+	}
+
+	// Read first metadata entry
+	query := `SELECT metadata FROM gpkg_metadata LIMIT 1`
+	var metadata string
+	if err := db.QueryRowContext(ctx, query).Scan(&metadata); err != nil {
+		return err
+	}
+
+	// Parse metadata (simplified - would need proper XML parsing for full support)
+	pkg.Metadata.Description = metadata
+	return nil
+}
+
+// executePointQuery performs the actual point query using ST_Contains.
+func (r *Repository) executePointQuery(ctx context.Context, db *sql.DB, layer *domain.Layer, coord domain.Coordinate) ([]domain.Feature, error) {
+	// Transform coordinate if needed
+	pointWKT := coord.WKT()
+
+	// Build query using ST_Contains for polygon layers, ST_Distance for others
+	var query string
+	if layer.IsPolygonLayer() {
+		query = fmt.Sprintf(`
+			SELECT fid, %s, AsText(%s)
+			FROM %s
+			WHERE ST_Contains(%s, GeomFromText(?, ?))
+		`, "*", layer.GeometryColumn, layer.Name, layer.GeometryColumn)
+	} else {
+		// For non-polygon layers, use bounding box + distance check
+		query = fmt.Sprintf(`
+			SELECT fid, %s, AsText(%s)
+			FROM %s
+			WHERE MbrContains(%s, GeomFromText(?, ?))
+		`, "*", layer.GeometryColumn, layer.Name, layer.GeometryColumn)
+	}
+
+	rows, err := db.QueryContext(ctx, query, pointWKT, coord.SRID)
+	if err != nil {
+		return nil, &domain.QueryError{
+			Layer: layer.Name,
+			Err:   err,
+		}
+	}
+	defer rows.Close()
+
+	// Get column names for property mapping
+	columns, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+
+	var features []domain.Feature
+	for rows.Next() {
+		feature, err := r.scanFeature(rows, columns, layer.Name, layer.GeometryColumn)
+		if err != nil {
+			return nil, err
+		}
+		features = append(features, feature)
+	}
+
+	return features, rows.Err()
+}
+
+// scanFeature scans a row into a Feature.
+func (r *Repository) scanFeature(rows *sql.Rows, columns []string, layerName, geomColumn string) (domain.Feature, error) {
+	// Create scan destinations
+	values := make([]interface{}, len(columns))
+	valuePtrs := make([]interface{}, len(columns))
+	for i := range values {
+		valuePtrs[i] = &values[i]
+	}
+
+	if err := rows.Scan(valuePtrs...); err != nil {
+		return domain.Feature{}, err
+	}
+
+	feature := domain.Feature{
+		LayerName:  layerName,
+		Properties: make(map[string]interface{}),
+	}
+
+	for i, col := range columns {
+		switch col {
+		case "fid":
+			if v, ok := values[i].(int64); ok {
+				feature.ID = v
+			}
+		case geomColumn:
+			// Skip raw geometry column
+		default:
+			if values[i] != nil {
+				feature.Properties[col] = values[i]
+			}
+		}
+	}
+
+	// Get WKT from the last column (AsText result)
+	if len(values) > 0 {
+		if wkt, ok := values[len(values)-1].(string); ok {
+			feature.Geometry.WKT = wkt
+			feature.Geometry.Type = extractGeometryType(wkt)
+		}
+	}
+
+	return feature, nil
+}
+
+// derivePackageID derives a package ID from the file path.
+func derivePackageID(path string) string {
+	base := filepath.Base(path)
+	ext := filepath.Ext(base)
+	return strings.TrimSuffix(base, ext)
+}
+
+// extractGeometryType extracts the geometry type from WKT.
+func extractGeometryType(wkt string) string {
+	if idx := strings.Index(wkt, "("); idx > 0 {
+		return strings.TrimSpace(wkt[:idx])
+	}
+	return ""
+}

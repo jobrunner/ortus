@@ -43,7 +43,7 @@ Wir verwenden **CertMagic** für automatische TLS-Zertifikatsverwaltung mit Let'
 
 ```
 +-------------------+          +-------------------+
-|   Client          |          |   Ortels Server   |
+|   Client          |          |   Ortus Server   |
 +-------------------+          +-------------------+
          |                              |
          | HTTPS (TLS 1.2+)             |
@@ -176,9 +176,9 @@ tls:
   letsEncrypt: true
   letsEncryptEmail: "admin@example.com"
   domains:
-    - "ortels.example.com"
+    - "ortus.example.com"
     - "geo.example.com"
-  cacheDir: "/var/cache/ortels/certs"
+  cacheDir: "/var/cache/ortus/certs"
 ```
 
 ### Let's Encrypt Anforderungen
@@ -196,7 +196,7 @@ Für Let's Encrypt müssen folgende Bedingungen erfüllt sein:
                                          | 1. Request Certificate
                                          v
 +-------------------+          +-------------------+
-|   Ortels          |<---------|   ACME Server     |
+|   Ortus          |<---------|   ACME Server     |
 |   :80 / :443      |          |                   |
 +-------------------+          +-------------------+
          |                              |
@@ -248,18 +248,18 @@ CertMagic verwendet standardmäßig sichere TLS-Defaults:
 
 ```yaml
 services:
-  ortels:
+  ortus:
     ports:
       - "80:80"     # ACME Challenge
       - "443:443"   # HTTPS
       - "9090:9090" # Metrics
     environment:
-      - ORTELS_TLS_ENABLED=true
-      - ORTELS_LETSENCRYPT=true
-      - ORTELS_LETSENCRYPT_EMAIL=admin@example.com
-      - ORTELS_DOMAINS=ortels.example.com
+      - ORTUS_TLS_ENABLED=true
+      - ORTUS_LETSENCRYPT=true
+      - ORTUS_LETSENCRYPT_EMAIL=admin@example.com
+      - ORTUS_DOMAINS=ortus.example.com
     volumes:
-      - cert-cache:/var/cache/ortels/certs
+      - cert-cache:/var/cache/ortus/certs
 
 volumes:
   cert-cache:
@@ -271,7 +271,7 @@ volumes:
 apiVersion: v1
 kind: Secret
 metadata:
-  name: ortels-tls
+  name: ortus-tls
 type: kubernetes.io/tls
 data:
   tls.crt: <base64-encoded-cert>
@@ -283,13 +283,13 @@ spec:
   template:
     spec:
       containers:
-        - name: ortels
+        - name: ortus
           env:
-            - name: ORTELS_TLS_ENABLED
+            - name: ORTUS_TLS_ENABLED
               value: "true"
-            - name: ORTELS_TLS_CERT_FILE
+            - name: ORTUS_TLS_CERT_FILE
               value: "/certs/tls.crt"
-            - name: ORTELS_TLS_KEY_FILE
+            - name: ORTUS_TLS_KEY_FILE
               value: "/certs/tls.key"
           volumeMounts:
             - name: tls-certs
@@ -298,7 +298,7 @@ spec:
       volumes:
         - name: tls-certs
           secret:
-            secretName: ortels-tls
+            secretName: ortus-tls
 ```
 
 ## Referenzen

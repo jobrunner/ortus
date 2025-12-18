@@ -1,4 +1,4 @@
-# Release Pipeline für ortels
+# Release Pipeline für ortus
 name: Release
 
 on:

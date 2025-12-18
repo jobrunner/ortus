@@ -30,7 +30,7 @@ fi
 
 # Run goimports (import management)
 if command -v goimports &> /dev/null; then
-  goimports -w -local github.com/jobrunner/ortels "$FILE_PATH" 2>/dev/null || true
+  goimports -w -local github.com/jobrunner/ortus "$FILE_PATH" 2>/dev/null || true
 fi
 
 # Run golangci-lint on the specific file (fast, focused linting)

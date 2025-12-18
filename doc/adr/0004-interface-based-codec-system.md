@@ -6,7 +6,7 @@ Vorgeschlagen
 
 ## Kontext
 
-Ortels soll verschiedene Geo-Datenformate lesen und schreiben konnen:
+Ortus soll verschiedene Geo-Datenformate lesen und schreiben konnen:
 - GPX (GPS Exchange Format)
 - KML (Keyhole Markup Language)
 - GeoJSON

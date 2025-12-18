@@ -6,7 +6,7 @@ Akzeptiert
 
 ## Kontext
 
-Das Projekt Ortels befindet sich in der Anfangsphase. Es muss eine Verzeichnisstruktur gewahlt werden, die:
+Das Projekt Ortus befindet sich in der Anfangsphase. Es muss eine Verzeichnisstruktur gewahlt werden, die:
 
 1. Go Best Practices entspricht
 2. Skalierbar fur zukunftige Erweiterungen ist
@@ -18,8 +18,8 @@ Das Projekt Ortels befindet sich in der Anfangsphase. Es muss eine Verzeichnisst
 Wir verwenden das Standard Go Project Layout basierend auf [golang-standards/project-layout](https://github.com/golang-standards/project-layout) mit folgender Struktur:
 
 ```
-ortels/
-|-- cmd/ortels/      # Entry Point (main.go)
+ortus/
+|-- cmd/ortus/      # Entry Point (main.go)
 |-- internal/        # Private Packages
 |-- pkg/             # Offentliche/exportierbare Packages
 |-- doc/             # Dokumentation

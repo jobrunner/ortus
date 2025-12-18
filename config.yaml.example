@@ -1,0 +1,63 @@
+# Ortus Configuration Example
+# Copy this file to config.yaml and adjust as needed
+
+server:
+  host: "0.0.0.0"
+  port: 8080
+  read_timeout: 30s
+  write_timeout: 30s
+  shutdown_timeout: 10s
+  rate_limit:
+    enabled: false
+    rate: 100.0
+    burst: 200
+
+storage:
+  # Storage type: local, s3, azure, http
+  type: local
+  local_path: ./data
+
+  # AWS S3 configuration (when type: s3)
+  s3:
+    bucket: ""
+    region: "eu-central-1"
+    prefix: ""
+    # endpoint: ""  # For S3-compatible storage
+    # access_key_id: ""
+    # secret_access_key: ""
+
+  # Azure Blob Storage configuration (when type: azure)
+  azure:
+    container: ""
+    account_name: ""
+    # account_key: ""
+    # connection_string: ""
+    prefix: ""
+
+  # HTTP download configuration (when type: http)
+  http:
+    base_url: ""
+    index_file: "index.txt"  # File listing available GeoPackages
+    timeout: 5m
+    # username: ""
+    # password: ""
+
+query:
+  default_srid: 4326
+  timeout: 30s
+  max_features: 1000
+
+tls:
+  enabled: false
+  domains: []
+  email: ""
+  cache_dir: "./.certmagic"
+  staging: false  # Use Let's Encrypt staging for testing
+
+metrics:
+  enabled: true
+  path: "/metrics"
+
+logging:
+  level: "info"  # debug, info, warn, error
+  format: "json"  # json, text

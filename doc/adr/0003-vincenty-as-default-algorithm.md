@@ -15,7 +15,7 @@ Fur die Berechnung von Entfernungen zwischen geographischen Punkten gibt es vers
 | Vincenty | Hoch (Ellipsoid) | Mittel | Hoch |
 | Karney | Sehr hoch | Mittel | Sehr hoch |
 
-Die Anwendung Ortels soll geodatische Berechnungen mit hoher Prazision ermoglichen.
+Die Anwendung Ortus soll geodatische Berechnungen mit hoher Prazision ermoglichen.
 
 ## Entscheidung
 

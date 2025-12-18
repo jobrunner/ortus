@@ -1,8 +1,8 @@
-# Architekturplan - Ortels
+# Architekturplan - Ortus
 
 ## 1. Executive Summary
 
-Ortels ist ein Go-basierter Geo-Service mit REST-API, der Punktabfragen auf GeoPackage-Dateien ermöglicht. Der Service nimmt Koordinaten in verschiedenen Projektionen entgegen, führt geometriebasierte Abfragen durch und liefert Features mit Lizenz- und Attributionsinformationen zurück.
+Ortus ist ein Go-basierter Geo-Service mit REST-API, der Punktabfragen auf GeoPackage-Dateien ermöglicht. Der Service nimmt Koordinaten in verschiedenen Projektionen entgegen, führt geometriebasierte Abfragen durch und liefert Features mit Lizenz- und Attributionsinformationen zurück.
 
 **Architektur-Stil:** Hexagonale Architektur (Ports & Adapters)
 
@@ -44,7 +44,7 @@ Ortels ist ein Go-basierter Geo-Service mit REST-API, der Punktabfragen auf GeoP
                                              v
 +------------------+               +------------------+               +------------------+
 |                  |               |                  |               |                  |
-|  Object Storage  |<------------->|     ORTELS       |<------------->|   GeoPackages    |
+|  Object Storage  |<------------->|     ORTUS       |<------------->|   GeoPackages    |
 | (AWS S3/Azure    |   Download    |     Service      |   Read-Only   |   (lokal)        |
 |  Blob/HTTP)      |   beim Start  |                  |   Abfragen    |                  |
 +------------------+               +--------+---------+               +------------------+
@@ -75,7 +75,7 @@ Ortels ist ein Go-basierter Geo-Service mit REST-API, der Punktabfragen auf GeoP
 
 ```
 +------------------------------------------------------------------------------+
-|                              Ortels-Container                                 |
+|                              Ortus-Container                                 |
 |  Base: ghcr.io/jobrunner/spatialite-base-image:1.4.0                         |
 +------------------------------------------------------------------------------+
 |                                                                              |
@@ -191,9 +191,9 @@ Ortels ist ein Go-basierter Geo-Service mit REST-API, der Punktabfragen auf GeoP
 ### 4.2 Package-Struktur
 
 ```
-ortels/
+ortus/
 |-- cmd/
-|   +-- ortels/
+|   +-- ortus/
 |       +-- main.go                    # Entry-Point, DI, Bootstrap (Cobra)
 |
 |-- internal/
@@ -318,7 +318,7 @@ ortels/
 
 ```
                          +------------------+
-                         |    cmd/ortels/   |
+                         |    cmd/ortus/   |
                          |     main.go      |
                          +--------+---------+
                                   |
@@ -366,7 +366,7 @@ package input
 
 import (
     "context"
-    "github.com/jobrunner/ortels/internal/domain"
+    "github.com/jobrunner/ortus/internal/domain"
 )
 
 // QueryPort definiert die Schnittstelle für Geo-Abfragen
@@ -415,7 +415,7 @@ package input
 
 import (
     "context"
-    "github.com/jobrunner/ortels/internal/domain"
+    "github.com/jobrunner/ortus/internal/domain"
 )
 
 // GeoPackagePort definiert die Schnittstelle für GeoPackage-Verwaltung
@@ -472,7 +472,7 @@ package output
 
 import (
     "context"
-    "github.com/jobrunner/ortels/internal/domain"
+    "github.com/jobrunner/ortus/internal/domain"
 )
 
 // GeoPackageRepository definiert die Schnittstelle für GeoPackage-Datenzugriff
@@ -969,7 +969,7 @@ FileSystem              Watcher              Registry            Repository
 **Request:**
 ```http
 GET /api/v1/query?lon=11.576124&lat=48.137154&srid=4326 HTTP/1.1
-Host: ortels.example.com
+Host: ortus.example.com
 Accept: application/json
 ```
 
@@ -1042,7 +1042,7 @@ Accept: application/json
 **Request:**
 ```http
 GET /api/v1/packages HTTP/1.1
-Host: ortels.example.com
+Host: ortus.example.com
 Accept: application/json
 ```
 
@@ -1073,7 +1073,7 @@ Accept: application/json
 **Request:**
 ```http
 GET /health/ready HTTP/1.1
-Host: ortels.example.com
+Host: ortus.example.com
 ```
 
 **Response (200 OK):**
@@ -1251,10 +1251,10 @@ func LoadConfig() (*Config, error) {
     viper.SetConfigName("config")
     viper.SetConfigType("yaml")
     viper.AddConfigPath(".")
-    viper.AddConfigPath("/etc/ortels")
+    viper.AddConfigPath("/etc/ortus")
 
     // Umgebungsvariablen-Prefix
-    viper.SetEnvPrefix("ORTELS")
+    viper.SetEnvPrefix("ORTUS")
     viper.AutomaticEnv()
 
     // Defaults setzen
@@ -1290,7 +1290,7 @@ func setDefaults() {
 
     viper.SetDefault("tls.enabled", false)
     viper.SetDefault("tls.letsEncrypt", false)
-    viper.SetDefault("tls.cacheDir", "/var/cache/ortels/certs")
+    viper.SetDefault("tls.cacheDir", "/var/cache/ortus/certs")
 
     viper.SetDefault("logging.level", "info")
     viper.SetDefault("logging.format", "json")
@@ -1318,7 +1318,7 @@ func setDefaults() {
          v
 +--------+---------+
 | Umgebungsvariablen|
-| ORTELS_RATE_LIMIT |
+| ORTUS_RATE_LIMIT |
 +--------+---------+
          |
          v
@@ -1337,7 +1337,7 @@ func setDefaults() {
 ### 9.4 CLI mit Cobra
 
 ```go
-// cmd/ortels/main.go
+// cmd/ortus/main.go
 package main
 
 import (
@@ -1346,9 +1346,9 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-    Use:   "ortels",
+    Use:   "ortus",
     Short: "GeoPackage Point Query Service",
-    Long:  `Ortels ist ein Go-Service für Punktabfragen auf GeoPackage-Dateien.`,
+    Long:  `Ortus ist ein Go-Service für Punktabfragen auf GeoPackage-Dateien.`,
 }
 
 var serveCmd = &cobra.Command{
@@ -1393,34 +1393,34 @@ func main() {
 
 | Variable | Default | Beschreibung |
 |----------|---------|--------------|
-| `ORTELS_HOST` | `0.0.0.0` | HTTP-Server-Host |
-| `ORTELS_PORT` | `8080` | HTTP-Server-Port |
-| `ORTELS_GPKG_DIR` | `/data/gpkg` | GeoPackage-Verzeichnis |
-| `ORTELS_STORAGE_TYPE` | `local` | Storage-Typ (local/s3/azure/http) |
-| `ORTELS_S3_BUCKET` | - | AWS S3-Bucket-Name |
-| `ORTELS_S3_REGION` | - | AWS S3-Region |
-| `ORTELS_S3_ENDPOINT` | - | AWS S3-Custom-Endpoint (MinIO etc.) |
-| `ORTELS_S3_ACCESS_KEY` | - | AWS S3-Access-Key |
-| `ORTELS_S3_SECRET_KEY` | - | AWS S3-Secret-Key |
-| `ORTELS_HTTP_BASE_URL` | - | Base-URL für HTTP-Download |
-| `ORTELS_AZURE_CONTAINER` | - | Azure-Container-Name |
-| `ORTELS_AZURE_ACCOUNT_NAME` | - | Azure-Account-Name |
-| `ORTELS_AZURE_ACCOUNT_KEY` | - | Azure-Account-Key |
-| `ORTELS_TLS_ENABLED` | `false` | TLS aktivieren |
-| `ORTELS_TLS_CERT_FILE` | - | TLS-Zertifikatspfad |
-| `ORTELS_TLS_KEY_FILE` | - | TLS-Schlüsselpfad |
-| `ORTELS_LETSENCRYPT` | `false` | Let's Encrypt aktivieren |
-| `ORTELS_LETSENCRYPT_EMAIL` | - | Let's Encrypt-E-Mail |
-| `ORTELS_DOMAINS` | - | Domains (kommasepariert) |
-| `ORTELS_LOG_LEVEL` | `info` | Log-Level |
-| `ORTELS_LOG_FORMAT` | `json` | Log-Format (json/text) |
-| `ORTELS_LOG_QUERIES` | `false` | SQL-Queries loggen |
-| `ORTELS_LOG_REQUESTS` | `true` | HTTP-Requests loggen |
-| `ORTELS_LOG_RESPONSES` | `false` | HTTP-Responses loggen |
-| `ORTELS_RATE_LIMIT` | `10` | Requests pro Sekunde |
-| `ORTELS_RATE_LIMIT_BURST` | `20` | Burst-Größe |
-| `ORTELS_METRICS_ENABLED` | `true` | Prometheus-Metriken |
-| `ORTELS_METRICS_PORT` | `9090` | Metriken-Port |
+| `ORTUS_HOST` | `0.0.0.0` | HTTP-Server-Host |
+| `ORTUS_PORT` | `8080` | HTTP-Server-Port |
+| `ORTUS_GPKG_DIR` | `/data/gpkg` | GeoPackage-Verzeichnis |
+| `ORTUS_STORAGE_TYPE` | `local` | Storage-Typ (local/s3/azure/http) |
+| `ORTUS_S3_BUCKET` | - | AWS S3-Bucket-Name |
+| `ORTUS_S3_REGION` | - | AWS S3-Region |
+| `ORTUS_S3_ENDPOINT` | - | AWS S3-Custom-Endpoint (MinIO etc.) |
+| `ORTUS_S3_ACCESS_KEY` | - | AWS S3-Access-Key |
+| `ORTUS_S3_SECRET_KEY` | - | AWS S3-Secret-Key |
+| `ORTUS_HTTP_BASE_URL` | - | Base-URL für HTTP-Download |
+| `ORTUS_AZURE_CONTAINER` | - | Azure-Container-Name |
+| `ORTUS_AZURE_ACCOUNT_NAME` | - | Azure-Account-Name |
+| `ORTUS_AZURE_ACCOUNT_KEY` | - | Azure-Account-Key |
+| `ORTUS_TLS_ENABLED` | `false` | TLS aktivieren |
+| `ORTUS_TLS_CERT_FILE` | - | TLS-Zertifikatspfad |
+| `ORTUS_TLS_KEY_FILE` | - | TLS-Schlüsselpfad |
+| `ORTUS_LETSENCRYPT` | `false` | Let's Encrypt aktivieren |
+| `ORTUS_LETSENCRYPT_EMAIL` | - | Let's Encrypt-E-Mail |
+| `ORTUS_DOMAINS` | - | Domains (kommasepariert) |
+| `ORTUS_LOG_LEVEL` | `info` | Log-Level |
+| `ORTUS_LOG_FORMAT` | `json` | Log-Format (json/text) |
+| `ORTUS_LOG_QUERIES` | `false` | SQL-Queries loggen |
+| `ORTUS_LOG_REQUESTS` | `true` | HTTP-Requests loggen |
+| `ORTUS_LOG_RESPONSES` | `false` | HTTP-Responses loggen |
+| `ORTUS_RATE_LIMIT` | `10` | Requests pro Sekunde |
+| `ORTUS_RATE_LIMIT_BURST` | `20` | Burst-Größe |
+| `ORTUS_METRICS_ENABLED` | `true` | Prometheus-Metriken |
+| `ORTUS_METRICS_PORT` | `9090` | Metriken-Port |
 
 ---
 
@@ -1501,7 +1501,7 @@ import (
     "errors"
     "net/http"
 
-    "github.com/jobrunner/ortels/internal/domain"
+    "github.com/jobrunner/ortus/internal/domain"
 )
 
 // ErrorResponse repräsentiert eine Fehlerantwort
@@ -1592,7 +1592,7 @@ var (
     // HTTP-Metriken
     HTTPRequestsTotal = promauto.NewCounterVec(
         prometheus.CounterOpts{
-            Name: "ortels_http_requests_total",
+            Name: "ortus_http_requests_total",
             Help: "Total number of HTTP requests",
         },
         []string{"method", "path", "status"},
@@ -1600,7 +1600,7 @@ var (
 
     HTTPRequestDuration = promauto.NewHistogramVec(
         prometheus.HistogramOpts{
-            Name:    "ortels_http_request_duration_seconds",
+            Name:    "ortus_http_request_duration_seconds",
             Help:    "HTTP request duration in seconds",
             Buckets: prometheus.DefBuckets,
         },
@@ -1610,7 +1610,7 @@ var (
     // Query-Metriken
     QueryTotal = promauto.NewCounterVec(
         prometheus.CounterOpts{
-            Name: "ortels_queries_total",
+            Name: "ortus_queries_total",
             Help: "Total number of point queries",
         },
         []string{"package_id", "status"},
@@ -1618,7 +1618,7 @@ var (
 
     QueryDuration = promauto.NewHistogramVec(
         prometheus.HistogramOpts{
-            Name:    "ortels_query_duration_seconds",
+            Name:    "ortus_query_duration_seconds",
             Help:    "Query duration in seconds",
             Buckets: []float64{.001, .005, .01, .025, .05, .1, .25, .5, 1},
         },
@@ -1627,7 +1627,7 @@ var (
 
     FeaturesReturned = promauto.NewHistogramVec(
         prometheus.HistogramOpts{
-            Name:    "ortels_features_returned",
+            Name:    "ortus_features_returned",
             Help:    "Number of features returned per query",
             Buckets: []float64{0, 1, 5, 10, 50, 100, 500, 1000},
         },
@@ -1636,18 +1636,18 @@ var (
 
     // GeoPackage-Metriken
     GeoPackagesLoaded = promauto.NewGauge(prometheus.GaugeOpts{
-        Name: "ortels_geopackages_loaded",
+        Name: "ortus_geopackages_loaded",
         Help: "Number of loaded GeoPackages",
     })
 
     GeoPackagesIndexed = promauto.NewGauge(prometheus.GaugeOpts{
-        Name: "ortels_geopackages_indexed",
+        Name: "ortus_geopackages_indexed",
         Help: "Number of fully indexed GeoPackages",
     })
 
     IndexCreationDuration = promauto.NewHistogramVec(
         prometheus.HistogramOpts{
-            Name:    "ortels_index_creation_duration_seconds",
+            Name:    "ortus_index_creation_duration_seconds",
             Help:    "Spatial index creation duration",
             Buckets: []float64{1, 5, 10, 30, 60, 120, 300, 600},
         },
@@ -1657,7 +1657,7 @@ var (
     // Storage-Metriken
     StorageDownloadDuration = promauto.NewHistogramVec(
         prometheus.HistogramOpts{
-            Name:    "ortels_storage_download_duration_seconds",
+            Name:    "ortus_storage_download_duration_seconds",
             Help:    "Object storage download duration",
             Buckets: []float64{1, 5, 10, 30, 60, 120, 300},
         },
@@ -1666,7 +1666,7 @@ var (
 
     StorageDownloadBytes = promauto.NewCounterVec(
         prometheus.CounterOpts{
-            Name: "ortels_storage_download_bytes_total",
+            Name: "ortus_storage_download_bytes_total",
             Help: "Total bytes downloaded from object storage",
         },
         []string{"storage_type"},
@@ -1682,7 +1682,7 @@ var (
 
 ```dockerfile
 # Dockerfile
-# Multi-Stage-Build für Ortels
+# Multi-Stage-Build für Ortus
 
 # ==============================================================================
 # Stage 1: Build
@@ -1706,8 +1706,8 @@ ARG VERSION=dev
 ARG BUILD_TIME=unknown
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     -ldflags="-w -s -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME}" \
-    -o ortels \
-    ./cmd/ortels
+    -o ortus \
+    ./cmd/ortus
 
 # ==============================================================================
 # Stage 2: Runtime
@@ -1715,17 +1715,17 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
 FROM ghcr.io/jobrunner/spatialite-base-image:1.4.0
 
 # Metadata
-LABEL org.opencontainers.image.title="Ortels" \
+LABEL org.opencontainers.image.title="Ortus" \
       org.opencontainers.image.description="GeoPackage Point Query Service" \
-      org.opencontainers.image.source="https://github.com/jobrunner/ortels"
+      org.opencontainers.image.source="https://github.com/jobrunner/ortus"
 
 # Non-root-User (bereits im Base-Image vorhanden: spatialite:10001)
 # Verzeichnisse erstellen
-RUN mkdir -p /data/gpkg /var/cache/ortels/certs && \
-    chown -R spatialite:spatialite /data /var/cache/ortels
+RUN mkdir -p /data/gpkg /var/cache/ortus/certs && \
+    chown -R spatialite:spatialite /data /var/cache/ortus
 
 # Binary aus Build-Stage kopieren
-COPY --from=builder /build/ortels /usr/local/bin/ortels
+COPY --from=builder /build/ortus /usr/local/bin/ortus
 
 # Zeitzone-Daten kopieren
 COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
@@ -1747,10 +1747,10 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health/live || exit 1
 
 # Volumes
-VOLUME ["/data/gpkg", "/var/cache/ortels/certs"]
+VOLUME ["/data/gpkg", "/var/cache/ortus/certs"]
 
 # Entry-Point
-ENTRYPOINT ["/usr/local/bin/ortels"]
+ENTRYPOINT ["/usr/local/bin/ortus"]
 
 # Default-Argumente
 CMD ["serve", "--gpkg-dir=/data/gpkg", "--log-level=info"]
@@ -1763,7 +1763,7 @@ CMD ["serve", "--gpkg-dir=/data/gpkg", "--log-level=info"]
 version: "3.9"
 
 services:
-  ortels:
+  ortus:
     build:
       context: .
       dockerfile: deployments/docker/Dockerfile
@@ -1775,11 +1775,11 @@ services:
       - "9090:9090"   # Metrics
     volumes:
       - ./testdata/geopackages:/data/gpkg:ro
-      - cert-cache:/var/cache/ortels/certs
+      - cert-cache:/var/cache/ortus/certs
     environment:
-      - ORTELS_LOG_LEVEL=debug
-      - ORTELS_LOG_QUERIES=true
-      - ORTELS_RATE_LIMIT=100
+      - ORTUS_LOG_LEVEL=debug
+      - ORTUS_LOG_QUERIES=true
+      - ORTUS_RATE_LIMIT=100
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health/live"]
       interval: 30s
@@ -1958,7 +1958,7 @@ WHERE srs_id = ?;
 |-----------|---------|---------|----------------|
 | 1.1 | `internal/config` | Config-Struct und Viper-Defaults | - |
 | 1.2 | `internal/config` | Viper-Config-Loader (CLI, Env, File) | 1.1 |
-| 1.3 | `cmd/ortels` | Cobra-CLI-Setup | 1.2 |
+| 1.3 | `cmd/ortus` | Cobra-CLI-Setup | 1.2 |
 | 1.4 | `internal/infrastructure/logging` | Logging-Setup mit slog | 1.1 |
 | 1.5 | `internal/domain` | Domain-Modelle (Coordinate, GeoPackage, Feature) | - |
 | 1.6 | `internal/ports` | Port-Interfaces definieren | 1.5 |

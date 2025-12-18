@@ -1,5 +1,5 @@
 {
-  description = "ortels - Go project with reproducible development environment";
+  description = "ortus - Go project with reproducible development environment";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -63,7 +63,7 @@
             mkdir -p "$GOPATH" "$GOBIN" "$GOCACHE" "$GOMODCACHE"
 
             echo ""
-            echo "🔧 ortels Entwicklungsumgebung"
+            echo "🔧 ortus Entwicklungsumgebung"
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
             echo "Go Version:      $(go version | cut -d' ' -f3)"
             echo "golangci-lint:   $(golangci-lint --version | head -1)"
@@ -82,7 +82,7 @@
 
         # Packages
         packages.default = pkgs.buildGoModule {
-          pname = "ortels";
+          pname = "ortus";
           version = "0.1.0";
           src = ./.;
 
@@ -92,8 +92,8 @@
           CGO_ENABLED = 1;
 
           meta = with pkgs.lib; {
-            description = "Ortels tool";
-            homepage = "https://github.com/jobrunner/ortels";
+            description = "Ortus tool";
+            homepage = "https://github.com/jobrunner/ortus";
             license = licenses.mit;
             maintainers = [ ];
           };

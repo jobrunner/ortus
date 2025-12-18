@@ -1,9 +1,9 @@
-# GoReleaser Konfiguration für ortels
+# GoReleaser Konfiguration für ortus
 # Dokumentation: https://goreleaser.com
 
 version: 2
 
-project_name: ortels
+project_name: ortus
 
 before:
   hooks:
@@ -11,9 +11,9 @@ before:
     - go generate ./...
 
 builds:
-  - id: ortels
-    main: ./cmd/ortels
-    binary: ortels
+  - id: ortus
+    main: ./cmd/ortus
+    binary: ortus
     env:
       - CGO_ENABLED=0
     goos:
@@ -61,6 +61,6 @@ changelog:
 release:
   github:
     owner: jobrunner
-    name: ortels
+    name: ortus
   draft: true
   prerelease: auto

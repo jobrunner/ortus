@@ -1,12 +1,12 @@
-# Architektur - Ortels
+# Architektur - Ortus
 
 ## Uebersicht
 
-Ortels ist ein Go-basierter REST-Service fuer Punktabfragen auf GeoPackage-Dateien. Der Service folgt der **Hexagonal Architecture (Ports & Adapters)** und dem **Standard Go Project Layout**.
+Ortus ist ein Go-basierter REST-Service fuer Punktabfragen auf GeoPackage-Dateien. Der Service folgt der **Hexagonal Architecture (Ports & Adapters)** und dem **Standard Go Project Layout**.
 
 ```
 +-------------------+          +-------------------+          +-------------------+
-|   API-Clients     |          |     ORTELS        |          |   GeoPackages     |
+|   API-Clients     |          |     ORTUS        |          |   GeoPackages     |
 |   (REST/HTTP)     |--------->|     Service       |<-------->|   (SpatiaLite)    |
 +-------------------+          +-------------------+          +-------------------+
                                         |
@@ -31,8 +31,8 @@ Ortels ist ein Go-basierter REST-Service fuer Punktabfragen auf GeoPackage-Datei
 ## Verzeichnisstruktur
 
 ```
-ortels/
-|-- cmd/ortels/                        # Entry Point
+ortus/
+|-- cmd/ortus/                        # Entry Point
 |   +-- main.go
 |
 |-- internal/
@@ -103,7 +103,7 @@ Secondary Adapters  <--  Output Ports  <------+
 ### Dependency Injection
 
 ```go
-// cmd/ortels/main.go
+// cmd/ortus/main.go
 func main() {
     cfg := config.Load()
 
@@ -149,11 +149,11 @@ Prioritaet: CLI > Umgebungsvariablen > .env > Defaults
 
 | Variable | Default | Beschreibung |
 |----------|---------|--------------|
-| `ORTELS_PORT` | `8080` | HTTP-Port |
-| `ORTELS_GPKG_DIR` | `/data/gpkg` | GeoPackage-Verzeichnis |
-| `ORTELS_STORAGE_TYPE` | `local` | Storage (local/s3/azure) |
-| `ORTELS_LOG_LEVEL` | `info` | Log-Level |
-| `ORTELS_RATE_LIMIT` | `10` | Requests/Sekunde |
+| `ORTUS_PORT` | `8080` | HTTP-Port |
+| `ORTUS_GPKG_DIR` | `/data/gpkg` | GeoPackage-Verzeichnis |
+| `ORTUS_STORAGE_TYPE` | `local` | Storage (local/s3/azure) |
+| `ORTUS_LOG_LEVEL` | `info` | Log-Level |
+| `ORTUS_RATE_LIMIT` | `10` | Requests/Sekunde |
 
 Siehe [ADR-0007](adr/0007-configuration-management.md) fuer vollstaendige Liste.
 
@@ -191,12 +191,12 @@ Base-Image: `ghcr.io/jobrunner/spatialite-base-image:1.4.0`
 ```dockerfile
 FROM ghcr.io/jobrunner/spatialite-base-image:1.4.0
 
-COPY ortels /usr/local/bin/ortels
+COPY ortus /usr/local/bin/ortus
 
 USER spatialite
 EXPOSE 8080 9090
 
-ENTRYPOINT ["/usr/local/bin/ortels"]
+ENTRYPOINT ["/usr/local/bin/ortus"]
 ```
 
 ## Weiterführende Dokumentation
