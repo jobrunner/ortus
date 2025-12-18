@@ -74,12 +74,21 @@
             echo "Go Version:      $(go version | cut -d' ' -f3)"
             echo "golangci-lint:   $(golangci-lint --version | head -1)"
             echo ""
-            echo "Verfügbare Befehle:"
-            echo "  make help      - Zeige alle Make-Targets"
-            echo "  make check     - Führe alle Prüfungen aus"
-            echo "  make test      - Führe Tests aus"
-            echo "  make build     - Baue das Projekt"
-            echo ""
+
+            # Dynamisch Make-Targets aus Makefile extrahieren und anzeigen
+            if [ -f Makefile ]; then
+              echo "Verfügbare Make-Targets:"
+              echo ""
+              grep -E '^[a-zA-Z_-]+:.*?## .*$$' Makefile | \
+                awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $1, $2}' | \
+                head -15
+              TOTAL=$(grep -cE '^[a-zA-Z_-]+:.*?## .*$$' Makefile 2>/dev/null || echo "0")
+              if [ "$TOTAL" -gt 15 ]; then
+                echo ""
+                echo "  ... und $((TOTAL - 15)) weitere (siehe: make help)"
+              fi
+              echo ""
+            fi
           '';
 
           # CGO für SQLite

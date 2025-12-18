@@ -58,6 +58,16 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/sync-makefile-flake.sh",
+            "timeout": 10
+          }
+        ]
       }
     ]
   },
