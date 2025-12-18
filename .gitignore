@@ -1,0 +1,66 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+ortels
+
+# Test binary
+*.test
+
+# Output of go coverage
+coverage.out
+coverage.html
+
+# Dependency directories
+vendor/
+
+# Go workspace file
+go.work
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# SQLite databases (außer Testdaten)
+*.db
+*.sqlite
+*.sqlite3
+!testdata/*.db
+!testdata/*.sqlite
+
+# Build output
+dist/
+build/
+
+# Logs
+*.log
+
+# Environment
+.env
+.env.local
+setting.local.json
+
+# Nix
+result
+result-*
+.direnv/
+
+# Go cache (Nix shell)
+.go/
+
+# Coverage directory
+coverage/
+
+# GoReleaser
+dist/
+
+settings.local.*

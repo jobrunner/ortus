@@ -1,0 +1,10 @@
+Package main is the entry point for the ortels application.
+
+VARIABLES
+
+var (
+	Version   = "dev"
+	BuildTime = "unknown"
+)
+    Build-Zeit Variablen (werden durch ldflags gesetzt).
+
