@@ -1,192 +1,220 @@
-# Architektur
+# Architektur - Ortels
 
-## Übersicht
+## Uebersicht
 
-ortels folgt dem Standard-Layout für Go-Projekte gemäß [golang-standards/project-layout](https://github.com/golang-standards/project-layout).
+Ortels ist ein Go-basierter REST-Service fuer Punktabfragen auf GeoPackage-Dateien. Der Service folgt der **Hexagonal Architecture (Ports & Adapters)** und dem **Standard Go Project Layout**.
+
+```
++-------------------+          +-------------------+          +-------------------+
+|   API-Clients     |          |     ORTELS        |          |   GeoPackages     |
+|   (REST/HTTP)     |--------->|     Service       |<-------->|   (SpatiaLite)    |
++-------------------+          +-------------------+          +-------------------+
+                                        |
+                               +--------+--------+
+                               |                 |
+                               v                 v
+                       +---------------+  +---------------+
+                       | Object Storage|  | File Watcher  |
+                       | (S3/Azure)    |  | (Hot-Reload)  |
+                       +---------------+  +---------------+
+```
+
+## Kern-Features
+
+- **REST-API:** OpenAPI-konforme Punktabfragen
+- **GeoPackage:** Geometriebasierte ST_Contains-Abfragen
+- **Koordinatentransformation:** Automatische Projektion in Layer-SRID
+- **Hot-Reload:** Automatische Erkennung neuer/entfernter GeoPackages
+- **Object Storage:** Laden von GeoPackages aus S3/Azure beim Start
+- **TLS:** Optionales HTTPS mit Let's Encrypt
 
 ## Verzeichnisstruktur
 
-### `/cmd`
+```
+ortels/
+|-- cmd/ortels/                        # Entry Point
+|   +-- main.go
+|
+|-- internal/
+|   |-- adapters/                      # Adapter-Implementierungen
+|   |   |-- primary/                   # Driving Adapters
+|   |   |   |-- http/                  # REST-API Handler
+|   |   |   +-- cli/                   # CLI (optional)
+|   |   +-- secondary/                 # Driven Adapters
+|   |       |-- spatialite/            # GeoPackage-Repository
+|   |       |-- storage/               # S3/Azure/Local
+|   |       +-- watcher/               # File-System Watcher
+|   |
+|   |-- application/                   # Application Services
+|   |   |-- query/                     # Punktabfrage-Service
+|   |   |-- geopackage/                # GeoPackage-Management
+|   |   +-- registry/                  # Package-Registry
+|   |
+|   |-- domain/                        # Domain-Modelle
+|   |   |-- geopackage.go              # GeoPackage Entity
+|   |   |-- feature.go                 # Feature Entity
+|   |   |-- coordinate.go              # Coordinate Value Object
+|   |   +-- errors.go                  # Domain-Fehler
+|   |
+|   |-- ports/                         # Port-Interfaces
+|   |   |-- input/                     # Input Ports
+|   |   +-- output/                    # Output Ports
+|   |
+|   |-- config/                        # Konfiguration
+|   +-- infrastructure/                # TLS, Logging, Metrics
+|
+|-- api/openapi/                       # OpenAPI-Spezifikation
+|-- deployments/                       # Docker, Kubernetes
++-- doc/                               # Dokumentation
+    +-- adr/                           # Architecture Decision Records
+```
 
-Hauptanwendungen für dieses Projekt. Der Verzeichnisname sollte dem Namen der gewünschten ausführbaren Datei entsprechen.
+## Hexagonale Architektur
+
+### Abhaengigkeitsrichtung
 
 ```
-cmd/
-└── ortels/
-    └── main.go     # Entry-Point, minimaler Code
+Primary Adapters  -->  Input Ports  -->  Application  -->  Domain
+                                              |
+                                              v
+Secondary Adapters  <--  Output Ports  <------+
 ```
 
 **Regeln:**
-- Minimaler Code in main.go
-- Nur Konfiguration und Dependency Injection
-- Eigentliche Logik in `/internal` oder `/pkg`
+- Domain hat KEINE Abhaengigkeiten
+- Ports definieren Interfaces
+- Adapters implementieren Ports
+- Application orchestriert Domain-Logik
 
-### `/internal`
+### Ports
 
-Private Anwendungs- und Bibliothekscode. Code, den andere nicht importieren sollen.
+**Input Ports** (was der Service anbietet):
+- `QueryPort` - Punktabfragen
+- `GeoPackagePort` - Package-Informationen
+- `HealthPort` - Health-Checks
 
-```
-internal/
-├── config/         # Konfigurationsmanagement
-├── domain/         # Domain-Modelle
-├── service/        # Business-Logik
-├── repository/     # Datenzugriff
-└── handler/        # HTTP/CLI Handler
-```
-
-**Regeln:**
-- Go-Compiler verhindert Import von außen
-- Interne APIs können ohne Rücksicht auf externe Nutzer geändert werden
-
-### `/pkg`
-
-Bibliothekscode, der von externen Anwendungen verwendet werden kann.
-
-```
-pkg/
-├── geo/            # Geographische Berechnungen
-└── format/         # Ausgabeformate
-```
-
-**Regeln:**
-- Stabile API
-- Gute Dokumentation
-- Vorsicht beim Export
+**Output Ports** (was der Service benoetigt):
+- `GeoPackageRepository` - SpatiaLite-Zugriff
+- `StoragePort` - Object Storage
+- `FileWatcherPort` - Datei-Ueberwachung
 
 ## Design-Patterns
 
 ### Dependency Injection
 
-Wir verwenden Constructor Injection:
-
 ```go
-type Service struct {
-    repo Repository
-    log  *slog.Logger
-}
+// cmd/ortels/main.go
+func main() {
+    cfg := config.Load()
 
-func NewService(repo Repository, log *slog.Logger) *Service {
-    return &Service{
-        repo: repo,
-        log:  log,
-    }
+    // Adapters
+    repo := spatialite.NewRepository()
+    storage := s3.NewAdapter(cfg.Storage)
+
+    // Services
+    registry := registry.NewService(repo)
+    query := query.NewService(registry, repo)
+
+    // HTTP Server
+    server := http.NewServer(cfg, query, registry)
+    server.Start()
 }
 ```
 
 ### Repository Pattern
 
-Trennung von Datenzugriff und Business-Logik:
-
 ```go
-type Repository interface {
-    Get(ctx context.Context, id string) (*Entity, error)
-    Save(ctx context.Context, entity *Entity) error
-    Delete(ctx context.Context, id string) error
+type GeoPackageRepository interface {
+    Open(ctx context.Context, path string) (*GeoPackageHandle, error)
+    PointQuery(ctx context.Context, handle *GeoPackageHandle, layer string, coord Coordinate) ([]Feature, error)
+    Close(handle *GeoPackageHandle) error
 }
 ```
 
-### Error Handling
-
-Errors werden mit Kontext angereichert:
+### Error Wrapping
 
 ```go
-import "fmt"
-
-func (s *Service) DoSomething(ctx context.Context, id string) error {
-    entity, err := s.repo.Get(ctx, id)
+func (s *Service) DoWork(ctx context.Context) error {
+    result, err := s.repo.Query(ctx)
     if err != nil {
-        return fmt.Errorf("get entity %s: %w", id, err)
+        return fmt.Errorf("query failed: %w", err)
     }
-    // ...
-}
-```
-
-### Context Propagation
-
-Context wird immer als erster Parameter übergeben:
-
-```go
-func DoWork(ctx context.Context, input Input) (Output, error) {
-    // Prüfe ob Context abgebrochen
-    select {
-    case <-ctx.Done():
-        return Output{}, ctx.Err()
-    default:
-    }
-
-    // Arbeit ausführen...
-}
-```
-
-## Logging
-
-Wir verwenden `log/slog` (Go 1.21+):
-
-```go
-import "log/slog"
-
-func main() {
-    logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-    slog.SetDefault(logger)
-
-    slog.Info("starting application",
-        "version", Version,
-        "build_time", BuildTime,
-    )
-}
-```
-
-## Testing-Architektur
-
-### Unit Tests
-
-- Testen einzelne Funktionen/Methoden
-- Mocking für Dependencies
-- Schnell und isoliert
-
-### Integration Tests
-
-- Testen Zusammenspiel mehrerer Komponenten
-- Können externe Systeme nutzen (z.B. Test-DB)
-- Mit `-short` überspringbar
-
-```go
-func TestIntegration(t *testing.T) {
-    if testing.Short() {
-        t.Skip("skipping integration test")
-    }
-    // ...
-}
-```
-
-### Test Fixtures
-
-Testdaten in `/testdata`:
-
-```go
-func TestWithFixture(t *testing.T) {
-    data, err := os.ReadFile("testdata/sample.json")
-    if err != nil {
-        t.Fatal(err)
-    }
-    // ...
+    return nil
 }
 ```
 
 ## Konfiguration
 
-Konfiguration durch Umgebungsvariablen und Flags:
+Prioritaet: CLI > Umgebungsvariablen > .env > Defaults
+
+| Variable | Default | Beschreibung |
+|----------|---------|--------------|
+| `ORTELS_PORT` | `8080` | HTTP-Port |
+| `ORTELS_GPKG_DIR` | `/data/gpkg` | GeoPackage-Verzeichnis |
+| `ORTELS_STORAGE_TYPE` | `local` | Storage (local/s3/azure) |
+| `ORTELS_LOG_LEVEL` | `info` | Log-Level |
+| `ORTELS_RATE_LIMIT` | `10` | Requests/Sekunde |
+
+Siehe [ADR-0007](adr/0007-configuration-management.md) fuer vollstaendige Liste.
+
+## Testing
+
+### Unit Tests
 
 ```go
-type Config struct {
-    Port     int    `env:"PORT" envDefault:"8080"`
-    LogLevel string `env:"LOG_LEVEL" envDefault:"info"`
-    DBPath   string `env:"DB_PATH" envDefault:"ortels.db"`
+func TestQueryService_PointQuery(t *testing.T) {
+    mockRepo := &MockRepository{}
+    svc := query.NewService(mockRepo)
+
+    result, err := svc.PointQuery(ctx, req)
+
+    assert.NoError(t, err)
+    assert.NotEmpty(t, result.Features)
 }
 ```
 
-Priorität:
-1. Command-Line Flags (höchste)
-2. Umgebungsvariablen
-3. Konfigurationsdatei
-4. Defaults (niedrigste)
+### Integration Tests
+
+```go
+func TestIntegration_PointQuery(t *testing.T) {
+    if testing.Short() {
+        t.Skip("skipping integration test")
+    }
+    // Test mit echtem GeoPackage
+}
+```
+
+## Container
+
+Base-Image: `ghcr.io/jobrunner/spatialite-base-image:1.4.0`
+
+```dockerfile
+FROM ghcr.io/jobrunner/spatialite-base-image:1.4.0
+
+COPY ortels /usr/local/bin/ortels
+
+USER spatialite
+EXPOSE 8080 9090
+
+ENTRYPOINT ["/usr/local/bin/ortels"]
+```
+
+## Weiterführende Dokumentation
+
+- [ARCHITECTURE_PLAN.md](ARCHITECTURE_PLAN.md) - Detaillierter Architekturplan
+- [DEVELOPMENT.md](DEVELOPMENT.md) - Entwicklungsdokumentation
+- [ADRs](adr/) - Architecture Decision Records
+
+### ADR-Index
+
+| ADR | Titel | Status |
+|-----|-------|--------|
+| [0001](adr/0001-standard-go-project-layout.md) | Standard Go Project Layout | Akzeptiert |
+| [0002](adr/0002-hexagonal-architecture-elements.md) | Hexagonal Architecture | Akzeptiert |
+| [0003](adr/0003-vincenty-as-default-algorithm.md) | Vincenty Algorithmus | Akzeptiert |
+| [0004](adr/0004-interface-based-codec-system.md) | Interface-basiertes Codec-System | Akzeptiert |
+| [0005](adr/0005-geopackage-based-architecture.md) | GeoPackage-basierte Architektur | Akzeptiert |
+| [0006](adr/0006-object-storage-integration.md) | Object Storage Integration | Akzeptiert |
+| [0007](adr/0007-configuration-management.md) | Configuration Management | Akzeptiert |
+| [0008](adr/0008-tls-letsencrypt.md) | TLS und Let's Encrypt | Akzeptiert |
+| [0009](adr/0009-hot-reload-file-watching.md) | Hot-Reload und File-Watching | Akzeptiert |
