@@ -11,6 +11,16 @@ server:
     enabled: false
     rate: 100.0
     burst: 200
+  cors:
+    # Allowed origins for CORS requests
+    # Supports exact matches and wildcard patterns (e.g., "*.example.com")
+    # Leave empty to disable CORS
+    allowed_origins: []
+    # Examples:
+    # allowed_origins:
+    #   - "https://example.com"
+    #   - "https://app.example.com"
+    #   - "*.sub.domain.tld"
 
 storage:
   # Storage type: local, s3, azure, http

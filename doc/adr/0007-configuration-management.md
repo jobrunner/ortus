@@ -288,6 +288,13 @@ rateLimit:
 | `ORTUS_RATE_LIMIT` | `10` | Requests pro Sekunde |
 | `ORTUS_METRICS_ENABLED` | `true` | Prometheus-Metriken |
 | `ORTUS_METRICS_PORT` | `9090` | Metriken-Port |
+| `ORTUS_SERVER_CORS_ALLOWED_ORIGINS` | `[]` | Erlaubte CORS Origins (kommasepariert) |
+
+### CLI-Flags
+
+| Flag | Env-Variable | Beschreibung |
+|------|--------------|--------------|
+| `--cors` | `ORTUS_SERVER_CORS_ALLOWED_ORIGINS` | Erlaubte CORS Origins, z.B. `--cors=https://example.com,*.sub.domain.tld` |
 
 ## Referenzen
 

@@ -27,6 +27,7 @@ Ortus ist ein Go-basierter REST-Service fuer Punktabfragen auf GeoPackage-Dateie
 - **Hot-Reload:** Automatische Erkennung neuer/entfernter GeoPackages
 - **Object Storage:** Laden von GeoPackages aus S3/Azure beim Start
 - **TLS:** Optionales HTTPS mit Let's Encrypt
+- **CORS:** Konfigurierbare Cross-Origin Resource Sharing Headers
 
 ## Verzeichnisstruktur
 
@@ -154,6 +155,9 @@ Prioritaet: CLI > Umgebungsvariablen > .env > Defaults
 | `ORTUS_STORAGE_TYPE` | `local` | Storage (local/s3/azure) |
 | `ORTUS_LOG_LEVEL` | `info` | Log-Level |
 | `ORTUS_RATE_LIMIT` | `10` | Requests/Sekunde |
+| `ORTUS_SERVER_CORS_ALLOWED_ORIGINS` | `[]` | Erlaubte CORS Origins |
+
+CLI-Flag fuer CORS: `--cors=origin1,*.sub.domain.tld`
 
 Siehe [ADR-0007](adr/0007-configuration-management.md) fuer vollstaendige Liste.
 

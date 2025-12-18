@@ -27,6 +27,17 @@ type ServerConfig struct {
 	WriteTimeout    time.Duration   `mapstructure:"write_timeout"`
 	ShutdownTimeout time.Duration   `mapstructure:"shutdown_timeout"`
 	RateLimit       RateLimitConfig `mapstructure:"rate_limit"`
+	CORS            CORSConfig      `mapstructure:"cors"`
+}
+
+// CORSConfig holds CORS configuration.
+type CORSConfig struct {
+	AllowedOrigins []string `mapstructure:"allowed_origins"` // e.g., ["https://example.com", "*.sub.domain.tld"]
+}
+
+// Enabled returns true if CORS is configured with at least one allowed origin.
+func (c *CORSConfig) Enabled() bool {
+	return len(c.AllowedOrigins) > 0
 }
 
 // RateLimitConfig holds rate limiting configuration.
@@ -112,6 +123,7 @@ func Defaults() {
 	viper.SetDefault("server.rate_limit.enabled", false)
 	viper.SetDefault("server.rate_limit.rate", 100.0)
 	viper.SetDefault("server.rate_limit.burst", 200)
+	viper.SetDefault("server.cors.allowed_origins", []string{})
 
 	// Storage defaults
 	viper.SetDefault("storage.type", "local")
@@ -206,10 +218,10 @@ func (c *Config) Validate() error {
 		}
 	case "azure":
 		if c.Storage.Azure.Container == "" {
-			return fmt.Errorf("Azure container is required")
+			return fmt.Errorf("azure container is required")
 		}
 		if c.Storage.Azure.AccountName == "" && c.Storage.Azure.ConnectionString == "" {
-			return fmt.Errorf("Azure account name or connection string is required")
+			return fmt.Errorf("azure account name or connection string is required")
 		}
 	case "http":
 		if c.Storage.HTTP.BaseURL == "" {

@@ -1,5 +1,5 @@
 // Package http provides the HTTP server and handlers.
-package http
+package http //nolint:revive // package name conflicts with stdlib but is acceptable in this context
 
 import (
 	"context"
@@ -59,6 +59,11 @@ func (s *Server) setupRoutes() *mux.Router {
 	// Add middleware
 	r.Use(s.loggingMiddleware)
 	r.Use(s.recoveryMiddleware)
+
+	// Add CORS middleware if configured
+	if s.config.CORS.Enabled() {
+		r.Use(s.corsMiddleware)
+	}
 
 	// Health endpoints
 	r.HandleFunc("/health", s.handleHealth).Methods(http.MethodGet)
