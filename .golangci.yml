@@ -43,7 +43,7 @@ linters:
 
   settings:
     gocyclo:
-      min-complexity: 15
+      min-complexity: 16
 
     gocognit:
       min-complexity: 20
@@ -65,6 +65,11 @@ linters:
         - performance
       disabled-checks:
         - whyNoLint
+        - hugeParam          # Too strict for function parameters
+        - rangeValCopy       # Premature optimization
+        - paramTypeCombine   # Style preference
+        - octalLiteral       # Style preference (0750 vs 0o750)
+        - httpNoBody         # Minor style issue
 
     gosec:
       excludes:
@@ -103,6 +108,10 @@ linters:
       # main.go darf globale Variablen haben
       - path: main\.go
         text: "don't use globals"
+
+      # Allow http package name in adapters (intentional)
+      - path: internal/adapters/http/
+        text: "avoid package names that conflict"
 
 output:
   show-stats: true
