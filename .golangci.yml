@@ -1,5 +1,5 @@
 # golangci-lint Konfiguration für ortus
-# Dokumentation: https://golangci-lint.run/usage/configuration/
+# Dokumentation: https://golangci-lint.run/docs/configuration/
 
 version: "2"
 
@@ -14,11 +14,11 @@ formatters:
 
 linters:
   enable:
-    # Standard Linters (default enabled)
+    # Standard Linters
     - errcheck      # Unbehandelte Fehler finden
     - govet         # Go vet Prüfungen
     - ineffassign   # Ineffektive Zuweisungen
-    - staticcheck   # Umfassende statische Analyse (enthält gosimple)
+    - staticcheck   # Umfassende statische Analyse
     - unused        # Ungenutzte Variablen/Funktionen
 
     # Zusätzliche Linters
@@ -41,68 +41,68 @@ linters:
     - unparam       # Ungenutzte Parameter
     - whitespace    # Leerzeichen-Probleme
 
-linters-settings:
-  gocyclo:
-    min-complexity: 15
+  settings:
+    gocyclo:
+      min-complexity: 15
 
-  gocognit:
-    min-complexity: 20
+    gocognit:
+      min-complexity: 20
 
-  dupl:
-    threshold: 100
+    dupl:
+      threshold: 100
 
-  goconst:
-    min-len: 3
-    min-occurrences: 3
+    goconst:
+      min-len: 3
+      min-occurrences: 3
 
-  misspell:
-    locale: US
+    misspell:
+      locale: US
 
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - style
-      - performance
-    disabled-checks:
-      - whyNoLint
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - style
+        - performance
+      disabled-checks:
+        - whyNoLint
 
-  gosec:
-    excludes:
-      - G104  # Audit errors not checked (zu strikt für manche Fälle)
+    gosec:
+      excludes:
+        - G104  # Audit errors not checked
 
-  revive:
+    revive:
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: exported
+        - name: increment-decrement
+        - name: indent-error-flow
+        - name: package-comments
+        - name: range
+        - name: receiver-naming
+        - name: time-naming
+        - name: unexported-return
+        - name: var-declaration
+        - name: var-naming
+
+  exclusions:
     rules:
-      - name: blank-imports
-      - name: context-as-argument
-      - name: context-keys-type
-      - name: dot-imports
-      - name: error-return
-      - name: error-strings
-      - name: error-naming
-      - name: exported
-      - name: increment-decrement
-      - name: indent-error-flow
-      - name: package-comments
-      - name: range
-      - name: receiver-naming
-      - name: time-naming
-      - name: unexported-return
-      - name: var-declaration
-      - name: var-naming
+      # Test-Dateien: weniger strikt
+      - path: _test\.go
+        linters:
+          - dupl
+          - gosec
+          - gocyclo
+          - gocognit
 
-issues:
-  exclude-rules:
-    # Test-Dateien: weniger strikt
-    - path: _test\.go
-      linters:
-        - dupl
-        - gosec
-        - gocyclo
-        - gocognit
+      # main.go darf globale Variablen haben
+      - path: main\.go
+        text: "don't use globals"
 
-    # main.go darf globale Variablen haben
-    - path: main\.go
-      text: "don't use globals"
-
-  max-issues-per-linter: 0
-  max-same-issues: 0
+output:
+  show-stats: true
