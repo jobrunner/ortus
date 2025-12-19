@@ -1,0 +1,773 @@
+openapi: 3.0.3
+info:
+  title: Ortus GeoPackage Query API
+  description: |
+    REST API für die Abfrage von GeoPackage-Dateien mittels Punktkoordinaten.
+
+    Ortus ermöglicht die effiziente räumliche Abfrage von GeoPackage-Daten und unterstützt
+    verschiedene Koordinatensysteme (SRIDs). Die API kann mehrere GeoPackages gleichzeitig
+    verwalten und abfragen.
+
+    ## Koordinatensysteme
+
+    Die API unterstützt verschiedene Koordinatensysteme über den `srid` Parameter:
+    - **4326** (WGS84): Standard GPS-Koordinaten (lon/lat)
+    - **3857** (Web Mercator): Web-Mapping Standard
+    - **25832/25833** (ETRS89/UTM): Deutscher/EU Standard
+    - **31466/31467** (DHDN/Gauß-Krüger): Deutsches Legacy-System
+
+    ## Authentifizierung
+
+    Derzeit ist keine Authentifizierung erforderlich.
+  version: 1.0.0
+  contact:
+    name: Ortus API Support
+    url: https://github.com/jobrunner/ortus
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: /api/v1
+    description: API Version 1
+  - url: /
+    description: Root (für Health-Endpoints)
+
+tags:
+  - name: Query
+    description: Räumliche Punktabfragen auf GeoPackages
+  - name: Packages
+    description: GeoPackage-Verwaltung und -Information
+  - name: Health
+    description: Gesundheitsprüfungen und Kubernetes-Probes
+
+paths:
+  /query:
+    get:
+      tags:
+        - Query
+      summary: Alle Pakete abfragen
+      description: |
+        Führt eine Punktabfrage über alle registrierten GeoPackages durch.
+
+        Koordinaten können entweder als `lon/lat` (für WGS84) oder als `x/y`
+        (für andere Koordinatensysteme) angegeben werden.
+      operationId: queryAllPackages
+      parameters:
+        - $ref: '#/components/parameters/LonParam'
+        - $ref: '#/components/parameters/LatParam'
+        - $ref: '#/components/parameters/XParam'
+        - $ref: '#/components/parameters/YParam'
+        - $ref: '#/components/parameters/SridParam'
+        - $ref: '#/components/parameters/PropertiesParam'
+      responses:
+        '200':
+          description: Erfolgreiche Abfrage
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueryResponse'
+              example:
+                coordinate:
+                  x: 13.405
+                  y: 52.52
+                  srid: 4326
+                results:
+                  - package_id: districts
+                    package_name: districts.gpkg
+                    features:
+                      - id: 42
+                        layer: districts
+                        properties:
+                          name: Mitte
+                          population: 384172
+                        geometry:
+                          type: MULTIPOLYGON
+                          wkt: "MULTIPOLYGON(((13.3 52.5, 13.4 52.5, 13.4 52.6, 13.3 52.6, 13.3 52.5)))"
+                    feature_count: 1
+                    query_time_ms: 5
+                    license:
+                      name: CC BY 4.0
+                      url: https://creativecommons.org/licenses/by/4.0/
+                      attribution: "© OpenData Berlin"
+                total_features: 1
+                processing_time_ms: 12
+        '400':
+          description: Ungültige Parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                missingCoordinates:
+                  summary: Fehlende Koordinaten
+                  value:
+                    error: Bad Request
+                    message: "coordinates required: use lon/lat or x/y"
+                invalidLon:
+                  summary: Ungültige Longitude
+                  value:
+                    error: Bad Request
+                    message: "invalid lon parameter"
+        '500':
+          description: Interner Serverfehler
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /query/{packageId}:
+    get:
+      tags:
+        - Query
+      summary: Spezifisches Paket abfragen
+      description: Führt eine Punktabfrage auf einem bestimmten GeoPackage durch.
+      operationId: queryPackage
+      parameters:
+        - $ref: '#/components/parameters/PackageIdParam'
+        - $ref: '#/components/parameters/LonParam'
+        - $ref: '#/components/parameters/LatParam'
+        - $ref: '#/components/parameters/XParam'
+        - $ref: '#/components/parameters/YParam'
+        - $ref: '#/components/parameters/SridParam'
+        - $ref: '#/components/parameters/PropertiesParam'
+      responses:
+        '200':
+          description: Erfolgreiche Abfrage
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueryResponse'
+        '400':
+          description: Ungültige Parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Paket nicht gefunden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not Found
+                message: Package not found
+        '500':
+          description: Interner Serverfehler
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /packages:
+    get:
+      tags:
+        - Packages
+      summary: Alle Pakete auflisten
+      description: Gibt eine Liste aller registrierten GeoPackages zurück.
+      operationId: listPackages
+      responses:
+        '200':
+          description: Liste der Pakete
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PackageList'
+              example:
+                packages:
+                  - id: districts
+                    name: districts.gpkg
+                    path: /data/districts.gpkg
+                    size: 1048576
+                    layer_count: 2
+                    indexed: true
+                    ready: true
+                    loaded_at: "2024-01-15T10:30:00Z"
+                    last_queried: "2024-01-15T10:35:00Z"
+                count: 1
+        '500':
+          description: Interner Serverfehler
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /packages/{packageId}:
+    get:
+      tags:
+        - Packages
+      summary: Paketdetails abrufen
+      description: Gibt detaillierte Informationen zu einem bestimmten GeoPackage zurück.
+      operationId: getPackage
+      parameters:
+        - $ref: '#/components/parameters/PackageIdParam'
+      responses:
+        '200':
+          description: Paketdetails
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Package'
+        '404':
+          description: Paket nicht gefunden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Interner Serverfehler
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /packages/{packageId}/layers:
+    get:
+      tags:
+        - Packages
+      summary: Paket-Layer abrufen
+      description: Gibt alle Layer eines bestimmten GeoPackages zurück.
+      operationId: getPackageLayers
+      parameters:
+        - $ref: '#/components/parameters/PackageIdParam'
+      responses:
+        '200':
+          description: Liste der Layer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LayerList'
+              example:
+                package_id: districts
+                layers:
+                  - name: districts
+                    description: Administrative Bezirke
+                    geometry_type: MULTIPOLYGON
+                    geometry_column: geom
+                    srid: 4326
+                    has_index: true
+                    feature_count: 12
+                    extent:
+                      min_x: 13.088
+                      min_y: 52.338
+                      max_x: 13.761
+                      max_y: 52.675
+                count: 1
+        '404':
+          description: Paket nicht gefunden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Interner Serverfehler
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Detaillierter Gesundheitsstatus
+      description: |
+        Gibt detaillierte Informationen über den Gesundheitszustand des Services zurück.
+        Enthält Informationen über geladene Pakete und den Status einzelner Komponenten.
+      operationId: getHealth
+      servers:
+        - url: /
+          description: Root
+      responses:
+        '200':
+          description: Service ist gesund
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+              example:
+                status: ok
+                ready: true
+                packages_loaded: 3
+                packages_ready: 3
+                components:
+                  storage: ok
+        '503':
+          description: Service ist nicht gesund
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+              example:
+                status: unhealthy
+                ready: false
+                packages_loaded: 0
+                packages_ready: 0
+                components:
+                  storage: ok
+
+  /health/live:
+    get:
+      tags:
+        - Health
+      summary: Kubernetes Liveness Probe
+      description: |
+        Einfacher Liveness-Check für Kubernetes.
+        Gibt 200 zurück, wenn der Service läuft, sonst 503.
+      operationId: getLiveness
+      servers:
+        - url: /
+          description: Root
+      responses:
+        '200':
+          description: Service ist aktiv
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimpleStatus'
+              example:
+                status: ok
+        '503':
+          description: Service ist nicht aktiv
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimpleStatus'
+              example:
+                status: unhealthy
+
+  /health/ready:
+    get:
+      tags:
+        - Health
+      summary: Kubernetes Readiness Probe
+      description: |
+        Readiness-Check für Kubernetes.
+        Gibt 200 zurück, wenn der Service bereit ist, Anfragen zu verarbeiten, sonst 503.
+      operationId: getReadiness
+      servers:
+        - url: /
+          description: Root
+      responses:
+        '200':
+          description: Service ist bereit
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimpleStatus'
+              example:
+                status: ok
+        '503':
+          description: Service ist nicht bereit
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimpleStatus'
+              example:
+                status: not ready
+
+components:
+  parameters:
+    PackageIdParam:
+      name: packageId
+      in: path
+      required: true
+      description: Die eindeutige ID des GeoPackages
+      schema:
+        type: string
+      example: districts
+
+    LonParam:
+      name: lon
+      in: query
+      description: Longitude (Längengrad) für WGS84-Koordinaten
+      schema:
+        type: number
+        format: double
+        minimum: -180
+        maximum: 180
+      example: 13.405
+
+    LatParam:
+      name: lat
+      in: query
+      description: Latitude (Breitengrad) für WGS84-Koordinaten
+      schema:
+        type: number
+        format: double
+        minimum: -90
+        maximum: 90
+      example: 52.52
+
+    XParam:
+      name: x
+      in: query
+      description: X-Koordinate für andere Koordinatensysteme
+      schema:
+        type: number
+        format: double
+      example: 389283
+
+    YParam:
+      name: y
+      in: query
+      description: Y-Koordinate für andere Koordinatensysteme
+      schema:
+        type: number
+        format: double
+      example: 5819450
+
+    SridParam:
+      name: srid
+      in: query
+      description: |
+        Spatial Reference ID der Eingabekoordinaten.
+        Standard ist 4326 (WGS84).
+      schema:
+        type: integer
+        default: 4326
+      example: 4326
+
+    PropertiesParam:
+      name: properties
+      in: query
+      description: |
+        Komma-separierte Liste von Eigenschaften, die zurückgegeben werden sollen.
+        Wenn nicht angegeben, werden alle Eigenschaften zurückgegeben.
+      schema:
+        type: string
+      example: name,population
+
+  schemas:
+    Coordinate:
+      type: object
+      description: Geografische Koordinate
+      properties:
+        x:
+          type: number
+          format: double
+          description: X-Koordinate (Longitude bei WGS84)
+        y:
+          type: number
+          format: double
+          description: Y-Koordinate (Latitude bei WGS84)
+        srid:
+          type: integer
+          description: Spatial Reference ID
+      required:
+        - x
+        - y
+        - srid
+
+    Geometry:
+      type: object
+      description: Geometrie im WKT-Format
+      properties:
+        type:
+          type: string
+          description: Geometrietyp
+          enum:
+            - POINT
+            - LINESTRING
+            - POLYGON
+            - MULTIPOINT
+            - MULTILINESTRING
+            - MULTIPOLYGON
+            - GEOMETRYCOLLECTION
+        wkt:
+          type: string
+          description: Well-Known Text Repräsentation
+      required:
+        - type
+        - wkt
+
+    Feature:
+      type: object
+      description: Geografisches Feature mit Eigenschaften
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Feature-ID
+        layer:
+          type: string
+          description: Name des Layers
+        properties:
+          type: object
+          additionalProperties: true
+          description: Schlüssel-Wert-Paare der Feature-Eigenschaften
+        geometry:
+          $ref: '#/components/schemas/Geometry'
+      required:
+        - id
+        - layer
+        - properties
+
+    License:
+      type: object
+      description: Lizenzinformationen
+      properties:
+        name:
+          type: string
+          description: Name der Lizenz
+        url:
+          type: string
+          format: uri
+          description: URL zur Lizenz
+        attribution:
+          type: string
+          description: Attributionstext
+
+    QueryResult:
+      type: object
+      description: Abfrageergebnis für ein einzelnes GeoPackage
+      properties:
+        package_id:
+          type: string
+          description: ID des GeoPackages
+        package_name:
+          type: string
+          description: Name des GeoPackages
+        features:
+          type: array
+          items:
+            $ref: '#/components/schemas/Feature'
+          description: Gefundene Features
+        feature_count:
+          type: integer
+          description: Anzahl der Features
+        query_time_ms:
+          type: integer
+          format: int64
+          description: Abfragezeit in Millisekunden
+        license:
+          $ref: '#/components/schemas/License'
+      required:
+        - package_id
+        - package_name
+        - features
+        - feature_count
+        - query_time_ms
+
+    QueryResponse:
+      type: object
+      description: Vollständige Abfrageantwort
+      properties:
+        coordinate:
+          $ref: '#/components/schemas/Coordinate'
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/QueryResult'
+          description: Ergebnisse pro GeoPackage
+        total_features:
+          type: integer
+          description: Gesamtanzahl der gefundenen Features
+        processing_time_ms:
+          type: integer
+          format: int64
+          description: Gesamte Verarbeitungszeit in Millisekunden
+      required:
+        - coordinate
+        - results
+        - total_features
+        - processing_time_ms
+
+    Extent:
+      type: object
+      description: Räumliche Ausdehnung (Bounding Box)
+      properties:
+        min_x:
+          type: number
+          format: double
+        min_y:
+          type: number
+          format: double
+        max_x:
+          type: number
+          format: double
+        max_y:
+          type: number
+          format: double
+      required:
+        - min_x
+        - min_y
+        - max_x
+        - max_y
+
+    Layer:
+      type: object
+      description: GeoPackage-Layer
+      properties:
+        name:
+          type: string
+          description: Name des Layers
+        description:
+          type: string
+          description: Beschreibung des Layers
+        geometry_type:
+          type: string
+          description: Geometrietyp
+          enum:
+            - POINT
+            - LINESTRING
+            - POLYGON
+            - MULTIPOINT
+            - MULTILINESTRING
+            - MULTIPOLYGON
+            - GEOMETRYCOLLECTION
+        geometry_column:
+          type: string
+          description: Name der Geometriespalte
+        srid:
+          type: integer
+          description: Spatial Reference ID
+        has_index:
+          type: boolean
+          description: Hat einen räumlichen Index
+        feature_count:
+          type: integer
+          description: Anzahl der Features
+        extent:
+          $ref: '#/components/schemas/Extent'
+      required:
+        - name
+        - geometry_type
+        - geometry_column
+        - srid
+        - has_index
+        - feature_count
+
+    LayerList:
+      type: object
+      description: Liste von Layern
+      properties:
+        package_id:
+          type: string
+          description: ID des GeoPackages
+        layers:
+          type: array
+          items:
+            $ref: '#/components/schemas/Layer'
+        count:
+          type: integer
+          description: Anzahl der Layer
+      required:
+        - package_id
+        - layers
+        - count
+
+    Package:
+      type: object
+      description: GeoPackage-Informationen
+      properties:
+        id:
+          type: string
+          description: Eindeutige ID des Pakets
+        name:
+          type: string
+          description: Anzeigename
+        path:
+          type: string
+          description: Dateipfad
+        size:
+          type: integer
+          format: int64
+          description: Dateigröße in Bytes
+        layer_count:
+          type: integer
+          description: Anzahl der Layer
+        indexed:
+          type: boolean
+          description: Alle Indizes erstellt
+        ready:
+          type: boolean
+          description: Bereit für Abfragen
+        loaded_at:
+          type: string
+          format: date-time
+          description: Zeitpunkt des Ladens
+        last_queried:
+          type: string
+          format: date-time
+          description: Zeitpunkt der letzten Abfrage
+      required:
+        - id
+        - name
+        - path
+        - size
+        - layer_count
+        - indexed
+        - ready
+
+    PackageList:
+      type: object
+      description: Liste von GeoPackages
+      properties:
+        packages:
+          type: array
+          items:
+            $ref: '#/components/schemas/Package'
+        count:
+          type: integer
+          description: Anzahl der Pakete
+      required:
+        - packages
+        - count
+
+    HealthStatus:
+      type: object
+      description: Detaillierter Gesundheitsstatus
+      properties:
+        status:
+          type: string
+          enum:
+            - ok
+            - unhealthy
+        ready:
+          type: boolean
+          description: Service ist bereit für Anfragen
+        packages_loaded:
+          type: integer
+          description: Anzahl geladener Pakete
+        packages_ready:
+          type: integer
+          description: Anzahl abfragebereiter Pakete
+        components:
+          type: object
+          additionalProperties:
+            type: string
+          description: Status einzelner Komponenten
+      required:
+        - status
+        - ready
+        - packages_loaded
+        - packages_ready
+
+    SimpleStatus:
+      type: object
+      description: Einfacher Status
+      properties:
+        status:
+          type: string
+          enum:
+            - ok
+            - unhealthy
+            - not ready
+      required:
+        - status
+
+    Error:
+      type: object
+      description: Fehlermeldung
+      properties:
+        error:
+          type: string
+          description: HTTP-Statustext
+        message:
+          type: string
+          description: Detaillierte Fehlermeldung
+      required:
+        - error
+        - message

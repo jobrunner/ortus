@@ -190,8 +190,14 @@ func (s *Server) handleGetLayers(w http.ResponseWriter, r *http.Request) {
 
 // handleOpenAPI returns the OpenAPI specification.
 func (s *Server) handleOpenAPI(w http.ResponseWriter, _ *http.Request) {
+	spec, err := getOpenAPIJSON()
+	if err != nil {
+		s.logger.Error("failed to get OpenAPI spec", "error", err)
+		s.writeError(w, http.StatusInternalServerError, "Failed to load OpenAPI specification")
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
-	_, _ = w.Write([]byte(openAPISpec))
+	_, _ = w.Write(spec)
 }
 
 // parseQueryParams parses query parameters from the request.
@@ -382,80 +388,3 @@ func boolToStatus(b bool) string {
 	}
 	return "unhealthy"
 }
-
-// openAPISpec is the OpenAPI 3.0 specification.
-const openAPISpec = `{
-  "openapi": "3.0.3",
-  "info": {
-    "title": "Ortus GeoPackage Query API",
-    "description": "REST API for querying GeoPackage files using point coordinates",
-    "version": "1.0.0"
-  },
-  "servers": [
-    {"url": "/api/v1", "description": "API v1"}
-  ],
-  "paths": {
-    "/query": {
-      "get": {
-        "summary": "Query all packages",
-        "description": "Performs a point query across all registered GeoPackages",
-        "parameters": [
-          {"name": "lon", "in": "query", "schema": {"type": "number"}, "description": "Longitude (WGS84)"},
-          {"name": "lat", "in": "query", "schema": {"type": "number"}, "description": "Latitude (WGS84)"},
-          {"name": "x", "in": "query", "schema": {"type": "number"}, "description": "X coordinate"},
-          {"name": "y", "in": "query", "schema": {"type": "number"}, "description": "Y coordinate"},
-          {"name": "srid", "in": "query", "schema": {"type": "integer", "default": 4326}, "description": "SRID of input coordinates"},
-          {"name": "properties", "in": "query", "schema": {"type": "string"}, "description": "Comma-separated list of properties to return"}
-        ],
-        "responses": {
-          "200": {"description": "Query results"},
-          "400": {"description": "Invalid parameters"}
-        }
-      }
-    },
-    "/query/{packageId}": {
-      "get": {
-        "summary": "Query specific package",
-        "parameters": [
-          {"name": "packageId", "in": "path", "required": true, "schema": {"type": "string"}}
-        ],
-        "responses": {
-          "200": {"description": "Query results"},
-          "404": {"description": "Package not found"}
-        }
-      }
-    },
-    "/packages": {
-      "get": {
-        "summary": "List all packages",
-        "responses": {
-          "200": {"description": "List of packages"}
-        }
-      }
-    },
-    "/packages/{packageId}": {
-      "get": {
-        "summary": "Get package details",
-        "parameters": [
-          {"name": "packageId", "in": "path", "required": true, "schema": {"type": "string"}}
-        ],
-        "responses": {
-          "200": {"description": "Package details"},
-          "404": {"description": "Package not found"}
-        }
-      }
-    },
-    "/packages/{packageId}/layers": {
-      "get": {
-        "summary": "Get package layers",
-        "parameters": [
-          {"name": "packageId", "in": "path", "required": true, "schema": {"type": "string"}}
-        ],
-        "responses": {
-          "200": {"description": "Layer list"},
-          "404": {"description": "Package not found"}
-        }
-      }
-    }
-  }
-}`
