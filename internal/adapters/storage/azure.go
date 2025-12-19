@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/container"
 
 	"github.com/jobrunner/ortus/internal/ports/output"
 )
@@ -74,38 +75,52 @@ func (s *AzureStorage) List(ctx context.Context) ([]output.StorageObject, error)
 		}
 
 		for _, blob := range page.Segment.BlobItems {
-			name := *blob.Name
-
-			// Only include .gpkg files
-			if !strings.HasSuffix(strings.ToLower(name), ".gpkg") {
-				continue
+			obj, ok := s.blobToStorageObject(blob)
+			if ok {
+				objects = append(objects, obj)
 			}
-
-			// Remove prefix from key
-			relKey := strings.TrimPrefix(name, s.prefix)
-			relKey = strings.TrimPrefix(relKey, "/")
-
-			obj := output.StorageObject{
-				Key: relKey,
-			}
-
-			if blob.Properties != nil {
-				if blob.Properties.ContentLength != nil {
-					obj.Size = *blob.Properties.ContentLength
-				}
-				if blob.Properties.LastModified != nil {
-					obj.LastModified = blob.Properties.LastModified.Unix()
-				}
-				if blob.Properties.ETag != nil {
-					obj.ETag = string(*blob.Properties.ETag)
-				}
-			}
-
-			objects = append(objects, obj)
 		}
 	}
 
 	return objects, nil
+}
+
+// blobToStorageObject converts an Azure blob to a StorageObject.
+// Returns false if the blob should be skipped (not a .gpkg file).
+func (s *AzureStorage) blobToStorageObject(blob *container.BlobItem) (output.StorageObject, bool) {
+	name := *blob.Name
+
+	// Only include .gpkg files
+	if !strings.HasSuffix(strings.ToLower(name), ".gpkg") {
+		return output.StorageObject{}, false
+	}
+
+	// Remove prefix from key
+	relKey := strings.TrimPrefix(name, s.prefix)
+	relKey = strings.TrimPrefix(relKey, "/")
+
+	obj := output.StorageObject{
+		Key: relKey,
+	}
+
+	s.extractBlobProperties(blob, &obj)
+	return obj, true
+}
+
+// extractBlobProperties extracts properties from an Azure blob.
+func (s *AzureStorage) extractBlobProperties(blob *container.BlobItem, obj *output.StorageObject) {
+	if blob.Properties == nil {
+		return
+	}
+	if blob.Properties.ContentLength != nil {
+		obj.Size = *blob.Properties.ContentLength
+	}
+	if blob.Properties.LastModified != nil {
+		obj.LastModified = blob.Properties.LastModified.Unix()
+	}
+	if blob.Properties.ETag != nil {
+		obj.ETag = string(*blob.Properties.ETag)
+	}
 }
 
 // Download downloads a blob from Azure to the local filesystem.

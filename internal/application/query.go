@@ -121,64 +121,70 @@ func (s *QueryService) QueryPointInPackage(ctx context.Context, packageID string
 
 	// Query each layer
 	for _, layer := range pkg.Layers {
-		// Transform coordinate to layer's SRID if needed
-		queryCoord := req.Coordinate
-		if queryCoord.SRID != layer.SRID {
-			if s.transformer != nil {
-				transformed, err := s.transformer.Transform(ctx, queryCoord, layer.SRID)
-				if err != nil {
-					s.logger.Warn("coordinate transformation failed",
-						"from_srid", queryCoord.SRID,
-						"to_srid", layer.SRID,
-						"error", err,
-					)
-					continue
-				}
-				queryCoord = transformed
-			} else {
-				// Skip layers with different SRID if no transformer
-				s.logger.Debug("skipping layer due to SRID mismatch",
-					"layer", layer.Name,
-					"layer_srid", layer.SRID,
-					"query_srid", queryCoord.SRID,
-				)
-				continue
-			}
+		if s.queryLayer(ctx, packageID, &layer, &req, result) {
+			break // max features reached
 		}
-
-		// Execute point query
-		features, err := s.repo.QueryPoint(ctx, packageID, layer.Name, queryCoord)
-		if err != nil {
-			s.logger.Warn("layer query failed",
-				"package", packageID,
-				"layer", layer.Name,
-				"error", err,
-			)
-			continue
-		}
-
-		// Filter properties if requested
-		if len(req.Properties) > 0 {
-			features = s.filterProperties(features, req.Properties)
-		}
-
-		// Apply max features limit
-		if len(result.Features)+len(features) > s.maxFeatures {
-			remaining := s.maxFeatures - len(result.Features)
-			if remaining > 0 {
-				features = features[:remaining]
-			} else {
-				break
-			}
-		}
-
-		result.Features = append(result.Features, features...)
 	}
 
 	result.QueryTime = time.Since(start)
 	s.metrics.ObserveQueryDuration(packageID, result.QueryTime)
 
 	return result, nil
+}
+
+// queryLayer queries a single layer and appends results. Returns true if max features reached.
+func (s *QueryService) queryLayer(ctx context.Context, packageID string, layer *domain.Layer, req *domain.QueryRequest, result *domain.QueryResult) bool {
+	queryCoord, ok := s.transformCoordinate(ctx, req.Coordinate, layer)
+	if !ok {
+		return false
+	}
+
+	features, err := s.repo.QueryPoint(ctx, packageID, layer.Name, queryCoord)
+	if err != nil {
+		s.logger.Warn("layer query failed", "package", packageID, "layer", layer.Name, "error", err)
+		return false
+	}
+
+	if len(req.Properties) > 0 {
+		features = s.filterProperties(features, req.Properties)
+	}
+
+	features, maxReached := s.applyMaxFeaturesLimit(features, result)
+	result.Features = append(result.Features, features...)
+	return maxReached
+}
+
+// transformCoordinate transforms the coordinate to the layer's SRID if needed.
+func (s *QueryService) transformCoordinate(ctx context.Context, coord domain.Coordinate, layer *domain.Layer) (domain.Coordinate, bool) {
+	if coord.SRID == layer.SRID {
+		return coord, true
+	}
+
+	if s.transformer == nil {
+		s.logger.Debug("skipping layer due to SRID mismatch", "layer", layer.Name, "layer_srid", layer.SRID, "query_srid", coord.SRID)
+		return coord, false
+	}
+
+	transformed, err := s.transformer.Transform(ctx, coord, layer.SRID)
+	if err != nil {
+		s.logger.Warn("coordinate transformation failed", "from_srid", coord.SRID, "to_srid", layer.SRID, "error", err)
+		return coord, false
+	}
+	return transformed, true
+}
+
+// applyMaxFeaturesLimit limits features to not exceed maxFeatures. Returns true if limit reached.
+func (s *QueryService) applyMaxFeaturesLimit(features []domain.Feature, result *domain.QueryResult) ([]domain.Feature, bool) {
+	total := len(result.Features) + len(features)
+	if total <= s.maxFeatures {
+		return features, false
+	}
+
+	remaining := s.maxFeatures - len(result.Features)
+	if remaining > 0 {
+		return features[:remaining], true
+	}
+	return nil, true
 }
 
 // filterProperties filters feature properties to only include requested ones.

@@ -273,7 +273,7 @@ type corsTestCase struct {
 }
 
 // runCORSTest executes a single CORS test case.
-func runCORSTest(t *testing.T, tt corsTestCase) {
+func runCORSTest(t *testing.T, tt *corsTestCase) {
 	t.Helper()
 
 	// Create a simple handler that returns 200 OK
@@ -313,7 +313,7 @@ func runCORSTest(t *testing.T, tt corsTestCase) {
 }
 
 // verifyCORSHeaders checks the CORS headers in the response.
-func verifyCORSHeaders(t *testing.T, rr *httptest.ResponseRecorder, tt corsTestCase) {
+func verifyCORSHeaders(t *testing.T, rr *httptest.ResponseRecorder, tt *corsTestCase) {
 	t.Helper()
 
 	allowOrigin := rr.Header().Get("Access-Control-Allow-Origin")
@@ -407,7 +407,8 @@ func TestCORSMiddleware(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
+	for i := range tests {
+		tt := &tests[i]
 		t.Run(tt.name, func(t *testing.T) {
 			runCORSTest(t, tt)
 		})

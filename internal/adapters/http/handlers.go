@@ -277,9 +277,11 @@ func (s *Server) paramsToCoordinate(params *QueryParams) domain.Coordinate {
 // formatQueryResponse formats the query response for JSON output.
 func (s *Server) formatQueryResponse(resp *domain.QueryResponse) map[string]interface{} {
 	results := make([]map[string]interface{}, len(resp.Results))
-	for i, r := range resp.Results {
+	for i := range resp.Results {
+		r := &resp.Results[i]
 		features := make([]map[string]interface{}, len(r.Features))
-		for j, f := range r.Features {
+		for j := range r.Features {
+			f := &r.Features[j]
 			features[j] = map[string]interface{}{
 				"id":         f.ID,
 				"layer":      f.LayerName,

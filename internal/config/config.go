@@ -191,46 +191,81 @@ func Load(configPath string) (*Config, error) {
 
 // Validate validates the configuration.
 func (c *Config) Validate() error {
+	if err := c.validateServer(); err != nil {
+		return err
+	}
+	if err := c.validateTLS(); err != nil {
+		return err
+	}
+	return c.validateStorage()
+}
+
+func (c *Config) validateServer() error {
 	if c.Server.Port < 1 || c.Server.Port > 65535 {
 		return fmt.Errorf("invalid server port: %d", c.Server.Port)
 	}
+	return nil
+}
 
-	if c.TLS.Enabled {
-		if len(c.TLS.Domains) == 0 {
-			return fmt.Errorf("TLS enabled but no domains specified")
-		}
-		if c.TLS.Email == "" {
-			return fmt.Errorf("TLS enabled but no email specified")
-		}
+func (c *Config) validateTLS() error {
+	if !c.TLS.Enabled {
+		return nil
 	}
+	if len(c.TLS.Domains) == 0 {
+		return fmt.Errorf("TLS enabled but no domains specified")
+	}
+	if c.TLS.Email == "" {
+		return fmt.Errorf("TLS enabled but no email specified")
+	}
+	return nil
+}
 
+func (c *Config) validateStorage() error {
 	switch c.Storage.Type {
 	case "local":
-		if c.Storage.LocalPath == "" {
-			return fmt.Errorf("local storage path is required")
-		}
+		return c.validateLocalStorage()
 	case "s3":
-		if c.Storage.S3.Bucket == "" {
-			return fmt.Errorf("S3 bucket is required")
-		}
-		if c.Storage.S3.Region == "" {
-			return fmt.Errorf("S3 region is required")
-		}
+		return c.validateS3Storage()
 	case "azure":
-		if c.Storage.Azure.Container == "" {
-			return fmt.Errorf("azure container is required")
-		}
-		if c.Storage.Azure.AccountName == "" && c.Storage.Azure.ConnectionString == "" {
-			return fmt.Errorf("azure account name or connection string is required")
-		}
+		return c.validateAzureStorage()
 	case "http":
-		if c.Storage.HTTP.BaseURL == "" {
-			return fmt.Errorf("HTTP base URL is required")
-		}
+		return c.validateHTTPStorage()
 	default:
 		return fmt.Errorf("unknown storage type: %s", c.Storage.Type)
 	}
+}
 
+func (c *Config) validateLocalStorage() error {
+	if c.Storage.LocalPath == "" {
+		return fmt.Errorf("local storage path is required")
+	}
+	return nil
+}
+
+func (c *Config) validateS3Storage() error {
+	if c.Storage.S3.Bucket == "" {
+		return fmt.Errorf("S3 bucket is required")
+	}
+	if c.Storage.S3.Region == "" {
+		return fmt.Errorf("S3 region is required")
+	}
+	return nil
+}
+
+func (c *Config) validateAzureStorage() error {
+	if c.Storage.Azure.Container == "" {
+		return fmt.Errorf("azure container is required")
+	}
+	if c.Storage.Azure.AccountName == "" && c.Storage.Azure.ConnectionString == "" {
+		return fmt.Errorf("azure account name or connection string is required")
+	}
+	return nil
+}
+
+func (c *Config) validateHTTPStorage() error {
+	if c.Storage.HTTP.BaseURL == "" {
+		return fmt.Errorf("HTTP base URL is required")
+	}
 	return nil
 }
 

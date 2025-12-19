@@ -140,7 +140,7 @@ func (r *Repository) GetLayers(_ context.Context, packageID string) ([]domain.La
 }
 
 // QueryPoint performs a point query on a specific layer.
-func (r *Repository) QueryPoint(ctx context.Context, packageID string, layerName string, coord domain.Coordinate) ([]domain.Feature, error) {
+func (r *Repository) QueryPoint(ctx context.Context, packageID, layerName string, coord domain.Coordinate) ([]domain.Feature, error) {
 	r.mu.RLock()
 	db, ok := r.connections[packageID]
 	pkg := r.packages[packageID]
@@ -161,7 +161,7 @@ func (r *Repository) QueryPoint(ctx context.Context, packageID string, layerName
 }
 
 // CreateSpatialIndex creates a spatial index for a layer.
-func (r *Repository) CreateSpatialIndex(ctx context.Context, packageID string, layerName string) error {
+func (r *Repository) CreateSpatialIndex(ctx context.Context, packageID, layerName string) error {
 	r.mu.RLock()
 	db, ok := r.connections[packageID]
 	pkg := r.packages[packageID]
@@ -210,7 +210,7 @@ func (r *Repository) CreateSpatialIndex(ctx context.Context, packageID string, l
 }
 
 // HasSpatialIndex checks if a layer has a spatial index.
-func (r *Repository) HasSpatialIndex(ctx context.Context, packageID string, layerName string) (bool, error) {
+func (r *Repository) HasSpatialIndex(ctx context.Context, packageID, layerName string) (bool, error) {
 	r.mu.RLock()
 	db, ok := r.connections[packageID]
 	pkg := r.packages[packageID]
