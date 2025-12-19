@@ -6,28 +6,28 @@ Akzeptiert
 
 ## Kontext
 
-GeoPackage-Dateien koennen zur Laufzeit hinzugefuegt, aktualisiert oder entfernt werden. Der Service muss auf diese Aenderungen reagieren, ohne neu gestartet werden zu muessen.
+GeoPackage-Dateien können zur Laufzeit hinzugefügt, aktualisiert oder entfernt werden. Der Service muss auf diese Änderungen reagieren, ohne neu gestartet werden zu müssen.
 
 ### Anforderungen
 
 1. **Automatische Erkennung:** Neue `.gpkg`-Dateien im Verzeichnis erkennen
-2. **Entfernung:** Geloeschte GeoPackages aus der Registry entfernen
-3. **Update:** Geaenderte GeoPackages neu laden (optional)
-4. **Thread-Safety:** Sichere gleichzeitige Abfragen waehrend Updates
-5. **Performance:** Minimaler Overhead bei unveraendertem Zustand
+2. **Entfernung:** Gelöschte GeoPackages aus der Registry entfernen
+3. **Update:** Geänderte GeoPackages neu laden (optional)
+4. **Thread-Safety:** Sichere gleichzeitige Abfragen während Updates
+5. **Performance:** Minimaler Overhead bei unverändertem Zustand
 
 ### Evaluierte Optionen
 
 | Option | Vorteile | Nachteile |
 |--------|----------|-----------|
-| fsnotify | Event-basiert, effizient | OS-abhaengig, Event-Limitierungen |
-| Polling | Einfach, zuverlaessig | CPU/IO-Overhead |
+| fsnotify | Event-basiert, effizient | OS-abhängig, Event-Limitierungen |
+| Polling | Einfach, zuverlässig | CPU/IO-Overhead |
 | inotify direkt | Linux-optimiert | Nicht portabel |
 | Signal-basiert | Explizite Kontrolle | Manueller Trigger erforderlich |
 
 ## Entscheidung
 
-Wir verwenden **fsnotify** fuer File-System-Events mit **Polling als Fallback**.
+Wir verwenden **fsnotify** für File-System-Events mit **Polling als Fallback**.
 
 ### Architektur
 
@@ -60,10 +60,10 @@ Wir verwenden **fsnotify** fuer File-System-Events mit **Polling als Fallback**.
 ```go
 // internal/ports/output/watcher.go
 type FileWatcherPort interface {
-    // Watch startet die Ueberwachung eines Verzeichnisses
+    // Watch startet die Überwachung eines Verzeichnisses
     Watch(ctx context.Context, path string) (<-chan FileEvent, error)
 
-    // Stop beendet die Ueberwachung
+    // Stop beendet die Überwachung
     Stop() error
 }
 
@@ -143,7 +143,7 @@ func (w *FSNotifyWatcher) processEvents(ctx context.Context, basePath string) {
                 continue
             }
 
-            // Temporaere Dateien ignorieren
+            // Temporäre Dateien ignorieren
             filename := filepath.Base(event.Name)
             if strings.HasPrefix(filename, ".") || strings.HasSuffix(filename, ".tmp") {
                 continue
@@ -229,7 +229,7 @@ func (s *RegistryService) handleEvents(ctx context.Context, events <-chan output
 func (s *RegistryService) handleCreate(ctx context.Context, event output.FileEvent) {
     s.logger.Info("new geopackage detected", "path", event.Path)
 
-    // Warte kurz bis Datei vollstaendig geschrieben
+    // Warte kurz bis Datei vollständig geschrieben
     time.Sleep(500 * time.Millisecond)
 
     // Lade GeoPackage
@@ -290,7 +290,7 @@ func (s *RegistryService) ListPackages() []*domain.GeoPackage {
 
 ### Debouncing
 
-Um mehrfache Events fuer dieselbe Datei zu vermeiden (z.B. bei grossen Uploads):
+Um mehrfache Events für dieselbe Datei zu vermeiden (z.B. bei grossen Uploads):
 
 ```go
 // internal/adapters/secondary/watcher/debouncer.go
@@ -333,27 +333,27 @@ func (d *Debouncer) Add(event FileEvent) {
 
 ### Positiv
 
-- **Reaktivitaet:** Sofortige Reaktion auf Dateiänderungen
+- **Reaktivität:** Sofortige Reaktion auf Dateiänderungen
 - **Effizienz:** Event-basiert statt Polling
-- **Thread-Safety:** RWMutex ermoeglicht parallele Reads
+- **Thread-Safety:** RWMutex ermöglicht parallele Reads
 - **Graceful:** Keine Unterbrechung laufender Abfragen
 
 ### Negativ
 
-- **Komplexitaet:** Event-Handling und Thread-Synchronisation
-- **Edge Cases:** Unvollstaendige Uploads, temporaere Dateien
-- **OS-Abhaengigkeit:** fsnotify-Verhalten variiert
+- **Komplexität:** Event-Handling und Thread-Synchronisation
+- **Edge Cases:** Unvollständige Uploads, temporäre Dateien
+- **OS-Abhängigkeit:** fsnotify-Verhalten variiert
 
 ### Mitigationen
 
 - Debouncing verhindert mehrfache Events
-- Delay vor Load wartet auf vollstaendigen Upload
-- Filter fuer temporaere Dateien (.tmp, Punkt-Prefix)
-- Logging aller Watcher-Events fuer Debugging
+- Delay vor Load wartet auf vollständigen Upload
+- Filter für temporäre Dateien (.tmp, Punkt-Prefix)
+- Logging aller Watcher-Events für Debugging
 
 ## Polling-Fallback
 
-Fuer Umgebungen wo fsnotify nicht funktioniert:
+Für Umgebungen wo fsnotify nicht funktioniert:
 
 ```go
 // internal/adapters/secondary/watcher/polling.go
@@ -405,13 +405,13 @@ func (w *PollingWatcher) scan(path string) {
             w.events <- FileEvent{Type: FileCreated, Path: fullPath}
             w.state[fullPath] = modTime
         } else if modTime.After(lastMod) {
-            // Geaenderte Datei
+            // Geänderte Datei
             w.events <- FileEvent{Type: FileModified, Path: fullPath}
             w.state[fullPath] = modTime
         }
     }
 
-    // Geloeschte Dateien
+    // Gelöschte Dateien
     for path := range w.state {
         if _, exists := currentFiles[path]; !exists {
             w.events <- FileEvent{Type: FileDeleted, Path: path}
@@ -426,7 +426,7 @@ func (w *PollingWatcher) scan(path string) {
 ```yaml
 geopackage:
   directory: "/data/gpkg"
-  watchInterval: 10s    # Fuer Polling-Fallback
+  watchInterval: 10s    # Für Polling-Fallback
   debounceDelay: 500ms  # Wartezeit nach Events
 ```
 

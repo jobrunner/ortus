@@ -6,18 +6,18 @@ Akzeptiert
 
 ## Kontext
 
-Ortus soll Punktabfragen auf Geodaten ermoeglichen. Es muss ein Datenformat gewaehlt werden, das:
+Ortus soll Punktabfragen auf Geodaten ermöglichen. Es muss ein Datenformat gewählt werden, das:
 
-1. Effiziente raeumliche Abfragen unterstuetzt
+1. Effiziente räumliche Abfragen unterstützt
 2. Selbstbeschreibend ist (Metadaten, Lizenzinformationen)
 3. Als einzelne Datei transportierbar ist
 4. Einen etablierten Standard darstellt
 5. Mit bestehenden GIS-Tools kompatibel ist
-6. Koordinatentransformation unterstuetzt
+6. Koordinatentransformation unterstützt
 
 ### Evaluierte Optionen
 
-| Format | Raeumliche Abfragen | Metadaten | Portabilitaet | Standard |
+| Format | Räumliche Abfragen | Metadaten | Portabilität | Standard |
 |--------|---------------------|-----------|---------------|----------|
 | GeoPackage | Sehr gut (R-Tree, SQL) | Sehr gut (gpkg_metadata) | Einzelne Datei | OGC Standard |
 | PostGIS | Sehr gut | Gut | Server erforderlich | De-facto Standard |
@@ -27,23 +27,23 @@ Ortus soll Punktabfragen auf Geodaten ermoeglichen. Es muss ein Datenformat gewa
 
 ## Entscheidung
 
-Wir verwenden **GeoPackage** als einziges Eingabeformat fuer Geodaten.
+Wir verwenden **GeoPackage** als einziges Eingabeformat für Geodaten.
 
-### Begruendung
+### Begründung
 
-1. **Raeumliche Abfragen:**
+1. **Räumliche Abfragen:**
    - Nativer R-Tree Spatial Index
    - SpatiaLite-Funktionen (ST_Contains, Transform)
-   - SQL-basierte Abfragen ermoeglicht Flexibilitaet
+   - SQL-basierte Abfragen ermöglicht Flexibilität
 
 2. **Metadaten und Lizenz:**
    - `gpkg_metadata` und `gpkg_metadata_reference` Tabellen
-   - Standardisiertes Schema fuer Attribution und Lizenz
+   - Standardisiertes Schema für Attribution und Lizenz
    - Keine externe Metadaten-Datei erforderlich
 
 3. **Koordinatensysteme:**
-   - `gpkg_spatial_ref_sys` enthaelt SRID-Definitionen
-   - Proj4-Strings fuer Transformation verfuegbar
+   - `gpkg_spatial_ref_sys` enthält SRID-Definitionen
+   - Proj4-Strings für Transformation verfügbar
    - Unterstuetzung aller EPSG-Codes
 
 4. **Deployment:**
@@ -97,7 +97,7 @@ WHERE ST_Contains(
 ### Index-Erstellung
 
 ```sql
--- Pruefung ob Index existiert
+-- Prüfung ob Index existiert
 SELECT COUNT(*) FROM sqlite_master
 WHERE type = 'table' AND name = 'rtree_layername_geom';
 
@@ -111,31 +111,31 @@ SELECT CreateSpatialIndex('layername', 'geom');
 
 - **Einheitliches Format:** Klare Anforderungen an Datenlieferanten
 - **Selbstbeschreibend:** Alle Informationen in einer Datei
-- **Performant:** R-Tree-Index ermoeglicht schnelle Abfragen
-- **Flexibel:** Multiple Layer pro GeoPackage moeglich
+- **Performant:** R-Tree-Index ermöglicht schnelle Abfragen
+- **Flexibel:** Multiple Layer pro GeoPackage möglich
 - **Offline-faehig:** Kein externer Service erforderlich
 
 ### Negativ
 
-- **Vorverarbeitung:** Daten muessen als GeoPackage bereitgestellt werden
-- **Groesse:** Bei grossen Datensaetzen kann die Datei mehrere GB gross sein
+- **Vorverarbeitung:** Daten müssen als GeoPackage bereitgestellt werden
+- **Größe:** Bei grossen Datensaetzen kann die Datei mehrere GB gross sein
 - **Write-Lock:** SQLite hat Einschraenkungen bei gleichzeitigem Schreiben
 
 ### Mitigationen
 
 - **Vorverarbeitung:** GDAL/ogr2ogr kann andere Formate konvertieren
-- **Groesse:** Regionale Aufteilung in mehrere GeoPackages
+- **Größe:** Regionale Aufteilung in mehrere GeoPackages
 - **Write-Lock:** GeoPackages werden Read-Only geoeffnet
 
 ## Technische Details
 
 ### Basis-Image
 
-Das Projekt verwendet `ghcr.io/jobrunner/spatialite-base-image:1.4.0`, das bereits enthaelt:
+Das Projekt verwendet `ghcr.io/jobrunner/spatialite-base-image:1.4.0`, das bereits enthält:
 - SQLite3
 - SpatiaLite Extension
 - GDAL/OGR Tools
-- Proj4 fuer Koordinatentransformation
+- Proj4 für Koordinatentransformation
 
 ### GeoPackage-Verzeichnis
 
@@ -150,9 +150,9 @@ Das Projekt verwendet `ghcr.io/jobrunner/spatialite-base-image:1.4.0`, das berei
 ### Initialisierung beim Start
 
 1. Verzeichnis nach `.gpkg`-Dateien scannen
-2. Fuer jede Datei:
+2. Für jede Datei:
    - Layer aus `gpkg_contents` ermitteln
-   - Spatial Index pruefen/erstellen
+   - Spatial Index prüfen/erstellen
    - Metadaten und Lizenz laden
    - In Registry registrieren
 3. Read-Only oeffnen

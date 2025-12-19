@@ -1,12 +1,12 @@
 # Architektur - Ortus
 
-## Uebersicht
+## Übersicht
 
-Ortus ist ein Go-basierter REST-Service fuer Punktabfragen auf GeoPackage-Dateien. Der Service folgt der **Hexagonal Architecture (Ports & Adapters)** und dem **Standard Go Project Layout**.
+Ortus ist ein Go-basierter REST-Service für Punktabfragen auf GeoPackage-Dateien. Der Service folgt der **Hexagonal Architecture (Ports & Adapters)** und dem **Standard Go Project Layout**.
 
 ```
 +-------------------+          +-------------------+          +-------------------+
-|   API-Clients     |          |     ORTUS        |          |   GeoPackages     |
+|   API-Clients     |          |     ORTUS         |          |   GeoPackages     |
 |   (REST/HTTP)     |--------->|     Service       |<-------->|   (SpatiaLite)    |
 +-------------------+          +-------------------+          +-------------------+
                                         |
@@ -72,7 +72,7 @@ ortus/
 
 ## Hexagonale Architektur
 
-### Abhaengigkeitsrichtung
+### Abhängigkeitsrichtung
 
 ```
 Primary Adapters  -->  Input Ports  -->  Application  -->  Domain
@@ -82,7 +82,7 @@ Secondary Adapters  <--  Output Ports  <------+
 ```
 
 **Regeln:**
-- Domain hat KEINE Abhaengigkeiten
+- Domain hat KEINE Abhängigkeiten
 - Ports definieren Interfaces
 - Adapters implementieren Ports
 - Application orchestriert Domain-Logik
@@ -94,10 +94,10 @@ Secondary Adapters  <--  Output Ports  <------+
 - `GeoPackagePort` - Package-Informationen
 - `HealthPort` - Health-Checks
 
-**Output Ports** (was der Service benoetigt):
+**Output Ports** (was der Service benötigt):
 - `GeoPackageRepository` - SpatiaLite-Zugriff
 - `StoragePort` - Object Storage
-- `FileWatcherPort` - Datei-Ueberwachung
+- `FileWatcherPort` - Datei-Überwachung
 
 ## Design-Patterns
 
@@ -146,7 +146,7 @@ func (s *Service) DoWork(ctx context.Context) error {
 
 ## Konfiguration
 
-Prioritaet: CLI > Umgebungsvariablen > .env > Defaults
+Priorität: CLI > Umgebungsvariablen > .env > Defaults
 
 | Variable | Default | Beschreibung |
 |----------|---------|--------------|
@@ -157,9 +157,9 @@ Prioritaet: CLI > Umgebungsvariablen > .env > Defaults
 | `ORTUS_RATE_LIMIT` | `10` | Requests/Sekunde |
 | `ORTUS_SERVER_CORS_ALLOWED_ORIGINS` | `[]` | Erlaubte CORS Origins |
 
-CLI-Flag fuer CORS: `--cors=origin1,*.sub.domain.tld`
+CLI-Flag für CORS: `--cors=origin1,*.sub.domain.tld`
 
-Siehe [ADR-0007](adr/0007-configuration-management.md) fuer vollstaendige Liste.
+Siehe [ADR-0007](adr/0007-configuration-management.md) für vollständige Liste.
 
 ## Testing
 

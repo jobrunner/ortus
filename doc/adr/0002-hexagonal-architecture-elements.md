@@ -6,17 +6,17 @@ Akzeptiert (Erweitert 2024-12)
 
 ## Kontext
 
-Fuer die interne Struktur des Projekts (`internal/`) muss ein Architekturmuster gewaehlt werden, das:
+Für die interne Struktur des Projekts (`internal/`) muss ein Architekturmuster gewählt werden, das:
 
-1. Testbarkeit durch Entkopplung ermoeglicht
+1. Testbarkeit durch Entkopplung ermöglicht
 2. Austauschbarkeit von Komponenten (z.B. Datenzugriff) erlaubt
 3. Klare Verantwortlichkeiten definiert
-4. Skalierbar fuer HTTP-API, CLI und zukuenftige Interfaces ist
-5. Unterstuetzung fuer multiple Adapter pro Port bietet
+4. Skalierbar für HTTP-API, CLI und zukünftige Interfaces ist
+5. Unterstuetzung für multiple Adapter pro Port bietet
 
 ## Entscheidung
 
-Wir verwenden eine **vollstaendige Hexagonal Architecture (Ports & Adapters)** mit klarer Trennung:
+Wir verwenden eine **vollständige Hexagonal Architecture (Ports & Adapters)** mit klarer Trennung:
 
 ```
 +-------------------------------------------------------------------------+
@@ -69,20 +69,20 @@ Wir verwenden eine **vollstaendige Hexagonal Architecture (Ports & Adapters)** m
 |---------|-------|--------------|
 | `adapters/primary/http/` | Primary Adapter | HTTP/REST API Handler |
 | `adapters/primary/cli/` | Primary Adapter | CLI-Eingabe (optional) |
-| `ports/input/` | Input Ports | Interfaces fuer Driving Adapters |
+| `ports/input/` | Input Ports | Interfaces für Driving Adapters |
 | `application/` | Application Core | Business-Logik, Use Cases |
 | `domain/` | Domain Core | Entities, Value Objects |
-| `ports/output/` | Output Ports | Interfaces fuer Driven Adapters |
+| `ports/output/` | Output Ports | Interfaces für Driven Adapters |
 | `adapters/secondary/spatialite/` | Secondary Adapter | GeoPackage-Repository |
 | `adapters/secondary/storage/` | Secondary Adapter | S3/Azure/Local Storage |
 | `adapters/secondary/watcher/` | Secondary Adapter | File-System Watcher |
 
-### Abhaengigkeitsregel
+### Abhängigkeitsregel
 
-Abhaengigkeiten zeigen immer **nach innen**:
+Abhängigkeiten zeigen immer **nach innen**:
 - `adapters/primary/*` -> `ports/input/` -> `application/` -> `domain/`
 - `application/` -> `ports/output/` <- `adapters/secondary/*`
-- `domain/` hat KEINE Abhaengigkeiten zu anderen Packages
+- `domain/` hat KEINE Abhängigkeiten zu anderen Packages
 
 ### Interface-Definition
 
@@ -137,10 +137,10 @@ func main() {
 ### Positiv
 
 - **Testbarkeit:** Jede Schicht einzeln mit Mocks testbar
-- **Flexibilitaet:** Adapter austauschbar (SpatiaLite -> PostGIS, S3 -> Azure)
-- **Fokussierung:** Domain-Logik vollstaendig isoliert
-- **Erweiterbarkeit:** Neue Interfaces (gRPC) ohne Core-Aenderungen
-- **Klarheit:** Explizite Ports machen Abhaengigkeiten sichtbar
+- **Flexibilität:** Adapter austauschbar (SpatiaLite -> PostGIS, S3 -> Azure)
+- **Fokussierung:** Domain-Logik vollständig isoliert
+- **Erweiterbarkeit:** Neue Interfaces (gRPC) ohne Core-Änderungen
+- **Klarheit:** Explizite Ports machen Abhängigkeiten sichtbar
 
 ### Negativ
 
@@ -151,7 +151,7 @@ func main() {
 ### Mitigationen
 
 - Klare Dokumentation und ADRs
-- Code-Generierung fuer Boilerplate wo sinnvoll
+- Code-Generierung für Boilerplate wo sinnvoll
 - Regelmaessige Architektur-Reviews
 
 ## Verwandte ADRs
