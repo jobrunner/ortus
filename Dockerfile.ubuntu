@@ -48,11 +48,12 @@ COPY --from=builder /build/ortus /app/ortus
 # Set ownership
 RUN chown -R ortus:ortus /app
 
+# Create symlink for SpatiaLite library (Ubuntu uses arch-specific paths)
+RUN ln -sf /usr/lib/*/mod_spatialite.so /usr/lib/mod_spatialite.so
+
 USER ortus
 
-# Set SpatiaLite library path for the runtime (architecture-dependent)
-# arm64: /usr/lib/aarch64-linux-gnu/mod_spatialite.so
-# amd64: /usr/lib/x86_64-linux-gnu/mod_spatialite.so
+# Set SpatiaLite library path for the runtime
 ENV SPATIALITE_LIBRARY_PATH=/usr/lib/mod_spatialite.so
 
 # Expose ports
