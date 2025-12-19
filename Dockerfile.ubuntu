@@ -1,16 +1,12 @@
 # =============================================================================
-# Ortus - Default Dockerfile (Alpine-based)
+# Ortus - Ubuntu-based Multi-Stage Dockerfile
 # Supports: linux/amd64, linux/arm64
-#
-# Alternative Dockerfiles:
-#   - Dockerfile.alpine  (same as this, explicit Alpine)
-#   - Dockerfile.ubuntu  (Ubuntu-based variant)
 # =============================================================================
 
 # =============================================================================
 # Build stage - dev image includes Go 1.24.4 and all build tools
 # =============================================================================
-FROM ghcr.io/jobrunner/spatialite-base-image:alpine-dev-1.5.0 AS builder
+FROM ghcr.io/jobrunner/spatialite-base-image:ubuntu-dev-1.5.0 AS builder
 
 USER root
 
@@ -33,12 +29,12 @@ RUN CGO_ENABLED=1 go build \
 # =============================================================================
 # Runtime stage - minimal runtime image (SAME VERSION!)
 # =============================================================================
-FROM ghcr.io/jobrunner/spatialite-base-image:alpine-1.5.0
+FROM ghcr.io/jobrunner/spatialite-base-image:ubuntu-1.5.0
 
 USER root
 
 # Create non-root user
-RUN addgroup -S ortus && adduser -S ortus -G ortus
+RUN groupadd -r ortus && useradd -r -g ortus ortus
 
 # Create directories
 RUN mkdir -p /app/data /app/cache && \
@@ -54,7 +50,9 @@ RUN chown -R ortus:ortus /app
 
 USER ortus
 
-# Set SpatiaLite library path for the runtime
+# Set SpatiaLite library path for the runtime (architecture-dependent)
+# arm64: /usr/lib/aarch64-linux-gnu/mod_spatialite.so
+# amd64: /usr/lib/x86_64-linux-gnu/mod_spatialite.so
 ENV SPATIALITE_LIBRARY_PATH=/usr/lib/mod_spatialite.so
 
 # Expose ports
@@ -62,7 +60,7 @@ EXPOSE 8080 443
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health/live || exit 1
+    CMD curl -f http://localhost:8080/health/live || exit 1
 
 # Default command
 ENTRYPOINT ["/app/ortus"]

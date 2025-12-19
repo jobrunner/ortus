@@ -1,10 +1,6 @@
 # =============================================================================
-# Ortus - Default Dockerfile (Alpine-based)
+# Ortus - Alpine-based Multi-Stage Dockerfile
 # Supports: linux/amd64, linux/arm64
-#
-# Alternative Dockerfiles:
-#   - Dockerfile.alpine  (same as this, explicit Alpine)
-#   - Dockerfile.ubuntu  (Ubuntu-based variant)
 # =============================================================================
 
 # =============================================================================

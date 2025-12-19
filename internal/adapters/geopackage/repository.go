@@ -23,27 +23,42 @@ func init() {
 }
 
 // getSpatiaLiteLibraryPaths returns a list of paths to try for loading SpatiaLite.
+// The order is important: environment variable first, then platform-specific paths.
 func getSpatiaLiteLibraryPaths() []string {
 	var paths []string
 
-	// First, check environment variable (set by Nix shell)
-	// The env var should point to the library without extension
+	// First, check environment variable (set by Nix shell or Docker)
+	// The env var should point to the exact library path
 	if envPath := os.Getenv("SPATIALITE_LIBRARY_PATH"); envPath != "" {
-		// Only use the env path when set (Nix environment)
-		// go-sqlite3 needs the exact path to load
 		paths = append(paths, envPath)
 		return paths
 	}
 
-	// Fallback: Common library names and paths for non-Nix environments
+	// Fallback: Platform-specific paths
+	// Order matters - more specific paths first, then generic names
 	paths = append(paths,
-		"mod_spatialite",                              // System default
-		"mod_spatialite.so",                           // Linux
-		"mod_spatialite.dylib",                        // macOS
-		"/usr/lib/mod_spatialite.so",                  // Linux system
-		"/usr/lib/x86_64-linux-gnu/mod_spatialite.so", // Debian/Ubuntu
-		"/usr/local/lib/mod_spatialite.dylib",         // macOS Homebrew
-		"/opt/homebrew/lib/mod_spatialite.dylib",      // macOS ARM Homebrew
+		// Alpine Linux (Docker containers)
+		"/usr/lib/mod_spatialite.so",
+		"/usr/lib/mod_spatialite.so.8",
+
+		// Debian/Ubuntu amd64
+		"/usr/lib/x86_64-linux-gnu/mod_spatialite.so",
+		"/usr/lib/x86_64-linux-gnu/mod_spatialite.so.8",
+
+		// Debian/Ubuntu arm64
+		"/usr/lib/aarch64-linux-gnu/mod_spatialite.so",
+		"/usr/lib/aarch64-linux-gnu/mod_spatialite.so.8",
+
+		// macOS Homebrew (Intel)
+		"/usr/local/lib/mod_spatialite.dylib",
+
+		// macOS Homebrew (Apple Silicon)
+		"/opt/homebrew/lib/mod_spatialite.dylib",
+
+		// Generic names (let the system find them via LD_LIBRARY_PATH)
+		"mod_spatialite.so",    // Linux
+		"mod_spatialite",       // System default
+		"mod_spatialite.dylib", // macOS
 	)
 
 	return paths

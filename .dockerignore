@@ -1,0 +1,46 @@
+# Git
+.git
+.gitignore
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# Build artifacts
+ortus
+*.exe
+bin/
+
+# Test files
+*_test.go
+
+# Documentation
+*.md
+doc/
+LICENSE
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Development
+.envrc
+.direnv/
+.claude/
+result
+flake.lock
+
+# Nix
+*.nix
+
+# Docker
+Dockerfile*
+.dockerignore
+docker-compose*.yml
+
+# Temporary files
+*.tmp
+*.log
+.DS_Store
