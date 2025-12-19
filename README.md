@@ -34,10 +34,10 @@ docker pull ghcr.io/jobrunner/ortus:latest
 
 ```bash
 # Start server with local GeoPackage directory
-./ortus serve --storage-path=./data
+./ortus --storage-path=./data
 
 # With custom port and CORS
-./ortus serve --port=8080 --cors=https://example.com,*.myapp.com
+./ortus --port=8080 --cors=https://example.com,*.myapp.com
 ```
 
 ## Configuration
@@ -49,7 +49,7 @@ Ortus can be configured via CLI flags, environment variables, or a config file.
 ### CLI Flags
 
 ```bash
-./ortus serve [flags]
+./ortus [flags]
 
 Flags:
       --config string         Config file path (default: ./config.yaml)
@@ -63,7 +63,7 @@ Flags:
       --tls-email string      Email for Let's Encrypt
       --log-level string      Log level: debug, info, warn, error (default "info")
       --metrics               Enable Prometheus metrics (default true)
-  -h, --help                  Help for serve
+  -h, --help                  Show help
 ```
 
 ### Environment Variables
@@ -264,22 +264,41 @@ curl "http://localhost:8080/api/v1/packages/districts/layers"
 
 ### Health Endpoints
 
+Health endpoints are available at root level (not under `/api/v1`):
+
 ```bash
 # Detailed health status
-curl "http://localhost:8080/api/v1/health"
+curl "http://localhost:8080/health"
 
 # Kubernetes liveness probe
-curl "http://localhost:8080/api/v1/health/live"
+curl "http://localhost:8080/health/live"
 
 # Kubernetes readiness probe
-curl "http://localhost:8080/api/v1/health/ready"
+curl "http://localhost:8080/health/ready"
 ```
 
-### OpenAPI Specification
+### API Documentation
+
+#### Swagger UI
+
+Interactive API documentation is available via Swagger UI:
+
+```
+http://localhost:8080/docs
+http://localhost:8080/swagger
+```
+
+Open one of these URLs in your browser to explore and test the API interactively.
+
+#### OpenAPI Specification
+
+The OpenAPI 3.0 specification is available as JSON:
 
 ```bash
-curl "http://localhost:8080/api/v1/openapi.json"
+curl "http://localhost:8080/openapi.json"
 ```
+
+The specification includes all endpoints, request/response schemas, and examples.
 
 ## Docker Usage
 
@@ -290,7 +309,7 @@ docker run -d \
   -p 8080:8080 \
   -v /path/to/geopackages:/data \
   -e ORTUS_STORAGE_LOCAL_PATH=/data \
-  ghcr.io/jobrunner/ortus:latest serve
+  ghcr.io/jobrunner/ortus:latest
 ```
 
 ### Docker Compose
@@ -309,7 +328,6 @@ services:
       ORTUS_STORAGE_LOCAL_PATH: /data
       ORTUS_LOG_LEVEL: info
       ORTUS_SERVER_CORS_ALLOWED_ORIGINS: "https://example.com,*.myapp.com"
-    command: serve
 ```
 
 ## Object Storage
