@@ -4,7 +4,7 @@
 *.dll
 *.so
 *.dylib
-ortus
+/ortus
 
 # Test binary
 *.test
