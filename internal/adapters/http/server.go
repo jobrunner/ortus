@@ -82,8 +82,10 @@ func (s *Server) setupRoutes() *mux.Router {
 	api.HandleFunc("/packages/{packageId}", s.handleGetPackage).Methods(http.MethodGet)
 	api.HandleFunc("/packages/{packageId}/layers", s.handleGetLayers).Methods(http.MethodGet)
 
-	// OpenAPI spec
+	// OpenAPI spec and Swagger UI
 	r.HandleFunc("/openapi.json", s.handleOpenAPI).Methods(http.MethodGet)
+	r.HandleFunc("/docs", s.handleSwaggerUI).Methods(http.MethodGet)
+	r.HandleFunc("/swagger", s.handleSwaggerUI).Methods(http.MethodGet)
 
 	return r
 }
