@@ -85,6 +85,9 @@ func init() {
 	// CORS flags
 	rootCmd.Flags().StringSlice("cors", nil, "allowed CORS origins (e.g., https://example.com,*.sub.domain.tld)")
 
+	// Query flags
+	rootCmd.Flags().Bool("with-geometry", false, "include geometry in query results")
+
 	// Bind flags to viper
 	_ = viper.BindPFlag("logging.level", rootCmd.PersistentFlags().Lookup("log-level"))
 	_ = viper.BindPFlag("logging.format", rootCmd.PersistentFlags().Lookup("log-format"))
@@ -96,6 +99,7 @@ func init() {
 	_ = viper.BindPFlag("storage.type", rootCmd.Flags().Lookup("storage-type"))
 	_ = viper.BindPFlag("storage.local_path", rootCmd.Flags().Lookup("storage-path"))
 	_ = viper.BindPFlag("server.cors.allowed_origins", rootCmd.Flags().Lookup("cors"))
+	_ = viper.BindPFlag("query.with_geometry", rootCmd.Flags().Lookup("with-geometry"))
 
 	rootCmd.AddCommand(versionCmd)
 }

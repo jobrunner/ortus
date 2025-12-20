@@ -70,11 +70,14 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*App, er
 		cfg.Storage.LocalPath,
 	)
 
+	// Initialize coordinate transformer
+	transformer := geopackage.NewRepositoryTransformer(app.Repository)
+
 	// Initialize query service
 	app.QueryService = application.NewQueryService(
 		app.Registry,
 		app.Repository,
-		nil, // TODO: Add transformer when using different SRIDs
+		transformer,
 		metricsCollector,
 		logger,
 		application.QueryServiceConfig{
@@ -93,6 +96,7 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*App, er
 		app.Registry,
 		app.HealthService,
 		logger,
+		cfg.Query.WithGeometry,
 	)
 
 	// Initialize TLS server if enabled

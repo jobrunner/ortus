@@ -385,24 +385,26 @@ func (r *Repository) readMetadata(ctx context.Context, db *sql.DB, pkg *domain.G
 }
 
 // executePointQuery performs the actual point query using ST_Contains.
+// The coordinate must already be transformed to the layer's SRID before calling this function.
 func (r *Repository) executePointQuery(ctx context.Context, db *sql.DB, layer *domain.Layer, coord domain.Coordinate) ([]domain.Feature, error) {
-	// Transform coordinate if needed
 	pointWKT := coord.WKT()
 
-	// Build query using ST_Contains for polygon layers, ST_Distance for others
+	// Build query using ST_Contains for polygon layers, MbrContains for others
+	// Note: GeoPackage uses GPKG binary format, so we use CastAutomagic() to convert
+	// the geometry to SpatiaLite format before spatial operations
 	var query string
 	if layer.IsPolygonLayer() {
 		query = fmt.Sprintf(`
-			SELECT fid, %s, AsText(%s)
+			SELECT fid, %s, AsText(CastAutomagic(%s))
 			FROM %s
-			WHERE ST_Contains(%s, GeomFromText(?, ?))
+			WHERE ST_Contains(CastAutomagic(%s), GeomFromText(?, ?))
 		`, "*", layer.GeometryColumn, layer.Name, layer.GeometryColumn)
 	} else {
-		// For non-polygon layers, use bounding box + distance check
+		// For non-polygon layers, use bounding box check
 		query = fmt.Sprintf(`
-			SELECT fid, %s, AsText(%s)
+			SELECT fid, %s, AsText(CastAutomagic(%s))
 			FROM %s
-			WHERE MbrContains(%s, GeomFromText(?, ?))
+			WHERE MbrContains(CastAutomagic(%s), GeomFromText(?, ?))
 		`, "*", layer.GeometryColumn, layer.Name, layer.GeometryColumn)
 	}
 
@@ -460,6 +462,12 @@ func (r *Repository) scanFeature(rows *sql.Rows, columns []string, layerName, ge
 		case geomColumn:
 			// Skip raw geometry column
 		default:
+			// Skip the AsText result column (last column) - it contains geometry WKT
+			// This is identified by checking if this is the last column and contains WKT-like string
+			if i == len(columns)-1 {
+				// Last column is the AsText result, skip it from properties
+				continue
+			}
 			if values[i] != nil {
 				feature.Properties[col] = values[i]
 			}
@@ -490,4 +498,60 @@ func extractGeometryType(wkt string) string {
 		return strings.TrimSpace(wkt[:idx])
 	}
 	return ""
+}
+
+// GetConnection returns the database connection for a specific package.
+// This is used by the RepositoryTransformer for coordinate transformation.
+func (r *Repository) GetConnection(packageID string) *sql.DB {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.connections[packageID]
+}
+
+// RepositoryTransformer implements CoordinateTransformer using an in-memory SpatiaLite database.
+// We use a separate in-memory database because GeoPackage files are opened read-only
+// and don't have the spatial_ref_sys table required by ST_Transform.
+type RepositoryTransformer struct {
+	db *sql.DB
+}
+
+// NewRepositoryTransformer creates a transformer with an in-memory SpatiaLite database.
+func NewRepositoryTransformer(_ *Repository) *RepositoryTransformer {
+	// Create in-memory database for coordinate transformations
+	db, err := sql.Open("sqlite3_with_extensions", ":memory:")
+	if err != nil {
+		return nil
+	}
+
+	// Initialize SpatiaLite metadata tables WITH full SRID definitions (required for ST_Transform)
+	// InitSpatialMetaDataFull populates spatial_ref_sys with standard EPSG definitions
+	_, _ = db.Exec("SELECT InitSpatialMetaDataFull(1)")
+
+	return &RepositoryTransformer{db: db}
+}
+
+// Transform transforms a coordinate from one SRID to another.
+func (t *RepositoryTransformer) Transform(ctx context.Context, coord domain.Coordinate, targetSRID int) (domain.Coordinate, error) {
+	if coord.SRID == targetSRID {
+		return coord, nil
+	}
+
+	if t.db == nil {
+		return domain.Coordinate{}, fmt.Errorf("transformer database not initialized")
+	}
+
+	return TransformCoordinate(ctx, t.db, coord, targetSRID)
+}
+
+// IsSupported checks if a transformation between two SRIDs is supported.
+func (t *RepositoryTransformer) IsSupported(sourceSRID, targetSRID int) bool {
+	return sourceSRID > 0 && targetSRID > 0
+}
+
+// Close closes the transformer's database connection.
+func (t *RepositoryTransformer) Close() error {
+	if t.db != nil {
+		return t.db.Close()
+	}
+	return nil
 }
