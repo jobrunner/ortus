@@ -25,7 +25,7 @@ func TestLocalStorageList(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Create test files
 	testFiles := []string{
@@ -73,7 +73,7 @@ func TestLocalStorageListEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	storage := NewLocalStorage(tmpDir)
 	objects, err := storage.List(context.Background())
@@ -99,7 +99,7 @@ func TestLocalStorageExists(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Create test file
 	testFile := filepath.Join(tmpDir, "exists.gpkg")
@@ -136,7 +136,7 @@ func TestLocalStorageGetReader(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	testContent := "test content"
 	testFile := filepath.Join(tmpDir, "test.gpkg")
@@ -150,7 +150,7 @@ func TestLocalStorageGetReader(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetReader() error = %v", err)
 	}
-	defer reader.Close()
+	defer func() { _ = reader.Close() }()
 
 	buf := make([]byte, len(testContent))
 	n, err := reader.Read(buf)
@@ -170,7 +170,7 @@ func TestLocalStorageGetReaderNonExistent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	storage := NewLocalStorage(tmpDir)
 	_, err = storage.GetReader(context.Background(), "nonexistent.gpkg")
@@ -184,13 +184,13 @@ func TestLocalStorageDownload(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create src dir: %v", err)
 	}
-	defer os.RemoveAll(srcDir)
+	defer func() { _ = os.RemoveAll(srcDir) }()
 
 	destDir, err := os.MkdirTemp("", "ortus-dest-*")
 	if err != nil {
 		t.Fatalf("failed to create dest dir: %v", err)
 	}
-	defer os.RemoveAll(destDir)
+	defer func() { _ = os.RemoveAll(destDir) }()
 
 	// Create source file
 	testContent := "test content for download"
@@ -222,7 +222,7 @@ func TestLocalStorageDownloadSameFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Create test file
 	testFile := filepath.Join(tmpDir, "test.gpkg")
@@ -244,7 +244,7 @@ func TestLocalStorageDownloadNonExistent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	storage := NewLocalStorage(tmpDir)
 	err = storage.Download(context.Background(), "nonexistent.gpkg", "/tmp/dest.gpkg")
@@ -258,13 +258,13 @@ func TestLocalStorageDownloadCreatesDir(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create src dir: %v", err)
 	}
-	defer os.RemoveAll(srcDir)
+	defer func() { _ = os.RemoveAll(srcDir) }()
 
 	destDir, err := os.MkdirTemp("", "ortus-dest-*")
 	if err != nil {
 		t.Fatalf("failed to create dest dir: %v", err)
 	}
-	defer os.RemoveAll(destDir)
+	defer func() { _ = os.RemoveAll(destDir) }()
 
 	// Create source file
 	srcFile := filepath.Join(srcDir, "source.gpkg")

@@ -10,12 +10,12 @@ import (
 	"github.com/jobrunner/ortus/internal/ports/output"
 )
 
-func newTestQueryService(registry *PackageRegistry, repo *mockRepository, transformer output.CoordinateTransformer) *QueryService {
+func newTestQueryService(registry *PackageRegistry, repo *mockRepository) *QueryService {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	return NewQueryService(
 		registry,
 		repo,
-		transformer,
+		nil, // No transformer needed for basic tests
 		&output.NoOpMetrics{},
 		logger,
 		QueryServiceConfig{
@@ -48,7 +48,7 @@ func TestQueryServiceDefaultConfig(t *testing.T) {
 
 func TestQueryServiceQueryPointInvalidCoordinate(t *testing.T) {
 	registry := newTestRegistry()
-	svc := newTestQueryService(registry, &mockRepository{}, nil)
+	svc := newTestQueryService(registry, &mockRepository{})
 
 	req := domain.QueryRequest{
 		Coordinate: domain.NewWGS84Coordinate(200, 0), // Invalid longitude
@@ -62,7 +62,7 @@ func TestQueryServiceQueryPointInvalidCoordinate(t *testing.T) {
 
 func TestQueryServiceQueryPointNoPackages(t *testing.T) {
 	registry := newTestRegistry()
-	svc := newTestQueryService(registry, &mockRepository{}, nil)
+	svc := newTestQueryService(registry, &mockRepository{})
 
 	req := domain.QueryRequest{
 		Coordinate: domain.NewWGS84Coordinate(10, 50),
@@ -115,7 +115,7 @@ func TestQueryServiceQueryPointWithFeatures(t *testing.T) {
 		},
 	}
 
-	svc := newTestQueryService(registry, repo, nil)
+	svc := newTestQueryService(registry, repo)
 
 	req := domain.QueryRequest{
 		Coordinate: domain.NewWGS84Coordinate(10, 50),
@@ -168,7 +168,7 @@ func TestQueryServiceQueryPointSpecificPackage(t *testing.T) {
 		},
 	}
 
-	svc := newTestQueryService(registry, repo, nil)
+	svc := newTestQueryService(registry, repo)
 
 	req := domain.QueryRequest{
 		Coordinate: domain.NewWGS84Coordinate(10, 50),
@@ -190,7 +190,7 @@ func TestQueryServiceQueryPointSpecificPackage(t *testing.T) {
 
 func TestQueryServiceQueryPointPackageNotFound(t *testing.T) {
 	registry := newTestRegistry()
-	svc := newTestQueryService(registry, &mockRepository{}, nil)
+	svc := newTestQueryService(registry, &mockRepository{})
 
 	req := domain.QueryRequest{
 		Coordinate: domain.NewWGS84Coordinate(10, 50),

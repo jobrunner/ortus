@@ -526,7 +526,7 @@ func NewRepositoryTransformer(_ *Repository) *RepositoryTransformer {
 
 	// Initialize SpatiaLite metadata tables WITH full SRID definitions (required for ST_Transform)
 	// InitSpatialMetaDataFull populates spatial_ref_sys with standard EPSG definitions
-	_, _ = db.Exec("SELECT InitSpatialMetaDataFull(1)")
+	_, _ = db.ExecContext(context.Background(), "SELECT InitSpatialMetaDataFull(1)")
 
 	return &RepositoryTransformer{db: db}
 }

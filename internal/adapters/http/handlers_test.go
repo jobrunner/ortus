@@ -80,7 +80,6 @@ func (m *mockPackageRegistry) IsReady(packageID string) bool {
 type mockHealthService struct {
 	healthy bool
 	ready   bool
-	details domain.GeoPackageStatus
 }
 
 func (m *mockHealthService) IsHealthy(_ context.Context) bool {
@@ -103,7 +102,7 @@ type mockHealthDetails struct {
 	ready   bool
 }
 
-func newTestServer(queryService *mockQueryService, registry *mockPackageRegistry, healthService *mockHealthService) *Server {
+func newTestServer(_ *mockQueryService, _ *mockPackageRegistry, _ *mockHealthService) *Server {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 
 	// Create real services using mocks
