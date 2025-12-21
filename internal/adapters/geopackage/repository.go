@@ -85,7 +85,7 @@ func (r *Repository) Open(ctx context.Context, path string) (*domain.GeoPackage,
 	defer r.mu.Unlock()
 
 	// Derive package ID from filename
-	packageID := derivePackageID(path)
+	packageID := DerivePackageID(path)
 
 	// Check if already open
 	if pkg, ok := r.packages[packageID]; ok {
@@ -485,8 +485,9 @@ func (r *Repository) scanFeature(rows *sql.Rows, columns []string, layerName, ge
 	return feature, nil
 }
 
-// derivePackageID derives a package ID from the file path.
-func derivePackageID(path string) string {
+// DerivePackageID derives a package ID from the file path.
+// It extracts the filename without extension as the package identifier.
+func DerivePackageID(path string) string {
 	base := filepath.Base(path)
 	ext := filepath.Ext(base)
 	return strings.TrimSuffix(base, ext)
