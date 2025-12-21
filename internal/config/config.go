@@ -86,9 +86,10 @@ type HTTPConfig struct {
 
 // QueryConfig holds query-related configuration.
 type QueryConfig struct {
-	DefaultSRID int           `mapstructure:"default_srid"`
-	Timeout     time.Duration `mapstructure:"timeout"`
-	MaxFeatures int           `mapstructure:"max_features"`
+	DefaultSRID  int           `mapstructure:"default_srid"`
+	Timeout      time.Duration `mapstructure:"timeout"`
+	MaxFeatures  int           `mapstructure:"max_features"`
+	WithGeometry bool          `mapstructure:"with_geometry"` // Include geometry in results (default: false)
 }
 
 // TLSConfig holds TLS/CertMagic configuration.
@@ -135,6 +136,7 @@ func Defaults() {
 	viper.SetDefault("query.default_srid", 4326)
 	viper.SetDefault("query.timeout", 30*time.Second)
 	viper.SetDefault("query.max_features", 1000)
+	viper.SetDefault("query.with_geometry", false)
 
 	// TLS defaults
 	viper.SetDefault("tls.enabled", false)

@@ -70,11 +70,14 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*App, er
 		cfg.Storage.LocalPath,
 	)
 
+	// Initialize coordinate transformer
+	transformer := geopackage.NewRepositoryTransformer(app.Repository)
+
 	// Initialize query service
 	app.QueryService = application.NewQueryService(
 		app.Registry,
 		app.Repository,
-		nil, // TODO: Add transformer when using different SRIDs
+		transformer,
 		metricsCollector,
 		logger,
 		application.QueryServiceConfig{
@@ -93,6 +96,7 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*App, er
 		app.Registry,
 		app.HealthService,
 		logger,
+		cfg.Query.WithGeometry,
 	)
 
 	// Initialize TLS server if enabled
@@ -189,8 +193,11 @@ func (a *App) handleFileEvent(ctx context.Context, event watcher.Event) error {
 		return a.Registry.LoadPackage(ctx, event.Path)
 
 	case watcher.OpDelete:
-		// Unload the package
-		// TODO: Derive package ID from path
+		// Unload the package by deriving the package ID from the file path
+		packageID := geopackage.DerivePackageID(event.Path)
+		if err := a.Registry.UnloadPackage(ctx, packageID); err != nil {
+			a.Logger.Warn("failed to unload deleted package", "id", packageID, "error", err)
+		}
 		return nil
 	}
 

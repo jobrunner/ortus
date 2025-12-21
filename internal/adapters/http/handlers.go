@@ -293,7 +293,8 @@ func (s *Server) formatQueryResponse(resp *domain.QueryResponse) map[string]inte
 				"layer":      f.LayerName,
 				"properties": f.Properties,
 			}
-			if f.Geometry.WKT != "" {
+			// Only include geometry if explicitly enabled via --with-geometry or ORTUS_RESULTS_WITH_GEOMETRY
+			if s.withGeometry && f.Geometry.WKT != "" {
 				features[j]["geometry"] = map[string]interface{}{
 					"type": f.Geometry.Type,
 					"wkt":  f.Geometry.WKT,

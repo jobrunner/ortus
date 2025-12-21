@@ -22,6 +22,7 @@ type Server struct {
 	health       *application.HealthService
 	logger       *slog.Logger
 	config       config.ServerConfig
+	withGeometry bool // Include geometry in query results
 }
 
 // NewServer creates a new HTTP server.
@@ -31,6 +32,7 @@ func NewServer(
 	registry *application.PackageRegistry,
 	health *application.HealthService,
 	logger *slog.Logger,
+	withGeometry bool,
 ) *Server {
 	s := &Server{
 		queryService: queryService,
@@ -38,6 +40,7 @@ func NewServer(
 		health:       health,
 		logger:       logger,
 		config:       cfg,
+		withGeometry: withGeometry,
 	}
 
 	s.router = s.setupRoutes()
