@@ -68,6 +68,15 @@ USER ortus
 # Set SpatiaLite library path for the runtime
 ENV SPATIALITE_LIBRARY_PATH=/usr/lib/mod_spatialite.so
 
+# Server configuration via environment variables
+# Override at runtime: docker run -e ORTUS_SERVER_PORT=9090 ortus
+ENV ORTUS_SERVER_HOST=0.0.0.0
+ENV ORTUS_SERVER_PORT=8080
+ENV ORTUS_STORAGE_TYPE=local
+ENV ORTUS_STORAGE_LOCAL_PATH=/app/data
+ENV ORTUS_LOGGING_LEVEL=info
+ENV ORTUS_LOGGING_FORMAT=json
+
 # Expose ports
 EXPOSE 8080 443
 
@@ -75,6 +84,8 @@ EXPOSE 8080 443
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health/live || exit 1
 
-# Default command
+# Start server
+# Configure via ENV: docker run -e ORTUS_PORT=9090 -e ORTUS_LOG_LEVEL=debug ortus
+# Or via CLI args:   docker run ortus --port 9090 --log-level debug
 ENTRYPOINT ["/app/ortus"]
-CMD ["--help"]
+CMD []
