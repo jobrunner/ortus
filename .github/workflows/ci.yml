@@ -212,6 +212,9 @@ jobs:
     name: Docker Security Scan
     runs-on: ubuntu-latest
     needs: [docker-lint]
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - uses: actions/checkout@v4
 
