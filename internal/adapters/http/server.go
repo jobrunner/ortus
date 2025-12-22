@@ -20,6 +20,7 @@ type Server struct {
 	queryService *application.QueryService
 	registry     *application.PackageRegistry
 	health       *application.HealthService
+	syncService  *application.SyncService
 	logger       *slog.Logger
 	config       config.ServerConfig
 	withGeometry bool // Include geometry in query results
@@ -31,6 +32,7 @@ func NewServer(
 	queryService *application.QueryService,
 	registry *application.PackageRegistry,
 	health *application.HealthService,
+	syncService *application.SyncService,
 	logger *slog.Logger,
 	withGeometry bool,
 ) *Server {
@@ -38,6 +40,7 @@ func NewServer(
 		queryService: queryService,
 		registry:     registry,
 		health:       health,
+		syncService:  syncService,
 		logger:       logger,
 		config:       cfg,
 		withGeometry: withGeometry,
@@ -84,6 +87,11 @@ func (s *Server) setupRoutes() *mux.Router {
 	api.HandleFunc("/packages", s.handleListPackages).Methods(http.MethodGet)
 	api.HandleFunc("/packages/{packageId}", s.handleGetPackage).Methods(http.MethodGet)
 	api.HandleFunc("/packages/{packageId}/layers", s.handleGetLayers).Methods(http.MethodGet)
+
+	// Sync endpoint (only if sync service is configured)
+	if s.syncService != nil {
+		api.HandleFunc("/sync", s.handleSync).Methods(http.MethodPost)
+	}
 
 	// OpenAPI spec and Swagger UI
 	r.HandleFunc("/openapi.json", s.handleOpenAPI).Methods(http.MethodGet)

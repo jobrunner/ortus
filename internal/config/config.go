@@ -17,6 +17,7 @@ type Config struct {
 	TLS     TLSConfig     `mapstructure:"tls"`
 	Metrics MetricsConfig `mapstructure:"metrics"`
 	Logging LoggingConfig `mapstructure:"logging"`
+	Sync    SyncConfig    `mapstructure:"sync"`
 }
 
 // ServerConfig holds HTTP server configuration.
@@ -123,6 +124,12 @@ type LoggingConfig struct {
 	Format string `mapstructure:"format"` // json, text
 }
 
+// SyncConfig holds remote storage sync configuration.
+type SyncConfig struct {
+	Enabled  bool          `mapstructure:"enabled"`
+	Interval time.Duration `mapstructure:"interval"` // e.g., "1h", "24h", "30m"
+}
+
 // Defaults sets the default configuration values.
 func Defaults() {
 	// Server defaults
@@ -162,6 +169,10 @@ func Defaults() {
 	// Logging defaults
 	viper.SetDefault("logging.level", "info")
 	viper.SetDefault("logging.format", "json")
+
+	// Sync defaults
+	viper.SetDefault("sync.enabled", false)
+	viper.SetDefault("sync.interval", time.Hour)
 }
 
 // Load loads configuration from environment and config file.

@@ -57,6 +57,14 @@ query:
   timeout: 30s
   max_features: 1000
 
+# Remote storage sync configuration
+# Periodically checks remote storage (S3/Azure/HTTP) for new GeoPackages
+sync:
+  enabled: false      # Enable periodic sync (only for remote storage types)
+  interval: "1h"      # Sync interval (e.g., "30m", "1h", "24h")
+  # Note: A manual sync API endpoint is available at POST /api/v1/sync
+  # Rate limited to 2 requests per minute
+
 tls:
   enabled: false
   domains: []
