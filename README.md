@@ -9,6 +9,7 @@ Ortus is a Go-based REST service for point queries on GeoPackage files. It allow
 - **Coordinate Transformation**: Automatic projection to layer SRID
 - **Hot-Reload**: Automatic detection of new/removed GeoPackages
 - **Object Storage**: Load GeoPackages from S3, Azure Blob, or HTTP sources
+- **Remote Storage Sync**: Periodic synchronization with S3/Azure to detect and load new GeoPackages
 - **TLS/HTTPS**: Optional HTTPS with Let's Encrypt via CertMagic
 - **CORS**: Configurable Cross-Origin Resource Sharing for web frontends
 - **Prometheus Metrics**: Built-in metrics endpoint for monitoring
@@ -80,6 +81,8 @@ All configuration options can be set via environment variables with the `ORTUS_`
 | `ORTUS_LOG_LEVEL` | `info` | Log level |
 | `ORTUS_TLS_ENABLED` | `false` | Enable TLS |
 | `ORTUS_METRICS_ENABLED` | `true` | Enable Prometheus metrics |
+| `ORTUS_SYNC_ENABLED` | `false` | Enable periodic remote storage sync |
+| `ORTUS_SYNC_INTERVAL` | `1h` | Sync interval (e.g., 30m, 1h, 24h) |
 
 ### Config File
 
@@ -262,6 +265,40 @@ curl "http://localhost:8080/api/v1/packages/districts/layers"
 }
 ```
 
+### Sync Endpoint
+
+#### Trigger Sync
+
+```
+POST /api/v1/sync
+```
+
+Manually trigger a sync with remote storage. Rate limited to 2 requests per minute.
+
+```bash
+curl -X POST "http://localhost:8080/api/v1/sync"
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "packages_added": 2,
+  "packages_total": 5,
+  "synced_at": "2025-12-22T12:00:00Z",
+  "next_scheduled_at": "2025-12-22T13:00:00Z"
+}
+```
+
+**Response (429 Too Many Requests):**
+
+```
+Retry-After: 30
+Rate limit exceeded
+```
+
+> **Note:** This endpoint is only available when sync is enabled and using remote storage.
+
 ### Health Endpoints
 
 Health endpoints are available at root level (not under `/api/v1`):
@@ -368,6 +405,48 @@ storage:
     base_url: "https://data.example.com/gpkg/"
     index_file: "index.txt"
 ```
+
+## Remote Storage Sync
+
+When using remote storage (S3/Azure/HTTP), Ortus can periodically check for new GeoPackages and automatically download and load them. This is useful for scenarios where GeoPackages are added to the remote storage after the container has started.
+
+### Configuration
+
+```yaml
+sync:
+  enabled: true       # Enable periodic sync
+  interval: "1h"      # Sync interval (e.g., "30m", "1h", "24h")
+```
+
+Or via environment variables:
+
+```bash
+ORTUS_SYNC_ENABLED=true
+ORTUS_SYNC_INTERVAL=1h
+```
+
+### Manual Sync via API
+
+You can trigger an immediate sync using the API endpoint:
+
+```bash
+curl -X POST "http://localhost:8080/api/v1/sync"
+```
+
+**Response:**
+
+```json
+{
+  "packages_added": 2,
+  "packages_total": 5,
+  "synced_at": "2025-12-22T12:00:00Z",
+  "next_scheduled_at": "2025-12-22T13:00:00Z"
+}
+```
+
+The API endpoint is rate-limited to 2 requests per minute (30 second cooldown). If exceeded, a `429 Too Many Requests` response is returned with a `Retry-After: 30` header.
+
+> **Note:** Sync is only available for remote storage types (s3, azure, http), not for local storage. For local storage, use the hot-reload feature which automatically detects file changes.
 
 ## TLS / HTTPS
 

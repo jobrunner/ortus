@@ -135,6 +135,7 @@ func newTestServer(_ *mockQueryService, _ *mockPackageRegistry, _ *mockHealthSer
 		realQuery,
 		realRegistry,
 		realHealth,
+		nil, // No sync service for tests
 		logger,
 		false,
 	)

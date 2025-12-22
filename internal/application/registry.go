@@ -218,3 +218,67 @@ func (r *PackageRegistry) LoadAll(ctx context.Context) error {
 
 	return nil
 }
+
+// IsLoaded returns true if a package with the given ID is already loaded.
+func (r *PackageRegistry) IsLoaded(packageID string) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	_, ok := r.packages[packageID]
+	return ok
+}
+
+// PackageCount returns the number of loaded packages.
+func (r *PackageRegistry) PackageCount() int {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return len(r.packages)
+}
+
+// Sync synchronizes with remote storage, downloading and loading new packages.
+// Returns the number of newly added packages.
+func (r *PackageRegistry) Sync(ctx context.Context) (int, error) {
+	r.logger.Info("syncing packages from storage")
+
+	objects, err := r.storage.List(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	added := 0
+	for _, obj := range objects {
+		// Derive package ID from object key
+		packageID := derivePackageID(obj.Key)
+
+		// Skip if already loaded
+		if r.IsLoaded(packageID) {
+			r.logger.Debug("package already loaded, skipping", "id", packageID)
+			continue
+		}
+
+		// Download to local path
+		localPath := filepath.Join(r.localPath, obj.Key)
+		if err := r.storage.Download(ctx, obj.Key, localPath); err != nil {
+			r.logger.Error("failed to download package", "key", obj.Key, "error", err)
+			continue
+		}
+
+		// Load the package
+		if err := r.LoadPackage(ctx, localPath); err != nil {
+			r.logger.Error("failed to load package", "path", localPath, "error", err)
+			continue
+		}
+
+		added++
+		r.logger.Info("new package synced", "id", packageID)
+	}
+
+	r.logger.Info("sync completed", "added", added, "total", r.PackageCount())
+	return added, nil
+}
+
+// derivePackageID extracts a package ID from a file path or object key.
+func derivePackageID(path string) string {
+	base := filepath.Base(path)
+	ext := filepath.Ext(base)
+	return base[:len(base)-len(ext)]
+}

@@ -10,13 +10,13 @@ Ortus ist ein Go-basierter REST-Service für Punktabfragen auf GeoPackage-Dateie
 |   (REST/HTTP)     |--------->|     Service       |<-------->|   (SpatiaLite)    |
 +-------------------+          +-------------------+          +-------------------+
                                         |
-                               +--------+--------+
-                               |                 |
-                               v                 v
-                       +---------------+  +---------------+
-                       | Object Storage|  | File Watcher  |
-                       | (S3/Azure)    |  | (Hot-Reload)  |
-                       +---------------+  +---------------+
+                               +--------+--------+--------+
+                               |                 |        |
+                               v                 v        v
+                       +---------------+  +---------------+  +---------------+
+                       | Object Storage|  | File Watcher  |  | Sync Service  |
+                       | (S3/Azure)    |  | (Hot-Reload)  |  | (Scheduler)   |
+                       +---------------+  +---------------+  +---------------+
 ```
 
 ## Kern-Features
@@ -26,6 +26,7 @@ Ortus ist ein Go-basierter REST-Service für Punktabfragen auf GeoPackage-Dateie
 - **Koordinatentransformation:** Automatische Projektion in Layer-SRID
 - **Hot-Reload:** Automatische Erkennung neuer/entfernter GeoPackages
 - **Object Storage:** Laden von GeoPackages aus S3/Azure beim Start
+- **Remote Sync:** Periodisches Synchronisieren mit Remote-Storage
 - **TLS:** Optionales HTTPS mit Let's Encrypt
 - **CORS:** Konfigurierbare Cross-Origin Resource Sharing Headers
 
@@ -222,3 +223,4 @@ ENTRYPOINT ["/usr/local/bin/ortus"]
 | [0007](adr/0007-configuration-management.md) | Configuration Management | Akzeptiert |
 | [0008](adr/0008-tls-letsencrypt.md) | TLS und Let's Encrypt | Akzeptiert |
 | [0009](adr/0009-hot-reload-file-watching.md) | Hot-Reload und File-Watching | Akzeptiert |
+| [0011](adr/0011-remote-storage-sync.md) | Remote Storage Sync | Akzeptiert |

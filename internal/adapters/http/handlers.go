@@ -9,6 +9,7 @@ import (
 
 	"github.com/gorilla/mux"
 
+	"github.com/jobrunner/ortus/internal/application"
 	"github.com/jobrunner/ortus/internal/domain"
 )
 
@@ -388,4 +389,26 @@ func boolToStatus(b bool) string {
 		return "ok"
 	}
 	return "unhealthy"
+}
+
+// handleSync handles the sync trigger endpoint.
+func (s *Server) handleSync(w http.ResponseWriter, r *http.Request) {
+	if s.syncService == nil {
+		s.writeError(w, http.StatusNotFound, "Sync service not available")
+		return
+	}
+
+	result, err := s.syncService.TriggerSync(r.Context())
+	if err != nil {
+		if errors.Is(err, application.ErrRateLimited) {
+			w.Header().Set("Retry-After", "30")
+			s.writeError(w, http.StatusTooManyRequests, "Rate limit exceeded. Try again in 30 seconds.")
+			return
+		}
+		s.logger.Error("sync failed", "error", err)
+		s.writeError(w, http.StatusInternalServerError, "Sync failed")
+		return
+	}
+
+	s.writeJSON(w, http.StatusOK, result)
 }

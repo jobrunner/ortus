@@ -26,6 +26,7 @@ type App struct {
 	Registry      *application.PackageRegistry
 	QueryService  *application.QueryService
 	HealthService *application.HealthService
+	SyncService   *application.SyncService
 	HTTPServer    *httpAdapter.Server
 	TLSServer     *tlsAdapter.Server
 	Watcher       *watcher.Watcher
@@ -95,12 +96,26 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*App, er
 	// Initialize health service
 	app.HealthService = application.NewHealthService(app.Registry)
 
+	// Initialize sync service (only for remote storage)
+	if cfg.Sync.Enabled && cfg.Storage.Type != "local" {
+		app.SyncService = application.NewSyncService(
+			app.Registry,
+			cfg.Sync.Interval,
+			logger,
+		)
+		logger.Info("sync service configured",
+			"interval", cfg.Sync.Interval,
+			"storage_type", cfg.Storage.Type,
+		)
+	}
+
 	// Initialize HTTP server
 	app.HTTPServer = httpAdapter.NewServer(
 		cfg.Server,
 		app.QueryService,
 		app.Registry,
 		app.HealthService,
+		app.SyncService, // May be nil if sync is disabled
 		logger,
 		cfg.Query.WithGeometry,
 	)
@@ -171,6 +186,11 @@ func (a *App) Start(ctx context.Context) error {
 		}()
 	}
 
+	// Start sync service in background
+	if a.SyncService != nil {
+		a.SyncService.Start(ctx)
+	}
+
 	// Start server
 	if a.Config.TLS.Enabled && a.TLSServer != nil {
 		return a.TLSServer.ListenAndServe(a.Config.Server.Address())
@@ -181,6 +201,11 @@ func (a *App) Start(ctx context.Context) error {
 // Shutdown gracefully shuts down all components.
 func (a *App) Shutdown(ctx context.Context) error {
 	a.Logger.Info("shutting down application")
+
+	// Stop sync service
+	if a.SyncService != nil {
+		a.SyncService.Stop()
+	}
 
 	// Stop watcher
 	if a.Watcher != nil {
