@@ -18,6 +18,7 @@ ARG VERSION
 ARG COMMIT
 ARG BUILD_DATE
 
+# hadolint ignore=DL3002
 USER root
 
 WORKDIR /build
@@ -56,11 +57,9 @@ WORKDIR /app
 # Copy only the binary from builder
 COPY --from=builder /build/ortus /app/ortus
 
-# Set ownership
-RUN chown -R ortus:ortus /app
-
-# Create symlink for SpatiaLite library (Ubuntu uses arch-specific paths)
-RUN ln -sf /usr/lib/*/mod_spatialite.so /usr/lib/mod_spatialite.so
+# Set ownership and create symlink for SpatiaLite library (Ubuntu uses arch-specific paths)
+RUN chown -R ortus:ortus /app && \
+    ln -sf /usr/lib/*/mod_spatialite.so /usr/lib/mod_spatialite.so
 
 USER ortus
 

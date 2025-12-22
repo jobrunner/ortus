@@ -22,6 +22,7 @@ ARG VERSION
 ARG COMMIT
 ARG BUILD_DATE
 
+# hadolint ignore=DL3002
 USER root
 
 WORKDIR /build
