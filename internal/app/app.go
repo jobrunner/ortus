@@ -30,6 +30,7 @@ type App struct {
 	TLSServer     *tlsAdapter.Server
 	Watcher       *watcher.Watcher
 	Metrics       *metrics.Collector
+	MetricsServer *metrics.Server
 }
 
 // New creates and initializes a new application.
@@ -42,6 +43,11 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*App, er
 	// Initialize metrics
 	if cfg.Metrics.Enabled {
 		app.Metrics = metrics.NewCollector("ortus")
+		app.MetricsServer = metrics.NewServer(
+			cfg.Metrics.Port,
+			cfg.Metrics.Path,
+			logger,
+		)
 	}
 
 	var metricsCollector output.MetricsCollector
@@ -108,6 +114,11 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*App, er
 				Email:    cfg.TLS.Email,
 				CacheDir: cfg.TLS.CacheDir,
 				Staging:  cfg.TLS.Staging,
+				DNS: tlsAdapter.DNSConfig{
+					SubscriptionID:    cfg.TLS.DNS.SubscriptionID,
+					ResourceGroupName: cfg.TLS.DNS.ResourceGroupName,
+					ClientID:          cfg.TLS.DNS.ClientID,
+				},
 			},
 			app.HTTPServer.Router(),
 			logger,
@@ -151,6 +162,15 @@ func (a *App) Start(ctx context.Context) error {
 		}
 	}
 
+	// Start metrics server in background
+	if a.MetricsServer != nil {
+		go func() {
+			if err := a.MetricsServer.Start(); err != nil && err.Error() != "http: Server closed" {
+				a.Logger.Error("metrics server error", "error", err)
+			}
+		}()
+	}
+
 	// Start server
 	if a.Config.TLS.Enabled && a.TLSServer != nil {
 		return a.TLSServer.ListenAndServe(a.Config.Server.Address())
@@ -165,6 +185,13 @@ func (a *App) Shutdown(ctx context.Context) error {
 	// Stop watcher
 	if a.Watcher != nil {
 		_ = a.Watcher.Stop()
+	}
+
+	// Shutdown metrics server
+	if a.MetricsServer != nil {
+		if err := a.MetricsServer.Shutdown(ctx); err != nil {
+			a.Logger.Error("metrics server shutdown error", "error", err)
+		}
 	}
 
 	// Shutdown HTTP server

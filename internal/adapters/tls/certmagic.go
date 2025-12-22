@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/caddyserver/certmagic"
+	"github.com/libdns/azure"
 )
 
 // Config holds TLS configuration.
@@ -19,6 +20,14 @@ type Config struct {
 	Email    string
 	CacheDir string
 	Staging  bool // Use Let's Encrypt staging environment
+	DNS      DNSConfig
+}
+
+// DNSConfig holds Azure DNS provider configuration for DNS-01 challenges.
+type DNSConfig struct {
+	SubscriptionID    string
+	ResourceGroupName string
+	ClientID          string // User Assigned Managed Identity client ID (optional)
 }
 
 // Server wraps an HTTP server with automatic TLS.
@@ -59,6 +68,18 @@ func NewServer(cfg Config, handler http.Handler, logger *slog.Logger) (*Server, 
 		certmagic.Default.Storage = &certmagic.FileStorage{Path: cfg.CacheDir}
 	}
 
+	// Configure DNS-01 challenge solver with Azure DNS
+	provider := &azure.Provider{
+		SubscriptionId:    cfg.DNS.SubscriptionID,
+		ResourceGroupName: cfg.DNS.ResourceGroupName,
+		ClientId:          cfg.DNS.ClientID, // Empty = System Assigned Managed Identity
+	}
+	certmagic.DefaultACME.DNS01Solver = &certmagic.DNS01Solver{
+		DNSManager: certmagic.DNSManager{
+			DNSProvider: provider,
+		},
+	}
+
 	// Get TLS config
 	tlsConfig, err := certmagic.TLS(cfg.Domains)
 	if err != nil {
@@ -85,7 +106,7 @@ func (s *Server) ListenAndServe(addr string) error {
 		return server.ListenAndServe()
 	}
 
-	s.logger.Info("starting HTTPS server",
+	s.logger.Info("starting HTTPS server with DNS-01 challenge",
 		"address", addr,
 		"domains", s.config.Domains,
 	)
@@ -96,19 +117,6 @@ func (s *Server) ListenAndServe(addr string) error {
 		TLSConfig:         s.tlsConfig,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
-
-	// Start HTTP-01 challenge handler on port 80
-	go func() {
-		s.logger.Info("starting HTTP-01 challenge handler on :80")
-		challengeServer := &http.Server{
-			Addr:              ":80",
-			Handler:           certmagic.DefaultACME.HTTPChallengeHandler(http.HandlerFunc(redirectHTTPS)),
-			ReadHeaderTimeout: 10 * time.Second,
-		}
-		if err := challengeServer.ListenAndServe(); err != nil {
-			s.logger.Error("HTTP-01 handler error", "error", err)
-		}
-	}()
 
 	return server.ListenAndServeTLS("", "")
 }
@@ -122,12 +130,6 @@ func (s *Server) Shutdown(_ context.Context) error {
 // TLSConfig returns the TLS configuration.
 func (s *Server) TLSConfig() *tls.Config {
 	return s.tlsConfig
-}
-
-// redirectHTTPS redirects HTTP requests to HTTPS.
-func redirectHTTPS(w http.ResponseWriter, r *http.Request) {
-	target := "https://" + r.Host + r.URL.RequestURI()
-	http.Redirect(w, r, target, http.StatusPermanentRedirect)
 }
 
 // ManageCertificates pre-obtains certificates for the configured domains.
