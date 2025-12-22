@@ -3,6 +3,8 @@ package application
 import (
 	"context"
 	"io"
+	"path/filepath"
+	"strings"
 
 	"github.com/jobrunner/ortus/internal/domain"
 	"github.com/jobrunner/ortus/internal/ports/output"
@@ -24,9 +26,14 @@ func (m *mockRepository) Open(_ context.Context, path string) (*domain.GeoPackag
 			return pkg, nil
 		}
 	}
+	// Derive package ID from filename (same as derivePackageID in registry.go)
+	base := filepath.Base(path)
+	ext := filepath.Ext(base)
+	packageID := strings.TrimSuffix(base, ext)
+
 	return &domain.GeoPackage{
-		ID:   path,
-		Name: path,
+		ID:   packageID,
+		Name: base,
 		Path: path,
 	}, nil
 }

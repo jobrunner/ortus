@@ -17,7 +17,7 @@ Wir implementieren einen SyncService mit folgenden Eigenschaften:
 1. **Periodischer Sync**: Konfigurierbares Intervall (Default: 1h)
 2. **Optional**: Kann per Konfiguration aktiviert werden
 3. **API-Endpoint**: `POST /api/v1/sync` mit Rate-Limiting (30s Cooldown)
-4. **Inkrementell**: Nur neue Packages werden geladen, existierende übersprungen
+4. **Bidirektional**: Neue Packages werden geladen, gelöschte werden entfernt
 
 ### Architektur
 
@@ -56,6 +56,7 @@ POST /api/v1/sync
 Response (200 OK):
 {
   "packages_added": 2,
+  "packages_removed": 1,
   "packages_total": 5,
   "synced_at": "2025-12-22T12:00:00Z",
   "next_scheduled_at": "2025-12-22T13:00:00Z"
@@ -85,6 +86,7 @@ Rate limit exceeded
 ### Positiv
 
 - Neue GeoPackages werden automatisch erkannt
+- Gelöschte Remote-Packages werden automatisch entladen und lokale Cache-Dateien gelöscht
 - Kein Container-Neustart erforderlich
 - API ermöglicht sofortigen Sync bei Bedarf
 - Rate-Limiting verhindert Missbrauch
@@ -92,9 +94,8 @@ Rate limit exceeded
 
 ### Negativ
 
-- Gelöschte Remote-Packages werden nicht automatisch entladen
 - Zusätzliche Netzwerk-Requests durch Polling
-- Latenz zwischen Upload und Verfügbarkeit (bis zu Intervall-Zeit)
+- Latenz zwischen Upload/Löschung und Verfügbarkeit (bis zu Intervall-Zeit)
 
 ## Referenzen
 

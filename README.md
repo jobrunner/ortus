@@ -284,6 +284,7 @@ curl -X POST "http://localhost:8080/api/v1/sync"
 ```json
 {
   "packages_added": 2,
+  "packages_removed": 1,
   "packages_total": 5,
   "synced_at": "2025-12-22T12:00:00Z",
   "next_scheduled_at": "2025-12-22T13:00:00Z"
@@ -438,13 +439,14 @@ curl -X POST "http://localhost:8080/api/v1/sync"
 ```json
 {
   "packages_added": 2,
+  "packages_removed": 1,
   "packages_total": 5,
   "synced_at": "2025-12-22T12:00:00Z",
   "next_scheduled_at": "2025-12-22T13:00:00Z"
 }
 ```
 
-The API endpoint is rate-limited to 2 requests per minute (30 second cooldown). If exceeded, a `429 Too Many Requests` response is returned with a `Retry-After: 30` header.
+The sync operation both adds new packages and removes packages that no longer exist in remote storage. The API endpoint is rate-limited to 2 requests per minute (30 second cooldown). If exceeded, a `429 Too Many Requests` response is returned with a `Retry-After: 30` header.
 
 > **Note:** Sync is only available for remote storage types (s3, azure, http), not for local storage. For local storage, use the hot-reload feature which automatically detects file changes.
 

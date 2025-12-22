@@ -45,6 +45,12 @@ func (o Operation) String() string {
 // Handler is called when a relevant file event occurs.
 type Handler func(ctx context.Context, event Event) error
 
+// pendingEvent holds a debounced event with its operation.
+type pendingEvent struct {
+	timestamp time.Time
+	op        Operation
+}
+
 // Watcher watches directories for GeoPackage file changes.
 type Watcher struct {
 	fsWatcher *fsnotify.Watcher
@@ -53,7 +59,7 @@ type Watcher struct {
 	paths     []string
 	debounce  time.Duration
 	mu        sync.Mutex
-	pending   map[string]time.Time
+	pending   map[string]*pendingEvent
 }
 
 // Config holds watcher configuration.
@@ -79,7 +85,7 @@ func New(cfg Config, handler Handler, logger *slog.Logger) (*Watcher, error) {
 		logger:    logger,
 		paths:     cfg.Paths,
 		debounce:  cfg.Debounce,
-		pending:   make(map[string]time.Time),
+		pending:   make(map[string]*pendingEvent),
 	}, nil
 }
 
@@ -134,9 +140,22 @@ func (w *Watcher) eventLoop(ctx context.Context) {
 
 			w.logger.Debug("file event", "path", event.Name, "op", event.Op.String())
 
+			// Convert fsnotify operation to our operation type
+			op := fsnotifyOpToOperation(event.Op)
+
 			// Add to pending events for debouncing
 			w.mu.Lock()
-			w.pending[event.Name] = time.Now()
+			// For delete events, always use delete operation
+			// For other events, only update if not already pending as delete
+			if existing, ok := w.pending[event.Name]; ok && existing.op == OpDelete {
+				// Keep delete operation, just update timestamp
+				existing.timestamp = time.Now()
+			} else {
+				w.pending[event.Name] = &pendingEvent{
+					timestamp: time.Now(),
+					op:        op,
+				}
+			}
 			w.mu.Unlock()
 
 		case err, ok := <-w.fsWatcher.Errors:
@@ -170,24 +189,21 @@ func (w *Watcher) processPending(ctx context.Context) {
 	defer w.mu.Unlock()
 
 	now := time.Now()
-	for path, timestamp := range w.pending {
-		if now.Sub(timestamp) < w.debounce {
+	for path, pending := range w.pending {
+		if now.Sub(pending.timestamp) < w.debounce {
 			continue
 		}
 
 		delete(w.pending, path)
 
-		// Determine operation type
-		op := w.determineOperation(path)
-
 		event := Event{
 			Path:      path,
-			Operation: op,
+			Operation: pending.op,
 		}
 
 		w.logger.Info("processing file event",
 			"path", path,
-			"operation", op.String(),
+			"operation", pending.op.String(),
 		)
 
 		// Call handler in goroutine to not block
@@ -203,16 +219,20 @@ func (w *Watcher) processPending(ctx context.Context) {
 	}
 }
 
-// determineOperation determines the operation type for a path.
-func (w *Watcher) determineOperation(path string) Operation {
-	// Check if file exists
-	if _, err := filepath.Abs(path); err != nil {
+// fsnotifyOpToOperation converts fsnotify.Op to our Operation type.
+func fsnotifyOpToOperation(op fsnotify.Op) Operation {
+	switch {
+	case op.Has(fsnotify.Remove):
 		return OpDelete
+	case op.Has(fsnotify.Rename):
+		// Rename is treated as delete (the file is gone from original location)
+		return OpDelete
+	case op.Has(fsnotify.Create):
+		return OpCreate
+	default:
+		// Write, Chmod, etc. are treated as modify
+		return OpModify
 	}
-
-	// For simplicity, treat all existing files as modified
-	// The handler can determine if it's new or updated
-	return OpModify
 }
 
 // isGeoPackageFile checks if the path is a GeoPackage file.

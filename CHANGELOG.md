@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2025-12-22
+
+### Added
+- Automatic removal of packages deleted from remote storage during sync
+- `packages_removed` field in sync API response
+- Proper file deletion detection in local file watcher (fixed fsnotify operation handling)
+
+### Changed
+- `Sync()` now returns `SyncStats` with both `Added` and `Removed` counts
+- File watcher now correctly uses fsnotify operation types instead of file existence check
+
+### Fixed
+- File watcher `determineOperation` now correctly detects file deletions using fsnotify events
+- Local cache files are now deleted when packages are removed from remote storage
+
 ## [0.2.0] - 2025-12-22
 
 ### Added
@@ -46,6 +61,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Read-only GeoPackage access
 - CORS configuration support
 
-[Unreleased]: https://github.com/jobrunner/ortus/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/jobrunner/ortus/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/jobrunner/ortus/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/jobrunner/ortus/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/jobrunner/ortus/releases/tag/v0.1.0
