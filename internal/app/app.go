@@ -97,7 +97,7 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*App, er
 	app.HealthService = application.NewHealthService(app.Registry)
 
 	// Initialize sync service (only for remote storage)
-	if cfg.Sync.Enabled && cfg.Storage.Type != "local" {
+	if cfg.Sync.Enabled && cfg.Storage.Type != config.StorageTypeLocal {
 		app.SyncService = application.NewSyncService(
 			app.Registry,
 			cfg.Sync.Interval,
@@ -145,7 +145,7 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*App, er
 	}
 
 	// Initialize file watcher for hot-reload
-	if cfg.Storage.Type == "local" {
+	if cfg.Storage.Type == config.StorageTypeLocal {
 		w, err := watcher.New(
 			watcher.Config{
 				Paths: []string{cfg.Storage.LocalPath},
@@ -259,10 +259,10 @@ func (a *App) handleFileEvent(ctx context.Context, event watcher.Event) error {
 // initStorage initializes the appropriate storage adapter.
 func initStorage(ctx context.Context, cfg config.StorageConfig) (output.ObjectStorage, error) {
 	switch cfg.Type {
-	case "local":
+	case config.StorageTypeLocal:
 		return storage.NewLocalStorage(cfg.LocalPath), nil
 
-	case "s3":
+	case config.StorageTypeS3:
 		return storage.NewS3Storage(ctx, storage.S3Config{
 			Bucket:          cfg.S3.Bucket,
 			Region:          cfg.S3.Region,
@@ -272,7 +272,7 @@ func initStorage(ctx context.Context, cfg config.StorageConfig) (output.ObjectSt
 			SecretAccessKey: cfg.S3.SecretAccessKey,
 		})
 
-	case "azure":
+	case config.StorageTypeAzure:
 		return storage.NewAzureStorage(storage.AzureConfig{
 			Container:        cfg.Azure.Container,
 			AccountName:      cfg.Azure.AccountName,
@@ -281,7 +281,7 @@ func initStorage(ctx context.Context, cfg config.StorageConfig) (output.ObjectSt
 			Prefix:           cfg.Azure.Prefix,
 		})
 
-	case "http":
+	case config.StorageTypeHTTP:
 		return storage.NewHTTPStorage(storage.HTTPConfig{
 			BaseURL:   cfg.HTTP.BaseURL,
 			IndexFile: cfg.HTTP.IndexFile,
