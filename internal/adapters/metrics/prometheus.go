@@ -2,6 +2,9 @@
 package metrics
 
 import (
+	"context"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -212,4 +215,37 @@ func statusToString(code int) string {
 	default:
 		return "unknown"
 	}
+}
+
+// Server provides a dedicated HTTP server for Prometheus metrics.
+type Server struct {
+	server *http.Server
+	logger *slog.Logger
+}
+
+// NewServer creates a new metrics server.
+func NewServer(port int, path string, logger *slog.Logger) *Server {
+	mux := http.NewServeMux()
+	mux.Handle(path, promhttp.Handler())
+
+	return &Server{
+		server: &http.Server{
+			Addr:              fmt.Sprintf(":%d", port),
+			Handler:           mux,
+			ReadHeaderTimeout: 10 * time.Second,
+		},
+		logger: logger,
+	}
+}
+
+// Start starts the metrics server.
+func (s *Server) Start() error {
+	s.logger.Info("starting metrics server", "address", s.server.Addr)
+	return s.server.ListenAndServe()
+}
+
+// Shutdown gracefully shuts down the metrics server.
+func (s *Server) Shutdown(ctx context.Context) error {
+	s.logger.Info("shutting down metrics server")
+	return s.server.Shutdown(ctx)
 }

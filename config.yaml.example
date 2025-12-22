@@ -63,9 +63,17 @@ tls:
   email: ""
   cache_dir: "./.certmagic"
   staging: false  # Use Let's Encrypt staging for testing
+  dns:
+    provider: "azure"
+    subscription_id: ""
+    resource_group_name: ""
+    # For User Assigned Managed Identity (optional)
+    # If empty, System Assigned Managed Identity is used
+    # client_id: ""
 
 metrics:
   enabled: true
+  port: 9090      # Separate port for Prometheus metrics (internal/VNet only)
   path: "/metrics"
 
 logging:

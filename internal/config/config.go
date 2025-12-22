@@ -94,16 +94,26 @@ type QueryConfig struct {
 
 // TLSConfig holds TLS/CertMagic configuration.
 type TLSConfig struct {
-	Enabled  bool     `mapstructure:"enabled"`
-	Domains  []string `mapstructure:"domains"`
-	Email    string   `mapstructure:"email"`
-	CacheDir string   `mapstructure:"cache_dir"`
-	Staging  bool     `mapstructure:"staging"` // Use Let's Encrypt staging
+	Enabled  bool      `mapstructure:"enabled"`
+	Domains  []string  `mapstructure:"domains"`
+	Email    string    `mapstructure:"email"`
+	CacheDir string    `mapstructure:"cache_dir"`
+	Staging  bool      `mapstructure:"staging"` // Use Let's Encrypt staging
+	DNS      DNSConfig `mapstructure:"dns"`
+}
+
+// DNSConfig holds DNS-01 challenge provider configuration for Azure DNS.
+type DNSConfig struct {
+	Provider          string `mapstructure:"provider"`            // DNS provider (azure)
+	SubscriptionID    string `mapstructure:"subscription_id"`     // Azure subscription ID
+	ResourceGroupName string `mapstructure:"resource_group_name"` // Azure resource group containing DNS zone
+	ClientID          string `mapstructure:"client_id"`           // User Assigned Managed Identity client ID (optional)
 }
 
 // MetricsConfig holds Prometheus metrics configuration.
 type MetricsConfig struct {
 	Enabled bool   `mapstructure:"enabled"`
+	Port    int    `mapstructure:"port"`
 	Path    string `mapstructure:"path"`
 }
 
@@ -142,9 +152,11 @@ func Defaults() {
 	viper.SetDefault("tls.enabled", false)
 	viper.SetDefault("tls.cache_dir", "./.certmagic")
 	viper.SetDefault("tls.staging", false)
+	viper.SetDefault("tls.dns.provider", "azure")
 
 	// Metrics defaults
 	viper.SetDefault("metrics.enabled", true)
+	viper.SetDefault("metrics.port", 9090)
 	viper.SetDefault("metrics.path", "/metrics")
 
 	// Logging defaults
@@ -218,6 +230,16 @@ func (c *Config) validateTLS() error {
 	}
 	if c.TLS.Email == "" {
 		return fmt.Errorf("TLS enabled but no email specified")
+	}
+	// Validate DNS-01 challenge configuration
+	if c.TLS.DNS.Provider != "azure" {
+		return fmt.Errorf("unsupported DNS provider: %s (only 'azure' is supported)", c.TLS.DNS.Provider)
+	}
+	if c.TLS.DNS.SubscriptionID == "" {
+		return fmt.Errorf("TLS enabled but no DNS subscription_id specified")
+	}
+	if c.TLS.DNS.ResourceGroupName == "" {
+		return fmt.Errorf("TLS enabled but no DNS resource_group_name specified")
 	}
 	return nil
 }
