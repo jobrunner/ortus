@@ -23,6 +23,8 @@ jobs:
       version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for diff comparison
 
       - name: Validate VERSION file
         id: version
@@ -50,6 +52,67 @@ jobs:
           if ! grep -q "\[$VERSION\]" CHANGELOG.md && ! grep -q "\[Unreleased\]" CHANGELOG.md; then
             echo "⚠️  Version $VERSION not found in CHANGELOG.md"
             echo "   Make sure to document changes before release."
+          fi
+
+      - name: Check VERSION/CHANGELOG updated for code changes (PRs only)
+        if: github.event_name == 'pull_request'
+        run: |
+          BASE_REF="${{ github.event.pull_request.base.ref }}"
+
+          # Get files changed in this PR
+          CHANGED_FILES=$(git diff --name-only origin/$BASE_REF...HEAD)
+
+          # Check for significant code changes
+          SIGNIFICANT_CHANGES=false
+          while IFS= read -r file; do
+            if [[ "$file" =~ ^(internal/|cmd/|pkg/).*\.go$ ]] || [[ "$file" =~ ^[^/]+\.go$ ]]; then
+              SIGNIFICANT_CHANGES=true
+              echo "📝 Significant change: $file"
+            fi
+          done <<< "$CHANGED_FILES"
+
+          if [[ "$SIGNIFICANT_CHANGES" != "true" ]]; then
+            echo "ℹ️  No significant code changes detected, skipping version check"
+            exit 0
+          fi
+
+          # Check if VERSION was changed
+          VERSION_CHANGED=false
+          if echo "$CHANGED_FILES" | grep -q "^VERSION$"; then
+            VERSION_CHANGED=true
+          fi
+
+          # Check if CHANGELOG was changed
+          CHANGELOG_CHANGED=false
+          if echo "$CHANGED_FILES" | grep -q "^CHANGELOG.md$"; then
+            CHANGELOG_CHANGED=true
+          fi
+
+          # Report results
+          ERRORS=0
+
+          if [[ "$VERSION_CHANGED" != "true" ]]; then
+            echo "❌ VERSION file not updated"
+            echo "   Significant code changes require a version bump"
+            ERRORS=$((ERRORS + 1))
+          else
+            echo "✅ VERSION file updated"
+          fi
+
+          if [[ "$CHANGELOG_CHANGED" != "true" ]]; then
+            echo "❌ CHANGELOG.md not updated"
+            echo "   Please document your changes in CHANGELOG.md"
+            ERRORS=$((ERRORS + 1))
+          else
+            echo "✅ CHANGELOG.md updated"
+          fi
+
+          if [[ $ERRORS -gt 0 ]]; then
+            echo ""
+            echo "💡 To fix this:"
+            echo "   1. Bump the version in VERSION file (current: $(cat VERSION))"
+            echo "   2. Add your changes to CHANGELOG.md under [Unreleased] or a new version"
+            exit 1
           fi
 
   # =============================================================================
