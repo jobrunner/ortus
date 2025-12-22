@@ -9,6 +9,14 @@ import (
 	"github.com/spf13/viper"
 )
 
+// Storage type constants.
+const (
+	StorageTypeLocal = "local"
+	StorageTypeS3    = "s3"
+	StorageTypeAzure = "azure"
+	StorageTypeHTTP  = "http"
+)
+
 // Config holds all application configuration.
 type Config struct {
 	Server  ServerConfig  `mapstructure:"server"`

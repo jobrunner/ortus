@@ -70,7 +70,7 @@ func (s *SyncService) run(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			s.logger.Info("sync service stopped: context cancelled")
+			s.logger.Info("sync service stopped: context canceled")
 			return
 		case <-s.stopCh:
 			s.logger.Info("sync service stopped")
