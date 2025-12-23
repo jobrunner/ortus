@@ -261,3 +261,56 @@ func TestRegistry_FindPackagesToRemove(t *testing.T) {
 		t.Errorf("expected pkg2 to be removed, got %s", toRemove[0].id)
 	}
 }
+
+func TestDerivePackageID(t *testing.T) {
+	tests := []struct {
+		name     string
+		path     string
+		expected string
+	}{
+		{
+			name:     "normal gpkg file",
+			path:     "test.gpkg",
+			expected: "test",
+		},
+		{
+			name:     "path with directory",
+			path:     "/path/to/file.gpkg",
+			expected: "file",
+		},
+		{
+			name:     "file without extension",
+			path:     "noextension",
+			expected: "noextension",
+		},
+		{
+			name:     "dot file only extension",
+			path:     ".gpkg",
+			expected: ".gpkg",
+		},
+		{
+			name:     "empty string",
+			path:     "",
+			expected: "",
+		},
+		{
+			name:     "just a dot",
+			path:     ".",
+			expected: "",
+		},
+		{
+			name:     "multiple extensions",
+			path:     "file.tar.gz",
+			expected: "file.tar",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := derivePackageID(tt.path)
+			if result != tt.expected {
+				t.Errorf("derivePackageID(%q) = %q, want %q", tt.path, result, tt.expected)
+			}
+		})
+	}
+}

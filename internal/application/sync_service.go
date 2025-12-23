@@ -35,6 +35,9 @@ type SyncService struct {
 	lastAPISync time.Time
 	apiMutex    sync.Mutex
 
+	// Prevents concurrent sync operations
+	syncOpMutex sync.Mutex
+
 	// Track next scheduled sync for reporting
 	nextSync time.Time
 	syncMu   sync.RWMutex
@@ -47,6 +50,8 @@ func NewSyncService(registry *PackageRegistry, interval time.Duration, logger *s
 		interval: interval,
 		logger:   logger,
 		stopCh:   make(chan struct{}),
+		// Initialize to past time to allow immediate first API call
+		lastAPISync: time.Now().Add(-31 * time.Second),
 	}
 }
 
@@ -108,6 +113,10 @@ func (s *SyncService) TriggerSync(ctx context.Context) (SyncResult, error) {
 
 // doSync performs the sync operation without returning detailed results.
 func (s *SyncService) doSync(ctx context.Context) {
+	// Prevent concurrent sync operations
+	s.syncOpMutex.Lock()
+	defer s.syncOpMutex.Unlock()
+
 	stats, err := s.registry.Sync(ctx)
 	if err != nil {
 		s.logger.Error("sync failed", "error", err)
@@ -122,6 +131,10 @@ func (s *SyncService) doSync(ctx context.Context) {
 
 // doSyncWithResult performs the sync operation and returns detailed results.
 func (s *SyncService) doSyncWithResult(ctx context.Context) (SyncResult, error) {
+	// Prevent concurrent sync operations
+	s.syncOpMutex.Lock()
+	defer s.syncOpMutex.Unlock()
+
 	stats, err := s.registry.Sync(ctx)
 	if err != nil {
 		return SyncResult{}, err

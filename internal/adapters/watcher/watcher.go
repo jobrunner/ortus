@@ -132,31 +132,7 @@ func (w *Watcher) eventLoop(ctx context.Context) {
 			if !ok {
 				return
 			}
-
-			// Only process .gpkg files
-			if !isGeoPackageFile(event.Name) {
-				continue
-			}
-
-			w.logger.Debug("file event", "path", event.Name, "op", event.Op.String())
-
-			// Convert fsnotify operation to our operation type
-			op := fsnotifyOpToOperation(event.Op)
-
-			// Add to pending events for debouncing
-			w.mu.Lock()
-			// Once a delete is already pending for this path, keep the delete operation
-			// and only update its timestamp; delete takes precedence over other operations.
-			if existing, ok := w.pending[event.Name]; ok && existing.op == OpDelete {
-				// Keep delete operation, just update timestamp
-				existing.timestamp = time.Now()
-			} else {
-				w.pending[event.Name] = &pendingEvent{
-					timestamp: time.Now(),
-					op:        op,
-				}
-			}
-			w.mu.Unlock()
+			w.handleFsEvent(event)
 
 		case err, ok := <-w.fsWatcher.Errors:
 			if !ok {
@@ -164,6 +140,50 @@ func (w *Watcher) eventLoop(ctx context.Context) {
 			}
 			w.logger.Error("watcher error", "error", err)
 		}
+	}
+}
+
+// handleFsEvent processes a single fsnotify event.
+func (w *Watcher) handleFsEvent(event fsnotify.Event) {
+	// Only process .gpkg files
+	if !isGeoPackageFile(event.Name) {
+		return
+	}
+
+	w.logger.Debug("file event", "path", event.Name, "op", event.Op.String())
+
+	// Convert fsnotify operation to our operation type
+	op := fsnotifyOpToOperation(event.Op)
+
+	// Add to pending events for debouncing
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	existing, exists := w.pending[event.Name]
+	if !exists {
+		w.pending[event.Name] = &pendingEvent{
+			timestamp: time.Now(),
+			op:        op,
+		}
+		return
+	}
+
+	// Update pending event based on operation precedence
+	w.updatePendingEvent(existing, op)
+}
+
+// updatePendingEvent updates an existing pending event based on the new operation.
+func (w *Watcher) updatePendingEvent(existing *pendingEvent, newOp Operation) {
+	existing.timestamp = time.Now()
+
+	switch {
+	case existing.op == OpDelete && newOp == OpCreate:
+		// File was deleted then recreated - use create operation
+		existing.op = OpCreate
+	case newOp == OpDelete:
+		// New delete event always takes precedence
+		existing.op = OpDelete
+		// For other cases (modify after modify, etc), just update timestamp
 	}
 }
 
