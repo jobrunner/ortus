@@ -145,8 +145,8 @@ func (w *Watcher) eventLoop(ctx context.Context) {
 
 			// Add to pending events for debouncing
 			w.mu.Lock()
-			// For delete events, always use delete operation
-			// For other events, only update if not already pending as delete
+			// Once a delete is already pending for this path, keep the delete operation
+			// and only update its timestamp; delete takes precedence over other operations.
 			if existing, ok := w.pending[event.Name]; ok && existing.op == OpDelete {
 				// Keep delete operation, just update timestamp
 				existing.timestamp = time.Now()
