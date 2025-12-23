@@ -342,6 +342,15 @@ func (r *PackageRegistry) findPackagesToRemove(remotePackages map[string]string)
 // derivePackageID extracts a package ID from a file path or object key.
 func derivePackageID(path string) string {
 	base := filepath.Base(path)
+	if base == "" || base == "." {
+		return ""
+	}
+
 	ext := filepath.Ext(base)
+	// Handle edge case where basename is only the extension (e.g., ".gpkg")
+	if ext == "" || len(base) == len(ext) {
+		return base
+	}
+
 	return strings.TrimSuffix(base, ext)
 }
