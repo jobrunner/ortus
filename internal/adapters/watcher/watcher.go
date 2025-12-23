@@ -173,17 +173,24 @@ func (w *Watcher) handleFsEvent(event fsnotify.Event) {
 }
 
 // updatePendingEvent updates an existing pending event based on the new operation.
+//
+// Concurrency: the caller must hold w.mu while invoking this method. It is an
+// internal helper intended to be used only from code paths that already
+// acquired the Watcher's mutex.
 func (w *Watcher) updatePendingEvent(existing *pendingEvent, newOp Operation) {
+	// Always refresh the timestamp for debouncing purposes.
 	existing.timestamp = time.Now()
 
 	switch {
 	case existing.op == OpDelete && newOp == OpCreate:
-		// File was deleted then recreated - use create operation
+		// File was deleted then recreated - treat as a create operation.
 		existing.op = OpCreate
 	case newOp == OpDelete:
-		// New delete event always takes precedence
+		// New delete event always takes precedence over any existing operation.
 		existing.op = OpDelete
-		// For other cases (modify after modify, etc), just update timestamp
+	default:
+		// For other combinations (e.g. create->modify, modify->modify, create->create),
+		// keep the existing operation and rely on the updated timestamp for debouncing.
 	}
 }
 
