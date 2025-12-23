@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2025-12-23
+
+### Fixed
+- `derivePackageID` edge cases: properly handles empty paths and files named only with extension (e.g., ".gpkg")
+- Race condition in package removal: captures both ID and path in single lock acquisition
+- Sync service rate limiting: initializes `lastAPISync` to allow immediate first API call
+- Concurrent sync prevention: adds mutex to prevent scheduled and API-triggered syncs from running simultaneously
+- Watcher event precedence: create events now override pending delete events (handles quick delete+recreate)
+
+### Changed
+- Refactored watcher `eventLoop` into smaller functions to reduce cognitive complexity
+
+### Added
+- Comprehensive tests for `derivePackageID` edge cases
+- Tests for watcher helper functions (`fsnotifyOpToOperation`, `isGeoPackageFile`, `Operation.String`)
+
 ## [0.3.0] - 2025-12-22
 
 ### Added
