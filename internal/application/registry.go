@@ -4,7 +4,9 @@ package application
 import (
 	"context"
 	"log/slog"
+	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -234,31 +236,43 @@ func (r *PackageRegistry) PackageCount() int {
 	return len(r.packages)
 }
 
-// Sync synchronizes with remote storage, downloading and loading new packages.
-// Returns the number of newly added packages.
-func (r *PackageRegistry) Sync(ctx context.Context) (int, error) {
+// SyncStats contains statistics from a sync operation.
+type SyncStats struct {
+	Added   int
+	Removed int
+}
+
+// Sync synchronizes with remote storage, downloading new packages and removing
+// packages that no longer exist in remote storage.
+// Returns statistics about added and removed packages.
+func (r *PackageRegistry) Sync(ctx context.Context) (SyncStats, error) {
 	r.logger.Info("syncing packages from storage")
 
 	objects, err := r.storage.List(ctx)
 	if err != nil {
-		return 0, err
+		return SyncStats{}, err
 	}
 
-	added := 0
+	// Build set of remote package IDs
+	remotePackages := make(map[string]string) // packageID -> objectKey
 	for _, obj := range objects {
-		// Derive package ID from object key
 		packageID := derivePackageID(obj.Key)
+		remotePackages[packageID] = obj.Key
+	}
 
-		// Skip if already loaded
+	stats := SyncStats{}
+
+	// Add new packages
+	for packageID, objectKey := range remotePackages {
 		if r.IsLoaded(packageID) {
 			r.logger.Debug("package already loaded, skipping", "id", packageID)
 			continue
 		}
 
 		// Download to local path
-		localPath := filepath.Join(r.localPath, obj.Key)
-		if err := r.storage.Download(ctx, obj.Key, localPath); err != nil {
-			r.logger.Error("failed to download package", "key", obj.Key, "error", err)
+		localPath := filepath.Join(r.localPath, objectKey)
+		if err := r.storage.Download(ctx, objectKey, localPath); err != nil {
+			r.logger.Error("failed to download package", "key", objectKey, "error", err)
 			continue
 		}
 
@@ -268,17 +282,66 @@ func (r *PackageRegistry) Sync(ctx context.Context) (int, error) {
 			continue
 		}
 
-		added++
+		stats.Added++
 		r.logger.Info("new package synced", "id", packageID)
 	}
 
-	r.logger.Info("sync completed", "added", added, "total", r.PackageCount())
-	return added, nil
+	// Remove packages that no longer exist in remote storage
+	// We capture both ID and path in findPackagesToRemove to avoid race conditions
+	packagesToRemove := r.findPackagesToRemove(remotePackages)
+	for _, pkg := range packagesToRemove {
+		r.logger.Info("removing package not in remote storage", "id", pkg.id)
+
+		// Unload the package
+		if err := r.UnloadPackage(ctx, pkg.id); err != nil {
+			r.logger.Error("failed to unload removed package", "id", pkg.id, "error", err)
+			continue
+		}
+
+		// Delete local cache file
+		if pkg.path != "" {
+			if err := os.Remove(pkg.path); err != nil && !os.IsNotExist(err) {
+				r.logger.Warn("failed to delete local cache file", "path", pkg.path, "error", err)
+			} else {
+				r.logger.Debug("deleted local cache file", "path", pkg.path)
+			}
+		}
+
+		stats.Removed++
+	}
+
+	r.logger.Info("sync completed", "added", stats.Added, "removed", stats.Removed, "total", r.PackageCount())
+	return stats, nil
+}
+
+// packageToRemove holds information about a package that should be removed.
+type packageToRemove struct {
+	id   string
+	path string
+}
+
+// findPackagesToRemove returns packages that are loaded but not in remote storage.
+// This captures both ID and path in a single lock acquisition to avoid race conditions.
+func (r *PackageRegistry) findPackagesToRemove(remotePackages map[string]string) []packageToRemove {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	var toRemove []packageToRemove
+	for packageID, entry := range r.packages {
+		if _, exists := remotePackages[packageID]; !exists {
+			path := ""
+			if entry.Package != nil {
+				path = entry.Package.Path
+			}
+			toRemove = append(toRemove, packageToRemove{id: packageID, path: path})
+		}
+	}
+	return toRemove
 }
 
 // derivePackageID extracts a package ID from a file path or object key.
 func derivePackageID(path string) string {
 	base := filepath.Base(path)
 	ext := filepath.Ext(base)
-	return base[:len(base)-len(ext)]
+	return strings.TrimSuffix(base, ext)
 }

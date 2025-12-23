@@ -174,3 +174,90 @@ func TestRegistry_PackageCount(t *testing.T) {
 		t.Errorf("expected 2 packages, got %d", registry.PackageCount())
 	}
 }
+
+func TestRegistry_SyncRemovesDeletedPackages(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+
+	// Create storage with two packages initially
+	storage := &mockStorage{
+		objects: []output.StorageObject{
+			{Key: "test1.gpkg"},
+			{Key: "test2.gpkg"},
+		},
+	}
+
+	registry := &PackageRegistry{
+		packages:  make(map[string]*packageEntry),
+		repo:      &mockRepository{},
+		logger:    logger,
+		localPath: "/tmp",
+		storage:   storage,
+		metrics:   &output.NoOpMetrics{},
+	}
+
+	ctx := context.Background()
+
+	// First sync should add both packages
+	stats, err := registry.Sync(ctx)
+	if err != nil {
+		t.Fatalf("first sync failed: %v", err)
+	}
+	if stats.Added != 2 {
+		t.Errorf("expected 2 packages added, got %d", stats.Added)
+	}
+	if stats.Removed != 0 {
+		t.Errorf("expected 0 packages removed, got %d", stats.Removed)
+	}
+
+	// Remove one package from storage
+	storage.objects = []output.StorageObject{
+		{Key: "test1.gpkg"},
+	}
+
+	// Second sync should remove the deleted package
+	stats, err = registry.Sync(ctx)
+	if err != nil {
+		t.Fatalf("second sync failed: %v", err)
+	}
+	if stats.Added != 0 {
+		t.Errorf("expected 0 packages added, got %d", stats.Added)
+	}
+	if stats.Removed != 1 {
+		t.Errorf("expected 1 package removed, got %d", stats.Removed)
+	}
+	if registry.PackageCount() != 1 {
+		t.Errorf("expected 1 total package, got %d", registry.PackageCount())
+	}
+}
+
+func TestRegistry_FindPackagesToRemove(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+
+	registry := &PackageRegistry{
+		packages:  make(map[string]*packageEntry),
+		logger:    logger,
+		localPath: "/tmp",
+		storage:   &mockStorage{},
+		metrics:   &output.NoOpMetrics{},
+	}
+
+	// Add some packages locally
+	registry.packages["pkg1"] = &packageEntry{}
+	registry.packages["pkg2"] = &packageEntry{}
+	registry.packages["pkg3"] = &packageEntry{}
+
+	// Only pkg1 and pkg3 are in remote
+	remotePackages := map[string]string{
+		"pkg1": "pkg1.gpkg",
+		"pkg3": "pkg3.gpkg",
+	}
+
+	toRemove := registry.findPackagesToRemove(remotePackages)
+
+	if len(toRemove) != 1 {
+		t.Errorf("expected 1 package to remove, got %d", len(toRemove))
+	}
+	if len(toRemove) > 0 && toRemove[0].id != "pkg2" {
+		t.Errorf("expected pkg2 to be removed, got %s", toRemove[0].id)
+	}
+}

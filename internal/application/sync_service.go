@@ -15,6 +15,7 @@ var ErrRateLimited = errors.New("rate limit exceeded")
 // SyncResult contains the result of a sync operation.
 type SyncResult struct {
 	PackagesAdded   int       `json:"packages_added"`
+	PackagesRemoved int       `json:"packages_removed"`
 	PackagesTotal   int       `json:"packages_total"`
 	SyncedAt        time.Time `json:"synced_at"`
 	NextScheduledAt time.Time `json:"next_scheduled_at,omitempty"`
@@ -107,23 +108,28 @@ func (s *SyncService) TriggerSync(ctx context.Context) (SyncResult, error) {
 
 // doSync performs the sync operation without returning detailed results.
 func (s *SyncService) doSync(ctx context.Context) {
-	added, err := s.registry.Sync(ctx)
+	stats, err := s.registry.Sync(ctx)
 	if err != nil {
 		s.logger.Error("sync failed", "error", err)
 		return
 	}
-	s.logger.Info("sync completed", "added", added, "total", s.registry.PackageCount())
+	s.logger.Info("sync completed",
+		"added", stats.Added,
+		"removed", stats.Removed,
+		"total", s.registry.PackageCount(),
+	)
 }
 
 // doSyncWithResult performs the sync operation and returns detailed results.
 func (s *SyncService) doSyncWithResult(ctx context.Context) (SyncResult, error) {
-	added, err := s.registry.Sync(ctx)
+	stats, err := s.registry.Sync(ctx)
 	if err != nil {
 		return SyncResult{}, err
 	}
 
 	return SyncResult{
-		PackagesAdded:   added,
+		PackagesAdded:   stats.Added,
+		PackagesRemoved: stats.Removed,
 		PackagesTotal:   s.registry.PackageCount(),
 		SyncedAt:        time.Now(),
 		NextScheduledAt: s.getNextSync(),
