@@ -257,7 +257,7 @@ func TestRegistry_FindPackagesToRemove(t *testing.T) {
 	if len(toRemove) != 1 {
 		t.Errorf("expected 1 package to remove, got %d", len(toRemove))
 	}
-	if len(toRemove) > 0 && toRemove[0] != "pkg2" {
-		t.Errorf("expected pkg2 to be removed, got %s", toRemove[0])
+	if len(toRemove) > 0 && toRemove[0].id != "pkg2" {
+		t.Errorf("expected pkg2 to be removed, got %s", toRemove[0].id)
 	}
 }

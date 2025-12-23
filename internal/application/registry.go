@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -286,25 +287,23 @@ func (r *PackageRegistry) Sync(ctx context.Context) (SyncStats, error) {
 	}
 
 	// Remove packages that no longer exist in remote storage
+	// We capture both ID and path in findPackagesToRemove to avoid race conditions
 	packagesToRemove := r.findPackagesToRemove(remotePackages)
-	for _, packageID := range packagesToRemove {
-		r.logger.Info("removing package not in remote storage", "id", packageID)
-
-		// Get the package path before unloading
-		localPath := r.getPackagePath(packageID)
+	for _, pkg := range packagesToRemove {
+		r.logger.Info("removing package not in remote storage", "id", pkg.id)
 
 		// Unload the package
-		if err := r.UnloadPackage(ctx, packageID); err != nil {
-			r.logger.Error("failed to unload removed package", "id", packageID, "error", err)
+		if err := r.UnloadPackage(ctx, pkg.id); err != nil {
+			r.logger.Error("failed to unload removed package", "id", pkg.id, "error", err)
 			continue
 		}
 
 		// Delete local cache file
-		if localPath != "" {
-			if err := os.Remove(localPath); err != nil && !os.IsNotExist(err) {
-				r.logger.Warn("failed to delete local cache file", "path", localPath, "error", err)
+		if pkg.path != "" {
+			if err := os.Remove(pkg.path); err != nil && !os.IsNotExist(err) {
+				r.logger.Warn("failed to delete local cache file", "path", pkg.path, "error", err)
 			} else {
-				r.logger.Debug("deleted local cache file", "path", localPath)
+				r.logger.Debug("deleted local cache file", "path", pkg.path)
 			}
 		}
 
@@ -315,34 +314,34 @@ func (r *PackageRegistry) Sync(ctx context.Context) (SyncStats, error) {
 	return stats, nil
 }
 
-// findPackagesToRemove returns package IDs that are loaded but not in remote storage.
-func (r *PackageRegistry) findPackagesToRemove(remotePackages map[string]string) []string {
+// packageToRemove holds information about a package that should be removed.
+type packageToRemove struct {
+	id   string
+	path string
+}
+
+// findPackagesToRemove returns packages that are loaded but not in remote storage.
+// This captures both ID and path in a single lock acquisition to avoid race conditions.
+func (r *PackageRegistry) findPackagesToRemove(remotePackages map[string]string) []packageToRemove {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	var toRemove []string
-	for packageID := range r.packages {
+	var toRemove []packageToRemove
+	for packageID, entry := range r.packages {
 		if _, exists := remotePackages[packageID]; !exists {
-			toRemove = append(toRemove, packageID)
+			path := ""
+			if entry.Package != nil {
+				path = entry.Package.Path
+			}
+			toRemove = append(toRemove, packageToRemove{id: packageID, path: path})
 		}
 	}
 	return toRemove
-}
-
-// getPackagePath returns the local file path for a loaded package.
-func (r *PackageRegistry) getPackagePath(packageID string) string {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	if entry, ok := r.packages[packageID]; ok && entry.Package != nil {
-		return entry.Package.Path
-	}
-	return ""
 }
 
 // derivePackageID extracts a package ID from a file path or object key.
 func derivePackageID(path string) string {
 	base := filepath.Base(path)
 	ext := filepath.Ext(base)
-	return base[:len(base)-len(ext)]
+	return strings.TrimSuffix(base, ext)
 }
