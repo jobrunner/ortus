@@ -618,12 +618,12 @@ const frontendHTML = `<!DOCTYPE html>
                     return;
                 }
 
-                // Build query URL
-                let url = '/api/v1/query?srid=' + srid;
+                // Build query URL with proper URL encoding
+                let url = '/api/v1/query?srid=' + encodeURIComponent(srid);
                 if (srid === '4326') {
-                    url += '&lon=' + x + '&lat=' + y;
+                    url += '&lon=' + encodeURIComponent(x) + '&lat=' + encodeURIComponent(y);
                 } else {
-                    url += '&x=' + x + '&y=' + y;
+                    url += '&x=' + encodeURIComponent(x) + '&y=' + encodeURIComponent(y);
                 }
 
                 submitBtn.disabled = true;
@@ -632,10 +632,23 @@ const frontendHTML = `<!DOCTYPE html>
 
                 try {
                     const response = await fetch(url);
-                    const data = await response.json();
 
                     if (!response.ok) {
-                        throw new Error(data.error || data.message || 'Abfrage fehlgeschlagen');
+                        let errorMessage = 'Abfrage fehlgeschlagen';
+                        try {
+                            const errorData = await response.json();
+                            errorMessage = errorData.error || errorData.message || errorMessage;
+                        } catch (parseErr) {
+                            // Response could not be parsed as JSON
+                        }
+                        throw new Error(errorMessage);
+                    }
+
+                    let data;
+                    try {
+                        data = await response.json();
+                    } catch (parseErr) {
+                        throw new Error('Die Serverantwort konnte nicht verarbeitet werden.');
                     }
 
                     displayResults(data, srid);
@@ -728,7 +741,7 @@ const frontendHTML = `<!DOCTYPE html>
                 let html = '<div class="feature">';
                 html += '<div class="feature-header">';
                 html += '<span class="feature-layer">' + escapeHtml(feature.layer || '-') + '</span>';
-                html += '<span class="feature-id">ID: ' + (feature.id || '-') + '</span>';
+                html += '<span class="feature-id">ID: ' + escapeHtml(feature.id || '-') + '</span>';
                 html += '</div>';
 
                 if (feature.properties && Object.keys(feature.properties).length > 0) {
@@ -763,7 +776,8 @@ const frontendHTML = `<!DOCTYPE html>
                     .replace(/&/g, '&amp;')
                     .replace(/</g, '&lt;')
                     .replace(/>/g, '&gt;')
-                    .replace(/"/g, '&quot;');
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
             }
         })();
     </script>
