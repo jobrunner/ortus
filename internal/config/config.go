@@ -37,6 +37,7 @@ type ServerConfig struct {
 	ShutdownTimeout time.Duration   `mapstructure:"shutdown_timeout"`
 	RateLimit       RateLimitConfig `mapstructure:"rate_limit"`
 	CORS            CORSConfig      `mapstructure:"cors"`
+	FrontendEnabled bool            `mapstructure:"frontend_enabled"` // Enable web frontend at /
 }
 
 // CORSConfig holds CORS configuration.
@@ -150,6 +151,7 @@ func Defaults() {
 	viper.SetDefault("server.rate_limit.rate", 100.0)
 	viper.SetDefault("server.rate_limit.burst", 200)
 	viper.SetDefault("server.cors.allowed_origins", []string{})
+	viper.SetDefault("server.frontend_enabled", true)
 
 	// Storage defaults
 	viper.SetDefault("storage.type", "local")

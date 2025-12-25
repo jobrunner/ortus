@@ -88,6 +88,9 @@ func init() {
 	// Query flags
 	rootCmd.Flags().Bool("with-geometry", false, "include geometry in query results")
 
+	// Frontend flags
+	rootCmd.Flags().Bool("disable-frontend", false, "disable web frontend at /")
+
 	// Bind flags to viper
 	_ = viper.BindPFlag("logging.level", rootCmd.PersistentFlags().Lookup("log-level"))
 	_ = viper.BindPFlag("logging.format", rootCmd.PersistentFlags().Lookup("log-format"))
@@ -100,6 +103,9 @@ func init() {
 	_ = viper.BindPFlag("storage.local_path", rootCmd.Flags().Lookup("storage-path"))
 	_ = viper.BindPFlag("server.cors.allowed_origins", rootCmd.Flags().Lookup("cors"))
 	_ = viper.BindPFlag("query.with_geometry", rootCmd.Flags().Lookup("with-geometry"))
+	// Note: --disable-frontend uses inverted logic and is handled in runServer().
+	// The env var ORTUS_SERVER_FRONTEND_ENABLED works via viper's AutomaticEnv()
+	// binding to server.frontend_enabled (set in config.Defaults()).
 
 	rootCmd.AddCommand(versionCmd)
 }
@@ -112,10 +118,15 @@ func initConfig() {
 	}
 }
 
-func runServer(_ *cobra.Command, _ []string) error {
+func runServer(cmd *cobra.Command, _ []string) error {
 	cfg, err := config.Load(cfgFile)
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
+	}
+
+	// Handle --disable-frontend flag (inverts frontend_enabled)
+	if disableFrontend, _ := cmd.Flags().GetBool("disable-frontend"); disableFrontend {
+		cfg.Server.FrontendEnabled = false
 	}
 
 	// Setup logger
