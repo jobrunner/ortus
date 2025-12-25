@@ -103,7 +103,9 @@ func init() {
 	_ = viper.BindPFlag("storage.local_path", rootCmd.Flags().Lookup("storage-path"))
 	_ = viper.BindPFlag("server.cors.allowed_origins", rootCmd.Flags().Lookup("cors"))
 	_ = viper.BindPFlag("query.with_geometry", rootCmd.Flags().Lookup("with-geometry"))
-	// Note: disable-frontend is handled separately in runServer (inverted logic)
+	// Note: --disable-frontend uses inverted logic and is handled in runServer().
+	// The env var ORTUS_SERVER_FRONTEND_ENABLED works via viper's AutomaticEnv()
+	// binding to server.frontend_enabled (set in config.Defaults()).
 
 	rootCmd.AddCommand(versionCmd)
 }
