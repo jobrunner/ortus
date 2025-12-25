@@ -98,6 +98,9 @@ func (s *Server) setupRoutes() *mux.Router {
 	r.HandleFunc("/docs", s.handleSwaggerUI).Methods(http.MethodGet)
 	r.HandleFunc("/swagger", s.handleSwaggerUI).Methods(http.MethodGet)
 
+	// Frontend for coordinate queries
+	r.HandleFunc("/", s.handleFrontend).Methods(http.MethodGet)
+
 	return r
 }
 
