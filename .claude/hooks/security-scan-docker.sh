@@ -65,7 +65,7 @@ fi
 
 echo "   Running trivy security scan..." >&2
 # Run trivy with severity filter (only HIGH and CRITICAL)
-if ! trivy image --severity HIGH,CRITICAL --exit-code 1 "$IMAGE_TAG" 2>&1 >&2; then
+if ! trivy image --severity HIGH,CRITICAL --exit-code 1 "$IMAGE_TAG" >&2; then
     echo "❌ Security vulnerabilities found in $IMAGE_TAG" >&2
     echo "   Review the issues above and fix before pushing." >&2
     # Clean up

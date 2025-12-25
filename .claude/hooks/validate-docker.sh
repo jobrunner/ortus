@@ -36,7 +36,7 @@ echo "🐳 Validating Dockerfile: $FILE_PATH" >&2
 
 # Run hadolint
 echo "   Running hadolint..." >&2
-if ! hadolint "$FILE_PATH" 2>&1 >&2; then
+if ! hadolint "$FILE_PATH" >&2; then
     echo "❌ hadolint found issues in $FILE_PATH" >&2
     exit 1
 fi

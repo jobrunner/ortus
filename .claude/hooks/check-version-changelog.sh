@@ -23,7 +23,7 @@ if [[ "$TOOL_NAME" != "Bash" ]]; then
 fi
 
 # Only run for git commit commands
-if [[ ! "$COMMAND" =~ git[[:space:]]+commit ]] && [[ ! "$COMMAND" =~ git[[:space:]].*commit ]]; then
+if [[ ! "$COMMAND" =~ git[[:space:]].*commit ]]; then
     exit 0
 fi
 
