@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2025-12-25
+
+### Added
+- Embedded web frontend at root path (`/`) for interactive coordinate queries
+- Support for major European coordinate systems: WGS84, Web Mercator, ETRS89/UTM zones 32N & 33N, DHDN/Gauß-Krüger zones 2 & 3
+- Mobile-first responsive design with dynamic labels adapting to selected coordinate system
+- Geolocation button to use current device position
+- Expandable result cards with feature properties, geometry preview, and license information
+
 ## [0.3.1] - 2025-12-23
 
 ### Fixed
@@ -77,7 +86,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Read-only GeoPackage access
 - CORS configuration support
 
-[Unreleased]: https://github.com/jobrunner/ortus/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/jobrunner/ortus/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/jobrunner/ortus/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/jobrunner/ortus/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/jobrunner/ortus/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/jobrunner/ortus/compare/v0.1.0...v0.2.0
