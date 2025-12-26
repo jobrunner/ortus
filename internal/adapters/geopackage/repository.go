@@ -445,7 +445,7 @@ func (r *Repository) executePointQuery(ctx context.Context, db *sql.DB, layer *d
 		// Use R-tree index for fast bounding box pre-filtering
 		if layer.IsPolygonLayer() {
 			query = fmt.Sprintf(`
-				SELECT t.fid, t.*, AsText(CastAutomagic(t."%s"))
+				SELECT t.*, AsText(CastAutomagic(t."%s"))
 				FROM "%s" t
 				INNER JOIN "%s" r ON t.rowid = r.id
 				WHERE r.minx <= ? AND r.maxx >= ? AND r.miny <= ? AND r.maxy >= ?
@@ -455,7 +455,7 @@ func (r *Repository) executePointQuery(ctx context.Context, db *sql.DB, layer *d
 			) //#nosec G201 -- table/column names from trusted database
 		} else {
 			query = fmt.Sprintf(`
-				SELECT t.fid, t.*, AsText(CastAutomagic(t."%s"))
+				SELECT t.*, AsText(CastAutomagic(t."%s"))
 				FROM "%s" t
 				INNER JOIN "%s" r ON t.rowid = r.id
 				WHERE r.minx <= ? AND r.maxx >= ? AND r.miny <= ? AND r.maxy >= ?
@@ -466,13 +466,13 @@ func (r *Repository) executePointQuery(ctx context.Context, db *sql.DB, layer *d
 		// Fallback: no R-tree index, full table scan
 		if layer.IsPolygonLayer() {
 			query = fmt.Sprintf(`
-				SELECT fid, *, AsText(CastAutomagic("%s"))
+				SELECT *, AsText(CastAutomagic("%s"))
 				FROM "%s"
 				WHERE ST_Contains(CastAutomagic("%s"), GeomFromText(?, ?))
 			`, layer.GeometryColumn, layer.Name, layer.GeometryColumn) //#nosec G201
 		} else {
 			query = fmt.Sprintf(`
-				SELECT fid, *, AsText(CastAutomagic("%s"))
+				SELECT *, AsText(CastAutomagic("%s"))
 				FROM "%s"
 				WHERE MbrContains(CastAutomagic("%s"), GeomFromText(?, ?))
 			`, layer.GeometryColumn, layer.Name, layer.GeometryColumn) //#nosec G201
