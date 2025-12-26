@@ -176,6 +176,8 @@ func (r *Repository) QueryPoint(ctx context.Context, packageID, layerName string
 }
 
 // CreateSpatialIndex creates a spatial index for a layer.
+// This creates an R-tree virtual table directly, bypassing SpatiaLite's CreateSpatialIndex()
+// which requires a geometry_columns table that GeoPackage files don't have.
 func (r *Repository) CreateSpatialIndex(ctx context.Context, packageID, layerName string) error {
 	r.mu.RLock()
 	db, ok := r.connections[packageID]
@@ -200,14 +202,47 @@ func (r *Repository) CreateSpatialIndex(ctx context.Context, packageID, layerNam
 		return nil
 	}
 
-	// Create spatial index using SpatiaLite
-	query := fmt.Sprintf("SELECT CreateSpatialIndex('%s', '%s')", layerName, layer.GeometryColumn) //#nosec G201 -- layer names from trusted database source
-	_, err = db.ExecContext(ctx, query)
-	if err != nil {
+	indexTable := fmt.Sprintf("rtree_%s_%s", layerName, layer.GeometryColumn)
+
+	// Create R-tree virtual table
+	//nolint:gocritic // sprintfQuotedString: SQL identifiers need double quotes, not Go's %q
+	createQuery := fmt.Sprintf(
+		`CREATE VIRTUAL TABLE "%s" USING rtree(id, minx, maxx, miny, maxy)`, //#nosec G201 -- table name derived from trusted database
+		indexTable,
+	)
+	if _, err := db.ExecContext(ctx, createQuery); err != nil {
 		return &domain.IndexError{
 			PackageID: packageID,
 			Layer:     layerName,
-			Err:       err,
+			Err:       fmt.Errorf("creating R-tree table: %w", err),
+		}
+	}
+
+	// Populate R-tree with bounding boxes from all geometries
+	// Using CastAutomagic to convert GeoPackage binary geometry to SpatiaLite format
+	populateQuery := fmt.Sprintf(`
+		INSERT INTO "%s" (id, minx, maxx, miny, maxy)
+		SELECT rowid,
+			MbrMinX(CastAutomagic("%s")),
+			MbrMaxX(CastAutomagic("%s")),
+			MbrMinY(CastAutomagic("%s")),
+			MbrMaxY(CastAutomagic("%s"))
+		FROM "%s"
+		WHERE "%s" IS NOT NULL
+	`, indexTable,
+		layer.GeometryColumn, layer.GeometryColumn,
+		layer.GeometryColumn, layer.GeometryColumn,
+		layerName, layer.GeometryColumn,
+	) //#nosec G201 -- table/column names from trusted database source
+
+	if _, err := db.ExecContext(ctx, populateQuery); err != nil {
+		// Clean up the empty R-tree table on failure
+		//nolint:gocritic // sprintfQuotedString: SQL identifiers need double quotes, not Go's %q
+		_, _ = db.ExecContext(ctx, fmt.Sprintf(`DROP TABLE IF EXISTS "%s"`, indexTable))
+		return &domain.IndexError{
+			PackageID: packageID,
+			Layer:     layerName,
+			Err:       fmt.Errorf("populating R-tree index: %w", err),
 		}
 	}
 
@@ -255,8 +290,9 @@ func (r *Repository) HasSpatialIndex(ctx context.Context, packageID, layerName s
 
 // openDB opens the SQLite database with appropriate settings.
 func (r *Repository) openDB(ctx context.Context, path string) (*sql.DB, error) {
-	// Open in read-only mode with shared cache using the custom driver with extensions
-	dsn := fmt.Sprintf("file:%s?mode=ro&cache=shared", path)
+	// Open in read-write mode to allow spatial index creation
+	// GeoPackage data remains unmodified - only R-tree indexes are added
+	dsn := fmt.Sprintf("file:%s?cache=shared", path)
 	db, err := sql.Open("sqlite3_with_extensions", dsn)
 	if err != nil {
 		return nil, err
@@ -386,29 +422,80 @@ func (r *Repository) readMetadata(ctx context.Context, db *sql.DB, pkg *domain.G
 
 // executePointQuery performs the actual point query using ST_Contains.
 // The coordinate must already be transformed to the layer's SRID before calling this function.
+// Uses R-tree spatial index for fast bounding box filtering when available.
 func (r *Repository) executePointQuery(ctx context.Context, db *sql.DB, layer *domain.Layer, coord domain.Coordinate) ([]domain.Feature, error) {
 	pointWKT := coord.WKT()
+	indexTable := fmt.Sprintf("rtree_%s_%s", layer.Name, layer.GeometryColumn)
+
+	// Check if R-tree index exists
+	var indexExists int
+	err := db.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?",
+		indexTable,
+	).Scan(&indexExists)
+	if err != nil {
+		indexExists = 0
+	}
 
 	// Build query using ST_Contains for polygon layers, MbrContains for others
 	// Note: GeoPackage uses GPKG binary format, so we use CastAutomagic() to convert
 	// the geometry to SpatiaLite format before spatial operations
 	var query string
-	if layer.IsPolygonLayer() {
-		query = fmt.Sprintf(`
-			SELECT fid, %s, AsText(CastAutomagic(%s))
-			FROM %s
-			WHERE ST_Contains(CastAutomagic(%s), GeomFromText(?, ?))
-		`, "*", layer.GeometryColumn, layer.Name, layer.GeometryColumn)
+	if indexExists > 0 {
+		// Use R-tree index for fast bounding box pre-filtering
+		if layer.IsPolygonLayer() {
+			query = fmt.Sprintf(`
+				SELECT t.*, AsText(CastAutomagic(t."%s"))
+				FROM "%s" t
+				INNER JOIN "%s" r ON t.rowid = r.id
+				WHERE r.minx <= ? AND r.maxx >= ? AND r.miny <= ? AND r.maxy >= ?
+				  AND ST_Contains(CastAutomagic(t."%s"), GeomFromText(?, ?))
+			`, layer.GeometryColumn, layer.Name, indexTable,
+				layer.GeometryColumn,
+			) //#nosec G201 -- table/column names from trusted database
+		} else {
+			query = fmt.Sprintf(`
+				SELECT t.*, AsText(CastAutomagic(t."%s"))
+				FROM "%s" t
+				INNER JOIN "%s" r ON t.rowid = r.id
+				WHERE r.minx <= ? AND r.maxx >= ? AND r.miny <= ? AND r.maxy >= ?
+			`, layer.GeometryColumn, layer.Name, indexTable,
+			) //#nosec G201 -- table/column names from trusted database
+		}
 	} else {
-		// For non-polygon layers, use bounding box check
-		query = fmt.Sprintf(`
-			SELECT fid, %s, AsText(CastAutomagic(%s))
-			FROM %s
-			WHERE MbrContains(CastAutomagic(%s), GeomFromText(?, ?))
-		`, "*", layer.GeometryColumn, layer.Name, layer.GeometryColumn)
+		// Fallback: no R-tree index, full table scan
+		if layer.IsPolygonLayer() {
+			query = fmt.Sprintf(`
+				SELECT *, AsText(CastAutomagic("%s"))
+				FROM "%s"
+				WHERE ST_Contains(CastAutomagic("%s"), GeomFromText(?, ?))
+			`, layer.GeometryColumn, layer.Name, layer.GeometryColumn) //#nosec G201
+		} else {
+			query = fmt.Sprintf(`
+				SELECT *, AsText(CastAutomagic("%s"))
+				FROM "%s"
+				WHERE MbrContains(CastAutomagic("%s"), GeomFromText(?, ?))
+			`, layer.GeometryColumn, layer.Name, layer.GeometryColumn) //#nosec G201
+		}
 	}
 
-	rows, err := db.QueryContext(ctx, query, pointWKT, coord.SRID)
+	var rows *sql.Rows
+	if indexExists > 0 {
+		// R-tree query: pass point coordinates for bounding box filter, then WKT and SRID
+		if layer.IsPolygonLayer() {
+			rows, err = db.QueryContext(ctx, query,
+				coord.X, coord.X, coord.Y, coord.Y, // R-tree bounds (point = minx=maxx, miny=maxy)
+				pointWKT, coord.SRID, // ST_Contains parameters
+			)
+		} else {
+			rows, err = db.QueryContext(ctx, query,
+				coord.X, coord.X, coord.Y, coord.Y, // R-tree bounds only
+			)
+		}
+	} else {
+		rows, err = db.QueryContext(ctx, query, pointWKT, coord.SRID)
+	}
+
 	if err != nil {
 		return nil, &domain.QueryError{
 			Layer: layer.Name,
