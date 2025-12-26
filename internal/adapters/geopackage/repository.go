@@ -205,8 +205,9 @@ func (r *Repository) CreateSpatialIndex(ctx context.Context, packageID, layerNam
 	indexTable := fmt.Sprintf("rtree_%s_%s", layerName, layer.GeometryColumn)
 
 	// Create R-tree virtual table
+	//nolint:gocritic // sprintfQuotedString: SQL identifiers need double quotes, not Go's %q
 	createQuery := fmt.Sprintf(
-		"CREATE VIRTUAL TABLE \"%s\" USING rtree(id, minx, maxx, miny, maxy)", //#nosec G201 -- table name derived from trusted database
+		`CREATE VIRTUAL TABLE "%s" USING rtree(id, minx, maxx, miny, maxy)`, //#nosec G201 -- table name derived from trusted database
 		indexTable,
 	)
 	if _, err := db.ExecContext(ctx, createQuery); err != nil {
@@ -236,7 +237,8 @@ func (r *Repository) CreateSpatialIndex(ctx context.Context, packageID, layerNam
 
 	if _, err := db.ExecContext(ctx, populateQuery); err != nil {
 		// Clean up the empty R-tree table on failure
-		_, _ = db.ExecContext(ctx, fmt.Sprintf("DROP TABLE IF EXISTS \"%s\"", indexTable))
+		//nolint:gocritic // sprintfQuotedString: SQL identifiers need double quotes, not Go's %q
+		_, _ = db.ExecContext(ctx, fmt.Sprintf(`DROP TABLE IF EXISTS "%s"`, indexTable))
 		return &domain.IndexError{
 			PackageID: packageID,
 			Layer:     layerName,
