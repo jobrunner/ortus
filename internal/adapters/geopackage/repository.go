@@ -265,12 +265,11 @@ func (r *Repository) setLayerIndexStatus(packageID, layerName string, hasIndex b
 	for i := range pkg.Layers {
 		if pkg.Layers[i].Name == layerName {
 			pkg.Layers[i].HasIndex = hasIndex
-			break
+			return nil
 		}
 	}
-	r.packages[packageID] = pkg
 
-	return nil
+	return domain.ErrLayerNotFound
 }
 
 // HasSpatialIndex checks if a layer has a spatial index.
