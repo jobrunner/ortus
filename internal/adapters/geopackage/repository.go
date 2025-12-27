@@ -199,6 +199,15 @@ func (r *Repository) CreateSpatialIndex(ctx context.Context, packageID, layerNam
 		return err
 	}
 	if hasIndex {
+		// Index already exists, just update the layer status
+		r.mu.Lock()
+		for i := range r.packages[packageID].Layers {
+			if r.packages[packageID].Layers[i].Name == layerName {
+				r.packages[packageID].Layers[i].HasIndex = true
+				break
+			}
+		}
+		r.mu.Unlock()
 		return nil
 	}
 
