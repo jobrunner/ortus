@@ -199,7 +199,8 @@ func (r *Repository) CreateSpatialIndex(ctx context.Context, packageID, layerNam
 		return err
 	}
 	if hasIndex {
-		return nil
+		// Index already exists, just update the layer status
+		return r.setLayerIndexStatus(packageID, layerName, true)
 	}
 
 	indexTable := fmt.Sprintf("rtree_%s_%s", layerName, layer.GeometryColumn)
@@ -247,16 +248,28 @@ func (r *Repository) CreateSpatialIndex(ctx context.Context, packageID, layerNam
 	}
 
 	// Update layer status
+	return r.setLayerIndexStatus(packageID, layerName, true)
+}
+
+// setLayerIndexStatus safely updates the HasIndex status for a layer.
+// It handles concurrent access and checks if the package still exists.
+func (r *Repository) setLayerIndexStatus(packageID, layerName string, hasIndex bool) error {
 	r.mu.Lock()
-	for i := range r.packages[packageID].Layers {
-		if r.packages[packageID].Layers[i].Name == layerName {
-			r.packages[packageID].Layers[i].HasIndex = true
-			break
+	defer r.mu.Unlock()
+
+	pkg, ok := r.packages[packageID]
+	if !ok {
+		return domain.ErrPackageNotFound
+	}
+
+	for i := range pkg.Layers {
+		if pkg.Layers[i].Name == layerName {
+			pkg.Layers[i].HasIndex = hasIndex
+			return nil
 		}
 	}
-	r.mu.Unlock()
 
-	return nil
+	return domain.ErrLayerNotFound
 }
 
 // HasSpatialIndex checks if a layer has a spatial index.
