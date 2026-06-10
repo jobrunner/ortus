@@ -48,6 +48,7 @@ build/
 .env
 .env.local
 setting.local.json
+.envrc.local
 
 # Nix
 result

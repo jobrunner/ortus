@@ -275,17 +275,19 @@ rateLimit:
 
 | Variable | Default | Beschreibung |
 |----------|---------|--------------|
-| `ORTUS_HOST` | `0.0.0.0` | HTTP-Server-Host |
-| `ORTUS_PORT` | `8080` | HTTP-Server-Port |
-| `ORTUS_GPKG_DIR` | `/data/gpkg` | GeoPackage-Verzeichnis |
+| `ORTUS_SERVER_HOST` | `0.0.0.0` | HTTP-Server-Host |
+| `ORTUS_SERVER_PORT` | `8080` | HTTP-Server-Port |
+| `ORTUS_STORAGE_LOCAL_PATH` | `./data` | GeoPackage-Verzeichnis |
 | `ORTUS_STORAGE_TYPE` | `local` | Storage-Typ (local/s3/azure/http) |
-| `ORTUS_S3_BUCKET` | - | AWS S3-Bucket-Name |
-| `ORTUS_S3_REGION` | - | AWS S3-Region |
-| `ORTUS_HTTP_BASE_URL` | - | Base-URL für HTTP-Download |
-| `ORTUS_TLS_ENABLED` | `false` | TLS aktivieren |
-| `ORTUS_LETSENCRYPT` | `false` | Let's Encrypt aktivieren |
-| `ORTUS_LOG_LEVEL` | `info` | Log-Level |
-| `ORTUS_RATE_LIMIT` | `10` | Requests pro Sekunde |
+| `ORTUS_STORAGE_S3_BUCKET` | - | AWS S3-Bucket-Name |
+| `ORTUS_STORAGE_S3_REGION` | - | AWS S3-Region |
+| `ORTUS_STORAGE_HTTP_BASE_URL` | - | Base-URL für HTTP-Download |
+| `ORTUS_TLS_ENABLED` | `false` | TLS aktivieren (CertMagic/Let's Encrypt) |
+| `ORTUS_TLS_EMAIL` | - | Let's Encrypt-E-Mail |
+| `ORTUS_TLS_DOMAINS` | - | Domains (kommasepariert) |
+| `ORTUS_LOGGING_LEVEL` | `info` | Log-Level |
+| `ORTUS_LOGGING_FORMAT` | `json` | Log-Format (json/text) |
+| `ORTUS_SERVER_RATE_LIMIT_RATE` | `100` | Requests pro Sekunde |
 | `ORTUS_METRICS_ENABLED` | `true` | Prometheus-Metriken |
 | `ORTUS_METRICS_PORT` | `9090` | Metriken-Port |
 | `ORTUS_SERVER_CORS_ALLOWED_ORIGINS` | `[]` | Erlaubte CORS Origins (kommasepariert) |
