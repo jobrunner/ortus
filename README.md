@@ -73,12 +73,13 @@ All configuration options can be set via environment variables with the `ORTUS_`
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ORTUS_HOST` | `0.0.0.0` | HTTP server host |
-| `ORTUS_PORT` | `8080` | HTTP server port |
+| `ORTUS_SERVER_HOST` | `0.0.0.0` | HTTP server host |
+| `ORTUS_SERVER_PORT` | `8080` | HTTP server port |
 | `ORTUS_STORAGE_TYPE` | `local` | Storage type (local/s3/azure/http) |
 | `ORTUS_STORAGE_LOCAL_PATH` | `./data` | Path to GeoPackage directory |
 | `ORTUS_SERVER_CORS_ALLOWED_ORIGINS` | `[]` | Allowed CORS origins (comma-separated) |
-| `ORTUS_LOG_LEVEL` | `info` | Log level |
+| `ORTUS_LOGGING_LEVEL` | `info` | Log level (debug/info/warn/error) |
+| `ORTUS_LOGGING_FORMAT` | `json` | Log format (json/text) |
 | `ORTUS_TLS_ENABLED` | `false` | Enable TLS |
 | `ORTUS_METRICS_ENABLED` | `true` | Enable Prometheus metrics |
 | `ORTUS_SYNC_ENABLED` | `false` | Enable periodic remote storage sync |
@@ -361,10 +362,13 @@ services:
       - "8080:8080"
       - "9090:9090"  # Metrics
     volumes:
-      - ./data:/data:ro
+      # Must be writable: Ortus creates R-tree spatial indexes inside the
+      # GeoPackage files on first load, and SQLite needs to write a journal
+      # file alongside the database. Do not mount this read-only.
+      - ./data:/data
     environment:
       ORTUS_STORAGE_LOCAL_PATH: /data
-      ORTUS_LOG_LEVEL: info
+      ORTUS_LOGGING_LEVEL: info
       ORTUS_SERVER_CORS_ALLOWED_ORIGINS: "https://example.com,*.myapp.com"
 ```
 

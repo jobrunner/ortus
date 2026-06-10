@@ -151,11 +151,11 @@ Priorität: CLI > Umgebungsvariablen > .env > Defaults
 
 | Variable | Default | Beschreibung |
 |----------|---------|--------------|
-| `ORTUS_PORT` | `8080` | HTTP-Port |
-| `ORTUS_GPKG_DIR` | `/data/gpkg` | GeoPackage-Verzeichnis |
-| `ORTUS_STORAGE_TYPE` | `local` | Storage (local/s3/azure) |
-| `ORTUS_LOG_LEVEL` | `info` | Log-Level |
-| `ORTUS_RATE_LIMIT` | `10` | Requests/Sekunde |
+| `ORTUS_SERVER_PORT` | `8080` | HTTP-Port |
+| `ORTUS_STORAGE_LOCAL_PATH` | `./data` | GeoPackage-Verzeichnis |
+| `ORTUS_STORAGE_TYPE` | `local` | Storage (local/s3/azure/http) |
+| `ORTUS_LOGGING_LEVEL` | `info` | Log-Level |
+| `ORTUS_SERVER_RATE_LIMIT_RATE` | `100` | Requests/Sekunde |
 | `ORTUS_SERVER_CORS_ALLOWED_ORIGINS` | `[]` | Erlaubte CORS Origins |
 
 CLI-Flag für CORS: `--cors=origin1,*.sub.domain.tld`

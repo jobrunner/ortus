@@ -1391,36 +1391,35 @@ func main() {
 
 ### 9.5 Umgebungsvariablen
 
+> Hinweis: Dies ist der ursprüngliche Architekturplan. Die tatsächliche Namensgebung wurde während der Implementierung vereinheitlicht (Viper-Namespaces). Aktuell verbindliche Liste in `README.md` und `internal/config/config.go`.
+
 | Variable | Default | Beschreibung |
 |----------|---------|--------------|
-| `ORTUS_HOST` | `0.0.0.0` | HTTP-Server-Host |
-| `ORTUS_PORT` | `8080` | HTTP-Server-Port |
-| `ORTUS_GPKG_DIR` | `/data/gpkg` | GeoPackage-Verzeichnis |
+| `ORTUS_SERVER_HOST` | `0.0.0.0` | HTTP-Server-Host |
+| `ORTUS_SERVER_PORT` | `8080` | HTTP-Server-Port |
+| `ORTUS_STORAGE_LOCAL_PATH` | `./data` | GeoPackage-Verzeichnis |
 | `ORTUS_STORAGE_TYPE` | `local` | Storage-Typ (local/s3/azure/http) |
-| `ORTUS_S3_BUCKET` | - | AWS S3-Bucket-Name |
-| `ORTUS_S3_REGION` | - | AWS S3-Region |
-| `ORTUS_S3_ENDPOINT` | - | AWS S3-Custom-Endpoint (MinIO etc.) |
-| `ORTUS_S3_ACCESS_KEY` | - | AWS S3-Access-Key |
-| `ORTUS_S3_SECRET_KEY` | - | AWS S3-Secret-Key |
-| `ORTUS_HTTP_BASE_URL` | - | Base-URL für HTTP-Download |
-| `ORTUS_AZURE_CONTAINER` | - | Azure-Container-Name |
-| `ORTUS_AZURE_ACCOUNT_NAME` | - | Azure-Account-Name |
-| `ORTUS_AZURE_ACCOUNT_KEY` | - | Azure-Account-Key |
-| `ORTUS_TLS_ENABLED` | `false` | TLS aktivieren |
-| `ORTUS_TLS_CERT_FILE` | - | TLS-Zertifikatspfad |
-| `ORTUS_TLS_KEY_FILE` | - | TLS-Schlüsselpfad |
-| `ORTUS_LETSENCRYPT` | `false` | Let's Encrypt aktivieren |
-| `ORTUS_LETSENCRYPT_EMAIL` | - | Let's Encrypt-E-Mail |
-| `ORTUS_DOMAINS` | - | Domains (kommasepariert) |
-| `ORTUS_LOG_LEVEL` | `info` | Log-Level |
-| `ORTUS_LOG_FORMAT` | `json` | Log-Format (json/text) |
-| `ORTUS_LOG_QUERIES` | `false` | SQL-Queries loggen |
-| `ORTUS_LOG_REQUESTS` | `true` | HTTP-Requests loggen |
-| `ORTUS_LOG_RESPONSES` | `false` | HTTP-Responses loggen |
-| `ORTUS_RATE_LIMIT` | `10` | Requests pro Sekunde |
-| `ORTUS_RATE_LIMIT_BURST` | `20` | Burst-Größe |
+| `ORTUS_STORAGE_S3_BUCKET` | - | AWS S3-Bucket-Name |
+| `ORTUS_STORAGE_S3_REGION` | - | AWS S3-Region |
+| `ORTUS_STORAGE_S3_ENDPOINT` | - | AWS S3-Custom-Endpoint (MinIO etc.) |
+| `ORTUS_STORAGE_S3_ACCESS_KEY_ID` | - | AWS S3-Access-Key |
+| `ORTUS_STORAGE_S3_SECRET_ACCESS_KEY` | - | AWS S3-Secret-Key |
+| `ORTUS_STORAGE_HTTP_BASE_URL` | - | Base-URL für HTTP-Download |
+| `ORTUS_STORAGE_AZURE_CONTAINER` | - | Azure-Container-Name |
+| `ORTUS_STORAGE_AZURE_ACCOUNT_NAME` | - | Azure-Account-Name |
+| `ORTUS_STORAGE_AZURE_ACCOUNT_KEY` | - | Azure-Account-Key |
+| `ORTUS_TLS_ENABLED` | `false` | TLS aktivieren (CertMagic/Let's Encrypt) |
+| `ORTUS_TLS_EMAIL` | - | Let's Encrypt-E-Mail |
+| `ORTUS_TLS_DOMAINS` | - | Domains (kommasepariert) |
+| `ORTUS_TLS_CACHE_DIR` | `./.certmagic` | CertMagic-Cache-Verzeichnis |
+| `ORTUS_LOGGING_LEVEL` | `info` | Log-Level |
+| `ORTUS_LOGGING_FORMAT` | `json` | Log-Format (json/text) |
+| `ORTUS_SERVER_RATE_LIMIT_ENABLED` | `false` | Rate-Limiting aktivieren |
+| `ORTUS_SERVER_RATE_LIMIT_RATE` | `100` | Requests pro Sekunde |
+| `ORTUS_SERVER_RATE_LIMIT_BURST` | `200` | Burst-Größe |
 | `ORTUS_METRICS_ENABLED` | `true` | Prometheus-Metriken |
 | `ORTUS_METRICS_PORT` | `9090` | Metriken-Port |
+| `ORTUS_METRICS_PATH` | `/metrics` | Metriken-Pfad |
 
 ---
 
@@ -1774,12 +1773,14 @@ services:
       - "8080:8080"   # API
       - "9090:9090"   # Metrics
     volumes:
-      - ./testdata/geopackages:/data/gpkg:ro
+      # Writable: Ortus erzeugt R-Tree-Indexe in den GPKGs und SQLite
+      # benötigt ein Journal-File neben der Datenbank.
+      - ./testdata/geopackages:/data/gpkg
       - cert-cache:/var/cache/ortus/certs
     environment:
-      - ORTUS_LOG_LEVEL=debug
-      - ORTUS_LOG_QUERIES=true
-      - ORTUS_RATE_LIMIT=100
+      - ORTUS_LOGGING_LEVEL=debug
+      - ORTUS_SERVER_RATE_LIMIT_ENABLED=true
+      - ORTUS_SERVER_RATE_LIMIT_RATE=100
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health/live"]
       interval: 30s
