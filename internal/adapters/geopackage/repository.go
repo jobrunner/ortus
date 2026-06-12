@@ -264,22 +264,34 @@ func (r *Repository) CreateSpatialIndex(ctx context.Context, packageID, layerNam
 	r.mu.RUnlock()
 
 	if !ok {
+		span.RecordError(domain.ErrPackageNotFound)
+		span.SetStatus(output.StatusError, "package not found")
 		return domain.ErrPackageNotFound
 	}
 
 	layer, found := pkg.GetLayer(layerName)
 	if !found {
+		span.RecordError(domain.ErrLayerNotFound)
+		span.SetStatus(output.StatusError, "layer not found")
 		return domain.ErrLayerNotFound
 	}
 
 	// Check if index already exists
 	hasIndex, err := r.HasSpatialIndex(ctx, packageID, layerName)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(output.StatusError, "index probe failed")
 		return err
 	}
 	if hasIndex {
 		// Index already exists, just update the layer status
-		return r.setLayerIndexStatus(packageID, layerName, true)
+		span.SetAttributes(output.Bool("ortus.index.preexisting", true))
+		if err := r.setLayerIndexStatus(packageID, layerName, true); err != nil {
+			span.RecordError(err)
+			span.SetStatus(output.StatusError, "status update failed")
+			return err
+		}
+		return nil
 	}
 
 	indexTable := fmt.Sprintf("rtree_%s_%s", layerName, layer.GeometryColumn)
@@ -291,11 +303,14 @@ func (r *Repository) CreateSpatialIndex(ctx context.Context, packageID, layerNam
 		indexTable,
 	)
 	if _, err := db.ExecContext(ctx, createQuery); err != nil {
-		return &domain.IndexError{
+		idxErr := &domain.IndexError{
 			PackageID: packageID,
 			Layer:     layerName,
 			Err:       fmt.Errorf("creating R-tree table: %w", err),
 		}
+		span.RecordError(idxErr)
+		span.SetStatus(output.StatusError, "create R-tree table failed")
+		return idxErr
 	}
 
 	// Populate R-tree with bounding boxes from all geometries
@@ -319,15 +334,23 @@ func (r *Repository) CreateSpatialIndex(ctx context.Context, packageID, layerNam
 		// Clean up the empty R-tree table on failure
 		//nolint:gocritic // sprintfQuotedString: SQL identifiers need double quotes, not Go's %q
 		_, _ = db.ExecContext(ctx, fmt.Sprintf(`DROP TABLE IF EXISTS "%s"`, indexTable))
-		return &domain.IndexError{
+		idxErr := &domain.IndexError{
 			PackageID: packageID,
 			Layer:     layerName,
 			Err:       fmt.Errorf("populating R-tree index: %w", err),
 		}
+		span.RecordError(idxErr)
+		span.SetStatus(output.StatusError, "populate R-tree failed")
+		return idxErr
 	}
 
 	// Update layer status
-	return r.setLayerIndexStatus(packageID, layerName, true)
+	if err := r.setLayerIndexStatus(packageID, layerName, true); err != nil {
+		span.RecordError(err)
+		span.SetStatus(output.StatusError, "status update failed")
+		return err
+	}
+	return nil
 }
 
 // setLayerIndexStatus safely updates the HasIndex status for a layer.

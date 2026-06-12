@@ -93,28 +93,10 @@ func (s *SyncService) run(ctx context.Context) {
 			return
 		case <-ticker.C:
 			s.logger.Debug("scheduled sync triggered")
-			s.safeSync(ctx)
+			s.doSync(ctx)
 			s.setNextSync(time.Now().Add(s.interval))
 		}
 	}
-}
-
-// safeSync runs doSync with panic recovery so the scheduler survives
-// unexpected failures. The recovery is also surfaced as a span so the MCP
-// server can find it later.
-func (s *SyncService) safeSync(ctx context.Context) {
-	ctx, span := s.tracer.Start(ctx, "SyncService.safeSync",
-		output.WithAttributes(output.String("sync.trigger", "scheduled")),
-	)
-	defer span.End()
-	defer func() {
-		if rec := recover(); rec != nil {
-			s.logger.Error("sync panic recovered", "panic", rec)
-			span.RecordError(fmt.Errorf("panic: %v", rec))
-			span.SetStatus(output.StatusError, "sync panicked")
-		}
-	}()
-	s.doSync(ctx)
 }
 
 // Stop gracefully stops the sync service.
@@ -140,11 +122,22 @@ func (s *SyncService) TriggerSync(ctx context.Context) (SyncResult, error) {
 }
 
 // doSync performs the sync operation without returning detailed results.
+// It is called from the scheduled-tick goroutine and includes panic recovery
+// so a single tick's failure can't take down the loop. defer order matters:
+// span.End() is registered first (runs last); the recover defer is registered
+// second (runs first) so it can write the panic onto the span before End().
 func (s *SyncService) doSync(ctx context.Context) {
 	ctx, span := s.tracer.Start(ctx, "SyncService.doSync",
 		output.WithAttributes(output.String("sync.trigger", "scheduled")),
 	)
 	defer span.End()
+	defer func() {
+		if rec := recover(); rec != nil {
+			s.logger.Error("sync panic recovered", "panic", rec)
+			span.RecordError(fmt.Errorf("panic: %v", rec))
+			span.SetStatus(output.StatusError, "sync panicked")
+		}
+	}()
 
 	// Prevent concurrent sync operations
 	s.syncOpMutex.Lock()
