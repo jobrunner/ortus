@@ -28,6 +28,7 @@ func TestPackageRegistryLoadUnload(t *testing.T) {
 		repo,
 		&mockStorage{},
 		&output.NoOpMetrics{},
+		output.NoOpTracer{},
 		slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError})),
 		"/tmp",
 	)

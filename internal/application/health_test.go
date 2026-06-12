@@ -15,6 +15,7 @@ func newTestRegistry() *PackageRegistry {
 		&mockRepository{},
 		&mockStorage{},
 		&output.NoOpMetrics{},
+		output.NoOpTracer{},
 		slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError})),
 		"/tmp",
 	)
@@ -22,7 +23,7 @@ func newTestRegistry() *PackageRegistry {
 
 func TestHealthServiceIsHealthy(t *testing.T) {
 	registry := newTestRegistry()
-	service := NewHealthService(registry)
+	service := NewHealthService(registry, output.NoOpTracer{})
 
 	if !service.IsHealthy(context.Background()) {
 		t.Error("IsHealthy should return true")
@@ -31,7 +32,7 @@ func TestHealthServiceIsHealthy(t *testing.T) {
 
 func TestHealthServiceIsReady(t *testing.T) {
 	registry := newTestRegistry()
-	service := NewHealthService(registry)
+	service := NewHealthService(registry, output.NoOpTracer{})
 
 	tests := []struct {
 		name     string
@@ -105,7 +106,7 @@ func TestHealthServiceIsReady(t *testing.T) {
 
 func TestHealthServiceGetHealthDetails(t *testing.T) {
 	registry := newTestRegistry()
-	service := NewHealthService(registry)
+	service := NewHealthService(registry, output.NoOpTracer{})
 
 	// Add some packages
 	registry.mu.Lock()
@@ -154,7 +155,7 @@ func TestHealthServiceGetHealthDetails(t *testing.T) {
 
 func TestHealthServiceGetPackageHealth(t *testing.T) {
 	registry := newTestRegistry()
-	service := NewHealthService(registry)
+	service := NewHealthService(registry, output.NoOpTracer{})
 
 	registry.mu.Lock()
 	registry.packages = map[string]*packageEntry{

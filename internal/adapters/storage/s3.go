@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/aws/aws-sdk-go-v2/otelaws"
 
 	"github.com/jobrunner/ortus/internal/ports/output"
 )
@@ -53,6 +54,12 @@ func NewS3Storage(ctx context.Context, cfg S3Config) (*S3Storage, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Wire OTel AWS-SDK middleware. Each S3 API call (GetObject, ListObjectsV2,
+	// HeadObject, ...) becomes its own child span with attempt-number, status,
+	// and error attributes — enough to see retries and per-attempt latency
+	// instead of one aggregate ObjectStorage.* span.
+	otelaws.AppendMiddlewares(&awsCfg.APIOptions)
 
 	var clientOpts []func(*s3.Options)
 	if cfg.Endpoint != "" {

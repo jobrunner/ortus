@@ -3,15 +3,31 @@ package storage
 import (
 	"context"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/container"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
 	"github.com/jobrunner/ortus/internal/ports/output"
 )
+
+// azureTraced returns a ClientOptions value with an OTel-instrumented HTTP
+// transport so every Azure Storage REST call surfaces as a child span.
+func azureTraced() *azblob.ClientOptions {
+	return &azblob.ClientOptions{
+		ClientOptions: azcore.ClientOptions{
+			Transport: &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)},
+		},
+	}
+}
+
+var _ policy.Transporter = (*http.Client)(nil) // sanity check at compile time
 
 // AzureStorage implements ObjectStorage for Azure Blob Storage.
 type AzureStorage struct {
@@ -35,7 +51,7 @@ func NewAzureStorage(cfg AzureConfig) (*AzureStorage, error) {
 	var err error
 
 	if cfg.ConnectionString != "" {
-		client, err = azblob.NewClientFromConnectionString(cfg.ConnectionString, nil)
+		client, err = azblob.NewClientFromConnectionString(cfg.ConnectionString, azureTraced())
 	} else {
 		// Build connection string from account name and key
 		url := "https://" + cfg.AccountName + ".blob.core.windows.net/"
@@ -43,7 +59,7 @@ func NewAzureStorage(cfg AzureConfig) (*AzureStorage, error) {
 		if err != nil {
 			return nil, err
 		}
-		client, err = azblob.NewClientWithSharedKeyCredential(url, cred, nil)
+		client, err = azblob.NewClientWithSharedKeyCredential(url, cred, azureTraced())
 		if err != nil {
 			return nil, err
 		}

@@ -17,6 +17,7 @@ func newTestQueryService(registry *PackageRegistry, repo *mockRepository) *Query
 		repo,
 		nil, // No transformer needed for basic tests
 		&output.NoOpMetrics{},
+		output.NoOpTracer{},
 		logger,
 		QueryServiceConfig{
 			DefaultSRID: domain.SRIDWGS84,
@@ -34,6 +35,7 @@ func TestQueryServiceDefaultConfig(t *testing.T) {
 		&mockRepository{},
 		nil,
 		&output.NoOpMetrics{},
+		output.NoOpTracer{},
 		logger,
 		QueryServiceConfig{}, // Empty config
 	)
@@ -316,7 +318,7 @@ func TestQueryServiceTransformCoordinate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			svc := NewQueryService(registry, &mockRepository{}, tt.transformer, &output.NoOpMetrics{}, logger, QueryServiceConfig{})
+			svc := NewQueryService(registry, &mockRepository{}, tt.transformer, &output.NoOpMetrics{}, output.NoOpTracer{}, logger, QueryServiceConfig{})
 
 			coord := domain.NewCoordinate(10, 50, tt.coordSRID)
 			layer := &domain.Layer{SRID: tt.layerSRID}

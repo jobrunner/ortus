@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	"github.com/jobrunner/ortus/internal/adapters/telemetry"
 	"github.com/jobrunner/ortus/internal/app"
 
 	"github.com/jobrunner/ortus/internal/config"
@@ -91,6 +92,12 @@ func init() {
 	// Frontend flags
 	rootCmd.Flags().Bool("disable-frontend", false, "disable web frontend at /")
 
+	// Tracing flags
+	rootCmd.Flags().Bool("tracing", false, "enable OpenTelemetry tracing")
+	rootCmd.Flags().String("tracing-endpoint", "", "OTLP collector endpoint (host:port for grpc, full URL or host:port for http)")
+	rootCmd.Flags().String("tracing-transport", "http", "OTLP transport (http|grpc)")
+	rootCmd.Flags().Float64("tracing-sample-ratio", 1.0, "tracing sample ratio (0.0..1.0)")
+
 	// Bind flags to viper
 	_ = viper.BindPFlag("logging.level", rootCmd.PersistentFlags().Lookup("log-level"))
 	_ = viper.BindPFlag("logging.format", rootCmd.PersistentFlags().Lookup("log-format"))
@@ -103,6 +110,10 @@ func init() {
 	_ = viper.BindPFlag("storage.local_path", rootCmd.Flags().Lookup("storage-path"))
 	_ = viper.BindPFlag("server.cors.allowed_origins", rootCmd.Flags().Lookup("cors"))
 	_ = viper.BindPFlag("query.with_geometry", rootCmd.Flags().Lookup("with-geometry"))
+	_ = viper.BindPFlag("tracing.enabled", rootCmd.Flags().Lookup("tracing"))
+	_ = viper.BindPFlag("tracing.endpoint", rootCmd.Flags().Lookup("tracing-endpoint"))
+	_ = viper.BindPFlag("tracing.transport", rootCmd.Flags().Lookup("tracing-transport"))
+	_ = viper.BindPFlag("tracing.sample_ratio", rootCmd.Flags().Lookup("tracing-sample-ratio"))
 	// Note: --disable-frontend uses inverted logic and is handled in runServer().
 	// The env var ORTUS_SERVER_FRONTEND_ENABLED works via viper's AutomaticEnv()
 	// binding to server.frontend_enabled (set in config.Defaults()).
@@ -217,5 +228,8 @@ func setupLogger(cfg config.LoggingConfig) *slog.Logger {
 		handler = slog.NewJSONHandler(os.Stdout, opts)
 	}
 
-	return slog.New(handler)
+	// Wrap with span-context injector so any slog.*Context call carrying a
+	// traced ctx auto-includes trace_id/span_id. Cheap no-op when ctx has
+	// no span.
+	return slog.New(telemetry.NewSpanContextHandler(handler))
 }

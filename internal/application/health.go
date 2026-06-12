@@ -5,45 +5,72 @@ import (
 
 	"github.com/jobrunner/ortus/internal/domain"
 	"github.com/jobrunner/ortus/internal/ports/input"
+	"github.com/jobrunner/ortus/internal/ports/output"
 )
 
 // HealthService provides health check functionality.
 type HealthService struct {
 	registry *PackageRegistry
+	tracer   output.Tracer
 }
 
 // NewHealthService creates a new health service.
-func NewHealthService(registry *PackageRegistry) *HealthService {
+func NewHealthService(registry *PackageRegistry, tracer output.Tracer) *HealthService {
+	if tracer == nil {
+		tracer = output.NoOpTracer{}
+	}
 	return &HealthService{
 		registry: registry,
+		tracer:   tracer,
 	}
 }
 
 // IsHealthy returns true if the service is healthy.
-func (s *HealthService) IsHealthy(_ context.Context) bool {
+func (s *HealthService) IsHealthy(ctx context.Context) bool {
+	_, span := s.tracer.Start(ctx, "HealthService.IsHealthy")
+	defer span.End()
+	span.SetAttributes(output.Bool("health.healthy", true))
 	return true // Basic health check
 }
 
 // IsReady returns true if the service is ready to accept requests.
 func (s *HealthService) IsReady(ctx context.Context) bool {
+	ctx, span := s.tracer.Start(ctx, "HealthService.IsReady")
+	defer span.End()
+
 	packages, err := s.registry.ListPackages(ctx)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(output.StatusError, "list packages failed")
+		span.SetAttributes(output.Bool("health.ready", false))
 		return false
 	}
+
+	span.SetAttributes(output.Int("health.packages_total", len(packages)))
 
 	// Ready if at least one package is ready
 	for _, pkg := range packages {
 		if pkg.IsReady() {
+			span.SetAttributes(output.Bool("health.ready", true), output.String("health.reason", "package_ready"))
 			return true
 		}
 	}
 
 	// Also ready if no packages are configured (empty state)
-	return len(packages) == 0
+	ready := len(packages) == 0
+	reason := "no_packages"
+	if !ready {
+		reason = "no_ready_packages"
+	}
+	span.SetAttributes(output.Bool("health.ready", ready), output.String("health.reason", reason))
+	return ready
 }
 
 // GetHealthDetails returns detailed health information.
 func (s *HealthService) GetHealthDetails(ctx context.Context) input.HealthDetails {
+	ctx, span := s.tracer.Start(ctx, "HealthService.GetHealthDetails")
+	defer span.End()
+
 	packages, _ := s.registry.ListPackages(ctx)
 
 	loaded := len(packages)
@@ -57,6 +84,11 @@ func (s *HealthService) GetHealthDetails(ctx context.Context) input.HealthDetail
 	components := map[string]string{
 		"storage": "ok",
 	}
+
+	span.SetAttributes(
+		output.Int("health.packages_loaded", loaded),
+		output.Int("health.packages_ready", ready),
+	)
 
 	return input.HealthDetails{
 		Healthy:        s.IsHealthy(ctx),
@@ -76,6 +108,9 @@ type PackageHealth struct {
 
 // GetPackageHealth returns health info for all packages.
 func (s *HealthService) GetPackageHealth(ctx context.Context) []PackageHealth {
+	ctx, span := s.tracer.Start(ctx, "HealthService.GetPackageHealth")
+	defer span.End()
+
 	packages, _ := s.registry.ListPackages(ctx)
 
 	health := make([]PackageHealth, len(packages))
@@ -88,5 +123,6 @@ func (s *HealthService) GetPackageHealth(ctx context.Context) []PackageHealth {
 		}
 	}
 
+	span.SetAttributes(output.Int("health.packages.count", len(health)))
 	return health
 }

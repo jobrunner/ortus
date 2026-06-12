@@ -20,9 +20,10 @@ func TestSyncService_RateLimiting(t *testing.T) {
 		localPath: "/tmp",
 		storage:   &mockStorage{},
 		metrics:   &output.NoOpMetrics{},
+		tracer:    output.NoOpTracer{},
 	}
 
-	service := NewSyncService(registry, time.Hour, logger)
+	service := NewSyncService(registry, time.Hour, output.NoOpTracer{}, logger)
 
 	ctx := context.Background()
 
@@ -51,10 +52,11 @@ func TestSyncService_StartStop(t *testing.T) {
 		localPath: "/tmp",
 		storage:   &mockStorage{},
 		metrics:   &output.NoOpMetrics{},
+		tracer:    output.NoOpTracer{},
 	}
 
 	// Use a short interval for testing
-	service := NewSyncService(registry, 100*time.Millisecond, logger)
+	service := NewSyncService(registry, 100*time.Millisecond, output.NoOpTracer{}, logger)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -80,10 +82,11 @@ func TestSyncService_Interval(t *testing.T) {
 		localPath: "/tmp",
 		storage:   &mockStorage{},
 		metrics:   &output.NoOpMetrics{},
+		tracer:    output.NoOpTracer{},
 	}
 
 	interval := 2 * time.Hour
-	service := NewSyncService(registry, interval, logger)
+	service := NewSyncService(registry, interval, output.NoOpTracer{}, logger)
 
 	if service.Interval() != interval {
 		t.Errorf("expected interval %v, got %v", interval, service.Interval())
@@ -108,9 +111,10 @@ func TestSyncService_SyncAddsNewPackages(t *testing.T) {
 		localPath: "/tmp",
 		storage:   storage,
 		metrics:   &output.NoOpMetrics{},
+		tracer:    output.NoOpTracer{},
 	}
 
-	service := NewSyncService(registry, time.Hour, logger)
+	service := NewSyncService(registry, time.Hour, output.NoOpTracer{}, logger)
 
 	ctx := context.Background()
 
@@ -136,6 +140,7 @@ func TestRegistry_IsLoaded(t *testing.T) {
 		localPath: "/tmp",
 		storage:   &mockStorage{},
 		metrics:   &output.NoOpMetrics{},
+		tracer:    output.NoOpTracer{},
 	}
 
 	// Initially not loaded
@@ -161,6 +166,7 @@ func TestRegistry_PackageCount(t *testing.T) {
 		localPath: "/tmp",
 		storage:   &mockStorage{},
 		metrics:   &output.NoOpMetrics{},
+		tracer:    output.NoOpTracer{},
 	}
 
 	if registry.PackageCount() != 0 {
@@ -193,6 +199,7 @@ func TestRegistry_SyncRemovesDeletedPackages(t *testing.T) {
 		localPath: "/tmp",
 		storage:   storage,
 		metrics:   &output.NoOpMetrics{},
+		tracer:    output.NoOpTracer{},
 	}
 
 	ctx := context.Background()
@@ -239,6 +246,7 @@ func TestRegistry_FindPackagesToRemove(t *testing.T) {
 		localPath: "/tmp",
 		storage:   &mockStorage{},
 		metrics:   &output.NoOpMetrics{},
+		tracer:    output.NoOpTracer{},
 	}
 
 	// Add some packages locally

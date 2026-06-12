@@ -484,6 +484,18 @@ Prometheus metrics are available at `/metrics` (default port 9090 in Docker, sam
 curl "http://localhost:8080/metrics"
 ```
 
+Internally the metrics are produced via OpenTelemetry meters and exported in
+Prometheus format. Metric names and labels are unchanged.
+
+## Tracing
+
+Ortus emits OpenTelemetry traces and additionally retains the last 256 traces
+in memory for direct inspection by the upcoming MCP server. Enable via
+`--tracing` or `ORTUS_TRACING_ENABLED=true`, point at a collector with
+`--tracing-endpoint=host:port`, and see [doc/TRACING.md](doc/TRACING.md) for
+the full configuration surface (transport, sampling, headers, resource
+attributes) and the list of instrumented spans.
+
 ## Architecture
 
 Ortus follows the Hexagonal Architecture (Ports & Adapters) pattern. See [ARCHITECTURE.md](doc/ARCHITECTURE.md) for details.
