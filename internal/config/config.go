@@ -121,7 +121,9 @@ type DNSConfig struct {
 	ClientID          string `mapstructure:"client_id"`           // User Assigned Managed Identity client ID (optional)
 }
 
-// MetricsConfig holds Prometheus metrics configuration.
+// MetricsConfig holds metrics configuration: the Prometheus scrape
+// endpoint (always on when Enabled) plus the optional OTLP push export
+// (configured via OTLP).
 type MetricsConfig struct {
 	Enabled bool       `mapstructure:"enabled"`
 	Port    int        `mapstructure:"port"`
