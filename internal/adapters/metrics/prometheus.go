@@ -23,10 +23,12 @@ import (
 	"github.com/jobrunner/ortus/internal/config"
 )
 
-// Options configures the meter provider built by New.
+// Options configures the meter provider built by New. Instrument names
+// are owned by the individual services that create them (e.g. the
+// QueryService picks "ortus.queries") — there is intentionally no central
+// prefix knob here, since the OTel Prometheus exporter derives the
+// scrape-format name directly from the instrument name.
 type Options struct {
-	Namespace string // Prefix for instrument names (e.g. "ortus")
-
 	// OTLP push configuration. When OTLPEnabled is true, the meter provider
 	// gets a PeriodicReader exporting via the chosen transport in addition
 	// to the Prometheus scrape Reader.

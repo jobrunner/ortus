@@ -105,8 +105,8 @@ func (s *Server) setupRoutes() *mux.Router {
 	}
 
 	// HTTP metrics: must be OUTSIDE recoveryMiddleware so panics-turned-500
-	// land in the status_bucket="5xx" series, and OUTSIDE traceIDHeader so
-	// the duration includes header-write time. The matched mux route is
+	// land in the status="5xx" series, and OUTSIDE traceIDHeader so the
+	// duration includes header-write time. The matched mux route is
 	// resolved inside the middleware via mux.CurrentRoute(r) — that's what
 	// fixes the cardinality bug from issue #14.
 	if s.httpMetrics != nil {

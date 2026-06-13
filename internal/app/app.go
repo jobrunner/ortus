@@ -103,7 +103,6 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*App, er
 	var meter metric.Meter
 	if cfg.Metrics.Enabled {
 		mc, err := metrics.New(ctx, metrics.Options{
-			Namespace:     "ortus",
 			OTLPEnabled:   cfg.Metrics.OTLP.Enabled,
 			OTLPEndpoint:  cfg.MetricsOTLPEndpoint(),
 			OTLPTransport: cfg.Metrics.OTLP.Transport,

@@ -36,11 +36,16 @@ func newHTTPMetrics(meter metric.Meter) *httpMetrics {
 }
 
 // middleware returns the gorilla/mux middleware that records counter +
-// histogram for every request. The `path` label is the MATCHED ROUTE
-// TEMPLATE ("/api/v1/packages/{packageId}"), not the raw URL — so 100
-// distinct package IDs collapse to one label combination rather than 100.
-// Unmatched routes (404/405) emit `path="unknown"` so cardinality stays
-// bounded.
+// histogram for every request that flows through it. The `path` label is
+// the MATCHED ROUTE TEMPLATE ("/api/v1/packages/{packageId}"), not the
+// raw URL — so 100 distinct package IDs collapse to one label
+// combination rather than 100.
+//
+// Note: gorilla/mux invokes NotFoundHandler / MethodNotAllowedHandler
+// outside the r.Use(...) chain, so unmatched requests do NOT currently
+// flow through this middleware. routePath's "unknown" fallback only
+// kicks in if a caller manually wraps an unmatched-route handler with
+// this middleware.
 func (m *httpMetrics) middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
