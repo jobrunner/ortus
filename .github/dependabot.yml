@@ -1,0 +1,49 @@
+# Dependabot configuration. See:
+# https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+#
+# Two ecosystems:
+#   1. github-actions — bumps actions/checkout, actions/setup-go, etc.
+#   2. gomod          — bumps Go modules AND the `toolchain` directive in
+#                       go.mod. This is what keeps us off the next round of
+#                       stdlib CVEs without manual work.
+#
+# The CI workflows themselves still pin GO_VERSION explicitly; Dependabot
+# does NOT update that. The vuln-scan workflow runs weekly to alert if it
+# drifts behind the toolchain directive.
+
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - github-actions
+
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+      - go
+    groups:
+      # OTel ecosystem updates as one PR — they release in lockstep and
+      # individual bumps usually break version-compat between sibling
+      # packages.
+      opentelemetry:
+        patterns:
+          - "go.opentelemetry.io/*"
+      # AWS SDK v2 modules likewise.
+      aws-sdk:
+        patterns:
+          - "github.com/aws/aws-sdk-go-v2*"
+      # Azure SDK modules.
+      azure-sdk:
+        patterns:
+          - "github.com/Azure/azure-sdk-for-go/*"

@@ -1,0 +1,77 @@
+# Weekly vulnerability scan on master. The regular CI Security job runs
+# on every push and PR; this job runs on a schedule so newly-disclosed
+# CVEs in the Go stdlib (which are continuously published) become visible
+# even when there is no PR activity to trigger them.
+#
+# On finding, the workflow opens (or comments on) a GitHub Issue tagged
+# `security` instead of just failing silently. Engineer reviews + bumps
+# the `toolchain` directive in go.mod (or merges the Dependabot PR that
+# does so).
+name: Vuln Scan
+
+on:
+  schedule:
+    # Monday 06:00 UTC. After the Go security team's typical Tuesday
+    # release cadence in the previous week.
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write   # to open / comment on the security issue
+
+jobs:
+  scan:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          # Pull the toolchain version from go.mod so we always scan
+          # against what the build actually uses.
+          go-version-file: go.mod
+
+      - name: Run govulncheck
+        id: vuln
+        continue-on-error: true
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          if govulncheck ./... > vuln-report.txt 2>&1; then
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            cat vuln-report.txt
+          else
+            echo "found=true" >> "$GITHUB_OUTPUT"
+            cat vuln-report.txt
+          fi
+
+      - name: Open or update security issue
+        if: steps.vuln.outputs.found == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          title="Weekly vuln scan: new CVEs detected"
+          # Re-use an existing open issue with the same title to avoid duplicates.
+          existing=$(gh issue list \
+            --label security \
+            --state open \
+            --search "$title in:title" \
+            --json number --jq '.[0].number // ""')
+
+          body=$(printf 'govulncheck reports vulnerabilities on master.\n\n```\n%s\n```\n\n## Fix\n\nUsually the right action is to bump the `toolchain` directive in `go.mod` to a Go patch version that fixes the listed CVEs, then update `GO_VERSION` in `.github/workflows/{ci,release}.yml` to match. Dependabot may already have an open PR doing this.\n' "$(cat vuln-report.txt)")
+
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            gh issue create \
+              --title "$title" \
+              --label security \
+              --body "$body"
+          fi
+
+      - name: Fail job if vulnerabilities found
+        if: steps.vuln.outputs.found == 'true'
+        run: exit 1
