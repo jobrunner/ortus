@@ -3,15 +3,19 @@
 # CVEs in the Go stdlib (which are continuously published) become visible
 # even when there is no PR activity to trigger them.
 #
-# On finding, the workflow opens (or comments on) a GitHub Issue tagged
-# `security` instead of just failing silently. Engineer reviews + bumps
-# the `toolchain` directive in go.mod (or merges the Dependabot PR that
-# does so).
+# Outcome handling distinguishes three cases:
+#   - findings (govulncheck exit 3, "X vulnerabilities" in JSON)
+#       → open / comment on a `security`-labelled GitHub issue, fail the job
+#   - clean (exit 0)
+#       → succeed silently
+#   - scan error (build failed, network issue, exit other than 0/3)
+#       → fail the job WITHOUT opening an issue, so we don't spam "new CVEs"
+#         when really the scan was broken
 name: Vuln Scan
 
 on:
   schedule:
-    # Monday 06:00 UTC. After the Go security team's typical Tuesday
+    # Monday 06:00 UTC, after the Go security team's typical Tuesday
     # release cadence in the previous week.
     - cron: '0 6 * * 1'
   workflow_dispatch:
@@ -34,27 +38,40 @@ jobs:
           # against what the build actually uses.
           go-version-file: go.mod
 
-      - name: Run govulncheck
+      - name: Run govulncheck (JSON)
         id: vuln
-        continue-on-error: true
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest
-          if govulncheck ./... > vuln-report.txt 2>&1; then
-            echo "found=false" >> "$GITHUB_OUTPUT"
-            cat vuln-report.txt
-          else
-            echo "found=true" >> "$GITHUB_OUTPUT"
-            cat vuln-report.txt
-          fi
+          # -json emits structured output even on findings. Exit codes:
+          #   0 — no vulnerabilities
+          #   3 — vulnerabilities found
+          #   other — scan failed (build error, network, etc.)
+          set +e
+          govulncheck -json ./... > vuln-report.json 2> vuln-stderr.txt
+          rc=$?
+          set -e
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          # Also keep a human-readable text report for the issue body.
+          govulncheck ./... > vuln-report.txt 2>&1 || true
+
+      - name: Ensure `security` label exists
+        if: steps.vuln.outputs.rc == '3'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Idempotent: --force overwrites if it exists, creates otherwise.
+          gh label create security \
+            --color D93F0B \
+            --description "Security vulnerability or scan finding" \
+            --force
 
       - name: Open or update security issue
-        if: steps.vuln.outputs.found == 'true'
+        if: steps.vuln.outputs.rc == '3'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           title="Weekly vuln scan: new CVEs detected"
-          # Re-use an existing open issue with the same title to avoid duplicates.
           existing=$(gh issue list \
             --label security \
             --state open \
@@ -72,6 +89,13 @@ jobs:
               --body "$body"
           fi
 
+      - name: Fail with scan-error context
+        if: steps.vuln.outputs.rc != '0' && steps.vuln.outputs.rc != '3'
+        run: |
+          echo "::error::govulncheck exited with $(cat <<< '${{ steps.vuln.outputs.rc }}') — not a CVE finding, likely a scan error. See log for details."
+          cat vuln-stderr.txt
+          exit 1
+
       - name: Fail job if vulnerabilities found
-        if: steps.vuln.outputs.found == 'true'
+        if: steps.vuln.outputs.rc == '3'
         run: exit 1
