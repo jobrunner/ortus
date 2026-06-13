@@ -489,12 +489,15 @@ Prometheus format. Metric names and labels are unchanged.
 
 ## Tracing
 
-Ortus emits OpenTelemetry traces and additionally retains the last 256 traces
-in memory for direct inspection by the upcoming MCP server. Enable via
-`--tracing` or `ORTUS_TRACING_ENABLED=true`, point at a collector with
-`--tracing-endpoint=host:port`, and see [doc/TRACING.md](doc/TRACING.md) for
-the full configuration surface (transport, sampling, headers, resource
-attributes) and the list of instrumented spans.
+Ortus emits OpenTelemetry traces and additionally retains the most recent
+traces in memory for direct inspection by the upcoming MCP server. The
+in-memory buffer keeps two FIFO pools — successful traces and error traces —
+each up to `tracing.buffer_size` (default 256), so worst-case retention is
+2× that value. Enable via `--tracing` or `ORTUS_TRACING_ENABLED=true`, point
+at a collector with `--tracing-endpoint=host:port`, and see
+[doc/TRACING.md](doc/TRACING.md) for the full configuration surface
+(transport, sampling, headers, resource attributes) and the list of
+instrumented spans.
 
 ## Architecture
 

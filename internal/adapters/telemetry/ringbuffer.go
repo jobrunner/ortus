@@ -469,9 +469,35 @@ func captureSpan(s sdktrace.ReadOnlySpan) CapturedSpan {
 	}
 }
 
+// cloneTrace returns a deep copy of t. We must deep-clone the per-span
+// Attributes map, the Events slice, and each event's Attributes map —
+// returning the in-buffer maps directly would let callers mutate stored
+// traces and race with concurrent readers. The shallow-copy version was
+// flagged in PR review (see PR #13).
 func cloneTrace(t *CapturedTrace) *CapturedTrace {
 	cp := *t
-	cp.Spans = append([]CapturedSpan(nil), t.Spans...)
+	cp.Spans = make([]CapturedSpan, len(t.Spans))
+	for i, sp := range t.Spans {
+		cp.Spans[i] = sp
+		if sp.Attributes != nil {
+			cp.Spans[i].Attributes = make(map[string]any, len(sp.Attributes))
+			for k, v := range sp.Attributes {
+				cp.Spans[i].Attributes[k] = v
+			}
+		}
+		if len(sp.Events) > 0 {
+			cp.Spans[i].Events = make([]CapturedEvent, len(sp.Events))
+			for j, ev := range sp.Events {
+				cp.Spans[i].Events[j] = ev
+				if ev.Attributes != nil {
+					cp.Spans[i].Events[j].Attributes = make(map[string]any, len(ev.Attributes))
+					for k, v := range ev.Attributes {
+						cp.Spans[i].Events[j].Attributes[k] = v
+					}
+				}
+			}
+		}
+	}
 	return &cp
 }
 

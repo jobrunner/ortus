@@ -95,7 +95,7 @@ tracing:
   enabled: false
   service_name: "ortus"
   environment: ""           # e.g., "dev", "staging", "prod"
-  endpoint: ""              # OTLP collector endpoint (host:port for grpc, full URL or host:port for http)
+  endpoint: ""              # OTLP collector endpoint as host:port (no scheme — passed verbatim to otlptracehttp/grpc.WithEndpoint)
   transport: "http"         # http | grpc
   insecure: true            # disable TLS to the collector
   sample_ratio: 1.0         # 0.0..1.0; 1.0 = AlwaysOn, 0.0 = NeverSample

@@ -165,9 +165,10 @@ func (s *Server) Shutdown(ctx context.Context) error {
 // response. Users reporting "GET /api/v1/query returned 500" can quote this
 // id and the MCP server can pull the full trace from the ring buffer.
 //
-// Note: the header must be written BEFORE the handler calls WriteHeader, so
-// we cannot defer it. We use the response writer wrapper to intercept
-// WriteHeader.
+// The header must be written BEFORE the handler calls WriteHeader. We set
+// it up-front (before calling next.ServeHTTP); since net/http only flushes
+// the response headers on the first body write or explicit WriteHeader,
+// any handler-set X-Trace-Id arrives at the client.
 func (s *Server) traceIDHeaderMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		sc := trace.SpanContextFromContext(r.Context())

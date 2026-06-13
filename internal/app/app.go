@@ -243,9 +243,14 @@ func (a *App) Start(ctx context.Context) error {
 	}
 	startupSpan.SetAttributes(output.Int("ortus.packages.loaded", a.Registry.PackageCount()))
 
-	// Start file watcher
+	// Start file watcher. Pass the parent ctx (NOT startupCtx) — the
+	// watcher keeps the ctx for the life of the process and uses it as the
+	// parent of every Watcher.handle span. Tying file-event spans to the
+	// startup trace would (a) keep the startup trace eternally unfinalized
+	// in the ring buffer and (b) misleadingly group hot-reload events
+	// under the startup root. File events deserve their own trace roots.
 	if a.Watcher != nil {
-		if err := a.Watcher.Start(startupCtx); err != nil {
+		if err := a.Watcher.Start(ctx); err != nil {
 			a.Logger.Warn("failed to start file watcher", "error", err)
 			startupSpan.RecordError(err)
 			startupOK = false
