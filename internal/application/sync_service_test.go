@@ -19,7 +19,6 @@ func TestSyncService_RateLimiting(t *testing.T) {
 		logger:    logger,
 		localPath: "/tmp",
 		storage:   &mockStorage{},
-		metrics:   &output.NoOpMetrics{},
 		tracer:    output.NoOpTracer{},
 	}
 
@@ -51,7 +50,6 @@ func TestSyncService_StartStop(t *testing.T) {
 		logger:    logger,
 		localPath: "/tmp",
 		storage:   &mockStorage{},
-		metrics:   &output.NoOpMetrics{},
 		tracer:    output.NoOpTracer{},
 	}
 
@@ -81,7 +79,6 @@ func TestSyncService_Interval(t *testing.T) {
 		logger:    logger,
 		localPath: "/tmp",
 		storage:   &mockStorage{},
-		metrics:   &output.NoOpMetrics{},
 		tracer:    output.NoOpTracer{},
 	}
 
@@ -110,7 +107,6 @@ func TestSyncService_SyncAddsNewPackages(t *testing.T) {
 		logger:    logger,
 		localPath: "/tmp",
 		storage:   storage,
-		metrics:   &output.NoOpMetrics{},
 		tracer:    output.NoOpTracer{},
 	}
 
@@ -139,7 +135,6 @@ func TestRegistry_IsLoaded(t *testing.T) {
 		logger:    logger,
 		localPath: "/tmp",
 		storage:   &mockStorage{},
-		metrics:   &output.NoOpMetrics{},
 		tracer:    output.NoOpTracer{},
 	}
 
@@ -165,7 +160,6 @@ func TestRegistry_PackageCount(t *testing.T) {
 		logger:    logger,
 		localPath: "/tmp",
 		storage:   &mockStorage{},
-		metrics:   &output.NoOpMetrics{},
 		tracer:    output.NoOpTracer{},
 	}
 
@@ -198,7 +192,6 @@ func TestRegistry_SyncRemovesDeletedPackages(t *testing.T) {
 		logger:    logger,
 		localPath: "/tmp",
 		storage:   storage,
-		metrics:   &output.NoOpMetrics{},
 		tracer:    output.NoOpTracer{},
 	}
 
@@ -245,7 +238,6 @@ func TestRegistry_FindPackagesToRemove(t *testing.T) {
 		logger:    logger,
 		localPath: "/tmp",
 		storage:   &mockStorage{},
-		metrics:   &output.NoOpMetrics{},
 		tracer:    output.NoOpTracer{},
 	}
 

@@ -123,9 +123,22 @@ type DNSConfig struct {
 
 // MetricsConfig holds Prometheus metrics configuration.
 type MetricsConfig struct {
-	Enabled bool   `mapstructure:"enabled"`
-	Port    int    `mapstructure:"port"`
-	Path    string `mapstructure:"path"`
+	Enabled bool       `mapstructure:"enabled"`
+	Port    int        `mapstructure:"port"`
+	Path    string     `mapstructure:"path"`
+	OTLP    OTLPConfig `mapstructure:"otlp"`
+}
+
+// OTLPConfig configures OTLP export for a single signal (metrics or others).
+// An empty Endpoint falls back to the tracing.endpoint setting so a single
+// collector can serve both signals without duplicate configuration.
+type OTLPConfig struct {
+	Enabled   bool              `mapstructure:"enabled"`
+	Endpoint  string            `mapstructure:"endpoint"`  // host:port; empty ⇒ fall back to tracing.endpoint
+	Transport string            `mapstructure:"transport"` // "http" or "grpc"
+	Insecure  bool              `mapstructure:"insecure"`
+	Headers   map[string]string `mapstructure:"headers"`
+	Interval  time.Duration     `mapstructure:"interval"` // PeriodicReader collection interval (default 60s)
 }
 
 // LoggingConfig holds logging configuration.
@@ -196,6 +209,10 @@ func Defaults() {
 	viper.SetDefault("metrics.enabled", true)
 	viper.SetDefault("metrics.port", 9090)
 	viper.SetDefault("metrics.path", "/metrics")
+	viper.SetDefault("metrics.otlp.enabled", false)
+	viper.SetDefault("metrics.otlp.transport", TracingTransportHTTP)
+	viper.SetDefault("metrics.otlp.insecure", true)
+	viper.SetDefault("metrics.otlp.interval", 60*time.Second)
 
 	// Logging defaults
 	viper.SetDefault("logging.level", "info")
@@ -266,7 +283,39 @@ func (c *Config) Validate() error {
 	if err := c.validateStorage(); err != nil {
 		return err
 	}
-	return c.validateTracing()
+	if err := c.validateTracing(); err != nil {
+		return err
+	}
+	return c.validateMetricsOTLP()
+}
+
+// MetricsOTLPEndpoint returns the effective endpoint for metric OTLP export.
+// Falls back to tracing.endpoint when metrics.otlp.endpoint is empty so a
+// single collector can serve both signals.
+func (c *Config) MetricsOTLPEndpoint() string {
+	if c.Metrics.OTLP.Endpoint != "" {
+		return c.Metrics.OTLP.Endpoint
+	}
+	return c.Tracing.Endpoint
+}
+
+func (c *Config) validateMetricsOTLP() error {
+	if !c.Metrics.OTLP.Enabled {
+		return nil
+	}
+	if c.MetricsOTLPEndpoint() == "" {
+		return fmt.Errorf("metrics.otlp.enabled is true but no endpoint is configured (set metrics.otlp.endpoint or tracing.endpoint)")
+	}
+	switch c.Metrics.OTLP.Transport {
+	case "", TracingTransportHTTP, TracingTransportGRPC:
+		// ok
+	default:
+		return fmt.Errorf("invalid metrics.otlp.transport %q (expected %q or %q)", c.Metrics.OTLP.Transport, TracingTransportHTTP, TracingTransportGRPC)
+	}
+	if c.Metrics.OTLP.Interval < 0 {
+		return fmt.Errorf("metrics.otlp.interval must be >= 0, got %s", c.Metrics.OTLP.Interval)
+	}
+	return nil
 }
 
 func (c *Config) validateTracing() error {

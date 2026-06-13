@@ -81,8 +81,18 @@ tls:
 
 metrics:
   enabled: true
-  port: 9090      # Separate port for Prometheus metrics (internal/VNet only)
+  port: 9090            # Prometheus scrape port (separate from main HTTP)
   path: "/metrics"
+  # Optional OTLP push of metrics to a collector, alongside the
+  # Prometheus scrape. Endpoint falls back to tracing.endpoint when empty.
+  otlp:
+    enabled: false
+    endpoint: ""        # host:port; empty ⇒ fall back to tracing.endpoint
+    transport: "http"   # http | grpc
+    insecure: true
+    interval: 60s       # PeriodicReader collection interval
+    # headers:
+    #   Authorization: "Bearer <token>"
 
 logging:
   level: "info"  # debug, info, warn, error

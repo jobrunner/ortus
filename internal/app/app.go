@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log/slog"
 
+	"go.opentelemetry.io/otel/metric"
+	otelmetricnoop "go.opentelemetry.io/otel/metric/noop"
 	oteltrace "go.opentelemetry.io/otel/trace"
 
 	"github.com/jobrunner/ortus/internal/adapters/geopackage"
@@ -50,6 +52,16 @@ func (a *App) tracerProvider() oteltrace.TracerProvider {
 	return a.TelemetryProvider.TracerProvider()
 }
 
+// meterProvider returns the MeterProvider for HTTP instrumentation. nil
+// when metrics are disabled, signalling to the HTTP layer to skip metric
+// middleware installation.
+func (a *App) meterProvider() metric.MeterProvider {
+	if a.Metrics == nil {
+		return nil
+	}
+	return a.Metrics.MeterProvider()
+}
+
 // New creates and initializes a new application.
 func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*App, error) {
 	app := &App{
@@ -84,21 +96,29 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*App, er
 		)
 	}
 
-	// Initialize metrics
+	// Initialize metrics provider. Combines a Prometheus reader (for the
+	// existing /metrics scrape endpoint) with an optional OTLP push reader
+	// configured via metrics.otlp.*. Falls back to a no-op meter when
+	// metrics are disabled entirely so service code never has to nil-check.
+	var meter metric.Meter
 	if cfg.Metrics.Enabled {
-		app.Metrics = metrics.NewCollector("ortus")
-		app.MetricsServer = metrics.NewServer(
-			cfg.Metrics.Port,
-			cfg.Metrics.Path,
-			logger,
-		)
-	}
-
-	var metricsCollector output.MetricsCollector
-	if app.Metrics != nil {
-		metricsCollector = app.Metrics
+		mc, err := metrics.New(ctx, metrics.Options{
+			Namespace:     "ortus",
+			OTLPEnabled:   cfg.Metrics.OTLP.Enabled,
+			OTLPEndpoint:  cfg.MetricsOTLPEndpoint(),
+			OTLPTransport: cfg.Metrics.OTLP.Transport,
+			OTLPInsecure:  cfg.Metrics.OTLP.Insecure,
+			OTLPHeaders:   cfg.Metrics.OTLP.Headers,
+			OTLPInterval:  cfg.Metrics.OTLP.Interval,
+		}, logger)
+		if err != nil {
+			return nil, fmt.Errorf("initializing metrics: %w", err)
+		}
+		app.Metrics = mc
+		meter = mc.MeterProvider().Meter("github.com/jobrunner/ortus")
+		app.MetricsServer = metrics.NewServer(cfg.Metrics.Port, cfg.Metrics.Path, logger)
 	} else {
-		metricsCollector = &output.NoOpMetrics{}
+		meter = otelmetricnoop.NewMeterProvider().Meter("github.com/jobrunner/ortus")
 	}
 
 	// Initialize storage adapter
@@ -119,7 +139,7 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*App, er
 	app.Registry = application.NewPackageRegistry(
 		app.Repository,
 		app.Storage,
-		metricsCollector,
+		meter,
 		app.Tracer,
 		logger,
 		cfg.Storage.LocalPath,
@@ -134,7 +154,7 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*App, er
 		app.Registry,
 		app.Repository,
 		transformer,
-		metricsCollector,
+		meter,
 		app.Tracer,
 		logger,
 		application.QueryServiceConfig{
@@ -171,6 +191,7 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*App, er
 		cfg.Query.WithGeometry,
 		httpAdapter.ServerOptions{
 			TracerProvider: app.tracerProvider(),
+			MeterProvider:  app.meterProvider(),
 			ServiceName:    cfg.Tracing.ServiceName,
 		},
 	)

@@ -6,9 +6,16 @@ import (
 	"os"
 	"testing"
 
+	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/metric/noop"
+
 	"github.com/jobrunner/ortus/internal/domain"
 	"github.com/jobrunner/ortus/internal/ports/output"
 )
+
+// testMeter returns a no-op OTel meter for tests that don't care about
+// metric output. Centralised so the import + helper stays in one place.
+func testMeter() metric.Meter { return noop.NewMeterProvider().Meter("test") }
 
 func newTestQueryService(registry *PackageRegistry, repo *mockRepository) *QueryService {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
@@ -16,7 +23,7 @@ func newTestQueryService(registry *PackageRegistry, repo *mockRepository) *Query
 		registry,
 		repo,
 		nil, // No transformer needed for basic tests
-		&output.NoOpMetrics{},
+		testMeter(),
 		output.NoOpTracer{},
 		logger,
 		QueryServiceConfig{
@@ -34,7 +41,7 @@ func TestQueryServiceDefaultConfig(t *testing.T) {
 		registry,
 		&mockRepository{},
 		nil,
-		&output.NoOpMetrics{},
+		testMeter(),
 		output.NoOpTracer{},
 		logger,
 		QueryServiceConfig{}, // Empty config
@@ -318,7 +325,7 @@ func TestQueryServiceTransformCoordinate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			svc := NewQueryService(registry, &mockRepository{}, tt.transformer, &output.NoOpMetrics{}, output.NoOpTracer{}, logger, QueryServiceConfig{})
+			svc := NewQueryService(registry, &mockRepository{}, tt.transformer, testMeter(), output.NoOpTracer{}, logger, QueryServiceConfig{})
 
 			coord := domain.NewCoordinate(10, 50, tt.coordSRID)
 			layer := &domain.Layer{SRID: tt.layerSRID}

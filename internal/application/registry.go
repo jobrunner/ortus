@@ -8,7 +8,11 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
+
+	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/metric/noop"
 
 	"github.com/jobrunner/ortus/internal/domain"
 	"github.com/jobrunner/ortus/internal/ports/output"
@@ -20,10 +24,15 @@ type PackageRegistry struct {
 	packages  map[string]*packageEntry
 	repo      output.GeoPackageRepository
 	storage   output.ObjectStorage
-	metrics   output.MetricsCollector
 	tracer    output.Tracer
 	logger    *slog.Logger
 	localPath string
+
+	// Observable gauge state. Atomic so the OTel callback (which can fire
+	// from a metric-export goroutine) doesn't race with mutations under
+	// r.mu. Updated by updateMetrics() after every load/unload.
+	loadedCount atomic.Int64
+	readyCount  atomic.Int64
 }
 
 type packageEntry struct {
@@ -36,7 +45,7 @@ type packageEntry struct {
 func NewPackageRegistry(
 	repo output.GeoPackageRepository,
 	storage output.ObjectStorage,
-	metrics output.MetricsCollector,
+	meter metric.Meter,
 	tracer output.Tracer,
 	logger *slog.Logger,
 	localPath string,
@@ -44,15 +53,40 @@ func NewPackageRegistry(
 	if tracer == nil {
 		tracer = output.NoOpTracer{}
 	}
-	return &PackageRegistry{
+	if meter == nil {
+		meter = noop.NewMeterProvider().Meter("ortus/application")
+	}
+
+	r := &PackageRegistry{
 		packages:  make(map[string]*packageEntry),
 		repo:      repo,
 		storage:   storage,
-		metrics:   metrics,
 		tracer:    tracer,
 		logger:    logger,
 		localPath: localPath,
 	}
+
+	// Register observable gauges for packages.loaded / packages.ready.
+	// The callback reads from atomic counters maintained by updateMetrics()
+	// so the read is lock-free and safe from any goroutine the SDK uses.
+	loaded, _ := meter.Int64ObservableGauge(
+		"ortus.packages.loaded",
+		metric.WithDescription("Number of loaded GeoPackages"),
+	)
+	ready, _ := meter.Int64ObservableGauge(
+		"ortus.packages.ready",
+		metric.WithDescription("Number of GeoPackages ready to serve queries"),
+	)
+	_, _ = meter.RegisterCallback(
+		func(_ context.Context, o metric.Observer) error {
+			o.ObserveInt64(loaded, r.loadedCount.Load())
+			o.ObserveInt64(ready, r.readyCount.Load())
+			return nil
+		},
+		loaded, ready,
+	)
+
+	return r
 }
 
 // LoadPackage loads a GeoPackage from the given path.
@@ -230,7 +264,10 @@ func (r *PackageRegistry) ReadyPackageIDs() []string {
 	return ids
 }
 
-// updateMetrics updates the metrics collector with current package counts.
+// updateMetrics refreshes the atomic counters that back the
+// packages.loaded / packages.ready observable gauges. Called after every
+// load/unload so the gauge callback (which can fire at any time) reads
+// a current value without needing r.mu.
 func (r *PackageRegistry) updateMetrics() {
 	r.mu.RLock()
 	total := len(r.packages)
@@ -242,8 +279,8 @@ func (r *PackageRegistry) updateMetrics() {
 	}
 	r.mu.RUnlock()
 
-	r.metrics.SetPackagesLoaded(total)
-	r.metrics.SetPackagesReady(ready)
+	r.loadedCount.Store(int64(total))
+	r.readyCount.Store(int64(ready))
 }
 
 // LoadAll loads all GeoPackages from storage.

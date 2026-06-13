@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"go.opentelemetry.io/otel/metric/noop"
+
 	"github.com/jobrunner/ortus/internal/application"
 	"github.com/jobrunner/ortus/internal/config"
 	"github.com/jobrunner/ortus/internal/domain"
@@ -109,7 +111,7 @@ func newTestServer(_ *mockQueryService, _ *mockPackageRegistry, _ *mockHealthSer
 	realRegistry := application.NewPackageRegistry(
 		&mockRepository{},
 		&mockStorage{},
-		&output.NoOpMetrics{},
+		noop.NewMeterProvider().Meter("test"),
 		output.NoOpTracer{},
 		logger,
 		"/tmp",
@@ -120,7 +122,7 @@ func newTestServer(_ *mockQueryService, _ *mockPackageRegistry, _ *mockHealthSer
 		realRegistry,
 		&mockRepository{},
 		nil,
-		&output.NoOpMetrics{},
+		noop.NewMeterProvider().Meter("test"),
 		output.NoOpTracer{},
 		logger,
 		application.QueryServiceConfig{},
