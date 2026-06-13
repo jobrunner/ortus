@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-06-13
+
+### Build
+- Bump Go toolchain from 1.25.8 to 1.26.4 across the build chain: `flake.nix` (`pkgs.go_1_24` → `pkgs.go_1_26`), `flake.lock` (nixpkgs bumped to 2026-06-10 to expose `go_1_26`), `go.mod` (`go 1.26.0` + new `toolchain go1.26.4` directive), `.github/workflows/ci.yml` and `release.yml` (`GO_VERSION` env). Clears 10 stdlib CVEs the Security job was flagging (GO-2026-{5039,5037,4982,4980,4971,4947,4946,4918,4870,4865} in `net/textproto`, `crypto/x509`, `html/template`, `net`, `net/http`, `crypto/tls`). `govulncheck ./...` now reports 0 reachable vulnerabilities.
+
+### Added
+- `.github/dependabot.yml` — weekly Dependabot updates for `github-actions` and `gomod` (latter also bumps the `toolchain` directive in `go.mod`). OTel and AWS/Azure SDKs grouped into single PRs to avoid version-skew between sibling modules.
+- `.github/workflows/vuln-scan.yml` — weekly scheduled `govulncheck` run on master. Pulls the toolchain version from `go.mod` via `go-version-file`. On finding, opens (or comments on) a GitHub issue tagged `security`, so newly-disclosed CVEs become visible even between PRs.
+
 ## [0.7.0] - 2026-06-13
 
 ### Fixed

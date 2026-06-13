@@ -12,7 +12,7 @@
         pkgs = nixpkgs.legacyPackages.${system};
 
         # Go Version (aktuell stabil)
-        go = pkgs.go_1_24;
+        go = pkgs.go_1_26;
 
         # Entwicklungswerkzeuge
         devTools = with pkgs; [
