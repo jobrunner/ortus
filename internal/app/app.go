@@ -53,7 +53,7 @@ func (a *App) tracerProvider() oteltrace.TracerProvider {
 }
 
 // meterProvider returns the MeterProvider for HTTP instrumentation. nil
-// when metrics are disabled, signalling to the HTTP layer to skip metric
+// when metrics are disabled, signaling to the HTTP layer to skip metric
 // middleware installation.
 func (a *App) meterProvider() metric.MeterProvider {
 	if a.Metrics == nil {

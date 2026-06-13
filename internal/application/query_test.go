@@ -14,7 +14,7 @@ import (
 )
 
 // testMeter returns a no-op OTel meter for tests that don't care about
-// metric output. Centralised so the import + helper stays in one place.
+// metric output. Centralized so the import + helper stays in one place.
 func testMeter() metric.Meter { return noop.NewMeterProvider().Meter("test") }
 
 func newTestQueryService(registry *PackageRegistry, repo *mockRepository) *QueryService {
