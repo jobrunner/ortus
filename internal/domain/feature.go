@@ -70,19 +70,19 @@ type Geometry struct {
 
 // IsPoint returns true if the geometry is a point.
 func (g *Geometry) IsPoint() bool {
-	return g.Type == "POINT" || g.Type == "Point"
+	return g.Type == string(GeomPoint) || g.Type == "Point"
 }
 
 // IsPolygon returns true if the geometry is a polygon.
 func (g *Geometry) IsPolygon() bool {
-	return g.Type == "POLYGON" || g.Type == "Polygon" ||
-		g.Type == "MULTIPOLYGON" || g.Type == "MultiPolygon"
+	return g.Type == string(GeomPolygon) || g.Type == "Polygon" ||
+		g.Type == string(GeomMultiPolygon) || g.Type == "MultiPolygon"
 }
 
 // IsLine returns true if the geometry is a line.
 func (g *Geometry) IsLine() bool {
-	return g.Type == "LINESTRING" || g.Type == "LineString" ||
-		g.Type == "MULTILINESTRING" || g.Type == "MultiLineString"
+	return g.Type == string(GeomLineString) || g.Type == "LineString" ||
+		g.Type == string(GeomMultiLineString) || g.Type == "MultiLineString"
 }
 
 // GeometryType represents the type of a geometry.
