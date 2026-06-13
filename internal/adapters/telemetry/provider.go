@@ -61,7 +61,7 @@ type Provider struct {
 // NewProvider builds a TracerProvider with a parent-based sampler, the OTLP
 // exporter (if endpoint set), and the in-memory ring buffer. It also installs
 // the global tracer provider and a W3C TraceContext + Baggage propagator so
-// that incoming requests' tracestate is honoured.
+// that incoming requests' tracestate is honored.
 func NewProvider(ctx context.Context, opts ProviderOptions, logger *slog.Logger) (*Provider, error) {
 	if logger == nil {
 		logger = slog.Default()
@@ -179,9 +179,8 @@ func buildOTLPExporter(ctx context.Context, opts ProviderOptions) (*otlptrace.Ex
 			grpcOpts = append(grpcOpts, otlptracegrpc.WithHeaders(opts.Headers))
 		}
 		return otlptracegrpc.New(ctx, grpcOpts...)
-	case config.TracingTransportHTTP:
-		fallthrough
 	default:
+		// HTTP is the documented default; any unknown transport falls back to it.
 		httpOpts := []otlptracehttp.Option{otlptracehttp.WithEndpoint(opts.Endpoint)}
 		if opts.Insecure {
 			httpOpts = append(httpOpts, otlptracehttp.WithInsecure())

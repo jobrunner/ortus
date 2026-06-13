@@ -2,6 +2,7 @@ package telemetry
 
 import (
 	"context"
+	"fmt"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -123,7 +124,9 @@ func toOTelAttrs(in []output.Attribute) []attribute.KeyValue {
 		case []float64:
 			out = append(out, attribute.Float64Slice(a.Key, v))
 		default:
-			// Best effort: stringify unknown types
+			// Best effort: stringify unknown types so we don't silently drop
+			// the value. Handle nil, error, fmt.Stringer, and finally fall
+			// back to fmt.Sprintf("%v", v) — better than an empty string.
 			out = append(out, attribute.String(a.Key, sprint(v)))
 		}
 	}
@@ -131,11 +134,16 @@ func toOTelAttrs(in []output.Attribute) []attribute.KeyValue {
 }
 
 func sprint(v any) string {
-	if v == nil {
+	switch x := v.(type) {
+	case nil:
 		return ""
+	case string:
+		return x
+	case error:
+		return x.Error()
+	case fmt.Stringer:
+		return x.String()
+	default:
+		return fmt.Sprintf("%v", v)
 	}
-	if s, ok := v.(interface{ String() string }); ok {
-		return s.String()
-	}
-	return ""
 }

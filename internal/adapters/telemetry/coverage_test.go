@@ -229,5 +229,7 @@ func (r *tracedFakeRepo) Close(ctx context.Context, packageID string) error {
 	return r.inner.Close(ctx, packageID)
 }
 func (r *tracedFakeRepo) QueryPoint(ctx context.Context, packageID, layerName string, coord domain.Coordinate) ([]domain.Feature, error) {
+	ctx, span := r.tracer.Start(ctx, "Repository.QueryPoint")
+	defer span.End()
 	return r.inner.QueryPoint(ctx, packageID, layerName, coord)
 }

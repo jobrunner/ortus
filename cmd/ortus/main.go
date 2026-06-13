@@ -94,7 +94,7 @@ func init() {
 
 	// Tracing flags
 	rootCmd.Flags().Bool("tracing", false, "enable OpenTelemetry tracing")
-	rootCmd.Flags().String("tracing-endpoint", "", "OTLP collector endpoint (host:port for grpc, full URL or host:port for http)")
+	rootCmd.Flags().String("tracing-endpoint", "", "OTLP collector endpoint (host:port — used as-is by both http and grpc transports)")
 	rootCmd.Flags().String("tracing-transport", "http", "OTLP transport (http|grpc)")
 	rootCmd.Flags().Float64("tracing-sample-ratio", 1.0, "tracing sample ratio (0.0..1.0)")
 

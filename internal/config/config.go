@@ -151,7 +151,7 @@ type TracingConfig struct {
 	Enabled     bool              `mapstructure:"enabled"`
 	ServiceName string            `mapstructure:"service_name"`
 	Environment string            `mapstructure:"environment"`  // e.g., "dev", "prod" — sets deployment.environment.name
-	Endpoint    string            `mapstructure:"endpoint"`     // OTLP collector endpoint (host:port for grpc, full URL or host:port for http)
+	Endpoint    string            `mapstructure:"endpoint"`     // OTLP collector endpoint as host:port; passed verbatim to otlptracehttp.WithEndpoint / otlptracegrpc.WithEndpoint
 	Transport   string            `mapstructure:"transport"`    // "http" or "grpc"
 	Insecure    bool              `mapstructure:"insecure"`     // disable TLS to the collector
 	Headers     map[string]string `mapstructure:"headers"`      // OTLP exporter headers (e.g., auth tokens)

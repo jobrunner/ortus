@@ -68,7 +68,8 @@ type ActiveSpan struct {
 type TraceFilter struct {
 	// MinDuration retains only traces longer than this. Zero means no filter.
 	MinDuration time.Duration
-	// Status retains only traces with this status ("OK", "ERROR", "UNSET").
+	// Status retains only traces with this status. Valid values follow the
+	// OTel codes.Code stringification: "Ok", "Error", "Unset" (mixed case).
 	// Empty means no filter.
 	Status string
 	// NameContains retains only traces whose root span name contains this
@@ -81,7 +82,7 @@ type TraceFilter struct {
 	Limit int
 }
 
-// Stats summarises ring-buffer contents for /health, /stats, and MCP overview.
+// Stats summarizes ring-buffer contents for /health, /stats, and MCP overview.
 type Stats struct {
 	Capacity          int       `json:"capacity"`      // per-pool capacity
 	TracesActive      int       `json:"traces_active"` // traces with at least one open span
@@ -116,13 +117,13 @@ type RingBuffer struct {
 
 type traceBuffer struct {
 	spans      []CapturedSpan
-	hasRoot    bool // observed at least one span with no parent in this trace
 	rootEnded  bool
 	rootName   string
 	start      time.Time
 	end        time.Time
 	statusCode string
 	statusMsg  string
+	openSpans  int // spans started but not yet ended that belong to this trace
 }
 
 // NewRingBuffer creates a ring buffer with the given per-pool capacity (in
@@ -146,7 +147,10 @@ func NewRingBuffer(capacity int, serviceName string) *RingBuffer {
 func (r *RingBuffer) Capacity() int { return r.capacity }
 
 // OnStart implements sdktrace.SpanProcessor. We snapshot the span as
-// "active" so ListActive can surface hangs to the MCP server.
+// "active" so ListActive can surface hangs to the MCP server, and we
+// maintain a per-trace open-span counter so the trace is only finalized
+// once every span has ended (the root may legally end before its
+// children, so finalizing on rootEnded alone evicts traces prematurely).
 func (r *RingBuffer) OnStart(_ context.Context, s sdktrace.ReadWriteSpan) {
 	if r.capacity == 0 {
 		return
@@ -178,11 +182,20 @@ func (r *RingBuffer) OnStart(_ context.Context, s sdktrace.ReadWriteSpan) {
 
 	r.mu.Lock()
 	r.activeSpans[sc.SpanID()] = a
+	traceID := sc.TraceID()
+	buf, ok := r.active[traceID]
+	if !ok {
+		buf = &traceBuffer{}
+		r.active[traceID] = buf
+	}
+	buf.openSpans++
 	r.mu.Unlock()
 }
 
-// OnEnd implements sdktrace.SpanProcessor. It records the span and, if this
-// finishes its trace, promotes the trace from active to finished.
+// OnEnd implements sdktrace.SpanProcessor. It records the span, decrements
+// the per-trace open-span counter, and finalizes the trace only once the
+// root has ended AND no spans remain open. This is the correct condition
+// for OTel: parents and children can end in any order.
 func (r *RingBuffer) OnEnd(s sdktrace.ReadOnlySpan) {
 	if r.capacity == 0 {
 		return
@@ -194,7 +207,12 @@ func (r *RingBuffer) OnEnd(s sdktrace.ReadOnlySpan) {
 
 	captured := captureSpan(s)
 	traceID := sc.TraceID()
-	isRoot := !s.Parent().IsValid() || s.Parent().TraceID() != sc.TraceID()
+	// A span is the local root of its trace when it has no parent, OR when
+	// its parent came from a remote service (distributed-trace continuation
+	// via incoming traceparent). In both cases we own the trace ID locally
+	// and should treat this span as the root for finalization purposes.
+	parent := s.Parent()
+	isRoot := !parent.IsValid() || parent.IsRemote() || parent.TraceID() != sc.TraceID()
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -207,6 +225,9 @@ func (r *RingBuffer) OnEnd(s sdktrace.ReadOnlySpan) {
 		r.active[traceID] = buf
 	}
 	buf.spans = append(buf.spans, captured)
+	if buf.openSpans > 0 {
+		buf.openSpans--
+	}
 	if buf.start.IsZero() || captured.Start.Before(buf.start) {
 		buf.start = captured.Start
 	}
@@ -214,14 +235,16 @@ func (r *RingBuffer) OnEnd(s sdktrace.ReadOnlySpan) {
 		buf.end = captured.End
 	}
 	if isRoot {
-		buf.hasRoot = true
 		buf.rootEnded = true
 		buf.rootName = captured.Name
 		buf.statusCode = captured.StatusCode
 		buf.statusMsg = captured.StatusMsg
 	}
 
-	if buf.rootEnded {
+	// Finalize only when the root has ended AND every started span has
+	// also ended. This handles the legal OTel case where a child outlives
+	// its parent.
+	if buf.rootEnded && buf.openSpans == 0 {
 		r.finalizeLocked(traceID, buf)
 	}
 }
@@ -455,7 +478,7 @@ func cloneTrace(t *CapturedTrace) *CapturedTrace {
 // containsFold is a tiny ASCII case-insensitive substring check. Avoids
 // importing strings just for this.
 func containsFold(s, sub string) bool {
-	if len(sub) == 0 {
+	if sub == "" {
 		return true
 	}
 	if len(sub) > len(s) {

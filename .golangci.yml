@@ -104,6 +104,8 @@ linters:
           - gosec
           - gocyclo
           - gocognit
+          - goconst   # Tests legitimately repeat literals
+          - noctx     # httptest.NewRequest is the conventional helper in tests
 
       # main.go darf globale Variablen haben
       - path: main\.go

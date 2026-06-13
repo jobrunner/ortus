@@ -280,7 +280,7 @@ func (s *QueryService) filterProperties(features []domain.Feature, properties []
 				filtered[key] = value
 			}
 		}
-		features[i].Properties = filtered
+		features[i].Properties = filtered //#nosec G602 -- i is the loop index over features, always in range
 	}
 
 	return features

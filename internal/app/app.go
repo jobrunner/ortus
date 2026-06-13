@@ -41,7 +41,7 @@ type App struct {
 
 // tracerProvider returns the underlying OTel TracerProvider for instrumentation
 // libraries (e.g. otelmux) that need it directly. Returns nil when tracing is
-// disabled, signalling to those libraries that they should not install
+// disabled, signaling to those libraries that they should not install
 // middleware.
 func (a *App) tracerProvider() oteltrace.TracerProvider {
 	if a.TelemetryProvider == nil {
@@ -231,10 +231,15 @@ func (a *App) Start(ctx context.Context) error {
 		output.Bool("ortus.watcher.enabled", a.Watcher != nil),
 	)
 
+	// Track whether any startup step failed so the span status reflects
+	// real outcome rather than always claiming OK after RecordError.
+	startupOK := true
+
 	// Load all packages from storage
 	if err := a.Registry.LoadAll(startupCtx); err != nil {
 		a.Logger.Warn("failed to load packages", "error", err)
 		startupSpan.RecordError(err)
+		startupOK = false
 	}
 	startupSpan.SetAttributes(output.Int("ortus.packages.loaded", a.Registry.PackageCount()))
 
@@ -243,6 +248,7 @@ func (a *App) Start(ctx context.Context) error {
 		if err := a.Watcher.Start(startupCtx); err != nil {
 			a.Logger.Warn("failed to start file watcher", "error", err)
 			startupSpan.RecordError(err)
+			startupOK = false
 		}
 	}
 
@@ -265,7 +271,11 @@ func (a *App) Start(ctx context.Context) error {
 		a.SyncService.Start(ctx)
 	}
 
-	startupSpan.SetStatus(output.StatusOK, "")
+	if startupOK {
+		startupSpan.SetStatus(output.StatusOK, "")
+	} else {
+		startupSpan.SetStatus(output.StatusError, "one or more startup steps failed")
+	}
 	startupSpan.End()
 
 	// Start server (long-running — must run outside the startup span so it

@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.6.0] - 2026-06-13
 
+### Fixed (review iteration)
+- RingBuffer now finalizes a trace only when its root has ended AND every span has ended, instead of evicting as soon as the root ends (OTel permits children to outlive their parent)
+- RingBuffer `isRoot` detection now also treats spans with remote parents as local roots, so distributed-trace continuations land in the buffer correctly
+- `tracer.sprint()` no longer silently drops unsupported attribute types — handles `error`, `fmt.Stringer`, and falls back to `fmt.Sprintf("%v", v)`
+- `App.Startup` span status now reflects real outcome (Error if any startup step failed); previously always set to OK after `RecordError`
+- `TraceFilter.Status` docstring corrected to match the OTel `codes.Code` casing ("Ok", "Error", "Unset")
+- `--tracing-endpoint` help text and `TracingConfig.Endpoint` comment corrected to describe host:port (no URL parsing happens in the exporter setup)
+
 ### Added
 - OpenTelemetry tracing across HTTP, application services, repository, storage, watcher, and sync — every named operation produces a span, enforced by a coverage test
 - In-memory trace-grouped ring buffer with separate FIFO pools for success and error traces (default 256 each); error traces never get evicted by routine successes
