@@ -14,7 +14,7 @@ func newTestRegistry() *PackageRegistry {
 	return NewPackageRegistry(
 		&mockRepository{},
 		&mockStorage{},
-		&output.NoOpMetrics{},
+		testMeter(),
 		output.NoOpTracer{},
 		slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError})),
 		"/tmp",

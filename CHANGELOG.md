@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-06-13
+
+### Fixed
+- Prometheus `path` label no longer explodes per package ID (issue #14). The HTTP metrics middleware now uses the matched gorilla/mux route template ("/api/v1/packages/{packageId}") as the `path` label, so 100 different package IDs collapse to one label combination instead of 100. Test contract in `internal/adapters/http/metrics_test.go`.
+- HTTP metrics middleware is now actually wired into the router. Previously the `Collector.Middleware` method existed but was never installed, so `ortus_http_requests_total` and `ortus_http_request_duration_seconds` were never emitted by real requests.
+
+### Added
+- OTLP push export for metrics. The MeterProvider now bundles a Prometheus reader (kept for the existing `/metrics` scrape) with an optional OTLP `PeriodicReader`. Configure via `metrics.otlp.{enabled,endpoint,transport,insecure,headers,interval}` or `ORTUS_METRICS_OTLP_*` env vars. Endpoint falls back to `tracing.endpoint` when unset so a single collector can serve both signals.
+
+### Changed
+- **Breaking (internal)**: removed the `output.MetricsCollector` port and its `NoOpMetrics` no-op. Services now receive `metric.Meter` directly (OTel-native API). Each service defines its own instruments — there is no central metric registry. Call sites that wrote `s.metrics.IncQueryCount(id, ok)` now write `s.queryCount.Add(ctx, 1, metric.WithAttributes(...))`. Tests use `noop.NewMeterProvider().Meter("test")` from `go.opentelemetry.io/otel/metric/noop`.
+- HTTP request instruments (`ortus.http.requests`, `ortus.http.request.duration`) moved from the `metrics` package to `internal/adapters/http/` where the label values originate, keeping `metrics` mux-free.
+- `metrics` package is now a thin lifecycle wrapper around the OTel `MeterProvider`. The Prometheus-shaped public methods (`IncQueryCount`, `ObserveQueryDuration`, `Middleware`, etc.) are gone.
+
+### Build
+- Added dependencies: `go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp`, `…/otlpmetricgrpc`.
+
 ## [0.6.0] - 2026-06-13
 
 ### Fixed (review iteration)

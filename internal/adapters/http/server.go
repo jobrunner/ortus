@@ -11,6 +11,7 @@ import (
 	"github.com/gorilla/mux"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gorilla/mux/otelmux"
 	otelcodes "go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/jobrunner/ortus/internal/application"
@@ -30,12 +31,15 @@ type Server struct {
 	withGeometry   bool                 // Include geometry in query results
 	tracerProvider trace.TracerProvider // Used by otelmux middleware; may be nil
 	serviceName    string               // Used as otelmux service name; defaults to "ortus"
+	httpMetrics    *httpMetrics         // HTTP-level instruments; nil when metrics disabled
 }
 
 // ServerOptions wraps optional dependencies the HTTP server can use, such as
-// the OTel TracerProvider for request-level tracing.
+// the OTel TracerProvider for request-level tracing and the MeterProvider
+// for HTTP request metrics.
 type ServerOptions struct {
 	TracerProvider trace.TracerProvider
+	MeterProvider  metric.MeterProvider
 	ServiceName    string
 }
 
@@ -55,6 +59,11 @@ func NewServer(
 		serviceName = "ortus"
 	}
 
+	var httpM *httpMetrics
+	if opts.MeterProvider != nil {
+		httpM = newHTTPMetrics(opts.MeterProvider.Meter("github.com/jobrunner/ortus/http"))
+	}
+
 	s := &Server{
 		queryService:   queryService,
 		registry:       registry,
@@ -65,6 +74,7 @@ func NewServer(
 		withGeometry:   withGeometry,
 		tracerProvider: opts.TracerProvider,
 		serviceName:    serviceName,
+		httpMetrics:    httpM,
 	}
 
 	s.router = s.setupRoutes()
@@ -94,6 +104,15 @@ func (s *Server) setupRoutes() *mux.Router {
 		))
 	}
 
+	// HTTP metrics: must be OUTSIDE recoveryMiddleware so panics-turned-500
+	// land in the status="5xx" series, and OUTSIDE traceIDHeader so the
+	// duration includes header-write time. The matched mux route is
+	// resolved inside the middleware via mux.CurrentRoute(r) — that's what
+	// fixes the cardinality bug from issue #14.
+	if s.httpMetrics != nil {
+		r.Use(s.httpMetrics.middleware)
+	}
+
 	// Add middleware. traceIDHeader runs immediately after the tracing
 	// middleware so every response — including errors from later middleware
 	// or panics caught by recovery — carries an X-Trace-Id the user can
@@ -103,6 +122,13 @@ func (s *Server) setupRoutes() *mux.Router {
 	}
 	r.Use(s.loggingMiddleware)
 	r.Use(s.recoveryMiddleware)
+
+	// Note on 404/405 coverage: gorilla/mux invokes its NotFoundHandler /
+	// MethodNotAllowedHandler outside the r.Use(...) middleware chain, so
+	// unmatched routes don't currently flow through the metrics middleware.
+	// That's acceptable — it keeps cardinality bounded with zero extra
+	// code. If we ever want to count unmatched traffic, the fix is to wrap
+	// those handlers with the same middleware chain manually.
 
 	// Add CORS middleware if configured
 	if s.config.CORS.Enabled() {

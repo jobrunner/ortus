@@ -5,20 +5,25 @@ import (
 	"log/slog"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/metric/noop"
+
 	"github.com/jobrunner/ortus/internal/domain"
 	"github.com/jobrunner/ortus/internal/ports/output"
 )
 
 // QueryService handles point queries across GeoPackages.
 type QueryService struct {
-	registry    *PackageRegistry
-	repo        output.GeoPackageRepository
-	transformer output.CoordinateTransformer
-	metrics     output.MetricsCollector
-	tracer      output.Tracer
-	logger      *slog.Logger
-	defaultSRID int
-	maxFeatures int
+	registry      *PackageRegistry
+	repo          output.GeoPackageRepository
+	transformer   output.CoordinateTransformer
+	tracer        output.Tracer
+	queryCount    metric.Int64Counter
+	queryDuration metric.Float64Histogram
+	logger        *slog.Logger
+	defaultSRID   int
+	maxFeatures   int
 }
 
 // QueryServiceConfig holds configuration for the query service.
@@ -27,12 +32,14 @@ type QueryServiceConfig struct {
 	MaxFeatures int
 }
 
-// NewQueryService creates a new query service.
+// NewQueryService creates a new query service. The meter is used directly
+// to define query-level instruments — no MetricsCollector indirection. Pass
+// noop.NewMeterProvider().Meter("test") to disable metrics in tests.
 func NewQueryService(
 	registry *PackageRegistry,
 	repo output.GeoPackageRepository,
 	transformer output.CoordinateTransformer,
-	metrics output.MetricsCollector,
+	meter metric.Meter,
 	tracer output.Tracer,
 	logger *slog.Logger,
 	cfg QueryServiceConfig,
@@ -46,16 +53,30 @@ func NewQueryService(
 	if tracer == nil {
 		tracer = output.NoOpTracer{}
 	}
+	if meter == nil {
+		meter = noop.NewMeterProvider().Meter("ortus/application")
+	}
+
+	queryCount, _ := meter.Int64Counter(
+		"ortus.queries",
+		metric.WithDescription("Total number of point queries"),
+	)
+	queryDuration, _ := meter.Float64Histogram(
+		"ortus.query.duration",
+		metric.WithDescription("Query duration in seconds"),
+		metric.WithUnit("s"),
+	)
 
 	return &QueryService{
-		registry:    registry,
-		repo:        repo,
-		transformer: transformer,
-		metrics:     metrics,
-		tracer:      tracer,
-		logger:      logger,
-		defaultSRID: cfg.DefaultSRID,
-		maxFeatures: cfg.MaxFeatures,
+		registry:      registry,
+		repo:          repo,
+		transformer:   transformer,
+		tracer:        tracer,
+		queryCount:    queryCount,
+		queryDuration: queryDuration,
+		logger:        logger,
+		defaultSRID:   cfg.DefaultSRID,
+		maxFeatures:   cfg.MaxFeatures,
 	}
 }
 
@@ -112,14 +133,20 @@ func (s *QueryService) QueryPoint(ctx context.Context, req domain.QueryRequest) 
 		result, err := s.QueryPointInPackage(ctx, pkgID, req)
 		if err != nil {
 			s.logger.Warn("query failed for package", "package", pkgID, "error", err)
-			s.metrics.IncQueryCount(pkgID, false)
+			s.queryCount.Add(ctx, 1, metric.WithAttributes(
+				attribute.String("package_id", pkgID),
+				attribute.String("status", "error"),
+			))
 			continue
 		}
 
 		if result.HasFeatures() {
 			response.AddResult(*result)
 		}
-		s.metrics.IncQueryCount(pkgID, true)
+		s.queryCount.Add(ctx, 1, metric.WithAttributes(
+			attribute.String("package_id", pkgID),
+			attribute.String("status", "success"),
+		))
 	}
 
 	response.ProcessingTime = time.Since(start)
@@ -171,7 +198,9 @@ func (s *QueryService) QueryPointInPackage(ctx context.Context, packageID string
 	}
 
 	result.QueryTime = time.Since(start)
-	s.metrics.ObserveQueryDuration(packageID, result.QueryTime)
+	s.queryDuration.Record(ctx, result.QueryTime.Seconds(), metric.WithAttributes(
+		attribute.String("package_id", packageID),
+	))
 
 	span.SetAttributes(
 		output.Int("ortus.features.count", result.FeatureCount()),

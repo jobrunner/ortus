@@ -484,8 +484,15 @@ Prometheus metrics are available at `/metrics` (default port 9090 in Docker, sam
 curl "http://localhost:8080/metrics"
 ```
 
-Internally the metrics are produced via OpenTelemetry meters and exported in
-Prometheus format. Metric names and labels are unchanged.
+Internally the metrics are produced via the OpenTelemetry meter API.
+By default they are exported only as Prometheus scrape format. To
+additionally push them to an OTLP collector (e.g. the same one tracing
+uses) enable `metrics.otlp.enabled`; the endpoint falls back to
+`tracing.endpoint` when not set explicitly. The HTTP request metrics
+(`ortus_http_requests_total`, `ortus_http_request_duration_seconds`)
+use the matched gorilla/mux route template as the `path` label, so
+dynamic segments like `{packageId}` collapse to a single bounded label
+combination.
 
 ## Tracing
 

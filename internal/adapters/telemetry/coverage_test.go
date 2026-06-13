@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"go.opentelemetry.io/otel/metric/noop"
+
 	"github.com/jobrunner/ortus/internal/adapters/storage"
 	"github.com/jobrunner/ortus/internal/adapters/telemetry"
 	"github.com/jobrunner/ortus/internal/application"
@@ -107,8 +109,8 @@ func TestTracingCoverage_AllPathsProduceSpans(t *testing.T) {
 
 	repo := &tracedFakeRepo{inner: coverageRepo{}, tracer: tr}
 	store := storage.NewTracedStorage(coverageStorage{}, tr, "local")
-	reg := application.NewPackageRegistry(repo, store, &output.NoOpMetrics{}, tr, logger, "/tmp")
-	qs := application.NewQueryService(reg, repo, nil, &output.NoOpMetrics{}, tr, logger, application.QueryServiceConfig{})
+	reg := application.NewPackageRegistry(repo, store, noop.NewMeterProvider().Meter("test"), tr, logger, "/tmp")
+	qs := application.NewQueryService(reg, repo, nil, noop.NewMeterProvider().Meter("test"), tr, logger, application.QueryServiceConfig{})
 	hs := application.NewHealthService(reg, tr)
 
 	// Each "request" runs in its own root context — this mirrors how

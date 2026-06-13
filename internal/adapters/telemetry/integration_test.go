@@ -6,10 +6,11 @@ import (
 	"os"
 	"testing"
 
+	"go.opentelemetry.io/otel/metric/noop"
+
 	"github.com/jobrunner/ortus/internal/adapters/telemetry"
 	"github.com/jobrunner/ortus/internal/application"
 	"github.com/jobrunner/ortus/internal/domain"
-	"github.com/jobrunner/ortus/internal/ports/output"
 )
 
 // stubRepo is a minimal GeoPackageRepository: it reports one package + layer
@@ -53,12 +54,12 @@ func TestEndToEnd_QueryServiceProducesSpansInBuffer(t *testing.T) {
 	registry := application.NewPackageRegistry(
 		stubRepo{},
 		nil, // storage unused in this path
-		&output.NoOpMetrics{},
+		noop.NewMeterProvider().Meter("test"),
 		tracer,
 		logger,
 		"/tmp",
 	)
-	qs := application.NewQueryService(registry, stubRepo{}, nil, &output.NoOpMetrics{}, tracer, logger, application.QueryServiceConfig{})
+	qs := application.NewQueryService(registry, stubRepo{}, nil, noop.NewMeterProvider().Meter("test"), tracer, logger, application.QueryServiceConfig{})
 
 	req := domain.QueryRequest{Coordinate: domain.NewCoordinate(13.4, 52.5, domain.SRIDWGS84)}
 	if _, err := qs.QueryPoint(context.Background(), req); err != nil {
