@@ -1,5 +1,7 @@
 package domain
 
+import "strings"
+
 // Feature represents a geo feature with geometry and properties.
 type Feature struct {
 	ID         int64                  // Feature ID (fid)
@@ -69,20 +71,23 @@ type Geometry struct {
 }
 
 // IsPoint returns true if the geometry is a point.
+// Comparison is case-insensitive — both the all-caps WKT form ("POINT") and
+// the GeoJSON-style title case ("Point") are accepted.
 func (g *Geometry) IsPoint() bool {
-	return g.Type == string(GeomPoint) || g.Type == "Point"
+	t := strings.ToUpper(g.Type)
+	return t == string(GeomPoint)
 }
 
-// IsPolygon returns true if the geometry is a polygon.
+// IsPolygon returns true if the geometry is a polygon (single or multi).
 func (g *Geometry) IsPolygon() bool {
-	return g.Type == string(GeomPolygon) || g.Type == "Polygon" ||
-		g.Type == string(GeomMultiPolygon) || g.Type == "MultiPolygon"
+	t := strings.ToUpper(g.Type)
+	return t == string(GeomPolygon) || t == string(GeomMultiPolygon)
 }
 
-// IsLine returns true if the geometry is a line.
+// IsLine returns true if the geometry is a line (single or multi).
 func (g *Geometry) IsLine() bool {
-	return g.Type == string(GeomLineString) || g.Type == "LineString" ||
-		g.Type == string(GeomMultiLineString) || g.Type == "MultiLineString"
+	t := strings.ToUpper(g.Type)
+	return t == string(GeomLineString) || t == string(GeomMultiLineString)
 }
 
 // GeometryType represents the type of a geometry.
