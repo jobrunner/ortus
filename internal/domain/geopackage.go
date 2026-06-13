@@ -58,17 +58,17 @@ type Layer struct {
 
 // IsPointLayer returns true if the layer contains point geometries.
 func (l *Layer) IsPointLayer() bool {
-	return l.GeometryType == "POINT" || l.GeometryType == "MULTIPOINT"
+	return l.GeometryType == string(GeomPoint) || l.GeometryType == string(GeomMultiPoint)
 }
 
 // IsPolygonLayer returns true if the layer contains polygon geometries.
 func (l *Layer) IsPolygonLayer() bool {
-	return l.GeometryType == "POLYGON" || l.GeometryType == "MULTIPOLYGON"
+	return l.GeometryType == string(GeomPolygon) || l.GeometryType == string(GeomMultiPolygon)
 }
 
 // IsLineLayer returns true if the layer contains line geometries.
 func (l *Layer) IsLineLayer() bool {
-	return l.GeometryType == "LINESTRING" || l.GeometryType == "MULTILINESTRING"
+	return l.GeometryType == string(GeomLineString) || l.GeometryType == string(GeomMultiLineString)
 }
 
 // GeoPackageStatus represents the status of a GeoPackage.

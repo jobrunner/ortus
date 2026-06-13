@@ -13,6 +13,7 @@ import (
 	"github.com/mattn/go-sqlite3"
 
 	"github.com/jobrunner/ortus/internal/domain"
+	"github.com/jobrunner/ortus/internal/ports/output"
 )
 
 // Ensure sqlite3 driver is registered with extension support.
@@ -69,6 +70,7 @@ type Repository struct {
 	mu          sync.RWMutex
 	connections map[string]*sql.DB
 	packages    map[string]*domain.GeoPackage
+	tracer      output.Tracer
 }
 
 // NewRepository creates a new GeoPackage repository.
@@ -76,19 +78,36 @@ func NewRepository() *Repository {
 	return &Repository{
 		connections: make(map[string]*sql.DB),
 		packages:    make(map[string]*domain.GeoPackage),
+		tracer:      output.NoOpTracer{},
 	}
+}
+
+// SetTracer wires a tracer into the repository. Pass output.NoOpTracer{} to
+// disable. Safe to call once at startup before queries flow.
+func (r *Repository) SetTracer(t output.Tracer) {
+	if t == nil {
+		t = output.NoOpTracer{}
+	}
+	r.tracer = t
 }
 
 // Open opens a GeoPackage file and returns its metadata.
 func (r *Repository) Open(ctx context.Context, path string) (*domain.GeoPackage, error) {
+	ctx, span := r.tracer.Start(ctx, "Repository.Open",
+		output.WithAttributes(output.String("ortus.package.path", path)),
+	)
+	defer span.End()
+
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	// Derive package ID from filename
 	packageID := DerivePackageID(path)
+	span.SetAttributes(output.String("ortus.package.id", packageID))
 
 	// Check if already open
 	if pkg, ok := r.packages[packageID]; ok {
+		span.AddEvent("already_open")
 		return pkg, nil
 	}
 
@@ -123,16 +142,28 @@ func (r *Repository) Open(ctx context.Context, path string) (*domain.GeoPackage,
 }
 
 // Close closes a GeoPackage connection.
-func (r *Repository) Close(_ context.Context, packageID string) error {
+func (r *Repository) Close(ctx context.Context, packageID string) error {
+	_, span := r.tracer.Start(ctx, "Repository.Close",
+		output.WithSpanKind(output.SpanKindClient),
+		output.WithAttributes(
+			output.String("db.system", "sqlite"),
+			output.String("ortus.package.id", packageID),
+		),
+	)
+	defer span.End()
+
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	db, ok := r.connections[packageID]
 	if !ok {
+		span.AddEvent("not_open")
 		return nil
 	}
 
 	if err := db.Close(); err != nil {
+		span.RecordError(err)
+		span.SetStatus(output.StatusError, "close failed")
 		return err
 	}
 
@@ -142,65 +173,125 @@ func (r *Repository) Close(_ context.Context, packageID string) error {
 }
 
 // GetLayers returns all layers in a GeoPackage.
-func (r *Repository) GetLayers(_ context.Context, packageID string) ([]domain.Layer, error) {
+func (r *Repository) GetLayers(ctx context.Context, packageID string) ([]domain.Layer, error) {
+	_, span := r.tracer.Start(ctx, "Repository.GetLayers",
+		output.WithAttributes(output.String("ortus.package.id", packageID)),
+	)
+	defer span.End()
+
 	r.mu.RLock()
 	pkg, ok := r.packages[packageID]
 	r.mu.RUnlock()
 
 	if !ok {
+		span.RecordError(domain.ErrPackageNotFound)
+		span.SetStatus(output.StatusError, "package not found")
 		return nil, domain.ErrPackageNotFound
 	}
 
+	span.SetAttributes(output.Int("ortus.layers.count", len(pkg.Layers)))
 	return pkg.Layers, nil
 }
 
 // QueryPoint performs a point query on a specific layer.
 func (r *Repository) QueryPoint(ctx context.Context, packageID, layerName string, coord domain.Coordinate) ([]domain.Feature, error) {
+	ctx, span := r.tracer.Start(ctx, "Repository.QueryPoint",
+		output.WithSpanKind(output.SpanKindClient),
+		output.WithAttributes(
+			output.String("db.system", "sqlite"),
+			output.String("ortus.package.id", packageID),
+			output.String("ortus.layer.name", layerName),
+			output.Float64("ortus.coordinate.x", coord.X),
+			output.Float64("ortus.coordinate.y", coord.Y),
+			output.Int("ortus.coordinate.srid", coord.SRID),
+		),
+	)
+	defer span.End()
+
 	r.mu.RLock()
 	db, ok := r.connections[packageID]
 	pkg := r.packages[packageID]
 	r.mu.RUnlock()
 
 	if !ok {
+		span.RecordError(domain.ErrPackageNotFound)
+		span.SetStatus(output.StatusError, "package not found")
 		return nil, domain.ErrPackageNotFound
 	}
 
 	// Find layer
 	layer, found := pkg.GetLayer(layerName)
 	if !found {
+		span.RecordError(domain.ErrLayerNotFound)
+		span.SetStatus(output.StatusError, "layer not found")
 		return nil, domain.ErrLayerNotFound
 	}
 
-	// Build and execute query
-	return r.executePointQuery(ctx, db, layer, coord)
+	span.SetAttributes(
+		output.String("ortus.layer.geometry_type", layer.GeometryType),
+		output.Int("ortus.layer.srid", layer.SRID),
+		output.Bool("ortus.layer.has_index", layer.HasIndex),
+	)
+
+	features, err := r.executePointQuery(ctx, db, layer, coord)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(output.StatusError, "query failed")
+		return nil, err
+	}
+	span.SetAttributes(output.Int("ortus.features.count", len(features)))
+	span.SetStatus(output.StatusOK, "")
+	return features, nil
 }
 
 // CreateSpatialIndex creates a spatial index for a layer.
 // This creates an R-tree virtual table directly, bypassing SpatiaLite's CreateSpatialIndex()
 // which requires a geometry_columns table that GeoPackage files don't have.
 func (r *Repository) CreateSpatialIndex(ctx context.Context, packageID, layerName string) error {
+	ctx, span := r.tracer.Start(ctx, "Repository.CreateSpatialIndex",
+		output.WithSpanKind(output.SpanKindClient),
+		output.WithAttributes(
+			output.String("db.system", "sqlite"),
+			output.String("ortus.package.id", packageID),
+			output.String("ortus.layer.name", layerName),
+		),
+	)
+	defer span.End()
+
 	r.mu.RLock()
 	db, ok := r.connections[packageID]
 	pkg := r.packages[packageID]
 	r.mu.RUnlock()
 
 	if !ok {
+		span.RecordError(domain.ErrPackageNotFound)
+		span.SetStatus(output.StatusError, "package not found")
 		return domain.ErrPackageNotFound
 	}
 
 	layer, found := pkg.GetLayer(layerName)
 	if !found {
+		span.RecordError(domain.ErrLayerNotFound)
+		span.SetStatus(output.StatusError, "layer not found")
 		return domain.ErrLayerNotFound
 	}
 
 	// Check if index already exists
 	hasIndex, err := r.HasSpatialIndex(ctx, packageID, layerName)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(output.StatusError, "index probe failed")
 		return err
 	}
 	if hasIndex {
 		// Index already exists, just update the layer status
-		return r.setLayerIndexStatus(packageID, layerName, true)
+		span.SetAttributes(output.Bool("ortus.index.preexisting", true))
+		if err := r.setLayerIndexStatus(packageID, layerName, true); err != nil {
+			span.RecordError(err)
+			span.SetStatus(output.StatusError, "status update failed")
+			return err
+		}
+		return nil
 	}
 
 	indexTable := fmt.Sprintf("rtree_%s_%s", layerName, layer.GeometryColumn)
@@ -212,11 +303,14 @@ func (r *Repository) CreateSpatialIndex(ctx context.Context, packageID, layerNam
 		indexTable,
 	)
 	if _, err := db.ExecContext(ctx, createQuery); err != nil {
-		return &domain.IndexError{
+		idxErr := &domain.IndexError{
 			PackageID: packageID,
 			Layer:     layerName,
 			Err:       fmt.Errorf("creating R-tree table: %w", err),
 		}
+		span.RecordError(idxErr)
+		span.SetStatus(output.StatusError, "create R-tree table failed")
+		return idxErr
 	}
 
 	// Populate R-tree with bounding boxes from all geometries
@@ -240,15 +334,23 @@ func (r *Repository) CreateSpatialIndex(ctx context.Context, packageID, layerNam
 		// Clean up the empty R-tree table on failure
 		//nolint:gocritic // sprintfQuotedString: SQL identifiers need double quotes, not Go's %q
 		_, _ = db.ExecContext(ctx, fmt.Sprintf(`DROP TABLE IF EXISTS "%s"`, indexTable))
-		return &domain.IndexError{
+		idxErr := &domain.IndexError{
 			PackageID: packageID,
 			Layer:     layerName,
 			Err:       fmt.Errorf("populating R-tree index: %w", err),
 		}
+		span.RecordError(idxErr)
+		span.SetStatus(output.StatusError, "populate R-tree failed")
+		return idxErr
 	}
 
 	// Update layer status
-	return r.setLayerIndexStatus(packageID, layerName, true)
+	if err := r.setLayerIndexStatus(packageID, layerName, true); err != nil {
+		span.RecordError(err)
+		span.SetStatus(output.StatusError, "status update failed")
+		return err
+	}
+	return nil
 }
 
 // setLayerIndexStatus safely updates the HasIndex status for a layer.
@@ -274,30 +376,51 @@ func (r *Repository) setLayerIndexStatus(packageID, layerName string, hasIndex b
 
 // HasSpatialIndex checks if a layer has a spatial index.
 func (r *Repository) HasSpatialIndex(ctx context.Context, packageID, layerName string) (bool, error) {
+	ctx, span := r.tracer.Start(ctx, "Repository.HasSpatialIndex",
+		output.WithSpanKind(output.SpanKindClient),
+		output.WithAttributes(
+			output.String("db.system", "sqlite"),
+			output.String("ortus.package.id", packageID),
+			output.String("ortus.layer.name", layerName),
+		),
+	)
+	defer span.End()
+
 	r.mu.RLock()
 	db, ok := r.connections[packageID]
 	pkg := r.packages[packageID]
 	r.mu.RUnlock()
 
 	if !ok {
+		span.RecordError(domain.ErrPackageNotFound)
+		span.SetStatus(output.StatusError, "package not found")
 		return false, domain.ErrPackageNotFound
 	}
 
 	layer, found := pkg.GetLayer(layerName)
 	if !found {
+		span.RecordError(domain.ErrLayerNotFound)
+		span.SetStatus(output.StatusError, "layer not found")
 		return false, domain.ErrLayerNotFound
 	}
 
 	// Check for RTree index table
 	indexTable := fmt.Sprintf("rtree_%s_%s", layerName, layer.GeometryColumn)
 	query := `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?`
+	span.SetAttributes(
+		output.String("db.statement", query),
+		output.String("ortus.index.table", indexTable),
+	)
 
 	var count int
 	err := db.QueryRowContext(ctx, query, indexTable).Scan(&count)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(output.StatusError, "query failed")
 		return false, err
 	}
 
+	span.SetAttributes(output.Bool("ortus.index.exists", count > 0))
 	return count > 0, nil
 }
 
@@ -437,6 +560,16 @@ func (r *Repository) readMetadata(ctx context.Context, db *sql.DB, pkg *domain.G
 // The coordinate must already be transformed to the layer's SRID before calling this function.
 // Uses R-tree spatial index for fast bounding box filtering when available.
 func (r *Repository) executePointQuery(ctx context.Context, db *sql.DB, layer *domain.Layer, coord domain.Coordinate) ([]domain.Feature, error) {
+	ctx, span := r.tracer.Start(ctx, "Repository.executePointQuery",
+		output.WithSpanKind(output.SpanKindClient),
+		output.WithAttributes(
+			output.String("db.system", "sqlite"),
+			output.String("ortus.layer.name", layer.Name),
+			output.Bool("ortus.layer.is_polygon", layer.IsPolygonLayer()),
+		),
+	)
+	defer span.End()
+
 	pointWKT := coord.WKT()
 	indexTable := fmt.Sprintf("rtree_%s_%s", layer.Name, layer.GeometryColumn)
 
@@ -449,6 +582,10 @@ func (r *Repository) executePointQuery(ctx context.Context, db *sql.DB, layer *d
 	if err != nil {
 		indexExists = 0
 	}
+	span.SetAttributes(
+		output.Bool("ortus.rtree.used", indexExists > 0),
+		output.String("ortus.index.table", indexTable),
+	)
 
 	// Build query using ST_Contains for polygon layers, MbrContains for others
 	// Note: GeoPackage uses GPKG binary format, so we use CastAutomagic() to convert
@@ -492,6 +629,8 @@ func (r *Repository) executePointQuery(ctx context.Context, db *sql.DB, layer *d
 		}
 	}
 
+	span.SetAttributes(output.String("db.statement", query))
+
 	var rows *sql.Rows
 	if indexExists > 0 {
 		// R-tree query: pass point coordinates for bounding box filter, then WKT and SRID
@@ -510,6 +649,8 @@ func (r *Repository) executePointQuery(ctx context.Context, db *sql.DB, layer *d
 	}
 
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(output.StatusError, "query failed")
 		return nil, &domain.QueryError{
 			Layer: layer.Name,
 			Err:   err,
@@ -520,6 +661,8 @@ func (r *Repository) executePointQuery(ctx context.Context, db *sql.DB, layer *d
 	// Get column names for property mapping
 	columns, err := rows.Columns()
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(output.StatusError, "columns failed")
 		return nil, err
 	}
 
@@ -527,12 +670,21 @@ func (r *Repository) executePointQuery(ctx context.Context, db *sql.DB, layer *d
 	for rows.Next() {
 		feature, err := r.scanFeature(rows, columns, layer.Name, layer.GeometryColumn)
 		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(output.StatusError, "scan failed")
 			return nil, err
 		}
 		features = append(features, feature)
 	}
 
-	return features, rows.Err()
+	if err := rows.Err(); err != nil {
+		span.RecordError(err)
+		span.SetStatus(output.StatusError, "rows iteration failed")
+		return nil, err
+	}
+
+	span.SetAttributes(output.Int("ortus.features.count", len(features)))
+	return features, nil
 }
 
 // scanFeature scans a row into a Feature.
@@ -613,7 +765,8 @@ func (r *Repository) GetConnection(packageID string) *sql.DB {
 // We use a separate in-memory database because GeoPackage files are opened read-only
 // and don't have the spatial_ref_sys table required by ST_Transform.
 type RepositoryTransformer struct {
-	db *sql.DB
+	db     *sql.DB
+	tracer output.Tracer
 }
 
 // NewRepositoryTransformer creates a transformer with an in-memory SpatiaLite database.
@@ -628,7 +781,15 @@ func NewRepositoryTransformer(_ *Repository) *RepositoryTransformer {
 	// InitSpatialMetaDataFull populates spatial_ref_sys with standard EPSG definitions
 	_, _ = db.ExecContext(context.Background(), "SELECT InitSpatialMetaDataFull(1)")
 
-	return &RepositoryTransformer{db: db}
+	return &RepositoryTransformer{db: db, tracer: output.NoOpTracer{}}
+}
+
+// SetTracer wires a tracer into the repository transformer.
+func (t *RepositoryTransformer) SetTracer(tr output.Tracer) {
+	if tr == nil {
+		tr = output.NoOpTracer{}
+	}
+	t.tracer = tr
 }
 
 // Transform transforms a coordinate from one SRID to another.
@@ -637,11 +798,31 @@ func (t *RepositoryTransformer) Transform(ctx context.Context, coord domain.Coor
 		return coord, nil
 	}
 
+	ctx, span := t.tracer.Start(ctx, "RepositoryTransformer.Transform",
+		output.WithSpanKind(output.SpanKindClient),
+		output.WithAttributes(
+			output.String("db.system", "sqlite"),
+			output.String("db.statement", "SELECT X(Transform(GeomFromText(?, ?), ?)), Y(Transform(GeomFromText(?, ?), ?))"),
+			output.Int("ortus.coordinate.from_srid", coord.SRID),
+			output.Int("ortus.coordinate.to_srid", targetSRID),
+		),
+	)
+	defer span.End()
+
 	if t.db == nil {
-		return domain.Coordinate{}, fmt.Errorf("transformer database not initialized")
+		err := fmt.Errorf("transformer database not initialized")
+		span.RecordError(err)
+		span.SetStatus(output.StatusError, "db not initialized")
+		return domain.Coordinate{}, err
 	}
 
-	return TransformCoordinate(ctx, t.db, coord, targetSRID)
+	result, err := TransformCoordinate(ctx, t.db, coord, targetSRID)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(output.StatusError, "transform failed")
+		return result, err
+	}
+	return result, nil
 }
 
 // IsSupported checks if a transformation between two SRIDs is supported.

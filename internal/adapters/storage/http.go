@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+
 	"github.com/jobrunner/ortus/internal/ports/output"
 )
 
@@ -32,7 +34,10 @@ type HTTPConfig struct {
 	Password  string
 }
 
-// NewHTTPStorage creates a new HTTP storage adapter.
+// NewHTTPStorage creates a new HTTP storage adapter. The http.Client is
+// wrapped with otelhttp so every outbound request becomes a child span — DNS
+// resolution, connection setup, TLS handshake, and retries all visible per
+// attempt rather than as one aggregate ObjectStorage.* span.
 func NewHTTPStorage(cfg HTTPConfig) *HTTPStorage {
 	if cfg.IndexFile == "" {
 		cfg.IndexFile = "index.txt"
@@ -43,7 +48,8 @@ func NewHTTPStorage(cfg HTTPConfig) *HTTPStorage {
 
 	return &HTTPStorage{
 		client: &http.Client{
-			Timeout: cfg.Timeout,
+			Timeout:   cfg.Timeout,
+			Transport: otelhttp.NewTransport(http.DefaultTransport),
 		},
 		baseURL:   strings.TrimSuffix(cfg.BaseURL, "/"),
 		indexFile: cfg.IndexFile,

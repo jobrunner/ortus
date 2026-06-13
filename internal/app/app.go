@@ -6,10 +6,13 @@ import (
 	"fmt"
 	"log/slog"
 
+	oteltrace "go.opentelemetry.io/otel/trace"
+
 	"github.com/jobrunner/ortus/internal/adapters/geopackage"
 	httpAdapter "github.com/jobrunner/ortus/internal/adapters/http"
 	"github.com/jobrunner/ortus/internal/adapters/metrics"
 	"github.com/jobrunner/ortus/internal/adapters/storage"
+	"github.com/jobrunner/ortus/internal/adapters/telemetry"
 	tlsAdapter "github.com/jobrunner/ortus/internal/adapters/tls"
 	"github.com/jobrunner/ortus/internal/adapters/watcher"
 	"github.com/jobrunner/ortus/internal/application"
@@ -19,19 +22,32 @@ import (
 
 // App holds all application components.
 type App struct {
-	Config        *config.Config
-	Logger        *slog.Logger
-	Storage       output.ObjectStorage
-	Repository    *geopackage.Repository
-	Registry      *application.PackageRegistry
-	QueryService  *application.QueryService
-	HealthService *application.HealthService
-	SyncService   *application.SyncService
-	HTTPServer    *httpAdapter.Server
-	TLSServer     *tlsAdapter.Server
-	Watcher       *watcher.Watcher
-	Metrics       *metrics.Collector
-	MetricsServer *metrics.Server
+	Config            *config.Config
+	Logger            *slog.Logger
+	Storage           output.ObjectStorage
+	Repository        *geopackage.Repository
+	Registry          *application.PackageRegistry
+	QueryService      *application.QueryService
+	HealthService     *application.HealthService
+	SyncService       *application.SyncService
+	HTTPServer        *httpAdapter.Server
+	TLSServer         *tlsAdapter.Server
+	Watcher           *watcher.Watcher
+	Metrics           *metrics.Collector
+	MetricsServer     *metrics.Server
+	TelemetryProvider *telemetry.Provider // nil when tracing is disabled
+	Tracer            output.Tracer       // never nil; NoOp when tracing is disabled
+}
+
+// tracerProvider returns the underlying OTel TracerProvider for instrumentation
+// libraries (e.g. otelmux) that need it directly. Returns nil when tracing is
+// disabled, signaling to those libraries that they should not install
+// middleware.
+func (a *App) tracerProvider() oteltrace.TracerProvider {
+	if a.TelemetryProvider == nil {
+		return nil
+	}
+	return a.TelemetryProvider.TracerProvider()
 }
 
 // New creates and initializes a new application.
@@ -39,6 +55,33 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*App, er
 	app := &App{
 		Config: cfg,
 		Logger: logger,
+		Tracer: output.NoOpTracer{},
+	}
+
+	// Initialize tracing (must come before HTTP/middleware setup so the
+	// TracerProvider is available downstream).
+	if cfg.Tracing.Enabled {
+		tp, err := telemetry.NewProvider(ctx, telemetry.ProviderOptions{
+			ServiceName: cfg.Tracing.ServiceName,
+			Environment: cfg.Tracing.Environment,
+			Transport:   cfg.Tracing.Transport,
+			Endpoint:    cfg.Tracing.Endpoint,
+			Insecure:    cfg.Tracing.Insecure,
+			Headers:     cfg.Tracing.Headers,
+			SampleRatio: cfg.Tracing.SampleRatio,
+			BufferSize:  cfg.Tracing.BufferSize,
+			ExtraAttrs:  cfg.Tracing.Attributes,
+		}, logger)
+		if err != nil {
+			return nil, fmt.Errorf("initializing tracing: %w", err)
+		}
+		app.TelemetryProvider = tp
+		app.Tracer = telemetry.NewTracer(tp.TracerProvider())
+		logger.Info("tracing enabled",
+			"service", cfg.Tracing.ServiceName,
+			"sample_ratio", cfg.Tracing.SampleRatio,
+			"buffer_size", cfg.Tracing.BufferSize,
+		)
 	}
 
 	// Initialize metrics
@@ -63,22 +106,28 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*App, er
 	if err != nil {
 		return nil, fmt.Errorf("initializing storage: %w", err)
 	}
+	if cfg.Tracing.Enabled {
+		store = storage.NewTracedStorage(store, app.Tracer, cfg.Storage.Type)
+	}
 	app.Storage = store
 
 	// Initialize GeoPackage repository
 	app.Repository = geopackage.NewRepository()
+	app.Repository.SetTracer(app.Tracer)
 
 	// Initialize package registry
 	app.Registry = application.NewPackageRegistry(
 		app.Repository,
 		app.Storage,
 		metricsCollector,
+		app.Tracer,
 		logger,
 		cfg.Storage.LocalPath,
 	)
 
 	// Initialize coordinate transformer
 	transformer := geopackage.NewRepositoryTransformer(app.Repository)
+	transformer.SetTracer(app.Tracer)
 
 	// Initialize query service
 	app.QueryService = application.NewQueryService(
@@ -86,6 +135,7 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*App, er
 		app.Repository,
 		transformer,
 		metricsCollector,
+		app.Tracer,
 		logger,
 		application.QueryServiceConfig{
 			DefaultSRID: cfg.Query.DefaultSRID,
@@ -94,13 +144,14 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*App, er
 	)
 
 	// Initialize health service
-	app.HealthService = application.NewHealthService(app.Registry)
+	app.HealthService = application.NewHealthService(app.Registry, app.Tracer)
 
 	// Initialize sync service (only for remote storage)
 	if cfg.Sync.Enabled && cfg.Storage.Type != config.StorageTypeLocal {
 		app.SyncService = application.NewSyncService(
 			app.Registry,
 			cfg.Sync.Interval,
+			app.Tracer,
 			logger,
 		)
 		logger.Info("sync service configured",
@@ -118,6 +169,10 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*App, er
 		app.SyncService, // May be nil if sync is disabled
 		logger,
 		cfg.Query.WithGeometry,
+		httpAdapter.ServerOptions{
+			TracerProvider: app.tracerProvider(),
+			ServiceName:    cfg.Tracing.ServiceName,
+		},
 	)
 
 	// Initialize TLS server if enabled
@@ -148,7 +203,8 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*App, er
 	if cfg.Storage.Type == config.StorageTypeLocal {
 		w, err := watcher.New(
 			watcher.Config{
-				Paths: []string{cfg.Storage.LocalPath},
+				Paths:  []string{cfg.Storage.LocalPath},
+				Tracer: app.Tracer,
 			},
 			app.handleFileEvent,
 			logger,
@@ -165,21 +221,50 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*App, er
 
 // Start starts all application components.
 func (a *App) Start(ctx context.Context) error {
-	// Load all packages from storage
-	if err := a.Registry.LoadAll(ctx); err != nil {
-		a.Logger.Warn("failed to load packages", "error", err)
-	}
+	startupCtx, startupSpan := a.Tracer.Start(ctx, "App.Startup")
+	startupSpan.SetAttributes(
+		output.String("ortus.storage.type", a.Config.Storage.Type),
+		output.Bool("ortus.tls.enabled", a.Config.TLS.Enabled),
+		output.Bool("ortus.tracing.enabled", a.Config.Tracing.Enabled),
+		output.Bool("ortus.metrics.enabled", a.Config.Metrics.Enabled),
+		output.Bool("ortus.sync.enabled", a.SyncService != nil),
+		output.Bool("ortus.watcher.enabled", a.Watcher != nil),
+	)
 
-	// Start file watcher
+	// Track whether any startup step failed so the span status reflects
+	// real outcome rather than always claiming OK after RecordError.
+	startupOK := true
+
+	// Load all packages from storage
+	if err := a.Registry.LoadAll(startupCtx); err != nil {
+		a.Logger.Warn("failed to load packages", "error", err)
+		startupSpan.RecordError(err)
+		startupOK = false
+	}
+	startupSpan.SetAttributes(output.Int("ortus.packages.loaded", a.Registry.PackageCount()))
+
+	// Start file watcher. Pass the parent ctx (NOT startupCtx) — the
+	// watcher keeps the ctx for the life of the process and uses it as the
+	// parent of every Watcher.handle span. Tying file-event spans to the
+	// startup trace would (a) keep the startup trace eternally unfinalized
+	// in the ring buffer and (b) misleadingly group hot-reload events
+	// under the startup root. File events deserve their own trace roots.
 	if a.Watcher != nil {
 		if err := a.Watcher.Start(ctx); err != nil {
 			a.Logger.Warn("failed to start file watcher", "error", err)
+			startupSpan.RecordError(err)
+			startupOK = false
 		}
 	}
 
 	// Start metrics server in background
 	if a.MetricsServer != nil {
 		go func() {
+			defer func() {
+				if rec := recover(); rec != nil {
+					a.Logger.Error("metrics server panic recovered", "panic", rec)
+				}
+			}()
 			if err := a.MetricsServer.Start(); err != nil && err.Error() != "http: Server closed" {
 				a.Logger.Error("metrics server error", "error", err)
 			}
@@ -191,7 +276,15 @@ func (a *App) Start(ctx context.Context) error {
 		a.SyncService.Start(ctx)
 	}
 
-	// Start server
+	if startupOK {
+		startupSpan.SetStatus(output.StatusOK, "")
+	} else {
+		startupSpan.SetStatus(output.StatusError, "one or more startup steps failed")
+	}
+	startupSpan.End()
+
+	// Start server (long-running — must run outside the startup span so it
+	// doesn't keep the span open for the entire lifetime of the process).
 	if a.Config.TLS.Enabled && a.TLSServer != nil {
 		return a.TLSServer.ListenAndServe(a.Config.Server.Address())
 	}
@@ -200,6 +293,9 @@ func (a *App) Start(ctx context.Context) error {
 
 // Shutdown gracefully shuts down all components.
 func (a *App) Shutdown(ctx context.Context) error {
+	ctx, span := a.Tracer.Start(ctx, "App.Shutdown")
+	defer span.End()
+
 	a.Logger.Info("shutting down application")
 
 	// Stop sync service
@@ -232,23 +328,54 @@ func (a *App) Shutdown(ctx context.Context) error {
 		}
 	}
 
+	// Shutdown metrics provider so the prometheus exporter unregisters.
+	if a.Metrics != nil {
+		if err := a.Metrics.Shutdown(ctx); err != nil {
+			a.Logger.Error("metrics provider shutdown error", "error", err)
+		}
+	}
+
+	// Shutdown telemetry last so spans emitted during shutdown above still
+	// get flushed by the BatchSpanProcessor.
+	if a.TelemetryProvider != nil {
+		if err := a.TelemetryProvider.Shutdown(ctx); err != nil {
+			a.Logger.Error("telemetry shutdown error", "error", err)
+		}
+	}
+
 	return nil
 }
 
 // handleFileEvent handles file system events for hot-reload.
 func (a *App) handleFileEvent(ctx context.Context, event watcher.Event) error {
+	ctx, span := a.Tracer.Start(ctx, "App.handleFileEvent",
+		output.WithAttributes(
+			output.String("watcher.path", event.Path),
+			output.String("watcher.operation", event.Operation.String()),
+		),
+	)
+	defer span.End()
+
 	a.Logger.Info("file event", "path", event.Path, "operation", event.Operation.String())
 
 	switch event.Operation {
 	case watcher.OpCreate, watcher.OpModify:
 		// Reload the package
-		return a.Registry.LoadPackage(ctx, event.Path)
+		if err := a.Registry.LoadPackage(ctx, event.Path); err != nil {
+			span.RecordError(err)
+			span.SetStatus(output.StatusError, "load failed")
+			return err
+		}
+		return nil
 
 	case watcher.OpDelete:
 		// Unload the package by deriving the package ID from the file path
 		packageID := geopackage.DerivePackageID(event.Path)
+		span.SetAttributes(output.String("ortus.package.id", packageID))
 		if err := a.Registry.UnloadPackage(ctx, packageID); err != nil {
 			a.Logger.Warn("failed to unload deleted package", "id", packageID, "error", err)
+			span.RecordError(err)
+			span.SetStatus(output.StatusError, "unload failed")
 		}
 		return nil
 	}

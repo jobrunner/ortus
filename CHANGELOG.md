@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-06-13
+
+### Fixed (review iteration)
+- RingBuffer now finalizes a trace only when its root has ended AND every span has ended, instead of evicting as soon as the root ends (OTel permits children to outlive their parent)
+- RingBuffer `isRoot` detection now also treats spans with remote parents as local roots, so distributed-trace continuations land in the buffer correctly
+- `tracer.sprint()` no longer silently drops unsupported attribute types — handles `error`, `fmt.Stringer`, and falls back to `fmt.Sprintf("%v", v)`
+- `App.Startup` span status now reflects real outcome (Error if any startup step failed); previously always set to OK after `RecordError`
+- `TraceFilter.Status` docstring corrected to match the OTel `codes.Code` casing ("Ok", "Error", "Unset")
+- `--tracing-endpoint` help text and `TracingConfig.Endpoint` comment corrected to describe host:port (no URL parsing happens in the exporter setup)
+
+### Added
+- OpenTelemetry tracing across HTTP, application services, repository, storage, watcher, and sync — every named operation produces a span, enforced by a coverage test
+- In-memory trace-grouped ring buffer with separate FIFO pools for success and error traces (default 256 each); error traces never get evicted by routine successes
+- `ListActive()` snapshot of in-flight spans so hanging operations remain visible (essential for diagnosing things that never finish)
+- `X-Trace-Id` response header on every HTTP response, including 4xx/5xx and panics
+- slog `SpanContextHandler` auto-injects `trace_id` and `span_id` into any `logger.*Context` call that carries a span
+- Panic recovery in background goroutines (watcher event handler, sync scheduler, metrics server) with panic recorded on the active span and full stack via `RecordError`
+- Outbound HTTP instrumentation: `otelhttp` transport for the HTTP storage adapter, `otelaws` middleware for S3, `otelhttp` transport for Azure Blob — retries and per-attempt latency now visible as child spans
+- OTLP exporter error handler routes failures through slog at Warn level and exposes a counter via `telemetry.OTelErrorCount()`
+- New CLI flags: `--tracing`, `--tracing-endpoint`, `--tracing-transport`, `--tracing-sample-ratio` and matching `ORTUS_TRACING_*` env vars + `tracing:` config block
+- `doc/TRACING.md` reference documenting the configuration surface, the span catalogue, and the MCP integration contract
+
+### Changed
+- Prometheus metrics now produced via the OTel meter API and exported in Prometheus format — metric names and labels unchanged, scrape configs keep working
+- Application/domain code depends on a hexagonal `output.Tracer` port rather than OTel directly; the OTel adapter lives in `internal/adapters/telemetry`
+
+### Build
+- Bump CI to Go 1.25.8 and golangci-lint to v2.12.2 to match the toolchain required by the new OpenTelemetry dependencies
+
 ## [0.5.1] - 2025-12-27
 
 ### Fixed

@@ -21,6 +21,7 @@ type PackageRegistry struct {
 	repo      output.GeoPackageRepository
 	storage   output.ObjectStorage
 	metrics   output.MetricsCollector
+	tracer    output.Tracer
 	logger    *slog.Logger
 	localPath string
 }
@@ -36,14 +37,19 @@ func NewPackageRegistry(
 	repo output.GeoPackageRepository,
 	storage output.ObjectStorage,
 	metrics output.MetricsCollector,
+	tracer output.Tracer,
 	logger *slog.Logger,
 	localPath string,
 ) *PackageRegistry {
+	if tracer == nil {
+		tracer = output.NoOpTracer{}
+	}
 	return &PackageRegistry{
 		packages:  make(map[string]*packageEntry),
 		repo:      repo,
 		storage:   storage,
 		metrics:   metrics,
+		tracer:    tracer,
 		logger:    logger,
 		localPath: localPath,
 	}
@@ -51,14 +57,26 @@ func NewPackageRegistry(
 
 // LoadPackage loads a GeoPackage from the given path.
 func (r *PackageRegistry) LoadPackage(ctx context.Context, path string) error {
+	ctx, span := r.tracer.Start(ctx, "PackageRegistry.LoadPackage",
+		output.WithAttributes(output.String("ortus.package.path", path)),
+	)
+	defer span.End()
+
 	r.logger.Info("loading package", "path", path)
 
 	// Open the package
 	pkg, err := r.repo.Open(ctx, path)
 	if err != nil {
 		r.logger.Error("failed to open package", "path", path, "error", err)
+		span.RecordError(err)
+		span.SetStatus(output.StatusError, "open failed")
 		return err
 	}
+
+	span.SetAttributes(
+		output.String("ortus.package.id", pkg.ID),
+		output.Int("ortus.layers.count", len(pkg.Layers)),
+	)
 
 	// Register the package
 	r.mu.Lock()
@@ -73,6 +91,10 @@ func (r *PackageRegistry) LoadPackage(ctx context.Context, path string) error {
 		r.logger.Debug("creating spatial index", "package", pkg.ID, "layer", layer.Name)
 		if err := r.repo.CreateSpatialIndex(ctx, pkg.ID, layer.Name); err != nil {
 			r.logger.Warn("failed to create spatial index", "package", pkg.ID, "layer", layer.Name, "error", err)
+			span.AddEvent("spatial index creation failed",
+				output.String("ortus.layer.name", layer.Name),
+				output.String("error", err.Error()),
+			)
 		}
 	}
 
@@ -87,12 +109,18 @@ func (r *PackageRegistry) LoadPackage(ctx context.Context, path string) error {
 
 	r.updateMetrics()
 	r.logger.Info("package loaded", "id", pkg.ID, "layers", len(pkg.Layers))
+	span.SetStatus(output.StatusOK, "")
 
 	return nil
 }
 
 // UnloadPackage unloads a GeoPackage.
 func (r *PackageRegistry) UnloadPackage(ctx context.Context, packageID string) error {
+	ctx, span := r.tracer.Start(ctx, "PackageRegistry.UnloadPackage",
+		output.WithAttributes(output.String("ortus.package.id", packageID)),
+	)
+	defer span.End()
+
 	r.logger.Info("unloading package", "id", packageID)
 
 	r.mu.Lock()
@@ -103,6 +131,8 @@ func (r *PackageRegistry) UnloadPackage(ctx context.Context, packageID string) e
 
 	if err := r.repo.Close(ctx, packageID); err != nil {
 		r.logger.Error("failed to close package", "id", packageID, "error", err)
+		span.RecordError(err)
+		span.SetStatus(output.StatusError, "close failed")
 		return err
 	}
 
@@ -111,11 +141,15 @@ func (r *PackageRegistry) UnloadPackage(ctx context.Context, packageID string) e
 	r.mu.Unlock()
 
 	r.updateMetrics()
+	span.SetStatus(output.StatusOK, "")
 	return nil
 }
 
 // ListPackages returns all registered GeoPackages.
-func (r *PackageRegistry) ListPackages(_ context.Context) ([]domain.GeoPackage, error) {
+func (r *PackageRegistry) ListPackages(ctx context.Context) ([]domain.GeoPackage, error) {
+	_, span := r.tracer.Start(ctx, "PackageRegistry.ListPackages")
+	defer span.End()
+
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -124,16 +158,24 @@ func (r *PackageRegistry) ListPackages(_ context.Context) ([]domain.GeoPackage, 
 		packages = append(packages, *entry.Package)
 	}
 
+	span.SetAttributes(output.Int("ortus.packages.count", len(packages)))
 	return packages, nil
 }
 
 // GetPackage returns a specific GeoPackage by ID.
-func (r *PackageRegistry) GetPackage(_ context.Context, id string) (*domain.GeoPackage, error) {
+func (r *PackageRegistry) GetPackage(ctx context.Context, id string) (*domain.GeoPackage, error) {
+	_, span := r.tracer.Start(ctx, "PackageRegistry.GetPackage",
+		output.WithAttributes(output.String("ortus.package.id", id)),
+	)
+	defer span.End()
+
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
 	entry, ok := r.packages[id]
 	if !ok {
+		span.RecordError(domain.ErrPackageNotFound)
+		span.SetStatus(output.StatusError, "package not found")
 		return nil, domain.ErrPackageNotFound
 	}
 
@@ -141,15 +183,23 @@ func (r *PackageRegistry) GetPackage(_ context.Context, id string) (*domain.GeoP
 }
 
 // GetPackageStatus returns the status of a GeoPackage.
-func (r *PackageRegistry) GetPackageStatus(_ context.Context, id string) (domain.GeoPackageStatus, error) {
+func (r *PackageRegistry) GetPackageStatus(ctx context.Context, id string) (domain.GeoPackageStatus, error) {
+	_, span := r.tracer.Start(ctx, "PackageRegistry.GetPackageStatus",
+		output.WithAttributes(output.String("ortus.package.id", id)),
+	)
+	defer span.End()
+
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
 	entry, ok := r.packages[id]
 	if !ok {
+		span.RecordError(domain.ErrPackageNotFound)
+		span.SetStatus(output.StatusError, "package not found")
 		return "", domain.ErrPackageNotFound
 	}
 
+	span.SetAttributes(output.String("ortus.package.status", string(entry.Status)))
 	return entry.Status, nil
 }
 
@@ -198,26 +248,43 @@ func (r *PackageRegistry) updateMetrics() {
 
 // LoadAll loads all GeoPackages from storage.
 func (r *PackageRegistry) LoadAll(ctx context.Context) error {
+	ctx, span := r.tracer.Start(ctx, "PackageRegistry.LoadAll")
+	defer span.End()
+
 	r.logger.Info("loading all packages from storage")
 
 	objects, err := r.storage.List(ctx)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(output.StatusError, "storage list failed")
 		return err
 	}
 
+	span.SetAttributes(output.Int("ortus.storage.objects", len(objects)))
+
+	loaded, failed := 0, 0
 	for _, obj := range objects {
 		// Download to local path using filepath.Join for consistent path handling
 		localPath := filepath.Join(r.localPath, obj.Key)
 		if err := r.storage.Download(ctx, obj.Key, localPath); err != nil {
 			r.logger.Error("failed to download package", "key", obj.Key, "error", err)
+			failed++
 			continue
 		}
 
 		if err := r.LoadPackage(ctx, localPath); err != nil {
 			r.logger.Error("failed to load package", "path", localPath, "error", err)
+			failed++
+			continue
 		}
+		loaded++
 	}
 
+	span.SetAttributes(
+		output.Int("ortus.packages.loaded", loaded),
+		output.Int("ortus.packages.failed", failed),
+	)
+	span.SetStatus(output.StatusOK, "")
 	return nil
 }
 
@@ -246,10 +313,15 @@ type SyncStats struct {
 // packages that no longer exist in remote storage.
 // Returns statistics about added and removed packages.
 func (r *PackageRegistry) Sync(ctx context.Context) (SyncStats, error) {
+	ctx, span := r.tracer.Start(ctx, "PackageRegistry.Sync")
+	defer span.End()
+
 	r.logger.Info("syncing packages from storage")
 
 	objects, err := r.storage.List(ctx)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(output.StatusError, "storage list failed")
 		return SyncStats{}, err
 	}
 
@@ -311,6 +383,12 @@ func (r *PackageRegistry) Sync(ctx context.Context) (SyncStats, error) {
 	}
 
 	r.logger.Info("sync completed", "added", stats.Added, "removed", stats.Removed, "total", r.PackageCount())
+	span.SetAttributes(
+		output.Int("ortus.sync.added", stats.Added),
+		output.Int("ortus.sync.removed", stats.Removed),
+		output.Int("ortus.packages.total", r.PackageCount()),
+	)
+	span.SetStatus(output.StatusOK, "")
 	return stats, nil
 }
 

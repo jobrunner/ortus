@@ -104,6 +104,8 @@ linters:
           - gosec
           - gocyclo
           - gocognit
+          - goconst   # Tests legitimately repeat literals
+          - noctx     # httptest.NewRequest is the conventional helper in tests
 
       # main.go darf globale Variablen haben
       - path: main\.go
@@ -112,6 +114,13 @@ linters:
       # Allow http package name in adapters (intentional)
       - path: internal/adapters/http/
         text: "avoid package names that conflict"
+
+      # HTTP adapter freely uses string literals as slog/JSON keys ("status",
+      # "path", "name", ...). Promoting these to constants adds clutter
+      # without semantic value — slog APIs take strings by design.
+      - path: internal/adapters/http/
+        linters:
+          - goconst
 
 output:
   show-stats: true

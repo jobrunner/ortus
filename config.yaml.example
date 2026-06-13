@@ -87,3 +87,20 @@ metrics:
 logging:
   level: "info"  # debug, info, warn, error
   format: "json"  # json, text
+
+# OpenTelemetry tracing configuration.
+# When enabled, spans are kept in an in-memory ring buffer (for the MCP server
+# to query directly) and, if endpoint is set, also exported via OTLP.
+tracing:
+  enabled: false
+  service_name: "ortus"
+  environment: ""           # e.g., "dev", "staging", "prod"
+  endpoint: ""              # OTLP collector endpoint as host:port (no scheme — passed verbatim to otlptracehttp/grpc.WithEndpoint)
+  transport: "http"         # http | grpc
+  insecure: true            # disable TLS to the collector
+  sample_ratio: 1.0         # 0.0..1.0; 1.0 = AlwaysOn, 0.0 = NeverSample
+  buffer_size: 256          # number of traces retained in memory for MCP queries
+  # headers:                # optional OTLP headers (auth tokens etc.)
+  #   Authorization: "Bearer <token>"
+  # attributes:             # static resource attributes
+  #   cluster: "prod-eu"

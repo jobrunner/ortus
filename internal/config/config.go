@@ -26,6 +26,7 @@ type Config struct {
 	Metrics MetricsConfig `mapstructure:"metrics"`
 	Logging LoggingConfig `mapstructure:"logging"`
 	Sync    SyncConfig    `mapstructure:"sync"`
+	Tracing TracingConfig `mapstructure:"tracing"`
 }
 
 // ServerConfig holds HTTP server configuration.
@@ -139,6 +140,26 @@ type SyncConfig struct {
 	Interval time.Duration `mapstructure:"interval"` // e.g., "1h", "24h", "30m"
 }
 
+// TracingTransport selects the OTLP transport (http/protobuf or grpc).
+const (
+	TracingTransportHTTP = "http"
+	TracingTransportGRPC = "grpc"
+)
+
+// TracingConfig holds OpenTelemetry tracing configuration.
+type TracingConfig struct {
+	Enabled     bool              `mapstructure:"enabled"`
+	ServiceName string            `mapstructure:"service_name"`
+	Environment string            `mapstructure:"environment"`  // e.g., "dev", "prod" — sets deployment.environment.name
+	Endpoint    string            `mapstructure:"endpoint"`     // OTLP collector endpoint as host:port; passed verbatim to otlptracehttp.WithEndpoint / otlptracegrpc.WithEndpoint
+	Transport   string            `mapstructure:"transport"`    // "http" or "grpc"
+	Insecure    bool              `mapstructure:"insecure"`     // disable TLS to the collector
+	Headers     map[string]string `mapstructure:"headers"`      // OTLP exporter headers (e.g., auth tokens)
+	SampleRatio float64           `mapstructure:"sample_ratio"` // 0.0..1.0; >=1.0 => AlwaysOn, <=0 => NeverSample, else ratio-based (parent-respecting)
+	BufferSize  int               `mapstructure:"buffer_size"`  // number of traces retained in the in-memory ring buffer for MCP queries
+	Attributes  map[string]string `mapstructure:"attributes"`   // additional static resource attributes
+}
+
 // Defaults sets the default configuration values.
 func Defaults() {
 	// Server defaults
@@ -183,6 +204,16 @@ func Defaults() {
 	// Sync defaults
 	viper.SetDefault("sync.enabled", false)
 	viper.SetDefault("sync.interval", time.Hour)
+
+	// Tracing defaults
+	viper.SetDefault("tracing.enabled", false)
+	viper.SetDefault("tracing.service_name", "ortus")
+	viper.SetDefault("tracing.environment", "")
+	viper.SetDefault("tracing.endpoint", "")
+	viper.SetDefault("tracing.transport", TracingTransportHTTP)
+	viper.SetDefault("tracing.insecure", true)
+	viper.SetDefault("tracing.sample_ratio", 1.0)
+	viper.SetDefault("tracing.buffer_size", 256)
 }
 
 // Load loads configuration from environment and config file.
@@ -232,7 +263,29 @@ func (c *Config) Validate() error {
 	if err := c.validateTLS(); err != nil {
 		return err
 	}
-	return c.validateStorage()
+	if err := c.validateStorage(); err != nil {
+		return err
+	}
+	return c.validateTracing()
+}
+
+func (c *Config) validateTracing() error {
+	if !c.Tracing.Enabled {
+		return nil
+	}
+	switch c.Tracing.Transport {
+	case "", TracingTransportHTTP, TracingTransportGRPC:
+		// ok
+	default:
+		return fmt.Errorf("invalid tracing transport %q (expected %q or %q)", c.Tracing.Transport, TracingTransportHTTP, TracingTransportGRPC)
+	}
+	if c.Tracing.BufferSize < 0 {
+		return fmt.Errorf("tracing.buffer_size must be >= 0, got %d", c.Tracing.BufferSize)
+	}
+	if c.Tracing.SampleRatio < 0 || c.Tracing.SampleRatio > 1 {
+		return fmt.Errorf("tracing.sample_ratio must be in [0, 1], got %f", c.Tracing.SampleRatio)
+	}
+	return nil
 }
 
 func (c *Config) validateServer() error {

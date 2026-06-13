@@ -3,6 +3,7 @@ package watcher
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"path/filepath"
 	"strings"
@@ -10,6 +11,8 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+
+	"github.com/jobrunner/ortus/internal/ports/output"
 )
 
 // Event represents a file system event.
@@ -56,6 +59,7 @@ type Watcher struct {
 	fsWatcher *fsnotify.Watcher
 	handler   Handler
 	logger    *slog.Logger
+	tracer    output.Tracer
 	paths     []string
 	debounce  time.Duration
 	mu        sync.Mutex
@@ -66,6 +70,7 @@ type Watcher struct {
 type Config struct {
 	Paths    []string
 	Debounce time.Duration
+	Tracer   output.Tracer // optional; defaults to NoOp
 }
 
 // New creates a new file watcher.
@@ -79,10 +84,16 @@ func New(cfg Config, handler Handler, logger *slog.Logger) (*Watcher, error) {
 		cfg.Debounce = 500 * time.Millisecond
 	}
 
+	tracer := cfg.Tracer
+	if tracer == nil {
+		tracer = output.NoOpTracer{}
+	}
+
 	return &Watcher{
 		fsWatcher: fsWatcher,
 		handler:   handler,
 		logger:    logger,
+		tracer:    tracer,
 		paths:     cfg.Paths,
 		debounce:  cfg.Debounce,
 		pending:   make(map[string]*pendingEvent),
@@ -233,14 +244,38 @@ func (w *Watcher) processPending(ctx context.Context) {
 			"operation", pending.op.String(),
 		)
 
-		// Call handler in goroutine to not block
+		// Call handler in goroutine to not block. The handler runs under a
+		// fresh root span — file events have no parent request context, so
+		// this span is the trace root that any downstream LoadPackage /
+		// UnloadPackage spans hang off.
 		go func(e Event) {
-			if err := w.handler(ctx, e); err != nil {
+			spanCtx, span := w.tracer.Start(ctx, "Watcher.handle",
+				output.WithAttributes(
+					output.String("watcher.path", e.Path),
+					output.String("watcher.operation", e.Operation.String()),
+				),
+			)
+			defer span.End()
+			defer func() {
+				if rec := recover(); rec != nil {
+					w.logger.Error("watcher handler panicked",
+						"path", e.Path,
+						"operation", e.Operation.String(),
+						"panic", rec,
+					)
+					span.RecordError(fmt.Errorf("panic: %v", rec))
+					span.SetStatus(output.StatusError, "handler panicked")
+				}
+			}()
+
+			if err := w.handler(spanCtx, e); err != nil {
 				w.logger.Error("handler error",
 					"path", e.Path,
 					"operation", e.Operation.String(),
 					"error", err,
 				)
+				span.RecordError(err)
+				span.SetStatus(output.StatusError, "handler failed")
 			}
 		}(event)
 	}

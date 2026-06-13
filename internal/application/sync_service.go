@@ -4,9 +4,12 @@ package application
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
+
+	"github.com/jobrunner/ortus/internal/ports/output"
 )
 
 // ErrRateLimited is returned when the sync API rate limit is exceeded.
@@ -26,6 +29,7 @@ type SyncService struct {
 	registry *PackageRegistry
 	interval time.Duration
 	logger   *slog.Logger
+	tracer   output.Tracer
 
 	// Lifecycle management
 	stopCh chan struct{}
@@ -44,11 +48,15 @@ type SyncService struct {
 }
 
 // NewSyncService creates a new sync service.
-func NewSyncService(registry *PackageRegistry, interval time.Duration, logger *slog.Logger) *SyncService {
+func NewSyncService(registry *PackageRegistry, interval time.Duration, tracer output.Tracer, logger *slog.Logger) *SyncService {
+	if tracer == nil {
+		tracer = output.NoOpTracer{}
+	}
 	return &SyncService{
 		registry: registry,
 		interval: interval,
 		logger:   logger,
+		tracer:   tracer,
 		stopCh:   make(chan struct{}),
 		// Initialize to past time to allow immediate first API call
 		lastAPISync: time.Now().Add(-31 * time.Second),
@@ -63,7 +71,9 @@ func (s *SyncService) Start(ctx context.Context) {
 	go s.run(ctx)
 }
 
-// run is the main sync loop.
+// run is the main sync loop. Wrapped with panic recovery so a single tick's
+// failure can't take down the whole process — instead the panic is recorded
+// on a span and the loop continues.
 func (s *SyncService) run(ctx context.Context) {
 	defer s.wg.Done()
 
@@ -112,7 +122,23 @@ func (s *SyncService) TriggerSync(ctx context.Context) (SyncResult, error) {
 }
 
 // doSync performs the sync operation without returning detailed results.
+// It is called from the scheduled-tick goroutine and includes panic recovery
+// so a single tick's failure can't take down the loop. defer order matters:
+// span.End() is registered first (runs last); the recover defer is registered
+// second (runs first) so it can write the panic onto the span before End().
 func (s *SyncService) doSync(ctx context.Context) {
+	ctx, span := s.tracer.Start(ctx, "SyncService.doSync",
+		output.WithAttributes(output.String("sync.trigger", "scheduled")),
+	)
+	defer span.End()
+	defer func() {
+		if rec := recover(); rec != nil {
+			s.logger.Error("sync panic recovered", "panic", rec)
+			span.RecordError(fmt.Errorf("panic: %v", rec))
+			span.SetStatus(output.StatusError, "sync panicked")
+		}
+	}()
+
 	// Prevent concurrent sync operations
 	s.syncOpMutex.Lock()
 	defer s.syncOpMutex.Unlock()
@@ -120,6 +146,8 @@ func (s *SyncService) doSync(ctx context.Context) {
 	stats, err := s.registry.Sync(ctx)
 	if err != nil {
 		s.logger.Error("sync failed", "error", err)
+		span.RecordError(err)
+		span.SetStatus(output.StatusError, "registry sync failed")
 		return
 	}
 	s.logger.Info("sync completed",
@@ -127,18 +155,38 @@ func (s *SyncService) doSync(ctx context.Context) {
 		"removed", stats.Removed,
 		"total", s.registry.PackageCount(),
 	)
+	span.SetAttributes(
+		output.Int("sync.added", stats.Added),
+		output.Int("sync.removed", stats.Removed),
+		output.Int("sync.total", s.registry.PackageCount()),
+	)
+	span.SetStatus(output.StatusOK, "")
 }
 
 // doSyncWithResult performs the sync operation and returns detailed results.
 func (s *SyncService) doSyncWithResult(ctx context.Context) (SyncResult, error) {
+	ctx, span := s.tracer.Start(ctx, "SyncService.doSyncWithResult",
+		output.WithAttributes(output.String("sync.trigger", "manual")),
+	)
+	defer span.End()
+
 	// Prevent concurrent sync operations
 	s.syncOpMutex.Lock()
 	defer s.syncOpMutex.Unlock()
 
 	stats, err := s.registry.Sync(ctx)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(output.StatusError, "registry sync failed")
 		return SyncResult{}, err
 	}
+
+	span.SetAttributes(
+		output.Int("sync.added", stats.Added),
+		output.Int("sync.removed", stats.Removed),
+		output.Int("sync.total", s.registry.PackageCount()),
+	)
+	span.SetStatus(output.StatusOK, "")
 
 	return SyncResult{
 		PackagesAdded:   stats.Added,

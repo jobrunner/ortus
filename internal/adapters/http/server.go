@@ -3,11 +3,15 @@ package http //nolint:revive // package name conflicts with stdlib but is accept
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/gorilla/mux"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gorilla/mux/otelmux"
+	otelcodes "go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/jobrunner/ortus/internal/application"
 	"github.com/jobrunner/ortus/internal/config"
@@ -15,15 +19,24 @@ import (
 
 // Server wraps the HTTP server with application handlers.
 type Server struct {
-	server       *http.Server
-	router       *mux.Router
-	queryService *application.QueryService
-	registry     *application.PackageRegistry
-	health       *application.HealthService
-	syncService  *application.SyncService
-	logger       *slog.Logger
-	config       config.ServerConfig
-	withGeometry bool // Include geometry in query results
+	server         *http.Server
+	router         *mux.Router
+	queryService   *application.QueryService
+	registry       *application.PackageRegistry
+	health         *application.HealthService
+	syncService    *application.SyncService
+	logger         *slog.Logger
+	config         config.ServerConfig
+	withGeometry   bool                 // Include geometry in query results
+	tracerProvider trace.TracerProvider // Used by otelmux middleware; may be nil
+	serviceName    string               // Used as otelmux service name; defaults to "ortus"
+}
+
+// ServerOptions wraps optional dependencies the HTTP server can use, such as
+// the OTel TracerProvider for request-level tracing.
+type ServerOptions struct {
+	TracerProvider trace.TracerProvider
+	ServiceName    string
 }
 
 // NewServer creates a new HTTP server.
@@ -35,15 +48,23 @@ func NewServer(
 	syncService *application.SyncService,
 	logger *slog.Logger,
 	withGeometry bool,
+	opts ServerOptions,
 ) *Server {
+	serviceName := opts.ServiceName
+	if serviceName == "" {
+		serviceName = "ortus"
+	}
+
 	s := &Server{
-		queryService: queryService,
-		registry:     registry,
-		health:       health,
-		syncService:  syncService,
-		logger:       logger,
-		config:       cfg,
-		withGeometry: withGeometry,
+		queryService:   queryService,
+		registry:       registry,
+		health:         health,
+		syncService:    syncService,
+		logger:         logger,
+		config:         cfg,
+		withGeometry:   withGeometry,
+		tracerProvider: opts.TracerProvider,
+		serviceName:    serviceName,
 	}
 
 	s.router = s.setupRoutes()
@@ -62,7 +83,24 @@ func NewServer(
 func (s *Server) setupRoutes() *mux.Router {
 	r := mux.NewRouter()
 
-	// Add middleware
+	// Tracing middleware MUST run first so subsequent middleware (logging,
+	// CORS, handlers) sees the span context. The instrumentation uses the
+	// matched mux route as span name (e.g. "GET /api/v1/query/{packageId}"),
+	// which keeps cardinality low.
+	if s.tracerProvider != nil {
+		r.Use(otelmux.Middleware(
+			s.serviceName,
+			otelmux.WithTracerProvider(s.tracerProvider),
+		))
+	}
+
+	// Add middleware. traceIDHeader runs immediately after the tracing
+	// middleware so every response — including errors from later middleware
+	// or panics caught by recovery — carries an X-Trace-Id the user can
+	// quote when reporting issues.
+	if s.tracerProvider != nil {
+		r.Use(s.traceIDHeaderMiddleware)
+	}
 	r.Use(s.loggingMiddleware)
 	r.Use(s.recoveryMiddleware)
 
@@ -123,7 +161,27 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	return s.server.Shutdown(ctx)
 }
 
-// loggingMiddleware logs incoming requests.
+// traceIDHeaderMiddleware writes the active trace id to X-Trace-Id on every
+// response. Users reporting "GET /api/v1/query returned 500" can quote this
+// id and the MCP server can pull the full trace from the ring buffer.
+//
+// The header must be written BEFORE the handler calls WriteHeader. We set
+// it up-front (before calling next.ServeHTTP); since net/http only flushes
+// the response headers on the first body write or explicit WriteHeader,
+// any handler-set X-Trace-Id arrives at the client.
+func (s *Server) traceIDHeaderMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sc := trace.SpanContextFromContext(r.Context())
+		if sc.IsValid() {
+			w.Header().Set("X-Trace-Id", sc.TraceID().String())
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// loggingMiddleware logs incoming requests, enriched with trace_id when a
+// span is present so log lines can be correlated with traces in the buffer
+// or in the OTLP backend.
 func (s *Server) loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -133,22 +191,34 @@ func (s *Server) loggingMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(wrapped, r)
 
-		s.logger.Info("request",
+		fields := []any{
 			"method", r.Method,
 			"path", r.URL.Path,
 			"status", wrapped.statusCode,
 			"duration", time.Since(start),
 			"remote_addr", r.RemoteAddr,
-		)
+		}
+		if sc := trace.SpanContextFromContext(r.Context()); sc.IsValid() {
+			fields = append(fields, "trace_id", sc.TraceID().String(), "span_id", sc.SpanID().String())
+		}
+		s.logger.Info("request", fields...)
 	})
 }
 
-// recoveryMiddleware recovers from panics.
+// recoveryMiddleware recovers from panics and records them on the active span
+// so panics are visible in the trace timeline alongside the request.
 func (s *Server) recoveryMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if err := recover(); err != nil {
-				s.logger.Error("panic recovered", "error", err, "path", r.URL.Path)
+				fields := []any{"error", err, "path", r.URL.Path}
+				if sc := trace.SpanContextFromContext(r.Context()); sc.IsValid() {
+					fields = append(fields, "trace_id", sc.TraceID().String())
+					span := trace.SpanFromContext(r.Context())
+					span.RecordError(fmt.Errorf("panic: %v", err), trace.WithStackTrace(true))
+					span.SetStatus(otelcodes.Error, "panic recovered")
+				}
+				s.logger.Error("panic recovered", fields...)
 				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 			}
 		}()

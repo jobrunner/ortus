@@ -110,16 +110,18 @@ func newTestServer(_ *mockQueryService, _ *mockPackageRegistry, _ *mockHealthSer
 		&mockRepository{},
 		&mockStorage{},
 		&output.NoOpMetrics{},
+		output.NoOpTracer{},
 		logger,
 		"/tmp",
 	)
 
-	realHealth := application.NewHealthService(realRegistry)
+	realHealth := application.NewHealthService(realRegistry, output.NoOpTracer{})
 	realQuery := application.NewQueryService(
 		realRegistry,
 		&mockRepository{},
 		nil,
 		&output.NoOpMetrics{},
+		output.NoOpTracer{},
 		logger,
 		application.QueryServiceConfig{},
 	)
@@ -138,6 +140,7 @@ func newTestServer(_ *mockQueryService, _ *mockPackageRegistry, _ *mockHealthSer
 		nil, // No sync service for tests
 		logger,
 		false,
+		ServerOptions{},
 	)
 
 	return srv
