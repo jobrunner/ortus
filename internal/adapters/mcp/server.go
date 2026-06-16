@@ -19,6 +19,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -79,7 +80,15 @@ func New(opts Options, deps Deps, logger *slog.Logger) *Server {
 		func(_ *http.Request) *mcp.Server { return srv },
 		&mcp.StreamableHTTPOptions{Logger: logger},
 	)
-	mux.Handle(opts.Path, bearerAuthMiddleware(opts.Token, streamHandler))
+	wrapped := bearerAuthMiddleware(opts.Token, streamHandler)
+	// Register both the exact path and the trailing-slash variant.
+	// Otherwise net/http.ServeMux issues a 301 redirect from /mcp/ to
+	// /mcp, which some MCP clients can't follow (POST body / Auth
+	// header may be dropped on redirect).
+	mux.Handle(opts.Path, wrapped)
+	if opts.Path != "/" && !strings.HasSuffix(opts.Path, "/") {
+		mux.Handle(opts.Path+"/", wrapped)
+	}
 
 	// net.JoinHostPort handles IPv6 literals correctly: ::1 + 9091 →
 	// "[::1]:9091", not "::1:9091". fmt.Sprintf would silently produce an

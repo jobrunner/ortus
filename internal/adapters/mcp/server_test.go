@@ -44,7 +44,10 @@ type stubStorage struct{}
 func (stubStorage) List(_ context.Context) ([]output.StorageObject, error) { return nil, nil }
 func (stubStorage) Download(_ context.Context, _, _ string) error          { return nil }
 func (stubStorage) GetReader(_ context.Context, _ string) (io.ReadCloser, error) {
-	return nil, nil
+	// Returning (nil, nil) would violate the ObjectStorage contract and
+	// crash any caller that tries to defer Close. The MCP tests don't
+	// exercise this path, but be safe.
+	return io.NopCloser(strings.NewReader("")), nil
 }
 func (stubStorage) Exists(_ context.Context, _ string) (bool, error) { return false, nil }
 

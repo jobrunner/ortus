@@ -259,6 +259,17 @@ func runMCPStdio(_ *cobra.Command, _ []string) error {
 	if err != nil {
 		return fmt.Errorf("initializing application: %w", err)
 	}
+	// Graceful shutdown on exit (incl. SIGINT/SIGTERM). Without this, the
+	// tracing BatchSpanProcessor and metrics PeriodicReader wouldn't flush
+	// their final batch and SQLite connections would leak.
+	defer func() {
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), cfg.Server.ShutdownTimeout)
+		defer shutdownCancel()
+		if err := application.Shutdown(shutdownCtx); err != nil {
+			logger.Error("shutdown error", "error", err)
+		}
+	}()
+
 	// Load packages so query tools see real data. We deliberately do NOT
 	// call application.Start() — that would also start the HTTP server.
 	if err := application.Registry.LoadAll(ctx); err != nil {
