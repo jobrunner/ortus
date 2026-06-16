@@ -288,7 +288,7 @@ func setupStderrLogger(cfg config.LoggingConfig) *slog.Logger {
 	return slog.New(telemetry.NewSpanContextHandler(buildHandler(cfg, os.Stderr)))
 }
 
-// buildHandler centralises the slog.Handler construction shared by
+// buildHandler centralizes the slog.Handler construction shared by
 // setupLogger (stdout) and setupStderrLogger (stderr) so they never
 // drift on level parsing or timestamp formatting.
 func buildHandler(cfg config.LoggingConfig, w io.Writer) slog.Handler {
