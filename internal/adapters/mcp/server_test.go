@@ -114,7 +114,7 @@ func TestBearerAuth_RejectsBadToken(t *testing.T) {
 			if err != nil {
 				t.Fatalf("do: %v", err)
 			}
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 			if resp.StatusCode != tc.wantStatus {
 				t.Errorf("status = %d, want %d", resp.StatusCode, tc.wantStatus)
 			}

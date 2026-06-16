@@ -317,39 +317,7 @@ func (a *App) Start(ctx context.Context) error {
 		}
 	}
 
-	// Start metrics server in background
-	if a.MetricsServer != nil {
-		go func() {
-			defer func() {
-				if rec := recover(); rec != nil {
-					a.Logger.Error("metrics server panic recovered", "panic", rec)
-				}
-			}()
-			if err := a.MetricsServer.Start(); err != nil && err.Error() != "http: Server closed" {
-				a.Logger.Error("metrics server error", "error", err)
-			}
-		}()
-	}
-
-	// Start sync service in background
-	if a.SyncService != nil {
-		a.SyncService.Start(ctx)
-	}
-
-	// Start MCP server in background (own port + its own panic guard, so a
-	// runaway MCP client can't take the main HTTP server with it).
-	if a.MCPServer != nil {
-		go func() {
-			defer func() {
-				if rec := recover(); rec != nil {
-					a.Logger.Error("MCP server panic recovered", "panic", rec)
-				}
-			}()
-			if err := a.MCPServer.Run(); err != nil {
-				a.Logger.Error("MCP server error", "error", err)
-			}
-		}()
-	}
+	a.startBackgroundServers(ctx)
 
 	if startupOK {
 		startupSpan.SetStatus(output.StatusOK, "")
@@ -364,6 +332,44 @@ func (a *App) Start(ctx context.Context) error {
 		return a.TLSServer.ListenAndServe(a.Config.Server.Address())
 	}
 	return a.HTTPServer.Start()
+}
+
+// startBackgroundServers spins up the long-running goroutines (metrics
+// scrape endpoint, sync ticker, MCP server). Each one has its own panic
+// recovery so a runaway in one doesn't take the others down. Extracted
+// from Start() for cognitive-complexity reasons — Start was at gocognit 26.
+func (a *App) startBackgroundServers(ctx context.Context) {
+	if a.MetricsServer != nil {
+		go func() {
+			defer func() {
+				if rec := recover(); rec != nil {
+					a.Logger.Error("metrics server panic recovered", "panic", rec)
+				}
+			}()
+			if err := a.MetricsServer.Start(); err != nil && err.Error() != "http: Server closed" {
+				a.Logger.Error("metrics server error", "error", err)
+			}
+		}()
+	}
+
+	if a.SyncService != nil {
+		a.SyncService.Start(ctx)
+	}
+
+	// MCP server has its own port + its own panic guard, so a runaway
+	// MCP client can't take the main HTTP server with it.
+	if a.MCPServer != nil {
+		go func() {
+			defer func() {
+				if rec := recover(); rec != nil {
+					a.Logger.Error("MCP server panic recovered", "panic", rec)
+				}
+			}()
+			if err := a.MCPServer.Run(); err != nil {
+				a.Logger.Error("MCP server error", "error", err)
+			}
+		}()
+	}
 }
 
 // Shutdown gracefully shuts down all components.

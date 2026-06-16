@@ -294,7 +294,7 @@ func Load(configPath string) (*Config, error) {
 
 	// Secrets that should NEVER be in a config file get loaded from env
 	// directly so they don't get printed by `viper.Debug()` / leaked into
-	// a marshalled config dump.
+	// a marshaled config dump.
 	cfg.MCP.Token = os.Getenv("ORTUS_MCP_TOKEN")
 
 	if err := cfg.Validate(); err != nil {

@@ -68,7 +68,7 @@ var versionCmd = &cobra.Command{
 // mcpCmd starts ortus in MCP-stdio mode: same tool surface as the HTTP
 // MCP endpoint, but over stdin/stdout. Use this from Claude Desktop's
 // mcpServers config to talk to a local instance without exposing an HTTP
-// port. Storage + tracing are initialised exactly as in serve mode so
+// port. Storage + tracing are initialized exactly as in serve mode so
 // the agent gets the same view.
 var mcpCmd = &cobra.Command{
 	Use:   "mcp",

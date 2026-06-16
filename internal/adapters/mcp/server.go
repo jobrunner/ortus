@@ -161,7 +161,6 @@ type (
 	toolCtx       = context.Context
 	callRequest   = mcp.CallToolRequest
 	callResult    = mcp.CallToolResult
-	textContent   = mcp.TextContent
 	queryRequest  = domain.QueryRequest
 	queryResponse = domain.QueryResponse
 	coordinate    = domain.Coordinate
