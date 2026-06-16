@@ -22,15 +22,17 @@ func registerQueryTools(srv *mcp.Server, deps Deps, logger *slog.Logger) {
 // ---- query_point ----------------------------------------------------------
 
 type queryPointIn struct {
-	// Either lon/lat (WGS84 shortcut) OR x/y+srid must be supplied. Pointer
-	// fields so we can distinguish "omitted" from a legitimate 0 (e.g. on
-	// the equator or the Greenwich meridian). lon/lat wins when both pairs
-	// are present.
+	// Either the lon/lat pair (WGS84 shortcut) OR the x/y pair must be
+	// supplied. `srid` is always optional and defaults to 4326 (WGS84)
+	// when omitted — provide it when the x/y values are in a different
+	// projection. Pointer fields so we can distinguish "omitted" from a
+	// legitimate 0 (e.g. on the equator or the Greenwich meridian).
+	// lon/lat wins when both pairs are present.
 	Lon        *float64 `json:"lon,omitempty" jsonschema:"longitude in WGS84 (EPSG:4326); pair with 'lat'"`
 	Lat        *float64 `json:"lat,omitempty" jsonschema:"latitude in WGS84 (EPSG:4326); pair with 'lon'"`
-	X          *float64 `json:"x,omitempty" jsonschema:"easting in the given SRID; pair with 'y' and 'srid'"`
-	Y          *float64 `json:"y,omitempty" jsonschema:"northing in the given SRID; pair with 'x' and 'srid'"`
-	SRID       int      `json:"srid,omitempty" jsonschema:"spatial reference id for x/y (default 4326 / WGS84)"`
+	X          *float64 `json:"x,omitempty" jsonschema:"easting in the given SRID; pair with 'y'"`
+	Y          *float64 `json:"y,omitempty" jsonschema:"northing in the given SRID; pair with 'x'"`
+	SRID       int      `json:"srid,omitempty" jsonschema:"spatial reference id for x/y; defaults to 4326 (WGS84) when omitted"`
 	Properties []string `json:"properties,omitempty" jsonschema:"if set, returned features include only these property keys"`
 	PackageID  string   `json:"package_id,omitempty" jsonschema:"if set, query only this single package instead of all loaded packages"`
 }

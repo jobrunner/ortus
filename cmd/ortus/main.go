@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -212,40 +213,12 @@ func runServer(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
+// setupLogger constructs the default stdout-writing logger used by
+// `serve` mode. The handler is wrapped with a span-context injector so
+// any slog.*Context call carrying a traced ctx auto-includes
+// trace_id/span_id (cheap no-op when ctx has no span).
 func setupLogger(cfg config.LoggingConfig) *slog.Logger {
-	var level slog.Level
-	switch cfg.Level {
-	case "debug":
-		level = slog.LevelDebug
-	case "warn":
-		level = slog.LevelWarn
-	case "error":
-		level = slog.LevelError
-	default:
-		level = slog.LevelInfo
-	}
-
-	opts := &slog.HandlerOptions{
-		Level: level,
-		ReplaceAttr: func(_ []string, a slog.Attr) slog.Attr {
-			if a.Key == slog.TimeKey {
-				a.Value = slog.StringValue(time.Now().UTC().Format(time.RFC3339))
-			}
-			return a
-		},
-	}
-
-	var handler slog.Handler
-	if cfg.Format == "text" {
-		handler = slog.NewTextHandler(os.Stdout, opts)
-	} else {
-		handler = slog.NewJSONHandler(os.Stdout, opts)
-	}
-
-	// Wrap with span-context injector so any slog.*Context call carrying a
-	// traced ctx auto-includes trace_id/span_id. Cheap no-op when ctx has
-	// no span.
-	return slog.New(telemetry.NewSpanContextHandler(handler))
+	return slog.New(telemetry.NewSpanContextHandler(buildHandler(cfg, os.Stdout)))
 }
 
 // runMCPStdio boots the same application stack as `serve` (storage,
@@ -307,8 +280,18 @@ func runMCPStdio(_ *cobra.Command, _ []string) error {
 	return nil
 }
 
-// setupStderrLogger mirrors setupLogger but writes to stderr.
+// setupStderrLogger mirrors setupLogger exactly — same level, same
+// UTC RFC3339 timestamp formatting via ReplaceAttr — but writes to
+// stderr. Used by stdio-mode (`./ortus mcp`) where stdout belongs to
+// the JSON-RPC protocol.
 func setupStderrLogger(cfg config.LoggingConfig) *slog.Logger {
+	return slog.New(telemetry.NewSpanContextHandler(buildHandler(cfg, os.Stderr)))
+}
+
+// buildHandler centralises the slog.Handler construction shared by
+// setupLogger (stdout) and setupStderrLogger (stderr) so they never
+// drift on level parsing or timestamp formatting.
+func buildHandler(cfg config.LoggingConfig, w io.Writer) slog.Handler {
 	var level slog.Level
 	switch cfg.Level {
 	case "debug":
@@ -320,14 +303,19 @@ func setupStderrLogger(cfg config.LoggingConfig) *slog.Logger {
 	default:
 		level = slog.LevelInfo
 	}
-	opts := &slog.HandlerOptions{Level: level}
-	var handler slog.Handler
-	if cfg.Format == "text" {
-		handler = slog.NewTextHandler(os.Stderr, opts)
-	} else {
-		handler = slog.NewJSONHandler(os.Stderr, opts)
+	opts := &slog.HandlerOptions{
+		Level: level,
+		ReplaceAttr: func(_ []string, a slog.Attr) slog.Attr {
+			if a.Key == slog.TimeKey {
+				a.Value = slog.StringValue(time.Now().UTC().Format(time.RFC3339))
+			}
+			return a
+		},
 	}
-	return slog.New(telemetry.NewSpanContextHandler(handler))
+	if cfg.Format == "text" {
+		return slog.NewTextHandler(w, opts)
+	}
+	return slog.NewJSONHandler(w, opts)
 }
 
 // mcpDepsFromApp constructs the MCP Deps from a running App. Mirrors
