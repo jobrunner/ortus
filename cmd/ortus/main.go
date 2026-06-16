@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	mcpAdapter "github.com/jobrunner/ortus/internal/adapters/mcp"
 	"github.com/jobrunner/ortus/internal/adapters/telemetry"
 	"github.com/jobrunner/ortus/internal/app"
 
@@ -62,6 +64,17 @@ var versionCmd = &cobra.Command{
 		fmt.Printf("  Commit:     %s\n", commit)
 		fmt.Printf("  Build Date: %s\n", buildDate)
 	},
+}
+
+// mcpCmd starts ortus in MCP-stdio mode: same tool surface as the HTTP
+// MCP endpoint, but over stdin/stdout. Use this from Claude Desktop's
+// mcpServers config to talk to a local instance without exposing an HTTP
+// port. Storage + tracing are initialized exactly as in serve mode so
+// the agent gets the same view.
+var mcpCmd = &cobra.Command{
+	Use:   "mcp",
+	Short: "Run ortus as a stdio MCP server (for Claude Desktop / IDE integration)",
+	RunE:  runMCPStdio,
 }
 
 func init() {
@@ -119,6 +132,7 @@ func init() {
 	// binding to server.frontend_enabled (set in config.Defaults()).
 
 	rootCmd.AddCommand(versionCmd)
+	rootCmd.AddCommand(mcpCmd)
 }
 
 func initConfig() {
@@ -134,6 +148,7 @@ func runServer(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
 	}
+	cfg.Build = config.BuildInfo{Version: version, Commit: commit, BuildDate: buildDate}
 
 	// Handle --disable-frontend flag (inverts frontend_enabled)
 	if disableFrontend, _ := cmd.Flags().GetBool("disable-frontend"); disableFrontend {
@@ -198,7 +213,96 @@ func runServer(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
+// setupLogger constructs the default stdout-writing logger used by
+// `serve` mode. The handler is wrapped with a span-context injector so
+// any slog.*Context call carrying a traced ctx auto-includes
+// trace_id/span_id (cheap no-op when ctx has no span).
 func setupLogger(cfg config.LoggingConfig) *slog.Logger {
+	return slog.New(telemetry.NewSpanContextHandler(buildHandler(cfg, os.Stdout)))
+}
+
+// runMCPStdio boots the same application stack as `serve` (storage,
+// repository, registry, tracing, …) but speaks MCP over stdin/stdout
+// instead of starting any HTTP listener. This is the mode Claude Desktop
+// will spawn ortus in. Anything we log goes to stderr — stdout is
+// reserved for the JSON-RPC protocol.
+func runMCPStdio(_ *cobra.Command, _ []string) error {
+	// Stdio mode does not start the MCP HTTP listener, so the HTTP-only
+	// validation (host/port/token) shouldn't fail it. Force-disable MCP
+	// before Load via env var — env beats config file in Viper's
+	// precedence chain, so even a config with `mcp.enabled: true` and
+	// no token still loads cleanly here.
+	_ = os.Setenv("ORTUS_MCP_ENABLED", "false")
+
+	cfg, err := config.Load(cfgFile)
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+	cfg.Build = config.BuildInfo{Version: version, Commit: commit, BuildDate: buildDate}
+
+	// Force log output to stderr — stdout belongs to MCP.
+	logger := setupStderrLogger(cfg.Logging)
+	slog.SetDefault(logger)
+
+	// Disable the HTTP listeners regardless of config; they would race
+	// for stdio's purposes and break the protocol stream.
+	cfg.Server.FrontendEnabled = false
+	cfg.MCP.Enabled = false // we run MCP ourselves in stdio mode
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	application, err := app.New(ctx, cfg, logger)
+	if err != nil {
+		return fmt.Errorf("initializing application: %w", err)
+	}
+	// Graceful shutdown on exit (incl. SIGINT/SIGTERM). Without this, the
+	// tracing BatchSpanProcessor and metrics PeriodicReader wouldn't flush
+	// their final batch and SQLite connections would leak.
+	defer func() {
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), cfg.Server.ShutdownTimeout)
+		defer shutdownCancel()
+		if err := application.Shutdown(shutdownCtx); err != nil {
+			logger.Error("shutdown error", "error", err)
+		}
+	}()
+
+	// Load packages so query tools see real data. We deliberately do NOT
+	// call application.Start() — that would also start the HTTP server.
+	if err := application.Registry.LoadAll(ctx); err != nil {
+		logger.Warn("LoadAll failed during MCP startup", "error", err)
+	}
+
+	deps := mcpDepsFromApp(application)
+
+	// Cancel on signal — RunStdio blocks on stdin.
+	go func() {
+		<-sigChan
+		cancel()
+	}()
+
+	logger.Info("MCP stdio mode active")
+	if err := mcpAdapter.RunStdio(ctx, deps, logger); err != nil {
+		return fmt.Errorf("mcp stdio: %w", err)
+	}
+	return nil
+}
+
+// setupStderrLogger mirrors setupLogger exactly — same level, same
+// UTC RFC3339 timestamp formatting via ReplaceAttr — but writes to
+// stderr. Used by stdio-mode (`./ortus mcp`) where stdout belongs to
+// the JSON-RPC protocol.
+func setupStderrLogger(cfg config.LoggingConfig) *slog.Logger {
+	return slog.New(telemetry.NewSpanContextHandler(buildHandler(cfg, os.Stderr)))
+}
+
+// buildHandler centralizes the slog.Handler construction shared by
+// setupLogger (stdout) and setupStderrLogger (stderr) so they never
+// drift on level parsing or timestamp formatting.
+func buildHandler(cfg config.LoggingConfig, w io.Writer) slog.Handler {
 	var level slog.Level
 	switch cfg.Level {
 	case "debug":
@@ -210,7 +314,6 @@ func setupLogger(cfg config.LoggingConfig) *slog.Logger {
 	default:
 		level = slog.LevelInfo
 	}
-
 	opts := &slog.HandlerOptions{
 		Level: level,
 		ReplaceAttr: func(_ []string, a slog.Attr) slog.Attr {
@@ -220,16 +323,25 @@ func setupLogger(cfg config.LoggingConfig) *slog.Logger {
 			return a
 		},
 	}
-
-	var handler slog.Handler
 	if cfg.Format == "text" {
-		handler = slog.NewTextHandler(os.Stdout, opts)
-	} else {
-		handler = slog.NewJSONHandler(os.Stdout, opts)
+		return slog.NewTextHandler(w, opts)
 	}
+	return slog.NewJSONHandler(w, opts)
+}
 
-	// Wrap with span-context injector so any slog.*Context call carrying a
-	// traced ctx auto-includes trace_id/span_id. Cheap no-op when ctx has
-	// no span.
-	return slog.New(telemetry.NewSpanContextHandler(handler))
+// mcpDepsFromApp constructs the MCP Deps from a running App. Mirrors
+// the App.mcpDeps method but lives here so the subcommand doesn't need
+// to import internal/app's private state.
+func mcpDepsFromApp(a *app.App) mcpAdapter.Deps {
+	var buf *telemetry.RingBuffer
+	if a.TelemetryProvider != nil {
+		buf = a.TelemetryProvider.Buffer()
+	}
+	return mcpAdapter.Deps{
+		Buffer:        buf,
+		QueryService:  a.QueryService,
+		Registry:      a.Registry,
+		HealthService: a.HealthService,
+		Version:       version,
+	}
 }

@@ -494,6 +494,16 @@ use the matched gorilla/mux route template as the `path` label, so
 dynamic segments like `{packageId}` collapse to a single bounded label
 combination.
 
+## MCP (AI integration)
+
+Ortus ships an in-process Model Context Protocol server so AI agents
+(Claude Desktop, Claude Code, custom MCP clients) can both **observe**
+the service (traces, active spans, health) and **use** it (point
+queries, package metadata). Two transports: streamable-HTTP for remote
+agents (`mcp.enabled: true` in `config.yaml`) and stdio for Claude
+Desktop (`./ortus mcp` subcommand). See [doc/MCP.md](doc/MCP.md) for the
+tool catalogue, auth model, and Claude Desktop setup.
+
 ## Tracing
 
 Ortus emits OpenTelemetry traces and additionally retains the most recent
