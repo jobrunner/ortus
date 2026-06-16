@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-06-16
+
+### Security
+- Pinned `aquasecurity/trivy-action` from mutable `@master` to `@0.36.0` in both `ci.yml` and `docker-release.yml`. Removes the supply-chain risk of a mid-tag-bump hijack.
+- Tightened workflow `permissions:` to least-privilege. Top-level `contents: read` on every workflow; jobs that need more (image push, SARIF upload, GitHub release creation) override explicitly. Previously `docker-release.yml` granted `packages: write` and `security-events: write` to every job indiscriminately, and `release.yml` granted `contents: write` workflow-wide.
+- Fixed a real `template-injection` finding in `ci.yml`: the PR base-ref was interpolated directly into a `run:` bash block via `${{ github.event.pull_request.base.ref }}`. Now injected via `env:` so a maliciously-named branch can't break out of the bash context.
+- Disabled the Go module cache in the release workflow (`actions/setup-go` `cache: false`). Stops a poisoned cache from another job ending up baked into a release artifact.
+
+### Added
+- **actionlint** as a CI job (`actions-lint`). Runs on every PR/push, catches workflow-level bugs and Actions-specific security anti-patterns. shellcheck integration filtered to severity=error so style suggestions don't gate.
+- **zizmor** weekly scan workflow (`actions-security.yml`) at Mon 06:30 UTC. SARIF results upload to the Security tab; high-severity findings open or comment on a `security`-labelled GitHub issue (same pattern as `vuln-scan.yml`).
+- **`.github/zizmor.yml`** config: documents the tag-pinning + Dependabot policy (vs. SHA-pinning) and disables a small number of audits that are noise at v0.x (`artipacked`, `dependabot-cooldown`).
+
 ## [0.8.0] - 2026-06-16
 
 ### Added

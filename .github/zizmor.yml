@@ -1,0 +1,32 @@
+# zizmor configuration for ortus
+#
+# Our pin policy is: actions referenced by tag (e.g. @v6), updates
+# managed by Dependabot. SHA-pinning is the gold standard for supply-
+# chain security, but it disables Dependabot's automatic update story
+# for actions because Dependabot has limited support for SHA-pinned
+# refs. For a v0.x project that's not in production, tag-pinning + a
+# weekly Dependabot bump is the chosen trade-off; revisit when the
+# threat model warrants the maintenance cost.
+#
+# See https://docs.zizmor.sh/configuration/
+
+rules:
+  # Allow tag-pinning. Without this every actions/checkout@v6 etc.
+  # becomes a "high"-severity finding and gates every CI run.
+  unpinned-uses:
+    config:
+      policies:
+        "*": ref-pin
+
+  # artipacked flags every checkout step that doesn't set
+  # persist-credentials:false. Useful audit, but our workflows that
+  # need credentials (release.yml's git push, docker-release.yml's
+  # registry push) explicitly grant the right permissions and aren't
+  # leaking artifacts. At v0.x the noise outweighs the signal.
+  artipacked:
+    disable: true
+
+  # Dependabot cooldown is a nice-to-have that would slow our weekly
+  # update cycle; not justified at v0.x.
+  dependabot-cooldown:
+    disable: true

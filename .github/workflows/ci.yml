@@ -12,6 +12,13 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
+# Least-privilege default. Individual jobs override (e.g. docker-security
+# adds security-events: write for SARIF upload) but everyone starts with
+# read-only repo access. Without this, GITHUB_TOKEN inherits the
+# repo-wide default which is broader than necessary for most jobs.
+permissions:
+  contents: read
+
 jobs:
   # =============================================================================
   # Version Validation
@@ -56,8 +63,13 @@ jobs:
 
       - name: Check VERSION/CHANGELOG updated for code changes (PRs only)
         if: github.event_name == 'pull_request'
+        # Inject the base ref via env (not via ${{ }} expansion inside the
+        # script) so a maliciously-named branch can't break out of the bash
+        # context and execute arbitrary code in our CI. See zizmor
+        # template-injection audit.
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: |
-          BASE_REF="${{ github.event.pull_request.base.ref }}"
 
           # Get files changed in this PR
           CHANGED_FILES=$(git diff --name-only origin/$BASE_REF...HEAD)
@@ -226,6 +238,29 @@ jobs:
           failure-threshold: error
 
   # =============================================================================
+  # GitHub Actions Workflow Linting
+  # =============================================================================
+  actions-lint:
+    name: Actions Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      # actionlint catches workflow-level bugs (typos, invalid expressions,
+      # bad shell scripts, action input validation) AND a handful of
+      # security issues like script-injection via untrusted github.event
+      # fields. Cheap to run on every PR; downloads a ~5MB static binary.
+      #
+      # shellcheck integration is filtered to severity=error so style
+      # suggestions like SC2086 ("quote to prevent word splitting") don't
+      # gate every PR. Real bugs and security issues are still caught.
+      - name: Run actionlint
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash \
+            | bash -s -- 1.7.12
+          ./actionlint -color -shellcheck="-S error"
+
+  # =============================================================================
   # Docker Build (without push) - Multi-arch
   # =============================================================================
   docker-build:
@@ -295,7 +330,7 @@ jobs:
           tags: ortus:scan
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.36.0
         with:
           image-ref: 'ortus:scan'
           format: 'sarif'

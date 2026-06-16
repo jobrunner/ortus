@@ -21,10 +21,11 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
+# Default is least-privilege; jobs add what they specifically need
+# (packages:write for image push, security-events:write for SARIF
+# upload, contents:write for the GitHub release).
 permissions:
   contents: read
-  packages: write
-  security-events: write
 
 jobs:
   # =============================================================================
@@ -62,6 +63,9 @@ jobs:
     name: Build Alpine Image
     runs-on: ubuntu-latest
     needs: [version]
+    permissions:
+      contents: read
+      packages: write   # push image to ghcr.io
     steps:
       - uses: actions/checkout@v6
 
@@ -117,6 +121,9 @@ jobs:
     name: Build Ubuntu Image
     runs-on: ubuntu-latest
     needs: [version]
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v6
 
@@ -167,11 +174,14 @@ jobs:
     name: Security Scan
     runs-on: ubuntu-latest
     needs: [docker-alpine, version]
+    permissions:
+      contents: read
+      security-events: write   # upload Trivy SARIF
     steps:
       - uses: actions/checkout@v6
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.36.0
         with:
           image-ref: '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.version.outputs.version }}'
           format: 'sarif'
