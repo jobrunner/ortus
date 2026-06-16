@@ -12,6 +12,7 @@ import (
 
 	"github.com/jobrunner/ortus/internal/adapters/geopackage"
 	httpAdapter "github.com/jobrunner/ortus/internal/adapters/http"
+	"github.com/jobrunner/ortus/internal/adapters/mcp"
 	"github.com/jobrunner/ortus/internal/adapters/metrics"
 	"github.com/jobrunner/ortus/internal/adapters/storage"
 	"github.com/jobrunner/ortus/internal/adapters/telemetry"
@@ -39,6 +40,7 @@ type App struct {
 	MetricsServer     *metrics.Server
 	TelemetryProvider *telemetry.Provider // nil when tracing is disabled
 	Tracer            output.Tracer       // never nil; NoOp when tracing is disabled
+	MCPServer         *mcp.Server         // nil when MCP is disabled
 }
 
 // tracerProvider returns the underlying OTel TracerProvider for instrumentation
@@ -236,7 +238,45 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*App, er
 		}
 	}
 
+	// Initialize MCP server (optional, off by default). Lives on its own
+	// port so a NetworkPolicy can isolate it from the public REST API.
+	if cfg.MCP.Enabled {
+		app.MCPServer = mcp.New(
+			mcp.Options{
+				Host:  cfg.MCP.Host,
+				Port:  cfg.MCP.Port,
+				Path:  cfg.MCP.Path,
+				Token: cfg.MCP.Token,
+			},
+			app.mcpDeps(),
+			logger,
+		)
+		logger.Info("MCP server configured",
+			"host", cfg.MCP.Host,
+			"port", cfg.MCP.Port,
+			"path", cfg.MCP.Path,
+			"token_set", cfg.MCP.Token != "",
+		)
+	}
+
 	return app, nil
+}
+
+// mcpDeps bundles the dependencies the MCP adapter needs. Extracted so
+// the stdio-mode subcommand can build the same Deps struct without
+// duplicating field-by-field wiring.
+func (a *App) mcpDeps() mcp.Deps {
+	var buf *telemetry.RingBuffer
+	if a.TelemetryProvider != nil {
+		buf = a.TelemetryProvider.Buffer()
+	}
+	return mcp.Deps{
+		Buffer:        buf,
+		QueryService:  a.QueryService,
+		Registry:      a.Registry,
+		HealthService: a.HealthService,
+		Version:       a.Config.Tracing.ServiceName, // best-effort identifier
+	}
 }
 
 // Start starts all application components.
@@ -296,6 +336,21 @@ func (a *App) Start(ctx context.Context) error {
 		a.SyncService.Start(ctx)
 	}
 
+	// Start MCP server in background (own port + its own panic guard, so a
+	// runaway MCP client can't take the main HTTP server with it).
+	if a.MCPServer != nil {
+		go func() {
+			defer func() {
+				if rec := recover(); rec != nil {
+					a.Logger.Error("MCP server panic recovered", "panic", rec)
+				}
+			}()
+			if err := a.MCPServer.Run(); err != nil {
+				a.Logger.Error("MCP server error", "error", err)
+			}
+		}()
+	}
+
 	if startupOK {
 		startupSpan.SetStatus(output.StatusOK, "")
 	} else {
@@ -326,6 +381,14 @@ func (a *App) Shutdown(ctx context.Context) error {
 	// Stop watcher
 	if a.Watcher != nil {
 		_ = a.Watcher.Stop()
+	}
+
+	// Shutdown MCP server first — block new MCP requests before we tear
+	// down the things they would access.
+	if a.MCPServer != nil {
+		if err := a.MCPServer.Shutdown(ctx); err != nil {
+			a.Logger.Error("MCP server shutdown error", "error", err)
+		}
 	}
 
 	// Shutdown metrics server

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-06-16
+
+### Added
+- **MCP (Model Context Protocol) server** in-process, off by default. Exposes 9 read-only tools to AI agents — 5 diagnostic (`list_traces`, `get_trace`, `list_active_spans`, `tracing_stats`, `health`) backed directly by the tracing ring buffer, and 4 query (`query_point`, `list_packages`, `get_package`, `get_package_layers`) backed by the existing application services. The diagnostic tools are the payoff for the tracing infrastructure built in PR #13: an agent can now debug ortus through a structured conversation rather than `kubectl logs`.
+- Two MCP transports: **streamable HTTP** on its own port (default 9091, separate from the public REST API so a NetworkPolicy can isolate it) for remote agents, and **stdio** via `./ortus mcp` for Claude Desktop integration.
+- Bearer-token authentication from `ORTUS_MCP_TOKEN` env var (never the config file). Constant-time comparison against timing attacks. Loopback hosts (`127.0.0.1`, `localhost`, `::1`) exempt from the token requirement — local processes are considered trusted.
+- New config block `mcp.{enabled,host,port,path}` + `ORTUS_MCP_TOKEN` env var.
+- `doc/MCP.md` with the tool catalogue, auth model, Claude Desktop integration walkthrough, and limitations.
+
+### Build
+- Added `github.com/modelcontextprotocol/go-sdk` v1.6.1 as a direct dependency (official Anthropic Go SDK).
+
 ## [0.7.1] - 2026-06-13
 
 ### Build

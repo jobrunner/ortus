@@ -98,6 +98,16 @@ logging:
   level: "info"  # debug, info, warn, error
   format: "json"  # json, text
 
+# Model Context Protocol server. Off by default. When enabled, ortus
+# exposes a streamable-HTTP MCP endpoint with diagnostic and query tools
+# for AI agents. The bearer token is loaded from the ORTUS_MCP_TOKEN
+# env var, NOT from this file.
+mcp:
+  enabled: false
+  host: "127.0.0.1"   # 127.0.0.1 = no token required; anything else requires ORTUS_MCP_TOKEN
+  port: 9091
+  path: "/mcp"
+
 # OpenTelemetry tracing configuration.
 # When enabled, spans are kept in an in-memory ring buffer (for the MCP server
 # to query directly) and, if endpoint is set, also exported via OTLP.

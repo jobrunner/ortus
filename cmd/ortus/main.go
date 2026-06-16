@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	mcpAdapter "github.com/jobrunner/ortus/internal/adapters/mcp"
 	"github.com/jobrunner/ortus/internal/adapters/telemetry"
 	"github.com/jobrunner/ortus/internal/app"
 
@@ -62,6 +63,17 @@ var versionCmd = &cobra.Command{
 		fmt.Printf("  Commit:     %s\n", commit)
 		fmt.Printf("  Build Date: %s\n", buildDate)
 	},
+}
+
+// mcpCmd starts ortus in MCP-stdio mode: same tool surface as the HTTP
+// MCP endpoint, but over stdin/stdout. Use this from Claude Desktop's
+// mcpServers config to talk to a local instance without exposing an HTTP
+// port. Storage + tracing are initialised exactly as in serve mode so
+// the agent gets the same view.
+var mcpCmd = &cobra.Command{
+	Use:   "mcp",
+	Short: "Run ortus as a stdio MCP server (for Claude Desktop / IDE integration)",
+	RunE:  runMCPStdio,
 }
 
 func init() {
@@ -119,6 +131,7 @@ func init() {
 	// binding to server.frontend_enabled (set in config.Defaults()).
 
 	rootCmd.AddCommand(versionCmd)
+	rootCmd.AddCommand(mcpCmd)
 }
 
 func initConfig() {
@@ -232,4 +245,95 @@ func setupLogger(cfg config.LoggingConfig) *slog.Logger {
 	// traced ctx auto-includes trace_id/span_id. Cheap no-op when ctx has
 	// no span.
 	return slog.New(telemetry.NewSpanContextHandler(handler))
+}
+
+// runMCPStdio boots the same application stack as `serve` (storage,
+// repository, registry, tracing, …) but speaks MCP over stdin/stdout
+// instead of starting any HTTP listener. This is the mode Claude Desktop
+// will spawn ortus in. Anything we log goes to stderr — stdout is
+// reserved for the JSON-RPC protocol.
+func runMCPStdio(_ *cobra.Command, _ []string) error {
+	cfg, err := config.Load(cfgFile)
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+
+	// Force log output to stderr — stdout belongs to MCP.
+	logger := setupStderrLogger(cfg.Logging)
+	slog.SetDefault(logger)
+
+	// Disable the HTTP listeners regardless of config; they would race
+	// for stdio's purposes and break the protocol stream.
+	cfg.Server.FrontendEnabled = false
+	cfg.MCP.Enabled = false // we run MCP ourselves in stdio mode
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	application, err := app.New(ctx, cfg, logger)
+	if err != nil {
+		return fmt.Errorf("initializing application: %w", err)
+	}
+	// Load packages so query tools see real data. We deliberately do NOT
+	// call application.Start() — that would also start the HTTP server.
+	if err := application.Registry.LoadAll(ctx); err != nil {
+		logger.Warn("LoadAll failed during MCP startup", "error", err)
+	}
+
+	deps := mcpDepsFromApp(application)
+
+	// Cancel on signal — RunStdio blocks on stdin.
+	go func() {
+		<-sigChan
+		cancel()
+	}()
+
+	logger.Info("MCP stdio mode active")
+	if err := mcpAdapter.RunStdio(ctx, deps, logger); err != nil {
+		return fmt.Errorf("mcp stdio: %w", err)
+	}
+	return nil
+}
+
+// setupStderrLogger mirrors setupLogger but writes to stderr.
+func setupStderrLogger(cfg config.LoggingConfig) *slog.Logger {
+	var level slog.Level
+	switch cfg.Level {
+	case "debug":
+		level = slog.LevelDebug
+	case "warn":
+		level = slog.LevelWarn
+	case "error":
+		level = slog.LevelError
+	default:
+		level = slog.LevelInfo
+	}
+	opts := &slog.HandlerOptions{Level: level}
+	var handler slog.Handler
+	if cfg.Format == "text" {
+		handler = slog.NewTextHandler(os.Stderr, opts)
+	} else {
+		handler = slog.NewJSONHandler(os.Stderr, opts)
+	}
+	return slog.New(telemetry.NewSpanContextHandler(handler))
+}
+
+// mcpDepsFromApp constructs the MCP Deps from a running App. Mirrors
+// the App.mcpDeps method but lives here so the subcommand doesn't need
+// to import internal/app's private state.
+func mcpDepsFromApp(a *app.App) mcpAdapter.Deps {
+	var buf *telemetry.RingBuffer
+	if a.TelemetryProvider != nil {
+		buf = a.TelemetryProvider.Buffer()
+	}
+	return mcpAdapter.Deps{
+		Buffer:        buf,
+		QueryService:  a.QueryService,
+		Registry:      a.Registry,
+		HealthService: a.HealthService,
+		Version:       version,
+	}
 }

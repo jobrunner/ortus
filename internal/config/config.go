@@ -3,6 +3,7 @@ package config
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -27,6 +28,7 @@ type Config struct {
 	Logging LoggingConfig `mapstructure:"logging"`
 	Sync    SyncConfig    `mapstructure:"sync"`
 	Tracing TracingConfig `mapstructure:"tracing"`
+	MCP     MCPConfig     `mapstructure:"mcp"`
 }
 
 // ServerConfig holds HTTP server configuration.
@@ -155,6 +157,23 @@ type SyncConfig struct {
 	Interval time.Duration `mapstructure:"interval"` // e.g., "1h", "24h", "30m"
 }
 
+// MCPConfig configures the in-process Model Context Protocol server. When
+// enabled, ortus exposes a streamable-HTTP MCP endpoint on a separate port
+// so AI agents (Claude Desktop, Claude Code, …) can query traces, package
+// metadata, and perform point queries against this service. The bearer
+// token is intentionally NOT in the config file — it's pulled from the
+// ORTUS_MCP_TOKEN environment variable so it can't be checked in by
+// accident.
+type MCPConfig struct {
+	Enabled bool   `mapstructure:"enabled"`
+	Host    string `mapstructure:"host"`
+	Port    int    `mapstructure:"port"`
+	Path    string `mapstructure:"path"`
+	// Token is populated from ORTUS_MCP_TOKEN at Load() time, NOT from the
+	// config file. Required for non-loopback hosts.
+	Token string `mapstructure:"-"`
+}
+
 // TracingTransport selects the OTLP transport (http/protobuf or grpc).
 const (
 	TracingTransportHTTP = "http"
@@ -224,6 +243,12 @@ func Defaults() {
 	viper.SetDefault("sync.enabled", false)
 	viper.SetDefault("sync.interval", time.Hour)
 
+	// MCP defaults
+	viper.SetDefault("mcp.enabled", false)
+	viper.SetDefault("mcp.host", "127.0.0.1")
+	viper.SetDefault("mcp.port", 9091)
+	viper.SetDefault("mcp.path", "/mcp")
+
 	// Tracing defaults
 	viper.SetDefault("tracing.enabled", false)
 	viper.SetDefault("tracing.service_name", "ortus")
@@ -267,6 +292,11 @@ func Load(configPath string) (*Config, error) {
 		return nil, fmt.Errorf("unmarshaling config: %w", err)
 	}
 
+	// Secrets that should NEVER be in a config file get loaded from env
+	// directly so they don't get printed by `viper.Debug()` / leaked into
+	// a marshalled config dump.
+	cfg.MCP.Token = os.Getenv("ORTUS_MCP_TOKEN")
+
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("validating config: %w", err)
 	}
@@ -288,7 +318,30 @@ func (c *Config) Validate() error {
 	if err := c.validateTracing(); err != nil {
 		return err
 	}
-	return c.validateMetricsOTLP()
+	if err := c.validateMetricsOTLP(); err != nil {
+		return err
+	}
+	return c.validateMCP()
+}
+
+func (c *Config) validateMCP() error {
+	if !c.MCP.Enabled {
+		return nil
+	}
+	if c.MCP.Port < 1 || c.MCP.Port > 65535 {
+		return fmt.Errorf("invalid mcp.port: %d", c.MCP.Port)
+	}
+	if c.MCP.Path == "" {
+		return fmt.Errorf("mcp.path must not be empty")
+	}
+	// Token is required when binding to anything but loopback. Loopback-only
+	// listeners are unreachable from outside the host, so a missing token
+	// only allows local processes (which are usually trusted) to call.
+	loopback := c.MCP.Host == "" || c.MCP.Host == "127.0.0.1" || c.MCP.Host == "localhost" || c.MCP.Host == "::1"
+	if !loopback && c.MCP.Token == "" {
+		return fmt.Errorf("mcp.enabled is true and host is not loopback — ORTUS_MCP_TOKEN must be set")
+	}
+	return nil
 }
 
 // MetricsOTLPEndpoint returns the effective endpoint for metric OTLP export.
