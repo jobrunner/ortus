@@ -45,7 +45,7 @@ func addQueryPoint(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 			"REST endpoint.",
 	}, func(ctx toolCtx, _ *callRequest, in queryPointIn) (*callResult, *queryResponse, error) {
 		// Coordinate selection: lon/lat takes precedence over x/y when both
-		// are supplied (matches the REST handler's behaviour). We require
+		// are supplied (matches the REST handler's behavior). We require
 		// BOTH components of a pair to be present — passing just lon
 		// without lat (or vice versa) is a bug, not a silent half-query.
 		srid := in.SRID
