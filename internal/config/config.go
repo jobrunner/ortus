@@ -347,6 +347,12 @@ func (c *Config) validateMCP() error {
 	if c.MCP.Path == "" {
 		return fmt.Errorf("mcp.path must not be empty")
 	}
+	if c.MCP.Path[0] != '/' {
+		// http.ServeMux.Handle panics on patterns without a leading slash —
+		// fail fast at startup with a clear message rather than crashing
+		// when the listener tries to bind.
+		return fmt.Errorf("mcp.path %q must start with '/'", c.MCP.Path)
+	}
 	// Token is required when binding to anything but loopback. Loopback-only
 	// listeners are unreachable from outside the host, so a missing token
 	// only allows local processes (which are usually trusted) to call.

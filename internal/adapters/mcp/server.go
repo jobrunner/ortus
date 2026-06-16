@@ -16,7 +16,9 @@ import (
 	"crypto/subtle"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -79,7 +81,10 @@ func New(opts Options, deps Deps, logger *slog.Logger) *Server {
 	)
 	mux.Handle(opts.Path, bearerAuthMiddleware(opts.Token, streamHandler))
 
-	addr := fmt.Sprintf("%s:%d", opts.Host, opts.Port)
+	// net.JoinHostPort handles IPv6 literals correctly: ::1 + 9091 →
+	// "[::1]:9091", not "::1:9091". fmt.Sprintf would silently produce an
+	// invalid address.
+	addr := net.JoinHostPort(opts.Host, strconv.Itoa(opts.Port))
 	return &Server{
 		server: &http.Server{
 			Addr:              addr,

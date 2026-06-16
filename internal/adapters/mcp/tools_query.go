@@ -41,13 +41,15 @@ func addQueryPoint(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 		Description: "Point-in-polygon query: returns every geographic feature " +
 			"containing the given coordinate across all loaded GeoPackages " +
 			"(or a single package if package_id is set). Accepts WGS84 lon/lat " +
-			"or an arbitrary x/y/srid combination. Equivalent to the GET /api/v1/query " +
-			"REST endpoint.",
+			"or an arbitrary x/y/srid combination. Backed by the same QueryService " +
+			"as the GET /api/v1/query REST endpoint, but with stricter coordinate " +
+			"validation: complete pairs only, and (0,0) is a valid input.",
 	}, func(ctx toolCtx, _ *callRequest, in queryPointIn) (*callResult, *queryResponse, error) {
 		// Coordinate selection: lon/lat takes precedence over x/y when both
-		// are supplied (matches the REST handler's behavior). We require
-		// BOTH components of a pair to be present — passing just lon
-		// without lat (or vice versa) is a bug, not a silent half-query.
+		// pairs are present. Stricter than the REST handler — we require
+		// BOTH members of a pair (passing just `lon` without `lat` is a
+		// bug, not a silent half-query) and we treat (0,0) as a valid
+		// input rather than a stand-in for "missing".
 		srid := in.SRID
 		if srid == 0 {
 			srid = domain.SRIDWGS84
