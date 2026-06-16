@@ -29,6 +29,19 @@ type Config struct {
 	Sync    SyncConfig    `mapstructure:"sync"`
 	Tracing TracingConfig `mapstructure:"tracing"`
 	MCP     MCPConfig     `mapstructure:"mcp"`
+
+	// Build is populated by main.go from -ldflags at startup; not loaded
+	// from config files. Used for the MCP Implementation.Version field
+	// and any future runtime identification needs.
+	Build BuildInfo `mapstructure:"-"`
+}
+
+// BuildInfo captures the binary's build identity. Populated from
+// -ldflags in main.go (or left as "dev"/"none" for local builds).
+type BuildInfo struct {
+	Version   string
+	Commit    string
+	BuildDate string
 }
 
 // ServerConfig holds HTTP server configuration.
@@ -337,9 +350,13 @@ func (c *Config) validateMCP() error {
 	// Token is required when binding to anything but loopback. Loopback-only
 	// listeners are unreachable from outside the host, so a missing token
 	// only allows local processes (which are usually trusted) to call.
-	loopback := c.MCP.Host == "" || c.MCP.Host == "127.0.0.1" || c.MCP.Host == "localhost" || c.MCP.Host == "::1"
+	// Empty host is NOT treated as loopback — Go's net.Listen binds to all
+	// interfaces with an empty host, which would silently expose the
+	// MCP endpoint without auth. Defaults set host to "127.0.0.1" so this
+	// only matters when a user explicitly overrides it to an empty string.
+	loopback := c.MCP.Host == "127.0.0.1" || c.MCP.Host == "localhost" || c.MCP.Host == "::1"
 	if !loopback && c.MCP.Token == "" {
-		return fmt.Errorf("mcp.enabled is true and host is not loopback — ORTUS_MCP_TOKEN must be set")
+		return fmt.Errorf("mcp.enabled is true and host %q is not loopback — ORTUS_MCP_TOKEN must be set", c.MCP.Host)
 	}
 	return nil
 }

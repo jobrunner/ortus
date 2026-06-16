@@ -270,12 +270,16 @@ func (a *App) mcpDeps() mcp.Deps {
 	if a.TelemetryProvider != nil {
 		buf = a.TelemetryProvider.Buffer()
 	}
+	version := a.Config.Build.Version
+	if version == "" {
+		version = "dev"
+	}
 	return mcp.Deps{
 		Buffer:        buf,
 		QueryService:  a.QueryService,
 		Registry:      a.Registry,
 		HealthService: a.HealthService,
-		Version:       a.Config.Tracing.ServiceName, // best-effort identifier
+		Version:       version,
 	}
 }
 

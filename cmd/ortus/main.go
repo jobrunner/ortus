@@ -147,6 +147,7 @@ func runServer(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
 	}
+	cfg.Build = config.BuildInfo{Version: version, Commit: commit, BuildDate: buildDate}
 
 	// Handle --disable-frontend flag (inverts frontend_enabled)
 	if disableFrontend, _ := cmd.Flags().GetBool("disable-frontend"); disableFrontend {
@@ -253,10 +254,18 @@ func setupLogger(cfg config.LoggingConfig) *slog.Logger {
 // will spawn ortus in. Anything we log goes to stderr — stdout is
 // reserved for the JSON-RPC protocol.
 func runMCPStdio(_ *cobra.Command, _ []string) error {
+	// Stdio mode does not start the MCP HTTP listener, so the HTTP-only
+	// validation (host/port/token) shouldn't fail it. Force-disable MCP
+	// before Load via env var — env beats config file in Viper's
+	// precedence chain, so even a config with `mcp.enabled: true` and
+	// no token still loads cleanly here.
+	_ = os.Setenv("ORTUS_MCP_ENABLED", "false")
+
 	cfg, err := config.Load(cfgFile)
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
 	}
+	cfg.Build = config.BuildInfo{Version: version, Commit: commit, BuildDate: buildDate}
 
 	// Force log output to stderr — stdout belongs to MCP.
 	logger := setupStderrLogger(cfg.Logging)

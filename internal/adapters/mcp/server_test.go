@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -176,12 +177,10 @@ func TestToolsRegistered(t *testing.T) {
 	}
 }
 
-// TestHealthTool exercises the simplest tool end-to-end (no DB
-// dependency, returns immediately) to prove the JSON-RPC roundtrip
-// works from input parsing through to typed output.
-func TestHealthTool(t *testing.T) {
-	ts := startTestServer(t, "")
-
+// connectClient is a small helper that opens an MCP session for a
+// test server. Cleans up on test exit.
+func connectClient(t *testing.T, ts *httptest.Server) *mcp.ClientSession {
+	t.Helper()
 	client := mcp.NewClient(&mcp.Implementation{Name: "test-client"}, nil)
 	transport := &mcp.StreamableClientTransport{Endpoint: ts.URL + "/mcp"}
 	session, err := client.Connect(context.Background(), transport, nil)
@@ -189,12 +188,106 @@ func TestHealthTool(t *testing.T) {
 		t.Fatalf("Connect: %v", err)
 	}
 	t.Cleanup(func() { _ = session.Close() })
+	return session
+}
 
+// TestHealthTool exercises the simplest tool end-to-end (no DB
+// dependency, returns immediately) to prove the JSON-RPC roundtrip
+// works from input parsing through to typed output.
+func TestHealthTool(t *testing.T) {
+	session := connectClient(t, startTestServer(t, ""))
 	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "health"})
 	if err != nil {
 		t.Fatalf("CallTool health: %v", err)
 	}
 	if res.IsError {
 		t.Fatalf("health returned IsError; content=%v", res.Content)
+	}
+}
+
+// TestListPackagesTool round-trips list_packages and asserts the
+// response shape matches what doc/MCP.md promises.
+func TestListPackagesTool(t *testing.T) {
+	session := connectClient(t, startTestServer(t, ""))
+	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "list_packages"})
+	if err != nil {
+		t.Fatalf("CallTool list_packages: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("list_packages returned IsError; content=%v", res.Content)
+	}
+}
+
+// TestQueryPointTool covers the coordinate-validation logic — both the
+// happy path AND the (0,0) edge case that the float64+omitempty design
+// used to mishandle.
+func TestQueryPointTool(t *testing.T) {
+	session := connectClient(t, startTestServer(t, ""))
+
+	cases := []struct {
+		name        string
+		args        map[string]any
+		wantErr     bool
+		errContains string
+	}{
+		{
+			name:    "lon/lat happy path",
+			args:    map[string]any{"lon": 13.4, "lat": 52.5},
+			wantErr: false,
+		},
+		{
+			name:    "x/y/srid happy path",
+			args:    map[string]any{"x": 389000.0, "y": 5820000.0, "srid": 25832},
+			wantErr: false,
+		},
+		{
+			name:    "(0,0) is a valid coordinate",
+			args:    map[string]any{"lon": 0.0, "lat": 0.0},
+			wantErr: false,
+		},
+		{
+			name:        "missing pair partner",
+			args:        map[string]any{"lon": 13.4},
+			wantErr:     true,
+			errContains: "both 'lon' and 'lat'",
+		},
+		{
+			name:        "no coordinate at all",
+			args:        map[string]any{},
+			wantErr:     true,
+			errContains: "coordinate required",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			res, err := session.CallTool(context.Background(), &mcp.CallToolParams{
+				Name:      "query_point",
+				Arguments: tc.args,
+			})
+			if err != nil {
+				t.Fatalf("CallTool: %v", err)
+			}
+			if tc.wantErr {
+				if !res.IsError {
+					t.Fatalf("expected IsError, got success: %v", res.Content)
+				}
+				if tc.errContains != "" {
+					var foundText string
+					for _, c := range res.Content {
+						if tc, ok := c.(*mcp.TextContent); ok {
+							foundText += tc.Text
+						}
+					}
+					if !strings.Contains(foundText, tc.errContains) {
+						t.Errorf("error message %q does not contain %q", foundText, tc.errContains)
+					}
+				}
+				return
+			}
+			if res.IsError {
+				t.Fatalf("unexpected error: %v", res.Content)
+			}
+		})
 	}
 }

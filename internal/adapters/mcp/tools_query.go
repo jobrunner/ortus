@@ -22,12 +22,14 @@ func registerQueryTools(srv *mcp.Server, deps Deps, logger *slog.Logger) {
 // ---- query_point ----------------------------------------------------------
 
 type queryPointIn struct {
-	// Either lon/lat (WGS84 shortcut) OR x/y+srid must be supplied. lon/lat
-	// wins if both are non-zero.
-	Lon        float64  `json:"lon,omitempty" jsonschema:"longitude in WGS84 (EPSG:4326); pair with 'lat'"`
-	Lat        float64  `json:"lat,omitempty" jsonschema:"latitude in WGS84 (EPSG:4326); pair with 'lon'"`
-	X          float64  `json:"x,omitempty" jsonschema:"easting in the given SRID; pair with 'y' and 'srid'"`
-	Y          float64  `json:"y,omitempty" jsonschema:"northing in the given SRID; pair with 'x' and 'srid'"`
+	// Either lon/lat (WGS84 shortcut) OR x/y+srid must be supplied. Pointer
+	// fields so we can distinguish "omitted" from a legitimate 0 (e.g. on
+	// the equator or the Greenwich meridian). lon/lat wins when both pairs
+	// are present.
+	Lon        *float64 `json:"lon,omitempty" jsonschema:"longitude in WGS84 (EPSG:4326); pair with 'lat'"`
+	Lat        *float64 `json:"lat,omitempty" jsonschema:"latitude in WGS84 (EPSG:4326); pair with 'lon'"`
+	X          *float64 `json:"x,omitempty" jsonschema:"easting in the given SRID; pair with 'y' and 'srid'"`
+	Y          *float64 `json:"y,omitempty" jsonschema:"northing in the given SRID; pair with 'x' and 'srid'"`
 	SRID       int      `json:"srid,omitempty" jsonschema:"spatial reference id for x/y (default 4326 / WGS84)"`
 	Properties []string `json:"properties,omitempty" jsonschema:"if set, returned features include only these property keys"`
 	PackageID  string   `json:"package_id,omitempty" jsonschema:"if set, query only this single package instead of all loaded packages"`
@@ -42,17 +44,24 @@ func addQueryPoint(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 			"or an arbitrary x/y/srid combination. Equivalent to the GET /api/v1/query " +
 			"REST endpoint.",
 	}, func(ctx toolCtx, _ *callRequest, in queryPointIn) (*callResult, *queryResponse, error) {
-		// Coordinate selection mirrors the HTTP handler: lon/lat wins over x/y.
+		// Coordinate selection: lon/lat takes precedence over x/y when both
+		// are supplied (matches the REST handler's behaviour). We require
+		// BOTH components of a pair to be present — passing just lon
+		// without lat (or vice versa) is a bug, not a silent half-query.
 		srid := in.SRID
 		if srid == 0 {
 			srid = domain.SRIDWGS84
 		}
 		var coord coordinate
 		switch {
-		case in.Lon != 0 || in.Lat != 0:
-			coord = coordinate{X: in.Lon, Y: in.Lat, SRID: srid}
-		case in.X != 0 || in.Y != 0:
-			coord = coordinate{X: in.X, Y: in.Y, SRID: srid}
+		case in.Lon != nil && in.Lat != nil:
+			coord = coordinate{X: *in.Lon, Y: *in.Lat, SRID: srid}
+		case in.X != nil && in.Y != nil:
+			coord = coordinate{X: *in.X, Y: *in.Y, SRID: srid}
+		case in.Lon != nil || in.Lat != nil:
+			return nil, nil, fmt.Errorf("both 'lon' and 'lat' must be set")
+		case in.X != nil || in.Y != nil:
+			return nil, nil, fmt.Errorf("both 'x' and 'y' must be set")
 		default:
 			return nil, nil, fmt.Errorf("coordinate required: provide lon/lat or x/y")
 		}
