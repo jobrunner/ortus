@@ -1,0 +1,127 @@
+# Weekly static-analysis security scan of every GitHub Actions workflow
+# in this repo, using zizmor (https://github.com/woodruffw/zizmor).
+#
+# zizmor catches Actions-specific security issues that actionlint and
+# Dependabot don't:
+#   - script injection via untrusted github.event fields
+#   - pwn-request patterns (pull_request_target + checkout of untrusted code)
+#   - cache poisoning
+#   - mutable references (action@master, action@main without sha pin)
+#   - over-privileged permissions
+#
+# Mirrors the vuln-scan.yml workflow: runs weekly + manual trigger,
+# opens / comments on a `security`-labelled GitHub issue on findings.
+name: Actions Security
+
+on:
+  schedule:
+    - cron: '30 6 * * 1'      # Monday 06:30 UTC, 30 min after vuln-scan
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  zizmor:
+    name: zizmor
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write           # open / comment on the security issue on findings
+      security-events: write  # upload SARIF to the GitHub Security tab
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install zizmor
+        run: pip install --no-cache-dir zizmor==1.25.2
+
+      - name: Run zizmor
+        id: scan
+        run: |
+          # zizmor exits non-zero on findings. We only fail on high-severity
+          # findings (template-injection, cache-poisoning etc.); informational
+          # and low findings show up in the SARIF upload but don't gate.
+          # Project policy + ignored audits are encoded in .github/zizmor.yml.
+          #
+          # Exit-code split mirrors vuln-scan.yml:
+          #   0 — clean
+          #   14 — high-severity findings present (zizmor's normal failure code)
+          #   anything else — actual scan error
+          set +e
+          zizmor --config .github/zizmor.yml --min-severity=high \
+            --format sarif --output zizmor.sarif . > zizmor.stdout 2> zizmor.stderr
+          rc=$?
+          set -e
+          # Plain-text variant for the issue body.
+          zizmor --config .github/zizmor.yml --min-severity=high . > zizmor.txt 2>&1 || true
+          {
+            echo "rc=$rc"
+            if [ -s zizmor.sarif ] && [ "$rc" = "14" ]; then
+              echo "has_findings=true"
+            else
+              echo "has_findings=false"
+            fi
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload SARIF to GitHub Security tab
+        if: steps.scan.outputs.has_findings == 'true'
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: zizmor.sarif
+          category: zizmor
+
+      - name: Ensure `security` label exists
+        if: steps.scan.outputs.has_findings == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh label create security \
+            --color D93F0B \
+            --description "Security vulnerability or scan finding" \
+            --force
+
+      - name: Open or update security issue
+        if: steps.scan.outputs.has_findings == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          title="Weekly actions-security scan: findings in workflows"
+          existing=$(gh issue list \
+            --label security \
+            --state open \
+            --search "$title in:title" \
+            --json number --jq '.[0].number // ""')
+
+          body=$(printf 'zizmor reports security findings in this repo'\''s GitHub Actions workflows.\n\n```\n%s\n```\n\n## Fix\n\nReview the findings above and apply the suggested fixes to the affected workflow files. The SARIF results are also uploaded to the Security tab under code scanning alerts.\n' "$(cat zizmor.txt)")
+
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            gh issue create \
+              --title "$title" \
+              --label security \
+              --body "$body"
+          fi
+
+      - name: Fail with scan-error context
+        if: steps.scan.outputs.rc != '0' && steps.scan.outputs.rc != '14'
+        # Inject via env to avoid template-injection (per our own zizmor
+        # audit) — although the value comes from a step output and is
+        # therefore not attacker-controlled, the static analyser still
+        # flags inline expansion.
+        env:
+          RC: ${{ steps.scan.outputs.rc }}
+        run: |
+          echo "::error::zizmor exited with rc=$RC — not a finding, likely a scan error."
+          cat zizmor.stderr
+          exit 1
+
+      - name: Fail job if findings present
+        if: steps.scan.outputs.has_findings == 'true'
+        run: exit 1
