@@ -53,8 +53,10 @@ jobs:
           #   14 — high-severity findings present (zizmor's normal failure code)
           #   anything else — actual scan error
           set +e
+          # zizmor 1.x has no --output flag; SARIF is emitted on stdout, so
+          # redirect stdout to the file and keep diagnostics on stderr.
           zizmor --config .github/zizmor.yml --min-severity=high \
-            --format sarif --output zizmor.sarif . > zizmor.stdout 2> zizmor.stderr
+            --format sarif . > zizmor.sarif 2> zizmor.stderr
           rc=$?
           set -e
           # Plain-text variant for the issue body.
