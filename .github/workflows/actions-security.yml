@@ -30,7 +30,7 @@ jobs:
       issues: write           # open / comment on the security issue on findings
       security-events: write  # upload SARIF to the GitHub Security tab
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Python
         uses: actions/setup-python@v5
