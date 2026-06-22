@@ -53,17 +53,22 @@ jobs:
           #   14 — high-severity findings present (zizmor's normal failure code)
           #   anything else — actual scan error
           set +e
-          # zizmor 1.x has no --output flag; SARIF is emitted on stdout, so
-          # redirect stdout to the file and keep diagnostics on stderr.
+          # SARIF report for the Security-tab upload. zizmor 1.x has no
+          # --output flag, so SARIF is emitted on stdout — redirect it to
+          # the file. NOTE: with --format sarif zizmor always exits 0
+          # (gating is delegated to the code-scanning dashboard), so this
+          # run's exit code can't tell us whether findings exist.
           zizmor --config .github/zizmor.yml --min-severity=high \
             --format sarif . > zizmor.sarif 2> zizmor.stderr
+          # Authoritative gating pass: the default (plain) format exits 14
+          # on findings, 0 when clean, anything else on a real scan error.
+          # Doubles as the human-readable issue body.
+          zizmor --config .github/zizmor.yml --min-severity=high . > zizmor.txt 2> zizmor.stderr
           rc=$?
           set -e
-          # Plain-text variant for the issue body.
-          zizmor --config .github/zizmor.yml --min-severity=high . > zizmor.txt 2>&1 || true
           {
             echo "rc=$rc"
-            if [ -s zizmor.sarif ] && [ "$rc" = "14" ]; then
+            if [ "$rc" = "14" ]; then
               echo "has_findings=true"
             else
               echo "has_findings=false"
