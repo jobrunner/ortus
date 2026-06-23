@@ -9,7 +9,6 @@ import (
 
 	"github.com/gorilla/mux"
 
-	"github.com/jobrunner/ortus/internal/application"
 	"github.com/jobrunner/ortus/internal/domain"
 )
 
@@ -400,7 +399,7 @@ func (s *Server) handleSync(w http.ResponseWriter, r *http.Request) {
 
 	result, err := s.syncService.TriggerSync(r.Context())
 	if err != nil {
-		if errors.Is(err, application.ErrRateLimited) {
+		if errors.Is(err, domain.ErrRateLimited) {
 			w.Header().Set("Retry-After", "30")
 			s.writeError(w, http.StatusTooManyRequests, "Rate limit exceeded. Try again in 30 seconds.")
 			return

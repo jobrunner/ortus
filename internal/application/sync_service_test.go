@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jobrunner/ortus/internal/domain"
 	"github.com/jobrunner/ortus/internal/ports/output"
 )
 
@@ -37,7 +38,7 @@ func TestSyncService_RateLimiting(t *testing.T) {
 
 	// Immediate second call should be rate limited
 	_, err = service.TriggerSync(ctx)
-	if err != ErrRateLimited {
+	if err != domain.ErrRateLimited {
 		t.Errorf("expected ErrRateLimited, got %v", err)
 	}
 }
