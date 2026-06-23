@@ -1,0 +1,56 @@
+# Reference manifest for the present-day Köppen-Geiger classification (Beck et al. V3).
+#
+# This file is hand-maintainable, but in the pipeline it is produced by gen_manifest.py
+# from the official legend.txt (which is also the authoritative source for the per-class
+# RGB colors that gen_manifest.py adds as a `color` property — omitted here on purpose so
+# this static example asserts only the values we can vouch for: code, description, group).
+#
+# Codes/descriptions/group follow the 30-class Köppen-Geiger numbering of Beck et al.
+schema_version: 1
+id: koeppen-geiger-present
+name: Köppen-Geiger 1980–2016 (V3)
+description: >-
+  Present-day Köppen-Geiger climate classification at ~1 km resolution
+  for the 1980–2016 period.
+license:
+  name: CC-BY-4.0
+  attribution: Beck et al. (2018), Scientific Data 5:180214
+  url: https://www.gloh2o.org/koppen/
+crs: EPSG:4326
+layers:
+  - id: present
+    file: koeppen.cog.tif
+    band: 1
+    nodata: 0
+    sampling: nearest
+    mapping:
+      1:  { code: "Af",  description: "Tropical, rainforest",                group: "Tropical" }
+      2:  { code: "Am",  description: "Tropical, monsoon",                   group: "Tropical" }
+      3:  { code: "Aw",  description: "Tropical, savannah",                  group: "Tropical" }
+      4:  { code: "BWh", description: "Arid, desert, hot",                   group: "Arid" }
+      5:  { code: "BWk", description: "Arid, desert, cold",                  group: "Arid" }
+      6:  { code: "BSh", description: "Arid, steppe, hot",                   group: "Arid" }
+      7:  { code: "BSk", description: "Arid, steppe, cold",                  group: "Arid" }
+      8:  { code: "Csa", description: "Temperate, dry summer, hot summer",   group: "Temperate" }
+      9:  { code: "Csb", description: "Temperate, dry summer, warm summer",  group: "Temperate" }
+      10: { code: "Csc", description: "Temperate, dry summer, cold summer",  group: "Temperate" }
+      11: { code: "Cwa", description: "Temperate, dry winter, hot summer",   group: "Temperate" }
+      12: { code: "Cwb", description: "Temperate, dry winter, warm summer",  group: "Temperate" }
+      13: { code: "Cwc", description: "Temperate, dry winter, cold summer",  group: "Temperate" }
+      14: { code: "Cfa", description: "Temperate, no dry season, hot summer", group: "Temperate" }
+      15: { code: "Cfb", description: "Temperate, no dry season, warm summer", group: "Temperate" }
+      16: { code: "Cfc", description: "Temperate, no dry season, cold summer", group: "Temperate" }
+      17: { code: "Dsa", description: "Cold, dry summer, hot summer",        group: "Cold" }
+      18: { code: "Dsb", description: "Cold, dry summer, warm summer",       group: "Cold" }
+      19: { code: "Dsc", description: "Cold, dry summer, cold summer",       group: "Cold" }
+      20: { code: "Dsd", description: "Cold, dry summer, very cold winter",  group: "Cold" }
+      21: { code: "Dwa", description: "Cold, dry winter, hot summer",        group: "Cold" }
+      22: { code: "Dwb", description: "Cold, dry winter, warm summer",       group: "Cold" }
+      23: { code: "Dwc", description: "Cold, dry winter, cold summer",       group: "Cold" }
+      24: { code: "Dwd", description: "Cold, dry winter, very cold winter",  group: "Cold" }
+      25: { code: "Dfa", description: "Cold, no dry season, hot summer",     group: "Cold" }
+      26: { code: "Dfb", description: "Cold, no dry season, warm summer",    group: "Cold" }
+      27: { code: "Dfc", description: "Cold, no dry season, cold summer",    group: "Cold" }
+      28: { code: "Dfd", description: "Cold, no dry season, very cold winter", group: "Cold" }
+      29: { code: "ET",  description: "Polar, tundra",                       group: "Polar" }
+      30: { code: "EF",  description: "Polar, frost",                        group: "Polar" }

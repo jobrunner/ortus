@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ortus/spec/raster-bundle/ortus-raster.schema.json",
+  "title": "Ortus Raster Bundle Manifest",
+  "description": "Manifest for an ortus raster bundle. Lives at the ZIP root under the fixed name 'ortus-raster.yaml'. Describes one categorical raster source (one or more COG layers) and the value -> attribute mapping that turns a sampled pixel value into Sachdaten.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "id", "name", "license", "crs", "layers"],
+  "properties": {
+    "schema_version": {
+      "description": "Bundle schema version. Bump on breaking changes.",
+      "const": 1
+    },
+    "id": {
+      "description": "Stable source id, kebab-case. Becomes the ortus source id; must be unique across all loaded bundles.",
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "name": {
+      "description": "Human-readable source name.",
+      "type": "string",
+      "minLength": 1
+    },
+    "description": {
+      "description": "Optional longer description of the dataset.",
+      "type": "string"
+    },
+    "license": { "$ref": "#/$defs/license" },
+    "crs": {
+      "description": "Canonical CRS of every raster in this bundle. The pipeline MUST have reprojected all rasters to this CRS so ortus never reprojects at query time.",
+      "type": "string",
+      "pattern": "^EPSG:[0-9]+$"
+    },
+    "layers": {
+      "description": "One or more raster layers (e.g. time slices, scenarios, or tiles already mosaicked into one COG each).",
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/layer" }
+    }
+  },
+  "$defs": {
+    "license": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "description": "SPDX id or license name, e.g. 'CC-BY-4.0'." },
+        "attribution": { "type": "string", "description": "Required attribution string." },
+        "url": { "type": "string", "format": "uri", "description": "Link to the license or source." }
+      }
+    },
+    "layer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "file"],
+      "comment": "Exactly one of 'mapping' (inline) or 'value_mapping' (sidecar pointer) must be present. The oneOf below enforces this: if both are present, both subschemas match and oneOf fails; if neither is present, neither matches and oneOf fails.",
+      "oneOf": [
+        { "required": ["mapping"], "not": { "required": ["value_mapping"] } },
+        { "required": ["value_mapping"], "not": { "required": ["mapping"] } }
+      ],
+      "properties": {
+        "id": {
+          "description": "Layer id, kebab-case, unique within the bundle.",
+          "type": "string",
+          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "description": { "type": "string" },
+        "file": {
+          "description": "Relative path to the COG inside the bundle. No leading slash, no parent traversal (validator additionally rejects '..').",
+          "type": "string",
+          "pattern": "^(?!/)(?!.*\\.\\.).+\\.tiff?$"
+        },
+        "band": {
+          "description": "1-based band index to sample.",
+          "type": "integer",
+          "minimum": 1,
+          "default": 1
+        },
+        "nodata": {
+          "description": "Pixel value treated as no-data. A sample equal to nodata yields no feature (no match), not an error.",
+          "type": "number"
+        },
+        "sampling": {
+          "description": "Resampling at the query point. Categorical rasters MUST use 'nearest' (interpolation would invent classes).",
+          "type": "string",
+          "enum": ["nearest", "bilinear"],
+          "default": "nearest"
+        },
+        "mapping": { "$ref": "#/$defs/mapping" },
+        "value_mapping": {
+          "description": "Relative path to a sidecar mapping file (.json/.yaml/.yml) for large tables. Same logical shape as the inline 'mapping'. No leading slash, no parent traversal.",
+          "type": "string",
+          "pattern": "^(?!/)(?!.*\\.\\.).+\\.(ya?ml|json)$"
+        }
+      }
+    },
+    "mapping": {
+      "description": "Inline value -> attribute table. Keys are integer pixel values written as JSON strings (object keys are always strings). Each value is a flat object of scalar properties that becomes Feature.Properties verbatim.",
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "pattern": "^-?(0|[1-9][0-9]*)$",
+        "description": "Integer pixel value with no leading zeros, optional leading minus."
+      },
+      "additionalProperties": { "$ref": "#/$defs/attributes" }
+    },
+    "attributes": {
+      "description": "Flat set of attribute properties for one pixel value. Scalars only; UTF-8 strings should be quoted in YAML to avoid the 'Norway problem' (no/yes/on becoming booleans).",
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": ["string", "number", "boolean", "null"]
+      }
+    }
+  }
+}
