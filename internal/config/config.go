@@ -18,6 +18,13 @@ const (
 	StorageTypeHTTP  = "http"
 )
 
+// DNSProviderAzure is the only supported ACME DNS-01 challenge provider.
+const DNSProviderAzure = "azure"
+
+// mcpLoopbackHost is the canonical loopback address; MCP binds here by default
+// and treats it (with localhost/::1) as trusted, token-optional.
+const mcpLoopbackHost = "127.0.0.1"
+
 // Config holds all application configuration.
 type Config struct {
 	Server  ServerConfig  `mapstructure:"server"`
@@ -222,7 +229,7 @@ func Defaults() {
 	viper.SetDefault("server.frontend_enabled", true)
 
 	// Storage defaults
-	viper.SetDefault("storage.type", "local")
+	viper.SetDefault("storage.type", StorageTypeLocal)
 	viper.SetDefault("storage.local_path", "./data")
 	viper.SetDefault("storage.http.index_file", "index.txt")
 	viper.SetDefault("storage.http.timeout", 5*time.Minute)
@@ -237,7 +244,7 @@ func Defaults() {
 	viper.SetDefault("tls.enabled", false)
 	viper.SetDefault("tls.cache_dir", "./.certmagic")
 	viper.SetDefault("tls.staging", false)
-	viper.SetDefault("tls.dns.provider", "azure")
+	viper.SetDefault("tls.dns.provider", DNSProviderAzure)
 
 	// Metrics defaults
 	viper.SetDefault("metrics.enabled", true)
@@ -258,7 +265,7 @@ func Defaults() {
 
 	// MCP defaults
 	viper.SetDefault("mcp.enabled", false)
-	viper.SetDefault("mcp.host", "127.0.0.1")
+	viper.SetDefault("mcp.host", mcpLoopbackHost)
 	viper.SetDefault("mcp.port", 9091)
 	viper.SetDefault("mcp.path", "/mcp")
 
@@ -360,7 +367,7 @@ func (c *Config) validateMCP() error {
 	// interfaces with an empty host, which would silently expose the
 	// MCP endpoint without auth. Defaults set host to "127.0.0.1" so this
 	// only matters when a user explicitly overrides it to an empty string.
-	loopback := c.MCP.Host == "127.0.0.1" || c.MCP.Host == "localhost" || c.MCP.Host == "::1"
+	loopback := c.MCP.Host == mcpLoopbackHost || c.MCP.Host == "localhost" || c.MCP.Host == "::1"
 	if !loopback && c.MCP.Token == "" {
 		return fmt.Errorf("mcp.enabled is true and host %q is not loopback — ORTUS_MCP_TOKEN must be set", c.MCP.Host)
 	}
@@ -433,7 +440,7 @@ func (c *Config) validateTLS() error {
 		return fmt.Errorf("TLS enabled but no email specified")
 	}
 	// Validate DNS-01 challenge configuration
-	if c.TLS.DNS.Provider != "azure" {
+	if c.TLS.DNS.Provider != DNSProviderAzure {
 		return fmt.Errorf("unsupported DNS provider: %s (only 'azure' is supported)", c.TLS.DNS.Provider)
 	}
 	if c.TLS.DNS.SubscriptionID == "" {
@@ -447,13 +454,13 @@ func (c *Config) validateTLS() error {
 
 func (c *Config) validateStorage() error {
 	switch c.Storage.Type {
-	case "local":
+	case StorageTypeLocal:
 		return c.validateLocalStorage()
-	case "s3":
+	case StorageTypeS3:
 		return c.validateS3Storage()
-	case "azure":
+	case StorageTypeAzure:
 		return c.validateAzureStorage()
-	case "http":
+	case StorageTypeHTTP:
 		return c.validateHTTPStorage()
 	default:
 		return fmt.Errorf("unknown storage type: %s", c.Storage.Type)

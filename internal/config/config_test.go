@@ -53,7 +53,7 @@ func TestLoadFromFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
 	yaml := `
 server:
-  host: "127.0.0.1"
+  host: "10.0.0.5"
   port: 18080
 storage:
   type: local
@@ -72,8 +72,8 @@ logging:
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if cfg.Server.Host != "127.0.0.1" || cfg.Server.Port != 18080 {
-		t.Errorf("server = %s:%d, want 127.0.0.1:18080", cfg.Server.Host, cfg.Server.Port)
+	if cfg.Server.Host != "10.0.0.5" || cfg.Server.Port != 18080 {
+		t.Errorf("server = %s:%d, want 10.0.0.5:18080", cfg.Server.Host, cfg.Server.Port)
 	}
 	if cfg.Storage.LocalPath != "/srv/data" {
 		t.Errorf("local_path = %q", cfg.Storage.LocalPath)
@@ -123,25 +123,25 @@ func TestValidateStorage(t *testing.T) {
 		mutate  func(*Config)
 		wantErr bool
 	}{
-		{"local ok", func(c *Config) { c.Storage.Type = "local"; c.Storage.LocalPath = "./data" }, false},
-		{"local missing path", func(c *Config) { c.Storage.Type = "local" }, true},
-		{"s3 ok", func(c *Config) { c.Storage.Type = "s3"; c.Storage.S3.Bucket = "b"; c.Storage.S3.Region = "eu" }, false},
-		{"s3 missing bucket", func(c *Config) { c.Storage.Type = "s3"; c.Storage.S3.Region = "eu" }, true},
-		{"s3 missing region", func(c *Config) { c.Storage.Type = "s3"; c.Storage.S3.Bucket = "b" }, true},
+		{"local ok", func(c *Config) { c.Storage.Type = StorageTypeLocal; c.Storage.LocalPath = "./data" }, false},
+		{"local missing path", func(c *Config) { c.Storage.Type = StorageTypeLocal }, true},
+		{"s3 ok", func(c *Config) { c.Storage.Type = StorageTypeS3; c.Storage.S3.Bucket = "b"; c.Storage.S3.Region = "eu" }, false},
+		{"s3 missing bucket", func(c *Config) { c.Storage.Type = StorageTypeS3; c.Storage.S3.Region = "eu" }, true},
+		{"s3 missing region", func(c *Config) { c.Storage.Type = StorageTypeS3; c.Storage.S3.Bucket = "b" }, true},
 		{"azure ok (account)", func(c *Config) {
-			c.Storage.Type = "azure"
+			c.Storage.Type = StorageTypeAzure
 			c.Storage.Azure.Container = "c"
 			c.Storage.Azure.AccountName = "a"
 		}, false},
 		{"azure ok (connstr)", func(c *Config) {
-			c.Storage.Type = "azure"
+			c.Storage.Type = StorageTypeAzure
 			c.Storage.Azure.Container = "c"
 			c.Storage.Azure.ConnectionString = "x"
 		}, false},
-		{"azure missing container", func(c *Config) { c.Storage.Type = "azure"; c.Storage.Azure.AccountName = "a" }, true},
-		{"azure missing creds", func(c *Config) { c.Storage.Type = "azure"; c.Storage.Azure.Container = "c" }, true},
-		{"http ok", func(c *Config) { c.Storage.Type = "http"; c.Storage.HTTP.BaseURL = "https://x" }, false},
-		{"http missing url", func(c *Config) { c.Storage.Type = "http" }, true},
+		{"azure missing container", func(c *Config) { c.Storage.Type = StorageTypeAzure; c.Storage.Azure.AccountName = "a" }, true},
+		{"azure missing creds", func(c *Config) { c.Storage.Type = StorageTypeAzure; c.Storage.Azure.Container = "c" }, true},
+		{"http ok", func(c *Config) { c.Storage.Type = StorageTypeHTTP; c.Storage.HTTP.BaseURL = "https://x" }, false},
+		{"http missing url", func(c *Config) { c.Storage.Type = StorageTypeHTTP }, true},
 		{"unknown type", func(c *Config) { c.Storage.Type = "ftp" }, true},
 	}
 	for _, tc := range cases {
@@ -160,7 +160,7 @@ func TestValidateServerPort(t *testing.T) {
 	for _, port := range []int{0, -1, 70000} {
 		c := &Config{}
 		c.Server.Port = port
-		c.Storage.Type = "local"
+		c.Storage.Type = StorageTypeLocal
 		c.Storage.LocalPath = "./data"
 		if err := c.Validate(); err == nil {
 			t.Errorf("port %d should be invalid", port)
@@ -172,12 +172,12 @@ func TestValidateTLS(t *testing.T) {
 	mk := func() *Config {
 		c := &Config{}
 		c.Server.Port = 8080
-		c.Storage.Type = "local"
+		c.Storage.Type = StorageTypeLocal
 		c.Storage.LocalPath = "./data"
 		c.TLS.Enabled = true
 		c.TLS.Domains = []string{"example.com"}
 		c.TLS.Email = "a@b.c"
-		c.TLS.DNS.Provider = "azure"
+		c.TLS.DNS.Provider = DNSProviderAzure
 		c.TLS.DNS.SubscriptionID = "sub"
 		c.TLS.DNS.ResourceGroupName = "rg"
 		return c
@@ -206,10 +206,10 @@ func TestValidateMCP(t *testing.T) {
 	mk := func() *Config {
 		c := &Config{}
 		c.Server.Port = 8080
-		c.Storage.Type = "local"
+		c.Storage.Type = StorageTypeLocal
 		c.Storage.LocalPath = "./data"
 		c.MCP.Enabled = true
-		c.MCP.Host = "127.0.0.1"
+		c.MCP.Host = mcpLoopbackHost
 		c.MCP.Port = 9091
 		c.MCP.Path = "/mcp"
 		return c
@@ -241,7 +241,7 @@ func TestValidateMetricsOTLPAndTracing(t *testing.T) {
 	mk := func() *Config {
 		c := &Config{}
 		c.Server.Port = 8080
-		c.Storage.Type = "local"
+		c.Storage.Type = StorageTypeLocal
 		c.Storage.LocalPath = "./data"
 		return c
 	}
@@ -287,9 +287,9 @@ func TestMetricsOTLPEndpointFallback(t *testing.T) {
 }
 
 func TestServerAddress(t *testing.T) {
-	c := ServerConfig{Host: "localhost", Port: 8080}
-	if got := c.Address(); got != "localhost:8080" {
-		t.Errorf("Address() = %q, want localhost:8080", got)
+	c := ServerConfig{Host: "example.org", Port: 8080}
+	if got := c.Address(); got != "example.org:8080" {
+		t.Errorf("Address() = %q, want example.org:8080", got)
 	}
 }
 
