@@ -135,3 +135,8 @@ partial reads (HTTP range requests) and efficient local random access (read only
 containing the pixel). COG standardizes **access**, not **meaning** — it does not define
 what value `7` means, how many files a dataset has, or licensing. That is exactly what the
 bundle manifest adds on top.
+
+**Compression: use `LZW`.** Bundle COGs must be written with `COMPRESS=LZW` (or none).
+The Go reader ortus uses (`tingold/gocog`, see [ADR-0013](../adr/0013-cog-reader-library.md))
+reads LZW/uncompressed tiles correctly but currently fails on GDAL's `DEFLATE` tiles. LZW
+stays lossless and compressed.

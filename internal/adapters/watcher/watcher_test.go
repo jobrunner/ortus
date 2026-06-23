@@ -84,7 +84,7 @@ func TestOperationString(t *testing.T) {
 	}
 }
 
-func TestIsGeoPackageFile(t *testing.T) {
+func TestIsSupportedSourceFile(t *testing.T) {
 	tests := []struct {
 		path     string
 		expected bool
@@ -93,6 +93,9 @@ func TestIsGeoPackageFile(t *testing.T) {
 		{"test.GPKG", true},
 		{"test.GpKg", true},
 		{"/path/to/file.gpkg", true},
+		{"bundle.zip", true},
+		{"bundle.ZIP", true},
+		{"/data/koeppen.zip", true},
 		{"test.txt", false},
 		{"test.gpkg.bak", false},
 		{"gpkg", false},
@@ -101,8 +104,8 @@ func TestIsGeoPackageFile(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.path, func(t *testing.T) {
-			if got := isGeoPackageFile(tt.path); got != tt.expected {
-				t.Errorf("isGeoPackageFile(%q) = %v, want %v", tt.path, got, tt.expected)
+			if got := isSupportedSourceFile(tt.path); got != tt.expected {
+				t.Errorf("isSupportedSourceFile(%q) = %v, want %v", tt.path, got, tt.expected)
 			}
 		})
 	}

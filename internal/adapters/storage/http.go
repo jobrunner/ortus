@@ -92,8 +92,8 @@ func (s *HTTPStorage) List(ctx context.Context) ([]output.StorageObject, error) 
 			continue
 		}
 
-		// Only include .gpkg files
-		if !strings.HasSuffix(strings.ToLower(line), ".gpkg") {
+		// Only include loadable sources: GeoPackages and raster bundles.
+		if !isSupportedSourceFile(line) {
 			continue
 		}
 
