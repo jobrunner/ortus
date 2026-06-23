@@ -333,9 +333,18 @@ func (b *bundle) closeFiles() {
 }
 
 // deriveSourceID extracts the source id from a bundle path (filename stem).
+// It mirrors the registry's derivePackageID, including the extension-only edge
+// case (e.g. ".zip" → ".zip"), so dedup/unload stay consistent across adapters.
 func deriveSourceID(path string) string {
 	base := filepath.Base(path)
-	return strings.TrimSuffix(base, filepath.Ext(base))
+	if base == "" || base == "." {
+		return ""
+	}
+	ext := filepath.Ext(base)
+	if ext == "" || len(base) == len(ext) {
+		return base
+	}
+	return strings.TrimSuffix(base, ext)
 }
 
 // parseEPSG parses an "EPSG:<n>" CRS string into its numeric SRID.
@@ -427,9 +436,13 @@ func extractFile(f *zip.File, target string, limit int64) (int64, error) {
 	}
 	defer func() { _ = out.Close() }()
 
-	n, err := io.CopyN(out, rc, limit+1) // +1 so hitting the limit is detectable
+	n, err := io.CopyN(out, rc, limit+1) // +1 so an over-limit entry is detectable
 	if err != nil && !errors.Is(err, io.EOF) {
 		return n, err
+	}
+	if n > limit {
+		// Fail loudly rather than silently truncate the entry.
+		return n, fmt.Errorf("bundle entry %q exceeds the extraction size limit", f.Name)
 	}
 	return n, nil
 }

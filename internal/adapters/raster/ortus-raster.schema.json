@@ -85,9 +85,9 @@
           "type": "number"
         },
         "sampling": {
-          "description": "Resampling at the query point. Categorical rasters MUST use 'nearest' (interpolation would invent classes).",
+          "description": "Resampling at the query point. Only 'nearest' is supported — categorical rasters must not interpolate (it would invent classes).",
           "type": "string",
-          "enum": ["nearest", "bilinear"],
+          "enum": ["nearest"],
           "default": "nearest"
         },
         "mapping": { "$ref": "#/$defs/mapping" },
