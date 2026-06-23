@@ -55,7 +55,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["id", "file"],
-      "comment": "Exactly one of 'mapping' (inline) or 'value_mapping' (sidecar pointer) must be present. The oneOf below enforces this: if both are present, both subschemas match and oneOf fails; if neither is present, neither matches and oneOf fails.",
+      "$comment": "Exactly one of 'mapping' (inline) or 'value_mapping' (sidecar pointer) must be present. The oneOf below enforces this: if both are present, both subschemas match and oneOf fails; if neither is present, neither matches and oneOf fails.",
       "oneOf": [
         { "required": ["mapping"], "not": { "required": ["value_mapping"] } },
         { "required": ["value_mapping"], "not": { "required": ["mapping"] } }

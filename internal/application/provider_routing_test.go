@@ -131,6 +131,26 @@ func TestRegistry_QueryEntryWithoutRepo(t *testing.T) {
 	}
 }
 
+func TestRegistry_UnloadEntryWithoutRepo(t *testing.T) {
+	// A malformed entry (no owning adapter) must be dropped by UnloadPackage,
+	// not left stuck in StatusUnloading.
+	reg := newRoutingRegistry(nil)
+	reg.mu.Lock()
+	reg.packages["broken"] = &packageEntry{
+		Package: &domain.Source{ID: "broken"},
+		Status:  domain.StatusReady,
+		// Repo intentionally nil
+	}
+	reg.mu.Unlock()
+
+	if err := reg.UnloadPackage(context.Background(), "broken"); err != nil {
+		t.Fatalf("UnloadPackage: %v", err)
+	}
+	if reg.IsLoaded("broken") {
+		t.Error("malformed entry should have been removed, not left stuck")
+	}
+}
+
 func TestRegistry_NoProviders(t *testing.T) {
 	reg := newRoutingRegistry(nil)
 	err := reg.LoadPackage(context.Background(), "/data/a.gpkg")

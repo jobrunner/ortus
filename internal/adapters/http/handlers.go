@@ -331,7 +331,7 @@ func (s *Server) formatQueryResponse(resp *domain.QueryResponse) map[string]inte
 	}
 }
 
-// formatPackage formats a GeoPackage for JSON output.
+// formatPackage formats a source for JSON output.
 func (s *Server) formatPackage(pkg *domain.Source) map[string]interface{} {
 	return map[string]interface{}{
 		"id":           pkg.ID,

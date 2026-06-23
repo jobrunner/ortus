@@ -58,7 +58,8 @@ func (s *Source) GetLayer(name string) (*Layer, bool) {
 	return nil, false
 }
 
-// Layer represents a feature layer within a GeoPackage.
+// Layer represents a queryable layer within a Source: a vector feature table
+// (GeoPackage) or, for raster sources, a raster layer/band.
 type Layer struct {
 	Name           string  // Layer name from gpkg_contents.table_name
 	Description    string  // Layer description

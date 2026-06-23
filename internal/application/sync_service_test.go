@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"os"
 	"testing"
@@ -38,7 +39,7 @@ func TestSyncService_RateLimiting(t *testing.T) {
 
 	// Immediate second call should be rate limited
 	_, err = service.TriggerSync(ctx)
-	if err != domain.ErrRateLimited {
+	if !errors.Is(err, domain.ErrRateLimited) {
 		t.Errorf("expected ErrRateLimited, got %v", err)
 	}
 }

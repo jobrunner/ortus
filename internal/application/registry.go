@@ -147,12 +147,14 @@ func (r *PackageRegistry) LoadPackage(ctx context.Context, path string) error {
 		}
 	}
 
-	// Update status
+	// Update status. Indexed reflects the actual post-Prepare per-layer state
+	// (Prepare updates each layer's HasIndex), not an unconditional assumption —
+	// a failed Prepare leaves its layer unindexed and the source not fully ready.
 	r.mu.Lock()
 	if entry, ok := r.packages[pkg.ID]; ok {
 		entry.Status = domain.StatusReady
-		entry.Package.Indexed = true
 		entry.Package.LoadedAt = time.Now()
+		entry.Package.Indexed = allLayersIndexed(entry.Package.Layers)
 	}
 	r.mu.Unlock()
 
@@ -173,17 +175,22 @@ func (r *PackageRegistry) UnloadPackage(ctx context.Context, packageID string) e
 	r.logger.Info("unloading package", "id", packageID)
 
 	r.mu.Lock()
-	var repo output.SpatialSource
-	if entry, ok := r.packages[packageID]; ok {
-		entry.Status = domain.StatusUnloading
-		repo = entry.Repo
+	entry, ok := r.packages[packageID]
+	if !ok {
+		r.mu.Unlock()
+		return nil // not loaded — nothing to do
 	}
-	r.mu.Unlock()
-
+	entry.Status = domain.StatusUnloading
+	repo := entry.Repo
 	if repo == nil {
-		// Not loaded — nothing to close.
+		// Malformed entry with no owning adapter: nothing to close, but it
+		// must not be left stuck in StatusUnloading — drop it.
+		delete(r.packages, packageID)
+		r.mu.Unlock()
+		r.updateMetrics()
 		return nil
 	}
+	r.mu.Unlock()
 
 	if err := repo.Close(ctx, packageID); err != nil {
 		r.logger.Error("failed to close package", "id", packageID, "error", err)
@@ -199,6 +206,17 @@ func (r *PackageRegistry) UnloadPackage(ctx context.Context, packageID string) e
 	r.updateMetrics()
 	span.SetStatus(output.StatusOK, "")
 	return nil
+}
+
+// allLayersIndexed reports whether every layer has its index/preparation done.
+// An empty layer set is vacuously indexed.
+func allLayersIndexed(layers []domain.Layer) bool {
+	for i := range layers {
+		if !layers[i].HasIndex {
+			return false
+		}
+	}
+	return true
 }
 
 // providerFor returns the first registered adapter that supports the given
