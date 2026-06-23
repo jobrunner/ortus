@@ -24,6 +24,8 @@ var (
 	ErrIndexCreationFailed   = fmt.Errorf("index creation: %w", ErrInternal)
 	ErrNotReady              = fmt.Errorf("service not ready: %w", ErrUnavailable)
 	ErrStorageUnavailable    = fmt.Errorf("storage: %w", ErrUnavailable)
+	ErrUnsupportedSource     = fmt.Errorf("source: %w", ErrUnsupported)
+	ErrRateLimited           = errors.New("rate limit exceeded")
 )
 
 // ValidationError represents a detailed validation error.

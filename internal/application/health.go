@@ -102,7 +102,7 @@ func (s *HealthService) GetHealthDetails(ctx context.Context) input.HealthDetail
 // PackageHealth contains health info for a single package.
 type PackageHealth struct {
 	ID     string
-	Status domain.GeoPackageStatus
+	Status domain.SourceStatus
 	Ready  bool
 }
 

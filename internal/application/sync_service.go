@@ -3,26 +3,19 @@ package application
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
 	"time"
 
+	"github.com/jobrunner/ortus/internal/domain"
+	"github.com/jobrunner/ortus/internal/ports/input"
 	"github.com/jobrunner/ortus/internal/ports/output"
 )
 
-// ErrRateLimited is returned when the sync API rate limit is exceeded.
-var ErrRateLimited = errors.New("rate limit exceeded")
-
-// SyncResult contains the result of a sync operation.
-type SyncResult struct {
-	PackagesAdded   int       `json:"packages_added"`
-	PackagesRemoved int       `json:"packages_removed"`
-	PackagesTotal   int       `json:"packages_total"`
-	SyncedAt        time.Time `json:"synced_at"`
-	NextScheduledAt time.Time `json:"next_scheduled_at,omitempty"`
-}
+// SyncResult is the outcome of a sync run; defined on the driving port so
+// adapters depend on input.SyncResult, not an application type.
+type SyncResult = input.SyncResult
 
 // SyncService manages periodic synchronization with remote storage.
 type SyncService struct {
@@ -114,7 +107,7 @@ func (s *SyncService) TriggerSync(ctx context.Context) (SyncResult, error) {
 
 	// Rate limit: 30 seconds cooldown (allows ~2 requests per minute)
 	if time.Since(s.lastAPISync) < 30*time.Second {
-		return SyncResult{}, ErrRateLimited
+		return SyncResult{}, domain.ErrRateLimited
 	}
 	s.lastAPISync = time.Now()
 

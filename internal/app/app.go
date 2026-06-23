@@ -20,6 +20,7 @@ import (
 	"github.com/jobrunner/ortus/internal/adapters/watcher"
 	"github.com/jobrunner/ortus/internal/application"
 	"github.com/jobrunner/ortus/internal/config"
+	"github.com/jobrunner/ortus/internal/ports/input"
 	"github.com/jobrunner/ortus/internal/ports/output"
 )
 
@@ -136,9 +137,10 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*App, er
 	app.Repository = geopackage.NewRepository()
 	app.Repository.SetTracer(app.Tracer)
 
-	// Initialize package registry
+	// Initialize package registry with the available source adapters. The
+	// registry routes each file to the first adapter whose Supports matches.
 	app.Registry = application.NewPackageRegistry(
-		app.Repository,
+		[]output.SpatialSource{app.Repository},
 		app.Storage,
 		meter,
 		app.Tracer,
@@ -153,7 +155,6 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*App, er
 	// Initialize query service
 	app.QueryService = application.NewQueryService(
 		app.Registry,
-		app.Repository,
 		transformer,
 		meter,
 		app.Tracer,
@@ -181,13 +182,19 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*App, er
 		)
 	}
 
-	// Initialize HTTP server
+	// Initialize HTTP server. Guard the syncer against the typed-nil trap: a
+	// nil *application.SyncService stuffed into an input.Syncer interface is
+	// NOT == nil, which would defeat the handler's nil check.
+	var syncer input.Syncer
+	if app.SyncService != nil {
+		syncer = app.SyncService
+	}
 	app.HTTPServer = httpAdapter.NewServer(
 		cfg.Server,
 		app.QueryService,
 		app.Registry,
 		app.HealthService,
-		app.SyncService, // May be nil if sync is disabled
+		syncer, // nil interface when sync is disabled
 		logger,
 		cfg.Query.WithGeometry,
 		httpAdapter.ServerOptions{

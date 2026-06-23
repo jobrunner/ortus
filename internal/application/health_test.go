@@ -12,7 +12,7 @@ import (
 
 func newTestRegistry() *PackageRegistry {
 	return NewPackageRegistry(
-		&mockRepository{},
+		[]output.SpatialSource{&mockRepository{}},
 		&mockStorage{},
 		testMeter(),
 		output.NoOpTracer{},
@@ -48,7 +48,7 @@ func TestHealthServiceIsReady(t *testing.T) {
 			name: "ready package",
 			packages: map[string]*packageEntry{
 				"test": {
-					Package: &domain.GeoPackage{
+					Package: &domain.Source{
 						ID:      "test",
 						Indexed: true,
 						Layers:  []domain.Layer{{Name: "layer1", HasIndex: true}},
@@ -62,7 +62,7 @@ func TestHealthServiceIsReady(t *testing.T) {
 			name: "no ready packages",
 			packages: map[string]*packageEntry{
 				"test": {
-					Package: &domain.GeoPackage{
+					Package: &domain.Source{
 						ID:      "test",
 						Indexed: false,
 					},
@@ -75,11 +75,11 @@ func TestHealthServiceIsReady(t *testing.T) {
 			name: "mixed packages - one ready",
 			packages: map[string]*packageEntry{
 				"loading": {
-					Package: &domain.GeoPackage{ID: "loading", Indexed: false},
+					Package: &domain.Source{ID: "loading", Indexed: false},
 					Status:  domain.StatusLoading,
 				},
 				"ready": {
-					Package: &domain.GeoPackage{
+					Package: &domain.Source{
 						ID:      "ready",
 						Indexed: true,
 						Layers:  []domain.Layer{{Name: "layer1", HasIndex: true}},
@@ -112,7 +112,7 @@ func TestHealthServiceGetHealthDetails(t *testing.T) {
 	registry.mu.Lock()
 	registry.packages = map[string]*packageEntry{
 		"ready1": {
-			Package: &domain.GeoPackage{
+			Package: &domain.Source{
 				ID:      "ready1",
 				Indexed: true,
 				Layers:  []domain.Layer{{Name: "l1", HasIndex: true}},
@@ -120,7 +120,7 @@ func TestHealthServiceGetHealthDetails(t *testing.T) {
 			Status: domain.StatusReady,
 		},
 		"ready2": {
-			Package: &domain.GeoPackage{
+			Package: &domain.Source{
 				ID:      "ready2",
 				Indexed: true,
 				Layers:  []domain.Layer{{Name: "l2", HasIndex: true}},
@@ -128,7 +128,7 @@ func TestHealthServiceGetHealthDetails(t *testing.T) {
 			Status: domain.StatusReady,
 		},
 		"loading": {
-			Package: &domain.GeoPackage{ID: "loading", Indexed: false},
+			Package: &domain.Source{ID: "loading", Indexed: false},
 			Status:  domain.StatusLoading,
 		},
 	}
@@ -160,7 +160,7 @@ func TestHealthServiceGetPackageHealth(t *testing.T) {
 	registry.mu.Lock()
 	registry.packages = map[string]*packageEntry{
 		"pkg1": {
-			Package: &domain.GeoPackage{
+			Package: &domain.Source{
 				ID:      "pkg1",
 				Indexed: true,
 				Layers:  []domain.Layer{{Name: "l1", HasIndex: true}},
@@ -168,7 +168,7 @@ func TestHealthServiceGetPackageHealth(t *testing.T) {
 			Status: domain.StatusReady,
 		},
 		"pkg2": {
-			Package: &domain.GeoPackage{ID: "pkg2", Indexed: false},
+			Package: &domain.Source{ID: "pkg2", Indexed: false},
 			Status:  domain.StatusIndexing,
 		},
 	}

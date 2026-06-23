@@ -11,16 +11,19 @@ import (
 	"github.com/jobrunner/ortus/internal/adapters/telemetry"
 	"github.com/jobrunner/ortus/internal/application"
 	"github.com/jobrunner/ortus/internal/domain"
+	"github.com/jobrunner/ortus/internal/ports/output"
 )
 
-// stubRepo is a minimal GeoPackageRepository: it reports one package + layer
+// stubRepo is a minimal SpatialSource: it reports one package + layer
 // and returns no features. Enough to exercise the query span tree.
 type stubRepo struct{}
 
-func (stubRepo) Open(_ context.Context, _ string) (*domain.GeoPackage, error) {
+func (stubRepo) Open(_ context.Context, _ string) (*domain.Source, error) {
 	return nil, domain.ErrPackageNotFound
 }
-func (stubRepo) Close(_ context.Context, _ string) error { return nil }
+func (stubRepo) Close(_ context.Context, _ string) error      { return nil }
+func (stubRepo) Supports(_ string) bool                       { return true }
+func (stubRepo) Prepare(_ context.Context, _, _ string) error { return nil }
 func (stubRepo) GetLayers(_ context.Context, _ string) ([]domain.Layer, error) {
 	return nil, nil
 }
@@ -52,14 +55,14 @@ func TestEndToEnd_QueryServiceProducesSpansInBuffer(t *testing.T) {
 	tracer := telemetry.NewTracer(provider.TracerProvider())
 
 	registry := application.NewPackageRegistry(
-		stubRepo{},
+		[]output.SpatialSource{stubRepo{}},
 		nil, // storage unused in this path
 		noop.NewMeterProvider().Meter("test"),
 		tracer,
 		logger,
 		"/tmp",
 	)
-	qs := application.NewQueryService(registry, stubRepo{}, nil, noop.NewMeterProvider().Meter("test"), tracer, logger, application.QueryServiceConfig{})
+	qs := application.NewQueryService(registry, nil, noop.NewMeterProvider().Meter("test"), tracer, logger, application.QueryServiceConfig{})
 
 	req := domain.QueryRequest{Coordinate: domain.NewCoordinate(13.4, 52.5, domain.SRIDWGS84)}
 	if _, err := qs.QueryPoint(context.Background(), req); err != nil {

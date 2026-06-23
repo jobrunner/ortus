@@ -65,19 +65,33 @@ func getSpatiaLiteLibraryPaths() []string {
 	return paths
 }
 
-// Repository implements the GeoPackageRepository port using SpatiaLite.
+// Repository implements the output.SpatialSource port using SpatiaLite.
+// It serves vector GeoPackages.
 type Repository struct {
 	mu          sync.RWMutex
 	connections map[string]*sql.DB
-	packages    map[string]*domain.GeoPackage
+	packages    map[string]*domain.Source
 	tracer      output.Tracer
+}
+
+// Supports reports whether this adapter can open the given path. The
+// GeoPackage adapter handles *.gpkg files.
+func (r *Repository) Supports(path string) bool {
+	return strings.EqualFold(filepath.Ext(path), ".gpkg")
+}
+
+// Prepare builds the spatial index for a layer (the GeoPackage adapter's
+// readiness work). It satisfies the output.SpatialSource port by delegating
+// to CreateSpatialIndex.
+func (r *Repository) Prepare(ctx context.Context, sourceID string, layer string) error {
+	return r.CreateSpatialIndex(ctx, sourceID, layer)
 }
 
 // NewRepository creates a new GeoPackage repository.
 func NewRepository() *Repository {
 	return &Repository{
 		connections: make(map[string]*sql.DB),
-		packages:    make(map[string]*domain.GeoPackage),
+		packages:    make(map[string]*domain.Source),
 		tracer:      output.NoOpTracer{},
 	}
 }
@@ -92,7 +106,7 @@ func (r *Repository) SetTracer(t output.Tracer) {
 }
 
 // Open opens a GeoPackage file and returns its metadata.
-func (r *Repository) Open(ctx context.Context, path string) (*domain.GeoPackage, error) {
+func (r *Repository) Open(ctx context.Context, path string) (*domain.Source, error) {
 	ctx, span := r.tracer.Start(ctx, "Repository.Open",
 		output.WithAttributes(output.String("ortus.package.path", path)),
 	)
@@ -456,11 +470,12 @@ func (r *Repository) loadSpatiaLite(ctx context.Context, db *sql.DB) error {
 }
 
 // readPackageMetadata reads metadata from a GeoPackage.
-func (r *Repository) readPackageMetadata(ctx context.Context, db *sql.DB, packageID, path string) (*domain.GeoPackage, error) {
-	pkg := &domain.GeoPackage{
+func (r *Repository) readPackageMetadata(ctx context.Context, db *sql.DB, packageID, path string) (*domain.Source, error) {
+	pkg := &domain.Source{
 		ID:   packageID,
 		Name: packageID,
 		Path: path,
+		Kind: domain.SourceKindVector,
 	}
 
 	// Read layers from gpkg_contents
@@ -534,7 +549,7 @@ func (r *Repository) readLayers(ctx context.Context, db *sql.DB) ([]domain.Layer
 }
 
 // readMetadata reads optional metadata from gpkg_metadata.
-func (r *Repository) readMetadata(ctx context.Context, db *sql.DB, pkg *domain.GeoPackage) error {
+func (r *Repository) readMetadata(ctx context.Context, db *sql.DB, pkg *domain.Source) error {
 	// Check if metadata table exists
 	var exists int
 	err := db.QueryRowContext(ctx,
@@ -751,14 +766,6 @@ func extractGeometryType(wkt string) string {
 		return strings.TrimSpace(wkt[:idx])
 	}
 	return ""
-}
-
-// GetConnection returns the database connection for a specific package.
-// This is used by the RepositoryTransformer for coordinate transformation.
-func (r *Repository) GetConnection(packageID string) *sql.DB {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	return r.connections[packageID]
 }
 
 // RepositoryTransformer implements CoordinateTransformer using an in-memory SpatiaLite database.

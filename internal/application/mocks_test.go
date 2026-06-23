@@ -10,14 +10,18 @@ import (
 	"github.com/jobrunner/ortus/internal/ports/output"
 )
 
-// mockRepository implements output.GeoPackageRepository for testing.
+// mockRepository implements output.SpatialSource for testing.
 type mockRepository struct {
-	packages map[string]*domain.GeoPackage
+	packages map[string]*domain.Source
 	features map[string][]domain.Feature
 	openErr  error
 }
 
-func (m *mockRepository) Open(_ context.Context, path string) (*domain.GeoPackage, error) {
+func (m *mockRepository) Supports(_ string) bool { return true }
+
+func (m *mockRepository) Prepare(_ context.Context, _, _ string) error { return nil }
+
+func (m *mockRepository) Open(_ context.Context, path string) (*domain.Source, error) {
 	if m.openErr != nil {
 		return nil, m.openErr
 	}
@@ -31,7 +35,7 @@ func (m *mockRepository) Open(_ context.Context, path string) (*domain.GeoPackag
 	ext := filepath.Ext(base)
 	packageID := strings.TrimSuffix(base, ext)
 
-	return &domain.GeoPackage{
+	return &domain.Source{
 		ID:   packageID,
 		Name: base,
 		Path: path,

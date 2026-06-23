@@ -38,24 +38,24 @@ func (m *mockQueryService) QueryPointInPackage(_ context.Context, _ string, _ do
 
 // mockPackageRegistry implements application.PackageRegistry for testing.
 type mockPackageRegistry struct {
-	packages   []domain.GeoPackage
-	getPackage *domain.GeoPackage
-	status     domain.GeoPackageStatus
+	packages   []domain.Source
+	getPackage *domain.Source
+	status     domain.SourceStatus
 	getErr     error
 }
 
-func (m *mockPackageRegistry) ListPackages(_ context.Context) ([]domain.GeoPackage, error) {
+func (m *mockPackageRegistry) ListPackages(_ context.Context) ([]domain.Source, error) {
 	return m.packages, nil
 }
 
-func (m *mockPackageRegistry) GetPackage(_ context.Context, _ string) (*domain.GeoPackage, error) {
+func (m *mockPackageRegistry) GetPackage(_ context.Context, _ string) (*domain.Source, error) {
 	if m.getErr != nil {
 		return nil, m.getErr
 	}
 	return m.getPackage, nil
 }
 
-func (m *mockPackageRegistry) GetPackageStatus(_ context.Context, _ string) (domain.GeoPackageStatus, error) {
+func (m *mockPackageRegistry) GetPackageStatus(_ context.Context, _ string) (domain.SourceStatus, error) {
 	return m.status, nil
 }
 
@@ -109,7 +109,7 @@ func newTestServer(_ *mockQueryService, _ *mockPackageRegistry, _ *mockHealthSer
 
 	// Create real services using mocks
 	realRegistry := application.NewPackageRegistry(
-		&mockRepository{},
+		[]output.SpatialSource{&mockRepository{}},
 		&mockStorage{},
 		noop.NewMeterProvider().Meter("test"),
 		output.NoOpTracer{},
@@ -120,7 +120,6 @@ func newTestServer(_ *mockQueryService, _ *mockPackageRegistry, _ *mockHealthSer
 	realHealth := application.NewHealthService(realRegistry, output.NoOpTracer{})
 	realQuery := application.NewQueryService(
 		realRegistry,
-		&mockRepository{},
 		nil,
 		noop.NewMeterProvider().Meter("test"),
 		output.NoOpTracer{},
@@ -469,13 +468,17 @@ func TestBoolToStatus(t *testing.T) {
 
 type mockRepository struct{}
 
-func (m *mockRepository) Open(_ context.Context, path string) (*domain.GeoPackage, error) {
-	return &domain.GeoPackage{ID: path, Name: path, Path: path}, nil
+func (m *mockRepository) Open(_ context.Context, path string) (*domain.Source, error) {
+	return &domain.Source{ID: path, Name: path, Path: path}, nil
 }
 
 func (m *mockRepository) Close(_ context.Context, _ string) error {
 	return nil
 }
+
+func (m *mockRepository) Supports(_ string) bool { return true }
+
+func (m *mockRepository) Prepare(_ context.Context, _, _ string) error { return nil }
 
 func (m *mockRepository) GetLayers(_ context.Context, _ string) ([]domain.Layer, error) {
 	return nil, nil

@@ -12,7 +12,7 @@ import (
 
 func TestPackageRegistryLoadUnload(t *testing.T) {
 	repo := &mockRepository{
-		packages: map[string]*domain.GeoPackage{
+		packages: map[string]*domain.Source{
 			"/data/test.gpkg": {
 				ID:   "test",
 				Name: "Test Package",
@@ -25,7 +25,7 @@ func TestPackageRegistryLoadUnload(t *testing.T) {
 	}
 
 	registry := NewPackageRegistry(
-		repo,
+		[]output.SpatialSource{repo},
 		&mockStorage{},
 		testMeter(),
 		output.NoOpTracer{},
@@ -88,7 +88,7 @@ func TestPackageRegistryGetPackageStatus(t *testing.T) {
 
 	registry.mu.Lock()
 	registry.packages["test"] = &packageEntry{
-		Package: &domain.GeoPackage{ID: "test"},
+		Package: &domain.Source{ID: "test"},
 		Status:  domain.StatusReady,
 	}
 	registry.mu.Unlock()
@@ -117,11 +117,11 @@ func TestPackageRegistryIsReady(t *testing.T) {
 
 	registry.mu.Lock()
 	registry.packages["ready"] = &packageEntry{
-		Package: &domain.GeoPackage{ID: "ready"},
+		Package: &domain.Source{ID: "ready"},
 		Status:  domain.StatusReady,
 	}
 	registry.packages["loading"] = &packageEntry{
-		Package: &domain.GeoPackage{ID: "loading"},
+		Package: &domain.Source{ID: "loading"},
 		Status:  domain.StatusLoading,
 	}
 	registry.mu.Unlock()
@@ -149,15 +149,15 @@ func TestPackageRegistryReadyPackageIDs(t *testing.T) {
 
 	registry.mu.Lock()
 	registry.packages["ready1"] = &packageEntry{
-		Package: &domain.GeoPackage{ID: "ready1"},
+		Package: &domain.Source{ID: "ready1"},
 		Status:  domain.StatusReady,
 	}
 	registry.packages["ready2"] = &packageEntry{
-		Package: &domain.GeoPackage{ID: "ready2"},
+		Package: &domain.Source{ID: "ready2"},
 		Status:  domain.StatusReady,
 	}
 	registry.packages["loading"] = &packageEntry{
-		Package: &domain.GeoPackage{ID: "loading"},
+		Package: &domain.Source{ID: "loading"},
 		Status:  domain.StatusLoading,
 	}
 	registry.mu.Unlock()

@@ -2,11 +2,13 @@ package application
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/jobrunner/ortus/internal/domain"
 	"github.com/jobrunner/ortus/internal/ports/output"
 )
 
@@ -37,7 +39,7 @@ func TestSyncService_RateLimiting(t *testing.T) {
 
 	// Immediate second call should be rate limited
 	_, err = service.TriggerSync(ctx)
-	if err != ErrRateLimited {
+	if !errors.Is(err, domain.ErrRateLimited) {
 		t.Errorf("expected ErrRateLimited, got %v", err)
 	}
 }
@@ -103,7 +105,7 @@ func TestSyncService_SyncAddsNewPackages(t *testing.T) {
 
 	registry := &PackageRegistry{
 		packages:  make(map[string]*packageEntry),
-		repo:      &mockRepository{},
+		providers: []output.SpatialSource{&mockRepository{}},
 		logger:    logger,
 		localPath: "/tmp",
 		storage:   storage,
@@ -188,7 +190,7 @@ func TestRegistry_SyncRemovesDeletedPackages(t *testing.T) {
 
 	registry := &PackageRegistry{
 		packages:  make(map[string]*packageEntry),
-		repo:      &mockRepository{},
+		providers: []output.SpatialSource{&mockRepository{}},
 		logger:    logger,
 		localPath: "/tmp",
 		storage:   storage,

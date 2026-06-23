@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`SpatialSource` output port** — the seam for plugging in additional source kinds (raster bundles) behind the existing point-query pipeline. The GeoPackage repository is its first implementation (`Supports`/`Open`/`Prepare`/`QueryPoint`/`Close`).
+- **`domain.Source` with a `Kind` discriminator** (`vector`|`raster`), replacing `domain.GeoPackage` as the registry/query currency, plus a `GeomRaster` geometry-type constant.
+- **Provider routing in the registry**: sources are routed to the first adapter whose `Supports` matches; each entry records its owning adapter and `registry.Query` delegates to it. New `domain.ErrUnsupportedSource`.
+- **Raster bundle design docs** under `doc/raster-bundle/` (bundle spec, JSON schema, Köppen reference pipeline, implementation plan) and **ADR-0012** for the staged `Package → Source` vocabulary migration.
+- **`input.Syncer` driving port** + `input.SyncResult`.
+
+### Changed
+- **HTTP and MCP adapters now depend on the driving ports** (`input.QueryService`/`PackageRegistry`/`HealthChecker`/`Syncer`) instead of concrete application services — no adapter imports `internal/application` anymore. Compile-time assertions guard the contracts.
+- Moved `ErrRateLimited` to the domain package.
+
+### Removed
+- Dead `output.GeoPackageRepository` port and the unused `Repository.GetConnection() *sql.DB` accessor (a database-handle leak out of the adapter).
+
+### Tests
+- Integration tests for the SpatiaLite query engine against a real GeoPackage fixture (point-in-polygon incl. fallback scan + R-tree path, `scanFeature`, index create/probe, coordinate transform): geopackage coverage **4% → ~62%**.
+- Provider-routing tests (`providerFor`, `Query` delegation, `ErrUnsupportedSource`, nil-repo guard).
+- New coverage for previously thin packages: **config 0% → 95%**, **watcher 11% → 79%** (incl. a real fsnotify hot-reload test), **storage 14% → 51%** (HTTP adapter via `httptest`, traced-storage decorator).
+
 ## [0.8.1] - 2026-06-16
 
 ### Security

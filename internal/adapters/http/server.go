@@ -14,18 +14,19 @@ import (
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/jobrunner/ortus/internal/application"
 	"github.com/jobrunner/ortus/internal/config"
+	"github.com/jobrunner/ortus/internal/ports/input"
 )
 
-// Server wraps the HTTP server with application handlers.
+// Server wraps the HTTP server with application handlers. It depends only on
+// the driving ports (input.*), not on concrete application services.
 type Server struct {
 	server         *http.Server
 	router         *mux.Router
-	queryService   *application.QueryService
-	registry       *application.PackageRegistry
-	health         *application.HealthService
-	syncService    *application.SyncService
+	queryService   input.QueryService
+	registry       input.PackageRegistry
+	health         input.HealthChecker
+	syncService    input.Syncer
 	logger         *slog.Logger
 	config         config.ServerConfig
 	withGeometry   bool                 // Include geometry in query results
@@ -46,10 +47,10 @@ type ServerOptions struct {
 // NewServer creates a new HTTP server.
 func NewServer(
 	cfg config.ServerConfig,
-	queryService *application.QueryService,
-	registry *application.PackageRegistry,
-	health *application.HealthService,
-	syncService *application.SyncService,
+	queryService input.QueryService,
+	registry input.PackageRegistry,
+	health input.HealthChecker,
+	syncService input.Syncer,
 	logger *slog.Logger,
 	withGeometry bool,
 	opts ServerOptions,

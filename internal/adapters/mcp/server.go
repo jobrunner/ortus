@@ -25,19 +25,19 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jobrunner/ortus/internal/adapters/telemetry"
-	"github.com/jobrunner/ortus/internal/application"
 	"github.com/jobrunner/ortus/internal/domain"
+	"github.com/jobrunner/ortus/internal/ports/input"
 )
 
-// Deps is what every MCP server needs to do its job. We pass concrete
-// pointers rather than ports here because the MCP layer is the topmost
-// adapter; introducing yet another port abstraction wouldn't gain
-// anything testability-wise.
+// Deps is what every MCP server needs to do its job. Like the HTTP adapter,
+// it depends on the driving ports (input.*) rather than concrete application
+// services, so both adapters share one set of contracts and stay decoupled
+// from the core implementation.
 type Deps struct {
 	Buffer        *telemetry.RingBuffer // may be nil when tracing is off — tools degrade gracefully
-	QueryService  *application.QueryService
-	Registry      *application.PackageRegistry
-	HealthService *application.HealthService
+	QueryService  input.QueryService
+	Registry      input.PackageRegistry
+	HealthService input.HealthChecker
 	Version       string
 }
 

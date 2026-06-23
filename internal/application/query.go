@@ -13,10 +13,9 @@ import (
 	"github.com/jobrunner/ortus/internal/ports/output"
 )
 
-// QueryService handles point queries across GeoPackages.
+// QueryService handles point queries across registered sources.
 type QueryService struct {
 	registry      *PackageRegistry
-	repo          output.GeoPackageRepository
 	transformer   output.CoordinateTransformer
 	tracer        output.Tracer
 	queryCount    metric.Int64Counter
@@ -37,7 +36,6 @@ type QueryServiceConfig struct {
 // noop.NewMeterProvider().Meter("test") to disable metrics in tests.
 func NewQueryService(
 	registry *PackageRegistry,
-	repo output.GeoPackageRepository,
 	transformer output.CoordinateTransformer,
 	meter metric.Meter,
 	tracer output.Tracer,
@@ -69,7 +67,6 @@ func NewQueryService(
 
 	return &QueryService{
 		registry:      registry,
-		repo:          repo,
 		transformer:   transformer,
 		tracer:        tracer,
 		queryCount:    queryCount,
@@ -230,7 +227,7 @@ func (s *QueryService) queryLayer(ctx context.Context, packageID string, layer *
 		return false
 	}
 
-	features, err := s.repo.QueryPoint(ctx, packageID, layer.Name, queryCoord)
+	features, err := s.registry.Query(ctx, packageID, layer.Name, queryCoord)
 	if err != nil {
 		s.logger.Warn("layer query failed", "package", packageID, "layer", layer.Name, "error", err)
 		span.RecordError(err)

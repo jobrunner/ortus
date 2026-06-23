@@ -21,16 +21,18 @@ import (
 	"github.com/jobrunner/ortus/internal/ports/output"
 )
 
-// fakeRepo is a no-DB GeoPackageRepository.
+// fakeRepo is a no-DB SpatialSource.
 type fakeRepo struct{}
 
-func (fakeRepo) Open(_ context.Context, path string) (*domain.GeoPackage, error) {
-	return &domain.GeoPackage{
+func (fakeRepo) Open(_ context.Context, path string) (*domain.Source, error) {
+	return &domain.Source{
 		ID: "fake", Name: "fake.gpkg", Path: path,
 		Layers: []domain.Layer{{Name: "regions", GeometryColumn: "geom", GeometryType: "POLYGON", SRID: 4326, HasIndex: true}},
 	}, nil
 }
 func (fakeRepo) Close(_ context.Context, _ string) error                       { return nil }
+func (fakeRepo) Supports(_ string) bool                                        { return true }
+func (fakeRepo) Prepare(_ context.Context, _, _ string) error                  { return nil }
 func (fakeRepo) GetLayers(_ context.Context, _ string) ([]domain.Layer, error) { return nil, nil }
 func (fakeRepo) CreateSpatialIndex(_ context.Context, _, _ string) error       { return nil }
 func (fakeRepo) HasSpatialIndex(_ context.Context, _, _ string) (bool, error)  { return true, nil }
@@ -70,8 +72,8 @@ func buildDeps(t *testing.T) mcpAdapter.Deps {
 
 	tr := telemetry.NewTracer(tp.TracerProvider())
 	store := storage.NewTracedStorage(stubStorage{}, tr, "local")
-	reg := application.NewPackageRegistry(fakeRepo{}, store, meter, tr, logger, "/tmp")
-	qs := application.NewQueryService(reg, fakeRepo{}, nil, meter, tr, logger, application.QueryServiceConfig{})
+	reg := application.NewPackageRegistry([]output.SpatialSource{fakeRepo{}}, store, meter, tr, logger, "/tmp")
+	qs := application.NewQueryService(reg, nil, meter, tr, logger, application.QueryServiceConfig{})
 	hs := application.NewHealthService(reg, tr)
 
 	return mcpAdapter.Deps{
