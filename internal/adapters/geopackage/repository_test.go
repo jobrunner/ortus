@@ -159,13 +159,3 @@ func TestNewRepository(t *testing.T) {
 		t.Error("packages map should be initialized")
 	}
 }
-
-func TestRepositoryGetConnection(t *testing.T) {
-	repo := NewRepository()
-
-	// Should return nil for non-existent connection
-	conn := repo.GetConnection("nonexistent")
-	if conn != nil {
-		t.Error("GetConnection should return nil for non-existent package")
-	}
-}

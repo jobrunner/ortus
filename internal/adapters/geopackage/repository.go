@@ -65,8 +65,8 @@ func getSpatiaLiteLibraryPaths() []string {
 	return paths
 }
 
-// Repository implements the output.SpatialSource port (and the legacy
-// GeoPackageRepository port) using SpatiaLite. It serves vector GeoPackages.
+// Repository implements the output.SpatialSource port using SpatiaLite.
+// It serves vector GeoPackages.
 type Repository struct {
 	mu          sync.RWMutex
 	connections map[string]*sql.DB
@@ -766,14 +766,6 @@ func extractGeometryType(wkt string) string {
 		return strings.TrimSpace(wkt[:idx])
 	}
 	return ""
-}
-
-// GetConnection returns the database connection for a specific package.
-// This is used by the RepositoryTransformer for coordinate transformation.
-func (r *Repository) GetConnection(packageID string) *sql.DB {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	return r.connections[packageID]
 }
 
 // RepositoryTransformer implements CoordinateTransformer using an in-memory SpatiaLite database.

@@ -18,7 +18,7 @@ import (
 	"github.com/jobrunner/ortus/internal/ports/output"
 )
 
-// coverageRepo is a fake GeoPackageRepository that lets every traced method
+// coverageRepo is a fake SpatialSource that lets every traced method
 // run to completion without hitting SQLite.
 type coverageRepo struct{}
 

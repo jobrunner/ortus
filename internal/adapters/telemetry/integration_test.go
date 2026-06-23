@@ -14,7 +14,7 @@ import (
 	"github.com/jobrunner/ortus/internal/ports/output"
 )
 
-// stubRepo is a minimal GeoPackageRepository: it reports one package + layer
+// stubRepo is a minimal SpatialSource: it reports one package + layer
 // and returns no features. Enough to exercise the query span tree.
 type stubRepo struct{}
 

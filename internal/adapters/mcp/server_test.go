@@ -21,7 +21,7 @@ import (
 	"github.com/jobrunner/ortus/internal/ports/output"
 )
 
-// fakeRepo is a no-DB GeoPackageRepository.
+// fakeRepo is a no-DB SpatialSource.
 type fakeRepo struct{}
 
 func (fakeRepo) Open(_ context.Context, path string) (*domain.Source, error) {
