@@ -101,6 +101,15 @@ func (r *Repository) Open(ctx context.Context, path string) (*domain.Source, err
 	}
 
 	r.mu.Lock()
+	if winner, raced := r.sources[sourceID]; raced {
+		// Lost a concurrent Open for the same source — discard our work so the
+		// freshly-unpacked dir and COG handles don't leak.
+		r.mu.Unlock()
+		b.closeFiles()
+		_ = os.RemoveAll(b.dir)
+		span.AddEvent("lost_open_race")
+		return winner.source, nil
+	}
 	r.sources[sourceID] = b
 	r.mu.Unlock()
 
@@ -118,7 +127,7 @@ func (r *Repository) openBundle(path, sourceID, dir string) (*bundle, error) {
 		return nil, fmt.Errorf("unpacking bundle: %w", err)
 	}
 
-	rawManifest, err := os.ReadFile(filepath.Join(dir, manifestName)) //#nosec G304 -- fixed manifest name under our unpack dir
+	rawManifest, err := readFileLimited(filepath.Join(dir, manifestName), maxManifestBytes)
 	if err != nil {
 		return nil, fmt.Errorf("reading %s: %w", manifestName, err)
 	}
@@ -217,7 +226,7 @@ func (r *Repository) openLayer(dir string, spec layerSpec) (*rasterLayer, error)
 		if perr != nil {
 			return nil, perr
 		}
-		return os.ReadFile(p) //#nosec G304 -- path validated by safeJoin
+		return readFileLimited(p, maxManifestBytes)
 	})
 	if err != nil {
 		_ = f.Close()
@@ -359,7 +368,16 @@ func safeJoin(base, rel string) (string, error) {
 	return joined, nil
 }
 
-// unzip extracts a ZIP archive into dest, guarding against zip-slip.
+// Extraction bounds — defense-in-depth against decompression bombs. Bundles
+// come from trusted storage, but a corrupt/hostile archive must not exhaust the
+// host's disk.
+const (
+	maxBundleBytes   = 8 << 30  // 8 GiB total extracted per bundle
+	maxManifestBytes = 16 << 20 // 16 MiB for the manifest itself
+)
+
+// unzip extracts a ZIP archive into dest, guarding against zip-slip and bounding
+// the total extracted size.
 func unzip(src, dest string) error {
 	zr, err := zip.OpenReader(src)
 	if err != nil {
@@ -367,6 +385,7 @@ func unzip(src, dest string) error {
 	}
 	defer func() { _ = zr.Close() }()
 
+	var total int64
 	for _, f := range zr.File {
 		target, err := safeJoin(dest, f.Name)
 		if err != nil {
@@ -381,30 +400,55 @@ func unzip(src, dest string) error {
 		if err := os.MkdirAll(filepath.Dir(target), 0o750); err != nil {
 			return err
 		}
-		if err := extractFile(f, target); err != nil {
+		n, err := extractFile(f, target, maxBundleBytes-total)
+		if err != nil {
 			return err
+		}
+		total += n
+		if total >= maxBundleBytes {
+			return fmt.Errorf("bundle exceeds maximum extracted size of %d bytes", maxBundleBytes)
 		}
 	}
 	return nil
 }
 
-func extractFile(f *zip.File, target string) error {
+// extractFile writes one ZIP entry to target, copying at most limit bytes, and
+// returns the number of bytes written.
+func extractFile(f *zip.File, target string, limit int64) (int64, error) {
 	rc, err := f.Open()
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer func() { _ = rc.Close() }()
 
 	out, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600) //#nosec G304 -- target validated by safeJoin
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer func() { _ = out.Close() }()
 
-	// Bound the copy to guard against decompression bombs.
-	const maxBytes = 2 << 30 // 2 GiB per file
-	if _, err := io.CopyN(out, rc, maxBytes); err != nil && !errors.Is(err, io.EOF) {
-		return err
+	n, err := io.CopyN(out, rc, limit+1) // +1 so hitting the limit is detectable
+	if err != nil && !errors.Is(err, io.EOF) {
+		return n, err
 	}
-	return nil
+	return n, nil
+}
+
+// readFileLimited reads up to max bytes from path, erroring if the file is
+// larger (guards against an oversized manifest / sidecar exhausting memory).
+func readFileLimited(path string, limit int64) ([]byte, error) {
+	f, err := os.Open(path) //#nosec G304 -- path validated by safeJoin / fixed name under our unpack dir
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = f.Close() }()
+
+	data, err := io.ReadAll(io.LimitReader(f, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > limit {
+		return nil, fmt.Errorf("file %s exceeds maximum size of %d bytes", filepath.Base(path), limit)
+	}
+	return data, nil
 }

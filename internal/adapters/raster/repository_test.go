@@ -5,6 +5,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/jobrunner/ortus/internal/domain"
@@ -247,6 +248,100 @@ layers:
 				t.Errorf("expected rejection for %s", name)
 			}
 		})
+	}
+}
+
+// buildBundleFiles writes a <id>.zip into dir from an arbitrary set of files
+// (always including the COG fixture as regions.cog.tif).
+func buildBundleFiles(t *testing.T, dir, id string, files map[string]string) string {
+	t.Helper()
+	cog, err := os.ReadFile(cogFixture)
+	if err != nil {
+		t.Fatalf("read fixture COG: %v", err)
+	}
+	zipPath := filepath.Join(dir, id+".zip")
+	zf, err := os.Create(zipPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = zf.Close() }()
+	zw := zip.NewWriter(zf)
+	w, _ := zw.Create("regions.cog.tif")
+	_, _ = w.Write(cog)
+	for name, content := range files {
+		fw, werr := zw.Create(name)
+		if werr != nil {
+			t.Fatal(werr)
+		}
+		if _, werr := fw.Write([]byte(content)); werr != nil {
+			t.Fatal(werr)
+		}
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return zipPath
+}
+
+func TestValueMappingSidecar(t *testing.T) {
+	const m = `
+schema_version: 1
+id: regions
+name: Test
+license: { name: CC0-1.0 }
+crs: EPSG:4326
+layers:
+  - id: main
+    file: regions.cog.tif
+    nodata: 0
+    value_mapping: mapping.SIDE
+`
+	// Same data expressed as JSON (string keys) and YAML (native int keys) must
+	// both resolve — the adapter normalizes keys before parsing.
+	variants := map[string]struct{ file, content string }{
+		"json string keys": {"mapping.json", `{"100": {"name": "west"}, "200": {"name": "east"}}`},
+		"yaml int keys":    {"mapping.yaml", "100:\n  name: west\n200:\n  name: east\n"},
+	}
+	for name, v := range variants {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			manifest := strings.Replace(m, "mapping.SIDE", v.file, 1)
+			zipPath := buildBundleFiles(t, dir, "regions", map[string]string{
+				manifestName: manifest,
+				v.file:       v.content,
+			})
+			repo := NewRepository(t.TempDir())
+			t.Cleanup(func() { _ = repo.Close(context.Background(), "regions") })
+			if _, err := repo.Open(context.Background(), zipPath); err != nil {
+				t.Fatalf("Open: %v", err)
+			}
+			feats, err := repo.QueryPoint(context.Background(), "regions", "main", domain.NewWGS84Coordinate(20, 20))
+			if err != nil || len(feats) != 1 || feats[0].GetStringProperty("name") != "west" {
+				t.Fatalf("sidecar query: feats=%d err=%v props=%v", len(feats), err, feats)
+			}
+		})
+	}
+}
+
+func TestReopenReturnsSameSource(t *testing.T) {
+	repo, src1 := openBundleForTest(t, validManifest)
+	// The bundle path is deterministic from openBundleForTest's tempdir; reopen
+	// by id is exercised via a second Open of the same path.
+	// (Re-derive the path the helper used is awkward; instead assert the in-map
+	// source is returned on a direct second Open of a freshly built identical zip
+	// with the same id.)
+	dir := t.TempDir()
+	zipPath := buildBundle(t, dir, "regions", validManifest)
+	src2, err := repo.Open(context.Background(), zipPath)
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	if src1.ID != src2.ID {
+		t.Errorf("reopen returned different id: %q vs %q", src1.ID, src2.ID)
+	}
+	// Still queryable.
+	if feats, err := repo.QueryPoint(context.Background(), "regions", "main", domain.NewWGS84Coordinate(80, 20)); err != nil || len(feats) != 1 {
+		t.Fatalf("query after reopen: feats=%d err=%v", len(feats), err)
 	}
 }
 

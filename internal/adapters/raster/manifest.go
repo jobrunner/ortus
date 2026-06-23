@@ -146,17 +146,26 @@ func resolveMapping(spec layerSpec, readSidecar func(name string) ([]byte, error
 		return nil, fmt.Errorf("reading value_mapping %q: %w", spec.ValueMapping, err)
 	}
 	// JSON is a subset of YAML, so yaml.v3 parses both .json and .yaml sidecars.
-	// Keys arrive as strings (JSON) or ints (YAML); normalize via string.
-	var raw map[string]map[string]interface{}
-	if err := yaml.Unmarshal(data, &raw); err != nil {
+	// Keys may arrive as JSON strings ("1") or native YAML integers (1);
+	// stringifyKeys normalizes both to string keys before we parse them to int.
+	var y interface{}
+	if err := yaml.Unmarshal(data, &y); err != nil {
 		return nil, fmt.Errorf("parsing value_mapping %q: %w", spec.ValueMapping, err)
 	}
-	for ks, v := range raw {
+	norm, ok := stringifyKeys(y).(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("value_mapping %q: expected a mapping object", spec.ValueMapping)
+	}
+	for ks, v := range norm {
 		k, err := strconv.ParseInt(ks, 10, 64)
 		if err != nil {
 			return nil, fmt.Errorf("value_mapping %q: non-integer key %q", spec.ValueMapping, ks)
 		}
-		out[k] = v
+		props, ok := v.(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("value_mapping %q: entry %q is not an object", spec.ValueMapping, ks)
+		}
+		out[k] = props
 	}
 	return out, nil
 }
