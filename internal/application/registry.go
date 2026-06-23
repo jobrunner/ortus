@@ -18,11 +18,11 @@ import (
 	"github.com/jobrunner/ortus/internal/ports/output"
 )
 
-// PackageRegistry manages loaded GeoPackages.
+// PackageRegistry manages loaded spatial sources (GeoPackages, raster bundles).
 type PackageRegistry struct {
 	mu        sync.RWMutex
 	packages  map[string]*packageEntry
-	repo      output.GeoPackageRepository
+	providers []output.SpatialSource
 	storage   output.ObjectStorage
 	tracer    output.Tracer
 	logger    *slog.Logger
@@ -37,13 +37,16 @@ type PackageRegistry struct {
 
 type packageEntry struct {
 	Package *domain.Source
+	Repo    output.SpatialSource // adapter that opened this source
 	Status  domain.SourceStatus
 	Error   error
 }
 
-// NewPackageRegistry creates a new package registry.
+// NewPackageRegistry creates a new package registry. providers are the source
+// adapters consulted (in order) to open a file; the first whose Supports
+// reports true for a path owns that source.
 func NewPackageRegistry(
-	repo output.GeoPackageRepository,
+	providers []output.SpatialSource,
 	storage output.ObjectStorage,
 	meter metric.Meter,
 	tracer output.Tracer,
@@ -59,7 +62,7 @@ func NewPackageRegistry(
 
 	r := &PackageRegistry{
 		packages:  make(map[string]*packageEntry),
-		repo:      repo,
+		providers: providers,
 		storage:   storage,
 		tracer:    tracer,
 		logger:    logger,
@@ -98,8 +101,17 @@ func (r *PackageRegistry) LoadPackage(ctx context.Context, path string) error {
 
 	r.logger.Info("loading package", "path", path)
 
+	// Resolve the adapter that owns this file kind.
+	provider, err := r.providerFor(path)
+	if err != nil {
+		r.logger.Error("no adapter for source", "path", path, "error", err)
+		span.RecordError(err)
+		span.SetStatus(output.StatusError, "no adapter")
+		return err
+	}
+
 	// Open the package
-	pkg, err := r.repo.Open(ctx, path)
+	pkg, err := provider.Open(ctx, path)
 	if err != nil {
 		r.logger.Error("failed to open package", "path", path, "error", err)
 		span.RecordError(err)
@@ -109,6 +121,7 @@ func (r *PackageRegistry) LoadPackage(ctx context.Context, path string) error {
 
 	span.SetAttributes(
 		output.String("ortus.package.id", pkg.ID),
+		output.String("ortus.source.kind", string(pkg.Kind)),
 		output.Int("ortus.layers.count", len(pkg.Layers)),
 	)
 
@@ -116,16 +129,18 @@ func (r *PackageRegistry) LoadPackage(ctx context.Context, path string) error {
 	r.mu.Lock()
 	r.packages[pkg.ID] = &packageEntry{
 		Package: pkg,
+		Repo:    provider,
 		Status:  domain.StatusIndexing,
 	}
 	r.mu.Unlock()
 
-	// Create spatial indices for all layers
+	// Prepare all layers (builds spatial indices for vector sources; a no-op
+	// for sources that are ready on open).
 	for _, layer := range pkg.Layers {
-		r.logger.Debug("creating spatial index", "package", pkg.ID, "layer", layer.Name)
-		if err := r.repo.CreateSpatialIndex(ctx, pkg.ID, layer.Name); err != nil {
-			r.logger.Warn("failed to create spatial index", "package", pkg.ID, "layer", layer.Name, "error", err)
-			span.AddEvent("spatial index creation failed",
+		r.logger.Debug("preparing layer", "package", pkg.ID, "layer", layer.Name)
+		if err := provider.Prepare(ctx, pkg.ID, layer.Name); err != nil {
+			r.logger.Warn("failed to prepare layer", "package", pkg.ID, "layer", layer.Name, "error", err)
+			span.AddEvent("layer preparation failed",
 				output.String("ortus.layer.name", layer.Name),
 				output.String("error", err.Error()),
 			)
@@ -158,12 +173,19 @@ func (r *PackageRegistry) UnloadPackage(ctx context.Context, packageID string) e
 	r.logger.Info("unloading package", "id", packageID)
 
 	r.mu.Lock()
+	var repo output.SpatialSource
 	if entry, ok := r.packages[packageID]; ok {
 		entry.Status = domain.StatusUnloading
+		repo = entry.Repo
 	}
 	r.mu.Unlock()
 
-	if err := r.repo.Close(ctx, packageID); err != nil {
+	if repo == nil {
+		// Not loaded — nothing to close.
+		return nil
+	}
+
+	if err := repo.Close(ctx, packageID); err != nil {
 		r.logger.Error("failed to close package", "id", packageID, "error", err)
 		span.RecordError(err)
 		span.SetStatus(output.StatusError, "close failed")
@@ -177,6 +199,30 @@ func (r *PackageRegistry) UnloadPackage(ctx context.Context, packageID string) e
 	r.updateMetrics()
 	span.SetStatus(output.StatusOK, "")
 	return nil
+}
+
+// providerFor returns the first registered adapter that supports the given
+// path, or ErrUnsupportedSource if none do.
+func (r *PackageRegistry) providerFor(path string) (output.SpatialSource, error) {
+	for _, p := range r.providers {
+		if p.Supports(path) {
+			return p, nil
+		}
+	}
+	return nil, domain.ErrUnsupportedSource
+}
+
+// Query samples/queries a single layer of a loaded source, delegating to the
+// adapter that owns it. This is the seam the query service uses so it stays
+// agnostic of the source kind.
+func (r *PackageRegistry) Query(ctx context.Context, sourceID, layer string, coord domain.Coordinate) ([]domain.Feature, error) {
+	r.mu.RLock()
+	entry, ok := r.packages[sourceID]
+	r.mu.RUnlock()
+	if !ok {
+		return nil, domain.ErrPackageNotFound
+	}
+	return entry.Repo.QueryPoint(ctx, sourceID, layer, coord)
 }
 
 // ListPackages returns all registered GeoPackages.

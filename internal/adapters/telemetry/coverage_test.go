@@ -109,8 +109,8 @@ func TestTracingCoverage_AllPathsProduceSpans(t *testing.T) {
 
 	repo := &tracedFakeRepo{inner: coverageRepo{}, tracer: tr}
 	store := storage.NewTracedStorage(coverageStorage{}, tr, "local")
-	reg := application.NewPackageRegistry(repo, store, noop.NewMeterProvider().Meter("test"), tr, logger, "/tmp")
-	qs := application.NewQueryService(reg, repo, nil, noop.NewMeterProvider().Meter("test"), tr, logger, application.QueryServiceConfig{})
+	reg := application.NewPackageRegistry([]output.SpatialSource{repo}, store, noop.NewMeterProvider().Meter("test"), tr, logger, "/tmp")
+	qs := application.NewQueryService(reg, nil, noop.NewMeterProvider().Meter("test"), tr, logger, application.QueryServiceConfig{})
 	hs := application.NewHealthService(reg, tr)
 
 	// Each "request" runs in its own root context — this mirrors how
@@ -209,6 +209,10 @@ func (r *tracedFakeRepo) Open(ctx context.Context, path string) (*domain.Source,
 	_, span := r.tracer.Start(ctx, "Repository.Open")
 	defer span.End()
 	return r.inner.Open(ctx, path)
+}
+func (r *tracedFakeRepo) Supports(_ string) bool { return true }
+func (r *tracedFakeRepo) Prepare(ctx context.Context, packageID, layerName string) error {
+	return r.CreateSpatialIndex(ctx, packageID, layerName)
 }
 func (r *tracedFakeRepo) CreateSpatialIndex(ctx context.Context, packageID, layerName string) error {
 	_, span := r.tracer.Start(ctx, "Repository.CreateSpatialIndex")

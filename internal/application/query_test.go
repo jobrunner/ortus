@@ -17,11 +17,10 @@ import (
 // metric output. Centralized so the import + helper stays in one place.
 func testMeter() metric.Meter { return noop.NewMeterProvider().Meter("test") }
 
-func newTestQueryService(registry *PackageRegistry, repo *mockRepository) *QueryService {
+func newTestQueryService(registry *PackageRegistry) *QueryService {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	return NewQueryService(
 		registry,
-		repo,
 		nil, // No transformer needed for basic tests
 		testMeter(),
 		output.NoOpTracer{},
@@ -39,7 +38,6 @@ func TestQueryServiceDefaultConfig(t *testing.T) {
 
 	svc := NewQueryService(
 		registry,
-		&mockRepository{},
 		nil,
 		testMeter(),
 		output.NoOpTracer{},
@@ -57,7 +55,7 @@ func TestQueryServiceDefaultConfig(t *testing.T) {
 
 func TestQueryServiceQueryPointInvalidCoordinate(t *testing.T) {
 	registry := newTestRegistry()
-	svc := newTestQueryService(registry, &mockRepository{})
+	svc := newTestQueryService(registry)
 
 	req := domain.QueryRequest{
 		Coordinate: domain.NewWGS84Coordinate(200, 0), // Invalid longitude
@@ -71,7 +69,7 @@ func TestQueryServiceQueryPointInvalidCoordinate(t *testing.T) {
 
 func TestQueryServiceQueryPointNoPackages(t *testing.T) {
 	registry := newTestRegistry()
-	svc := newTestQueryService(registry, &mockRepository{})
+	svc := newTestQueryService(registry)
 
 	req := domain.QueryRequest{
 		Coordinate: domain.NewWGS84Coordinate(10, 50),
@@ -93,21 +91,6 @@ func TestQueryServiceQueryPointNoPackages(t *testing.T) {
 func TestQueryServiceQueryPointWithFeatures(t *testing.T) {
 	registry := newTestRegistry()
 
-	// Add a ready package
-	registry.mu.Lock()
-	registry.packages["test-pkg"] = &packageEntry{
-		Package: &domain.Source{
-			ID:      "test-pkg",
-			Name:    "Test Package",
-			Indexed: true,
-			Layers: []domain.Layer{
-				{Name: "layer1", GeometryType: "POLYGON", SRID: 4326, HasIndex: true},
-			},
-		},
-		Status: domain.StatusReady,
-	}
-	registry.mu.Unlock()
-
 	repo := &mockRepository{
 		packages: map[string]*domain.Source{
 			"test-pkg": {
@@ -124,7 +107,23 @@ func TestQueryServiceQueryPointWithFeatures(t *testing.T) {
 		},
 	}
 
-	svc := newTestQueryService(registry, repo)
+	// Add a ready package owned by the features repo.
+	registry.mu.Lock()
+	registry.packages["test-pkg"] = &packageEntry{
+		Package: &domain.Source{
+			ID:      "test-pkg",
+			Name:    "Test Package",
+			Indexed: true,
+			Layers: []domain.Layer{
+				{Name: "layer1", GeometryType: "POLYGON", SRID: 4326, HasIndex: true},
+			},
+		},
+		Repo:   repo,
+		Status: domain.StatusReady,
+	}
+	registry.mu.Unlock()
+
+	svc := newTestQueryService(registry)
 
 	req := domain.QueryRequest{
 		Coordinate: domain.NewWGS84Coordinate(10, 50),
@@ -146,26 +145,6 @@ func TestQueryServiceQueryPointWithFeatures(t *testing.T) {
 func TestQueryServiceQueryPointSpecificPackage(t *testing.T) {
 	registry := newTestRegistry()
 
-	// Add two ready packages
-	registry.mu.Lock()
-	registry.packages["pkg1"] = &packageEntry{
-		Package: &domain.Source{
-			ID:      "pkg1",
-			Indexed: true,
-			Layers:  []domain.Layer{{Name: "layer1", SRID: 4326, HasIndex: true}},
-		},
-		Status: domain.StatusReady,
-	}
-	registry.packages["pkg2"] = &packageEntry{
-		Package: &domain.Source{
-			ID:      "pkg2",
-			Indexed: true,
-			Layers:  []domain.Layer{{Name: "layer1", SRID: 4326, HasIndex: true}},
-		},
-		Status: domain.StatusReady,
-	}
-	registry.mu.Unlock()
-
 	repo := &mockRepository{
 		packages: map[string]*domain.Source{
 			"pkg1": {ID: "pkg1", Layers: []domain.Layer{{Name: "layer1", SRID: 4326}}},
@@ -177,7 +156,29 @@ func TestQueryServiceQueryPointSpecificPackage(t *testing.T) {
 		},
 	}
 
-	svc := newTestQueryService(registry, repo)
+	// Add two ready packages owned by the features repo.
+	registry.mu.Lock()
+	registry.packages["pkg1"] = &packageEntry{
+		Package: &domain.Source{
+			ID:      "pkg1",
+			Indexed: true,
+			Layers:  []domain.Layer{{Name: "layer1", SRID: 4326, HasIndex: true}},
+		},
+		Repo:   repo,
+		Status: domain.StatusReady,
+	}
+	registry.packages["pkg2"] = &packageEntry{
+		Package: &domain.Source{
+			ID:      "pkg2",
+			Indexed: true,
+			Layers:  []domain.Layer{{Name: "layer1", SRID: 4326, HasIndex: true}},
+		},
+		Repo:   repo,
+		Status: domain.StatusReady,
+	}
+	registry.mu.Unlock()
+
+	svc := newTestQueryService(registry)
 
 	req := domain.QueryRequest{
 		Coordinate: domain.NewWGS84Coordinate(10, 50),
@@ -199,7 +200,7 @@ func TestQueryServiceQueryPointSpecificPackage(t *testing.T) {
 
 func TestQueryServiceQueryPointPackageNotFound(t *testing.T) {
 	registry := newTestRegistry()
-	svc := newTestQueryService(registry, &mockRepository{})
+	svc := newTestQueryService(registry)
 
 	req := domain.QueryRequest{
 		Coordinate: domain.NewWGS84Coordinate(10, 50),
@@ -325,7 +326,7 @@ func TestQueryServiceTransformCoordinate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			svc := NewQueryService(registry, &mockRepository{}, tt.transformer, testMeter(), output.NoOpTracer{}, logger, QueryServiceConfig{})
+			svc := NewQueryService(registry, tt.transformer, testMeter(), output.NoOpTracer{}, logger, QueryServiceConfig{})
 
 			coord := domain.NewCoordinate(10, 50, tt.coordSRID)
 			layer := &domain.Layer{SRID: tt.layerSRID}

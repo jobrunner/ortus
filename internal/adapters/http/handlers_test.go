@@ -109,7 +109,7 @@ func newTestServer(_ *mockQueryService, _ *mockPackageRegistry, _ *mockHealthSer
 
 	// Create real services using mocks
 	realRegistry := application.NewPackageRegistry(
-		&mockRepository{},
+		[]output.SpatialSource{&mockRepository{}},
 		&mockStorage{},
 		noop.NewMeterProvider().Meter("test"),
 		output.NoOpTracer{},
@@ -120,7 +120,6 @@ func newTestServer(_ *mockQueryService, _ *mockPackageRegistry, _ *mockHealthSer
 	realHealth := application.NewHealthService(realRegistry, output.NoOpTracer{})
 	realQuery := application.NewQueryService(
 		realRegistry,
-		&mockRepository{},
 		nil,
 		noop.NewMeterProvider().Meter("test"),
 		output.NoOpTracer{},
@@ -476,6 +475,10 @@ func (m *mockRepository) Open(_ context.Context, path string) (*domain.Source, e
 func (m *mockRepository) Close(_ context.Context, _ string) error {
 	return nil
 }
+
+func (m *mockRepository) Supports(_ string) bool { return true }
+
+func (m *mockRepository) Prepare(_ context.Context, _, _ string) error { return nil }
 
 func (m *mockRepository) GetLayers(_ context.Context, _ string) ([]domain.Layer, error) {
 	return nil, nil

@@ -25,7 +25,7 @@ func TestPackageRegistryLoadUnload(t *testing.T) {
 	}
 
 	registry := NewPackageRegistry(
-		repo,
+		[]output.SpatialSource{repo},
 		&mockStorage{},
 		testMeter(),
 		output.NoOpTracer{},

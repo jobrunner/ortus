@@ -103,7 +103,7 @@ func TestSyncService_SyncAddsNewPackages(t *testing.T) {
 
 	registry := &PackageRegistry{
 		packages:  make(map[string]*packageEntry),
-		repo:      &mockRepository{},
+		providers: []output.SpatialSource{&mockRepository{}},
 		logger:    logger,
 		localPath: "/tmp",
 		storage:   storage,
@@ -188,7 +188,7 @@ func TestRegistry_SyncRemovesDeletedPackages(t *testing.T) {
 
 	registry := &PackageRegistry{
 		packages:  make(map[string]*packageEntry),
-		repo:      &mockRepository{},
+		providers: []output.SpatialSource{&mockRepository{}},
 		logger:    logger,
 		localPath: "/tmp",
 		storage:   storage,

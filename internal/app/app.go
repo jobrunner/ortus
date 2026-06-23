@@ -136,9 +136,10 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*App, er
 	app.Repository = geopackage.NewRepository()
 	app.Repository.SetTracer(app.Tracer)
 
-	// Initialize package registry
+	// Initialize package registry with the available source adapters. The
+	// registry routes each file to the first adapter whose Supports matches.
 	app.Registry = application.NewPackageRegistry(
-		app.Repository,
+		[]output.SpatialSource{app.Repository},
 		app.Storage,
 		meter,
 		app.Tracer,
@@ -153,7 +154,6 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*App, er
 	// Initialize query service
 	app.QueryService = application.NewQueryService(
 		app.Registry,
-		app.Repository,
 		transformer,
 		meter,
 		app.Tracer,

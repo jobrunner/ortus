@@ -65,12 +65,26 @@ func getSpatiaLiteLibraryPaths() []string {
 	return paths
 }
 
-// Repository implements the GeoPackageRepository port using SpatiaLite.
+// Repository implements the output.SpatialSource port (and the legacy
+// GeoPackageRepository port) using SpatiaLite. It serves vector GeoPackages.
 type Repository struct {
 	mu          sync.RWMutex
 	connections map[string]*sql.DB
 	packages    map[string]*domain.Source
 	tracer      output.Tracer
+}
+
+// Supports reports whether this adapter can open the given path. The
+// GeoPackage adapter handles *.gpkg files.
+func (r *Repository) Supports(path string) bool {
+	return strings.EqualFold(filepath.Ext(path), ".gpkg")
+}
+
+// Prepare builds the spatial index for a layer (the GeoPackage adapter's
+// readiness work). It satisfies the output.SpatialSource port by delegating
+// to CreateSpatialIndex.
+func (r *Repository) Prepare(ctx context.Context, sourceID string, layer string) error {
+	return r.CreateSpatialIndex(ctx, sourceID, layer)
 }
 
 // NewRepository creates a new GeoPackage repository.

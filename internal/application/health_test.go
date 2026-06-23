@@ -12,7 +12,7 @@ import (
 
 func newTestRegistry() *PackageRegistry {
 	return NewPackageRegistry(
-		&mockRepository{},
+		[]output.SpatialSource{&mockRepository{}},
 		&mockStorage{},
 		testMeter(),
 		output.NoOpTracer{},
