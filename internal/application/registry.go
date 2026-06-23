@@ -36,8 +36,8 @@ type PackageRegistry struct {
 }
 
 type packageEntry struct {
-	Package *domain.GeoPackage
-	Status  domain.GeoPackageStatus
+	Package *domain.Source
+	Status  domain.SourceStatus
 	Error   error
 }
 
@@ -180,14 +180,14 @@ func (r *PackageRegistry) UnloadPackage(ctx context.Context, packageID string) e
 }
 
 // ListPackages returns all registered GeoPackages.
-func (r *PackageRegistry) ListPackages(ctx context.Context) ([]domain.GeoPackage, error) {
+func (r *PackageRegistry) ListPackages(ctx context.Context) ([]domain.Source, error) {
 	_, span := r.tracer.Start(ctx, "PackageRegistry.ListPackages")
 	defer span.End()
 
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	packages := make([]domain.GeoPackage, 0, len(r.packages))
+	packages := make([]domain.Source, 0, len(r.packages))
 	for _, entry := range r.packages {
 		packages = append(packages, *entry.Package)
 	}
@@ -197,7 +197,7 @@ func (r *PackageRegistry) ListPackages(ctx context.Context) ([]domain.GeoPackage
 }
 
 // GetPackage returns a specific GeoPackage by ID.
-func (r *PackageRegistry) GetPackage(ctx context.Context, id string) (*domain.GeoPackage, error) {
+func (r *PackageRegistry) GetPackage(ctx context.Context, id string) (*domain.Source, error) {
 	_, span := r.tracer.Start(ctx, "PackageRegistry.GetPackage",
 		output.WithAttributes(output.String("ortus.package.id", id)),
 	)
@@ -217,7 +217,7 @@ func (r *PackageRegistry) GetPackage(ctx context.Context, id string) (*domain.Ge
 }
 
 // GetPackageStatus returns the status of a GeoPackage.
-func (r *PackageRegistry) GetPackageStatus(ctx context.Context, id string) (domain.GeoPackageStatus, error) {
+func (r *PackageRegistry) GetPackageStatus(ctx context.Context, id string) (domain.SourceStatus, error) {
 	_, span := r.tracer.Start(ctx, "PackageRegistry.GetPackageStatus",
 		output.WithAttributes(output.String("ortus.package.id", id)),
 	)

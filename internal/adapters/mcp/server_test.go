@@ -24,8 +24,8 @@ import (
 // fakeRepo is a no-DB GeoPackageRepository.
 type fakeRepo struct{}
 
-func (fakeRepo) Open(_ context.Context, path string) (*domain.GeoPackage, error) {
-	return &domain.GeoPackage{
+func (fakeRepo) Open(_ context.Context, path string) (*domain.Source, error) {
+	return &domain.Source{
 		ID: "fake", Name: "fake.gpkg", Path: path,
 		Layers: []domain.Layer{{Name: "regions", GeometryColumn: "geom", GeometryType: "POLYGON", SRID: 4326, HasIndex: true}},
 	}, nil

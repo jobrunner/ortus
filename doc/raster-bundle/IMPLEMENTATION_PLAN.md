@@ -6,6 +6,14 @@ by adding a second adapter behind a generalized port, not a second service.
 
 This plan is grounded in the current code (file:line references are to `master`).
 
+## 0. Locked decisions (2026-06-23)
+
+1. **Domain model:** rename `domain.GeoPackage` → `domain.Source` with a `Kind` (§2.2).
+2. **COG library:** run the evaluation spike first, record an ADR (§3.2) — pure-Go preferred.
+3. **Runtime validation:** embed the JSON Schema (`go:embed`) and validate (§3.1, §5.3).
+4. **Sequencing:** start with the behavior-preserving refactor PR (§7 step 2); the COG
+   spike runs independently.
+
 ---
 
 ## 1. Where the code is coupled to GeoPackage today

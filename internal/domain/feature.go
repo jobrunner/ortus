@@ -102,4 +102,7 @@ const (
 	GeomMultiLineString    GeometryType = "MULTILINESTRING"
 	GeomMultiPolygon       GeometryType = "MULTIPOLYGON"
 	GeomGeometryCollection GeometryType = "GEOMETRYCOLLECTION"
+	// GeomRaster marks a layer backed by a raster source; such a layer is
+	// sampled per pixel rather than queried by geometry containment.
+	GeomRaster GeometryType = "RASTER"
 )

@@ -17,7 +17,7 @@ import (
 // and returns no features. Enough to exercise the query span tree.
 type stubRepo struct{}
 
-func (stubRepo) Open(_ context.Context, _ string) (*domain.GeoPackage, error) {
+func (stubRepo) Open(_ context.Context, _ string) (*domain.Source, error) {
 	return nil, domain.ErrPackageNotFound
 }
 func (stubRepo) Close(_ context.Context, _ string) error { return nil }

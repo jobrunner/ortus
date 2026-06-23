@@ -96,7 +96,7 @@ func TestQueryServiceQueryPointWithFeatures(t *testing.T) {
 	// Add a ready package
 	registry.mu.Lock()
 	registry.packages["test-pkg"] = &packageEntry{
-		Package: &domain.GeoPackage{
+		Package: &domain.Source{
 			ID:      "test-pkg",
 			Name:    "Test Package",
 			Indexed: true,
@@ -109,7 +109,7 @@ func TestQueryServiceQueryPointWithFeatures(t *testing.T) {
 	registry.mu.Unlock()
 
 	repo := &mockRepository{
-		packages: map[string]*domain.GeoPackage{
+		packages: map[string]*domain.Source{
 			"test-pkg": {
 				ID:     "test-pkg",
 				Name:   "Test Package",
@@ -149,7 +149,7 @@ func TestQueryServiceQueryPointSpecificPackage(t *testing.T) {
 	// Add two ready packages
 	registry.mu.Lock()
 	registry.packages["pkg1"] = &packageEntry{
-		Package: &domain.GeoPackage{
+		Package: &domain.Source{
 			ID:      "pkg1",
 			Indexed: true,
 			Layers:  []domain.Layer{{Name: "layer1", SRID: 4326, HasIndex: true}},
@@ -157,7 +157,7 @@ func TestQueryServiceQueryPointSpecificPackage(t *testing.T) {
 		Status: domain.StatusReady,
 	}
 	registry.packages["pkg2"] = &packageEntry{
-		Package: &domain.GeoPackage{
+		Package: &domain.Source{
 			ID:      "pkg2",
 			Indexed: true,
 			Layers:  []domain.Layer{{Name: "layer1", SRID: 4326, HasIndex: true}},
@@ -167,7 +167,7 @@ func TestQueryServiceQueryPointSpecificPackage(t *testing.T) {
 	registry.mu.Unlock()
 
 	repo := &mockRepository{
-		packages: map[string]*domain.GeoPackage{
+		packages: map[string]*domain.Source{
 			"pkg1": {ID: "pkg1", Layers: []domain.Layer{{Name: "layer1", SRID: 4326}}},
 			"pkg2": {ID: "pkg2", Layers: []domain.Layer{{Name: "layer1", SRID: 4326}}},
 		},

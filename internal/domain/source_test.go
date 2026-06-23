@@ -5,15 +5,15 @@ import (
 	"time"
 )
 
-func TestGeoPackageIsReady(t *testing.T) {
+func TestSourceIsReady(t *testing.T) {
 	tests := []struct {
 		name string
-		pkg  GeoPackage
+		pkg  Source
 		want bool
 	}{
 		{
 			name: "indexed with all indexed layers",
-			pkg: GeoPackage{
+			pkg: Source{
 				Indexed: true,
 				Layers: []Layer{
 					{Name: "layer1", HasIndex: true},
@@ -24,7 +24,7 @@ func TestGeoPackageIsReady(t *testing.T) {
 		},
 		{
 			name: "indexed but layer not indexed",
-			pkg: GeoPackage{
+			pkg: Source{
 				Indexed: true,
 				Layers: []Layer{
 					{Name: "layer1", HasIndex: true},
@@ -35,7 +35,7 @@ func TestGeoPackageIsReady(t *testing.T) {
 		},
 		{
 			name: "not indexed",
-			pkg: GeoPackage{
+			pkg: Source{
 				Indexed: false,
 				Layers: []Layer{
 					{Name: "layer1", HasIndex: true},
@@ -45,7 +45,7 @@ func TestGeoPackageIsReady(t *testing.T) {
 		},
 		{
 			name: "indexed with no layers",
-			pkg: GeoPackage{
+			pkg: Source{
 				Indexed: true,
 				Layers:  []Layer{},
 			},
@@ -62,20 +62,20 @@ func TestGeoPackageIsReady(t *testing.T) {
 	}
 }
 
-func TestGeoPackageLayerCount(t *testing.T) {
+func TestSourceLayerCount(t *testing.T) {
 	tests := []struct {
 		name string
-		pkg  GeoPackage
+		pkg  Source
 		want int
 	}{
 		{
 			name: "no layers",
-			pkg:  GeoPackage{},
+			pkg:  Source{},
 			want: 0,
 		},
 		{
 			name: "three layers",
-			pkg: GeoPackage{
+			pkg: Source{
 				Layers: []Layer{{Name: "a"}, {Name: "b"}, {Name: "c"}},
 			},
 			want: 3,
@@ -91,8 +91,8 @@ func TestGeoPackageLayerCount(t *testing.T) {
 	}
 }
 
-func TestGeoPackageGetLayer(t *testing.T) {
-	pkg := GeoPackage{
+func TestSourceGetLayer(t *testing.T) {
+	pkg := Source{
 		Layers: []Layer{
 			{Name: "buildings", GeometryType: "POLYGON"},
 			{Name: "roads", GeometryType: "LINESTRING"},
@@ -187,9 +187,9 @@ func TestLayerIsLineLayer(t *testing.T) {
 	}
 }
 
-func TestGeoPackageStatus(t *testing.T) {
+func TestSourceStatus(t *testing.T) {
 	// Test all status constants are defined and unique
-	statuses := []GeoPackageStatus{
+	statuses := []SourceStatus{
 		StatusLoading,
 		StatusIndexing,
 		StatusReady,
@@ -197,7 +197,7 @@ func TestGeoPackageStatus(t *testing.T) {
 		StatusUnloading,
 	}
 
-	seen := make(map[GeoPackageStatus]bool)
+	seen := make(map[SourceStatus]bool)
 	for _, s := range statuses {
 		if seen[s] {
 			t.Errorf("Duplicate status: %s", s)
@@ -209,9 +209,9 @@ func TestGeoPackageStatus(t *testing.T) {
 	}
 }
 
-func TestGeoPackageMetadata(t *testing.T) {
+func TestSourceMetadata(t *testing.T) {
 	now := time.Now()
-	pkg := GeoPackage{
+	pkg := Source{
 		ID:       "test-pkg",
 		Name:     "Test Package",
 		Path:     "/data/test.gpkg",
@@ -219,7 +219,7 @@ func TestGeoPackageMetadata(t *testing.T) {
 		LoadedAt: now,
 		Metadata: Metadata{
 			Title:       "Test Data",
-			Description: "Test GeoPackage for testing",
+			Description: "Test Source for testing",
 		},
 		License: License{
 			Name: "CC BY 4.0",

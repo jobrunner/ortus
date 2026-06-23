@@ -135,7 +135,7 @@ func addGetPackage(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 		Name: "get_package",
 		Description: "Fetch the full metadata for one GeoPackage: layers, extent, " +
 			"size, license, last-queried timestamp. Equivalent to GET /api/v1/packages/{id}.",
-	}, func(ctx toolCtx, _ *callRequest, in getPackageIn) (*callResult, *domain.GeoPackage, error) {
+	}, func(ctx toolCtx, _ *callRequest, in getPackageIn) (*callResult, *domain.Source, error) {
 		if strings.TrimSpace(in.PackageID) == "" {
 			return nil, nil, fmt.Errorf("package_id is required")
 		}

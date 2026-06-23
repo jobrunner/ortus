@@ -9,7 +9,7 @@ import (
 // GeoPackageRepository defines the secondary port for GeoPackage data access.
 type GeoPackageRepository interface {
 	// Open opens a GeoPackage file and returns its metadata.
-	Open(ctx context.Context, path string) (*domain.GeoPackage, error)
+	Open(ctx context.Context, path string) (*domain.Source, error)
 
 	// Close closes a GeoPackage connection.
 	Close(ctx context.Context, packageID string) error

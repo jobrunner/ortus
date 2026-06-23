@@ -19,13 +19,13 @@ type QueryService interface {
 // PackageRegistry defines the primary port for GeoPackage management.
 type PackageRegistry interface {
 	// ListPackages returns all registered GeoPackages.
-	ListPackages(ctx context.Context) ([]domain.GeoPackage, error)
+	ListPackages(ctx context.Context) ([]domain.Source, error)
 
 	// GetPackage returns a specific GeoPackage by ID.
-	GetPackage(ctx context.Context, id string) (*domain.GeoPackage, error)
+	GetPackage(ctx context.Context, id string) (*domain.Source, error)
 
 	// GetPackageStatus returns the status of a GeoPackage.
-	GetPackageStatus(ctx context.Context, id string) (domain.GeoPackageStatus, error)
+	GetPackageStatus(ctx context.Context, id string) (domain.SourceStatus, error)
 }
 
 // HealthChecker defines the primary port for health checks.

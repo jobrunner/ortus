@@ -22,8 +22,8 @@ import (
 // run to completion without hitting SQLite.
 type coverageRepo struct{}
 
-func (coverageRepo) Open(_ context.Context, path string) (*domain.GeoPackage, error) {
-	return &domain.GeoPackage{
+func (coverageRepo) Open(_ context.Context, path string) (*domain.Source, error) {
+	return &domain.Source{
 		ID:   "fake",
 		Name: "fake.gpkg",
 		Path: path,
@@ -205,7 +205,7 @@ type tracedFakeRepo struct {
 	tracer output.Tracer
 }
 
-func (r *tracedFakeRepo) Open(ctx context.Context, path string) (*domain.GeoPackage, error) {
+func (r *tracedFakeRepo) Open(ctx context.Context, path string) (*domain.Source, error) {
 	_, span := r.tracer.Start(ctx, "Repository.Open")
 	defer span.End()
 	return r.inner.Open(ctx, path)

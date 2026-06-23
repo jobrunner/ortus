@@ -69,7 +69,7 @@ func getSpatiaLiteLibraryPaths() []string {
 type Repository struct {
 	mu          sync.RWMutex
 	connections map[string]*sql.DB
-	packages    map[string]*domain.GeoPackage
+	packages    map[string]*domain.Source
 	tracer      output.Tracer
 }
 
@@ -77,7 +77,7 @@ type Repository struct {
 func NewRepository() *Repository {
 	return &Repository{
 		connections: make(map[string]*sql.DB),
-		packages:    make(map[string]*domain.GeoPackage),
+		packages:    make(map[string]*domain.Source),
 		tracer:      output.NoOpTracer{},
 	}
 }
@@ -92,7 +92,7 @@ func (r *Repository) SetTracer(t output.Tracer) {
 }
 
 // Open opens a GeoPackage file and returns its metadata.
-func (r *Repository) Open(ctx context.Context, path string) (*domain.GeoPackage, error) {
+func (r *Repository) Open(ctx context.Context, path string) (*domain.Source, error) {
 	ctx, span := r.tracer.Start(ctx, "Repository.Open",
 		output.WithAttributes(output.String("ortus.package.path", path)),
 	)
@@ -456,11 +456,12 @@ func (r *Repository) loadSpatiaLite(ctx context.Context, db *sql.DB) error {
 }
 
 // readPackageMetadata reads metadata from a GeoPackage.
-func (r *Repository) readPackageMetadata(ctx context.Context, db *sql.DB, packageID, path string) (*domain.GeoPackage, error) {
-	pkg := &domain.GeoPackage{
+func (r *Repository) readPackageMetadata(ctx context.Context, db *sql.DB, packageID, path string) (*domain.Source, error) {
+	pkg := &domain.Source{
 		ID:   packageID,
 		Name: packageID,
 		Path: path,
+		Kind: domain.SourceKindVector,
 	}
 
 	// Read layers from gpkg_contents
@@ -534,7 +535,7 @@ func (r *Repository) readLayers(ctx context.Context, db *sql.DB) ([]domain.Layer
 }
 
 // readMetadata reads optional metadata from gpkg_metadata.
-func (r *Repository) readMetadata(ctx context.Context, db *sql.DB, pkg *domain.GeoPackage) error {
+func (r *Repository) readMetadata(ctx context.Context, db *sql.DB, pkg *domain.Source) error {
 	// Check if metadata table exists
 	var exists int
 	err := db.QueryRowContext(ctx,
