@@ -58,8 +58,11 @@ fi
 # --- 3. Cloud Optimized GeoTIFF ----------------------------------------------
 echo ">> writing COG"
 COG="$WORK/koeppen.cog.tif"
+# LZW (not DEFLATE) is mandated for bundle COGs: the Go reader (tingold/gocog,
+# see doc/adr/0013) reads LZW/uncompressed tiles correctly but trips over GDAL's
+# DEFLATE tiles. LZW keeps the COG compressed and lossless.
 gdal_translate -of COG \
-  -co COMPRESS=DEFLATE \
+  -co COMPRESS=LZW \
   -co BLOCKSIZE=512 \
   -co OVERVIEW_RESAMPLING=NEAREST \
   -co RESAMPLING=NEAREST \
