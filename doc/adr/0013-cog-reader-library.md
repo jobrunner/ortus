@@ -81,8 +81,13 @@ Begleitend:
   (ganze Pakete werden gelinkt, auch wenn wir nur `ReadWindow`/`PixelFromPoint`
   nutzen und `ReadTile`/`maptile` nie aufrufen). Das ist ein realer, unschöner
   Bloat. Korrektur eines früheren, falschen Spike-Befunds („nicht im Runtime-Build").
-  Folge-Option (empfohlen, niedrige Prio): Upstream-PR, der gocogs `maptile`-Nutzung
-  entfernt (`ReadTile(x,y,z int)` statt `maptile.Tile`) — entfernt `geojson`+`bson`.
+  **Entscheidung: akzeptiert.** `bson` ist pure-Go, verhaltensneutral und wird nie
+  ausgeführt (wir rufen `ReadTile`/`maptile` nie auf) — es ist reine Binary-Größe
+  (~1–2 MB). Ein Fork (hart oder Vendor-Patch) bedeutete dauerhafte Wartungslast
+  (Rebases, Security, API-Drift) bei einer aktiv entwickelten pre-1.0-Lib und steht
+  in keinem Verhältnis dazu. Falls die Binary-Größe je real stört, ist der Hebel ein
+  **einmaliger** Upstream-PR (gocogs `maptile`-Nutzung entfernen: `ReadTile(x,y,z int)`
+  statt `maptile.Tile` → entfernt `geojson`+`bson`), **kein** Fork.
 - Float-Raster erfordern `Float32frombits`-Dekodierung je `DataType` (für die
   kategorialen Bundles irrelevant — dort liefert `At()` den Wert direkt).
 
