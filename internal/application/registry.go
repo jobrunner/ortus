@@ -219,7 +219,9 @@ func (r *PackageRegistry) Query(ctx context.Context, sourceID, layer string, coo
 	r.mu.RLock()
 	entry, ok := r.packages[sourceID]
 	r.mu.RUnlock()
-	if !ok {
+	if !ok || entry.Repo == nil {
+		// entry.Repo is always set by LoadPackage; guard anyway so a
+		// malformed entry surfaces a clean error instead of a nil panic.
 		return nil, domain.ErrPackageNotFound
 	}
 	return entry.Repo.QueryPoint(ctx, sourceID, layer, coord)

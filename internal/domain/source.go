@@ -31,11 +31,11 @@ type Source struct {
 }
 
 // IsReady returns true if the source is fully indexed/prepared and ready for queries.
-func (g *Source) IsReady() bool {
-	if !g.Indexed {
+func (s *Source) IsReady() bool {
+	if !s.Indexed {
 		return false
 	}
-	for _, layer := range g.Layers {
+	for _, layer := range s.Layers {
 		if !layer.HasIndex {
 			return false
 		}
@@ -44,15 +44,15 @@ func (g *Source) IsReady() bool {
 }
 
 // LayerCount returns the number of feature layers.
-func (g *Source) LayerCount() int {
-	return len(g.Layers)
+func (s *Source) LayerCount() int {
+	return len(s.Layers)
 }
 
 // GetLayer returns a layer by name.
-func (g *Source) GetLayer(name string) (*Layer, bool) {
-	for i := range g.Layers {
-		if g.Layers[i].Name == name {
-			return &g.Layers[i], true
+func (s *Source) GetLayer(name string) (*Layer, bool) {
+	for i := range s.Layers {
+		if s.Layers[i].Name == name {
+			return &s.Layers[i], true
 		}
 	}
 	return nil, false
