@@ -75,10 +75,14 @@ Begleitend:
 - gocog ist **pre-1.0** → Commit gepinnt; API-Drift möglich. Abkapselung im Adapter mindert das.
 - **DEFLATE-COGs werden nicht gelesen.** LZW ist vorgeschrieben; externe DEFLATE-COGs
   müssten beim Ingest re-komprimiert werden (`gdal_translate -co COMPRESS=LZW`).
-- Dependency-Baum: `fasthttp`, `paulmach/orb`, `maptile`, `golang.org/x/image`.
-  `go.mongodb.org/mongo-driver` erscheint nur im `orb/geojson`-Pfad und ist laut
-  `go mod why` **nicht** im Runtime-Build von ortus — wird durch Nicht-Import von
-  `orb/geojson` vermieden.
+- **Dependency-Footprint (verifiziert nach Einbau):** `fasthttp`, `paulmach/orb`,
+  `golang.org/x/image` — **und** über `gocog → orb/maptile → orb/geojson →
+  go.mongodb.org/mongo-driver/bson` wird `bson` **in das ortus-Binary kompiliert**
+  (ganze Pakete werden gelinkt, auch wenn wir nur `ReadWindow`/`PixelFromPoint`
+  nutzen und `ReadTile`/`maptile` nie aufrufen). Das ist ein realer, unschöner
+  Bloat. Korrektur eines früheren, falschen Spike-Befunds („nicht im Runtime-Build").
+  Folge-Option (empfohlen, niedrige Prio): Upstream-PR, der gocogs `maptile`-Nutzung
+  entfernt (`ReadTile(x,y,z int)` statt `maptile.Tile`) — entfernt `geojson`+`bson`.
 - Float-Raster erfordern `Float32frombits`-Dekodierung je `DataType` (für die
   kategorialen Bundles irrelevant — dort liefert `At()` den Wert direkt).
 

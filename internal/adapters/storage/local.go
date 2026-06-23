@@ -6,7 +6,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/jobrunner/ortus/internal/ports/output"
 )
@@ -34,8 +33,8 @@ func (s *LocalStorage) List(_ context.Context) ([]output.StorageObject, error) {
 			return nil
 		}
 
-		// Only include .gpkg files
-		if !strings.HasSuffix(strings.ToLower(info.Name()), ".gpkg") {
+		// Only include loadable sources: GeoPackages and raster bundles.
+		if !isSupportedSourceFile(info.Name()) {
 			return nil
 		}
 

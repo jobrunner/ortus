@@ -14,6 +14,7 @@ import (
 	httpAdapter "github.com/jobrunner/ortus/internal/adapters/http"
 	"github.com/jobrunner/ortus/internal/adapters/mcp"
 	"github.com/jobrunner/ortus/internal/adapters/metrics"
+	"github.com/jobrunner/ortus/internal/adapters/raster"
 	"github.com/jobrunner/ortus/internal/adapters/storage"
 	"github.com/jobrunner/ortus/internal/adapters/telemetry"
 	tlsAdapter "github.com/jobrunner/ortus/internal/adapters/tls"
@@ -30,6 +31,7 @@ type App struct {
 	Logger            *slog.Logger
 	Storage           output.ObjectStorage
 	Repository        *geopackage.Repository
+	RasterRepository  *raster.Repository
 	Registry          *application.PackageRegistry
 	QueryService      *application.QueryService
 	HealthService     *application.HealthService
@@ -133,14 +135,21 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*App, er
 	}
 	app.Storage = store
 
-	// Initialize GeoPackage repository
+	// Initialize GeoPackage (vector) repository
 	app.Repository = geopackage.NewRepository()
 	app.Repository.SetTracer(app.Tracer)
 
+	// Initialize raster bundle repository. Bundles are unpacked into OS temp
+	// dirs (not the watched storage path, so unpacked files don't re-trigger
+	// the watcher) and cleaned up on unload.
+	app.RasterRepository = raster.NewRepository("")
+	app.RasterRepository.SetTracer(app.Tracer)
+
 	// Initialize package registry with the available source adapters. The
-	// registry routes each file to the first adapter whose Supports matches.
+	// registry routes each file to the first adapter whose Supports matches
+	// (geopackage: *.gpkg, raster: *.zip).
 	app.Registry = application.NewPackageRegistry(
-		[]output.SpatialSource{app.Repository},
+		[]output.SpatialSource{app.Repository, app.RasterRepository},
 		app.Storage,
 		meter,
 		app.Tracer,

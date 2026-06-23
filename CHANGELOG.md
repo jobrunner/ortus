@@ -8,6 +8,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Raster bundle adapter** (`internal/adapters/raster`): a second `SpatialSource`
+  implementation that serves point queries against raster bundles (`*.zip` = manifest
+  + Cloud Optimized GeoTIFF + integer-value→attribute mapping). Unpacks and
+  schema-validates the manifest against the embedded JSON Schema, samples the COG at
+  the query coordinate (nearest-neighbor) via `tingold/gocog`, and maps the pixel value
+  to `Feature.Properties` — the same `QueryResult` shape as GeoPackages.
+- COG reader **`tingold/gocog`** adopted after a spike ([ADR-0013](doc/adr/0013-cog-reader-library.md));
+  bundle COGs must use `COMPRESS=LZW` (gocog's DEFLATE decoder is broken).
+- Source discovery widened to raster bundles: the file watcher and the local/HTTP
+  storage listings now surface `.zip` alongside `.gpkg`.
+
+### Changed
+- The raster adapter is wired as a registry provider in `app.go` next to the GeoPackage
+  adapter; bundles unpack into OS temp dirs (not the watched storage path) and are
+  cleaned up on unload.
+
+### Notes
+- Dependency footprint: gocog pulls `fasthttp`, `paulmach/orb`, `golang.org/x/image`,
+  and (via `orb/maptile`→`orb/geojson`) `mongo-driver/bson` is compiled into the binary.
+  See ADR-0013 for the upstream-fix follow-up.
+
+## [0.9.0] - 2026-06-23
+
+### Added
 - **`SpatialSource` output port** — the seam for plugging in additional source kinds (raster bundles) behind the existing point-query pipeline. The GeoPackage repository is its first implementation (`Supports`/`Open`/`Prepare`/`QueryPoint`/`Close`).
 - **`domain.Source` with a `Kind` discriminator** (`vector`|`raster`), replacing `domain.GeoPackage` as the registry/query currency, plus a `GeomRaster` geometry-type constant.
 - **Provider routing in the registry**: sources are routed to the first adapter whose `Supports` matches; each entry records its owning adapter and `registry.Query` delegates to it. New `domain.ErrUnsupportedSource`.
