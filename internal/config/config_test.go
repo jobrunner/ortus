@@ -177,7 +177,7 @@ func TestValidateTLS(t *testing.T) {
 		c.TLS.Enabled = true
 		c.TLS.Domains = []string{"example.com"}
 		c.TLS.Email = "a@b.c"
-		c.TLS.DNS.Provider = DNSProviderAzure
+		c.TLS.DNS.Provider = dnsProviderAzure
 		c.TLS.DNS.SubscriptionID = "sub"
 		c.TLS.DNS.ResourceGroupName = "rg"
 		return c

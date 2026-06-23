@@ -18,8 +18,8 @@ const (
 	StorageTypeHTTP  = "http"
 )
 
-// DNSProviderAzure is the only supported ACME DNS-01 challenge provider.
-const DNSProviderAzure = "azure"
+// dnsProviderAzure is the only supported ACME DNS-01 challenge provider.
+const dnsProviderAzure = "azure"
 
 // mcpLoopbackHost is the canonical loopback address; MCP binds here by default
 // and treats it (with localhost/::1) as trusted, token-optional.
@@ -244,7 +244,7 @@ func Defaults() {
 	viper.SetDefault("tls.enabled", false)
 	viper.SetDefault("tls.cache_dir", "./.certmagic")
 	viper.SetDefault("tls.staging", false)
-	viper.SetDefault("tls.dns.provider", DNSProviderAzure)
+	viper.SetDefault("tls.dns.provider", dnsProviderAzure)
 
 	// Metrics defaults
 	viper.SetDefault("metrics.enabled", true)
@@ -440,7 +440,7 @@ func (c *Config) validateTLS() error {
 		return fmt.Errorf("TLS enabled but no email specified")
 	}
 	// Validate DNS-01 challenge configuration
-	if c.TLS.DNS.Provider != DNSProviderAzure {
+	if c.TLS.DNS.Provider != dnsProviderAzure {
 		return fmt.Errorf("unsupported DNS provider: %s (only 'azure' is supported)", c.TLS.DNS.Provider)
 	}
 	if c.TLS.DNS.SubscriptionID == "" {
