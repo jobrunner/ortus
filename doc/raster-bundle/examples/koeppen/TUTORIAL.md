@@ -106,16 +106,26 @@ gdalinfo koeppen.cog.tif | grep -iE 'Band 1|ColorInterp|COMPRESSION'
 quoted to avoid YAML's "Norway problem" (`no`/`yes`/`NO` parsing as booleans):
 
 ```bash
-python3 gen_manifest.py legend.txt > ortus-raster.yaml
+python3 gen_manifest.py legend.txt \
+  --id koeppen-geiger-1980-2016 \
+  --name "Köppen-Geiger climate classification 1980–2016 (Beck et al. 2018, V1)" \
+  > ortus-raster.yaml
 ```
+
+> **Naming — avoid the "latest" trap.** A Köppen "present-day" map is a
+> classification computed over a fixed **reference period**, *not* "now". For
+> Beck et al. 2018 (V1) that period is **1980–2016**; V3 is **1991–2020**. Bake
+> the period into the source `id` (`koeppen-geiger-1980-2016`) — never call it
+> `…-present` or `…-latest`, or a future release silently becomes "the" Köppen
+> source. The `id` must also equal the bundle filename (Step 5).
 
 The result (see the committed [`ortus-raster.yaml`](ortus-raster.yaml)) declares:
 
 ```yaml
-id: koeppen-geiger-present     # MUST equal the bundle filename stem (Step 5)
+id: koeppen-geiger-1980-2016   # period in the id; MUST equal the bundle filename stem
 crs: EPSG:4326                 # authoritative; must match the COG's actual CRS
 layers:
-  - id: present
+  - id: classification
     file: koeppen.cog.tif
     band: 1
     nodata: 0                  # 0 = ocean / no class → no feature, not an error
@@ -134,10 +144,10 @@ The bundle filename stem **must equal the manifest `id`** — ortus derives the
 source id from the filename and cross-checks it against the manifest:
 
 ```bash
-zip -j koeppen-geiger-present.zip ortus-raster.yaml koeppen.cog.tif
+zip -j koeppen-geiger-1980-2016.zip ortus-raster.yaml koeppen.cog.tif
 ```
 
-→ `koeppen-geiger-present.zip` (the manifest `id` is `koeppen-geiger-present`).
+→ `koeppen-geiger-1980-2016.zip` (the manifest `id` is `koeppen-geiger-1980-2016`).
 
 ## Step 6 — Load it into ortus
 
@@ -150,8 +160,7 @@ and registers the source — all or nothing.
 make build
 
 mkdir -p /tmp/koeppen/data
-cp koeppen.cog.tif ortus-raster.yaml >/dev/null 2>&1 || true   # (already zipped)
-cp koeppen-geiger-present.zip /tmp/koeppen/data/
+cp koeppen-geiger-1980-2016.zip /tmp/koeppen/data/
 
 ./ortus --storage-path /tmp/koeppen/data --port 8099 --log-level info &
 ```
@@ -159,14 +168,14 @@ cp koeppen-geiger-present.zip /tmp/koeppen/data/
 The log should show the source register:
 
 ```json
-{"level":"INFO","msg":"package loaded","id":"koeppen-geiger-present","layers":1}
+{"level":"INFO","msg":"package loaded","id":"koeppen-geiger-1980-2016","layers":1}
 ```
 
 Check readiness and that the source is listed:
 
 ```bash
 curl -s localhost:8099/health/ready          # {"status":"ok"}
-curl -s localhost:8099/api/v1/packages        # id=koeppen-geiger-present, ready:true
+curl -s localhost:8099/api/v1/packages        # id=koeppen-geiger-1980-2016, ready:true
 ```
 
 ## Step 7 — Verify with point queries
@@ -199,10 +208,10 @@ attributes land in `properties`, and the license/attribution is carried through:
 {
   "coordinate": {"srid": 4326, "x": 13.4, "y": 52.5},
   "results": [{
-    "package_id": "koeppen-geiger-present",
-    "package_name": "Köppen-Geiger 1980–2016 (V3)",
+    "package_id": "koeppen-geiger-1980-2016",
+    "package_name": "Köppen-Geiger climate classification 1980–2016 (Beck et al. 2018, V1)",
     "features": [{
-      "id": 26, "layer": "present",
+      "id": 26, "layer": "classification",
       "properties": {"code": "Dfb", "description": "Cold, no dry season, warm summer",
                      "group": "Cold", "color": "#37C8FF"}
     }],
@@ -220,6 +229,7 @@ Stop the server when done: `pkill -f 'ortus --storage-path /tmp/koeppen/data'`.
 
 1. **LZW, never DEFLATE** for the COG — gocog can't read GDAL's DEFLATE tiles.
 2. **Filename stem == manifest `id`** — or ingest fails with a clear mismatch error.
+   Encode the reference **period** in the id (`…-1980-2016`), never `present`/`latest`.
 3. **`crs` is authoritative** — it must match the COG's real CRS. If the source
    lacks an EPSG code, stamp it (`-a_srs`); if it is in another projection,
    reproject with `gdalwarp ... -r near` *before* building the COG.
@@ -238,5 +248,5 @@ Stop the server when done: `pkill -f 'ortus --storage-path /tmp/koeppen/data'`.
 zip). Run it, then jump to Step 6:
 
 ```bash
-./build.sh   # produces koeppen-geiger-present.zip in this folder
+./build.sh   # produces koeppen-geiger-1980-2016.zip in this folder
 ```

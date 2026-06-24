@@ -23,13 +23,19 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
 # --- 0. config ---------------------------------------------------------------
-# V3 distribution; pick the resolution you need (0p00833333 ~= 1 km).
 # Beck et al. (2018) V1 archive (~68 MB) — contains the present-day 1 km map and
 # legend.txt. (For V3, use https://figshare.com/ndownloader/files/61012822, a much
 # larger multi-period/scenario archive; the build steps below are identical.)
 SRC_URL="${KOEPPEN_URL:-https://ndownloader.figshare.com/files/12407516}"
 CANONICAL_CRS="EPSG:4326"
-OUT_BUNDLE="$HERE/koeppen-geiger-present.zip"
+
+# Identity — encode the reference PERIOD, never "present"/"latest" (a Köppen
+# "present-day" map is a classification over a fixed period). Beck 2018 V1 =
+# 1980–2016; V3 = 1991–2020. The id MUST equal the bundle filename stem.
+SRC_ID="koeppen-geiger-1980-2016"
+SRC_NAME="Köppen-Geiger climate classification 1980–2016 (Beck et al. 2018, V1)"
+SRC_DESC="Köppen-Geiger climate classification at ~1 km, computed over the 1980–2016 reference period (Beck et al. 2018, V1). 'Present-day' here means this fixed reference period, not the current year."
+OUT_BUNDLE="$HERE/$SRC_ID.zip"
 
 # Present-day map at 0.0083° (~1 km) inside the archive.
 SRC_RASTER_GLOB="*present_0p0083.tif"
@@ -79,7 +85,8 @@ gdal_translate -of COG \
 # --- 4. generate manifest from legend.txt ------------------------------------
 echo ">> generating manifest"
 MANIFEST="$WORK/ortus-raster.yaml"
-python3 "$HERE/gen_manifest.py" "$LEGEND" > "$MANIFEST"
+python3 "$HERE/gen_manifest.py" "$LEGEND" \
+  --id "$SRC_ID" --name "$SRC_NAME" --description "$SRC_DESC" > "$MANIFEST"
 
 # --- 5. validate (fail the build here) ---------------------------------------
 # Pre-validate against the schema so a bad manifest fails the build, not ortus.
