@@ -30,7 +30,7 @@ func (m *mockRepository) Open(_ context.Context, path string) (*domain.Source, e
 			return pkg, nil
 		}
 	}
-	// Derive package ID from filename (same as derivePackageID in registry.go)
+	// Derive package ID from filename (same as deriveSourceID in registry.go)
 	base := filepath.Base(path)
 	ext := filepath.Ext(base)
 	packageID := strings.TrimSuffix(base, ext)

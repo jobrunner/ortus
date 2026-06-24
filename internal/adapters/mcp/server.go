@@ -36,7 +36,7 @@ import (
 type Deps struct {
 	Buffer        *telemetry.RingBuffer // may be nil when tracing is off — tools degrade gracefully
 	QueryService  input.QueryService
-	Registry      input.PackageRegistry
+	Registry      input.SourceRegistry
 	HealthService input.HealthChecker
 	Version       string
 }

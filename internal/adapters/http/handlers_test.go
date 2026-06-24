@@ -32,34 +32,34 @@ func (m *mockQueryService) QueryPoint(_ context.Context, _ domain.QueryRequest) 
 	return m.queryResponse, nil
 }
 
-func (m *mockQueryService) QueryPointInPackage(_ context.Context, _ string, _ domain.QueryRequest) (*domain.QueryResult, error) {
+func (m *mockQueryService) QueryPointInSource(_ context.Context, _ string, _ domain.QueryRequest) (*domain.QueryResult, error) {
 	return nil, nil
 }
 
-// mockPackageRegistry implements application.PackageRegistry for testing.
-type mockPackageRegistry struct {
+// mockSourceRegistry implements application.SourceRegistry for testing.
+type mockSourceRegistry struct {
 	packages   []domain.Source
 	getPackage *domain.Source
 	status     domain.SourceStatus
 	getErr     error
 }
 
-func (m *mockPackageRegistry) ListPackages(_ context.Context) ([]domain.Source, error) {
+func (m *mockSourceRegistry) ListSources(_ context.Context) ([]domain.Source, error) {
 	return m.packages, nil
 }
 
-func (m *mockPackageRegistry) GetPackage(_ context.Context, _ string) (*domain.Source, error) {
+func (m *mockSourceRegistry) GetSource(_ context.Context, _ string) (*domain.Source, error) {
 	if m.getErr != nil {
 		return nil, m.getErr
 	}
 	return m.getPackage, nil
 }
 
-func (m *mockPackageRegistry) GetPackageStatus(_ context.Context, _ string) (domain.SourceStatus, error) {
+func (m *mockSourceRegistry) GetSourceStatus(_ context.Context, _ string) (domain.SourceStatus, error) {
 	return m.status, nil
 }
 
-func (m *mockPackageRegistry) ReadyPackageIDs() []string {
+func (m *mockSourceRegistry) ReadySourceIDs() []string {
 	var ids []string
 	for _, pkg := range m.packages {
 		if pkg.IsReady() {
@@ -69,7 +69,7 @@ func (m *mockPackageRegistry) ReadyPackageIDs() []string {
 	return ids
 }
 
-func (m *mockPackageRegistry) IsReady(packageID string) bool {
+func (m *mockSourceRegistry) IsReady(packageID string) bool {
 	for _, pkg := range m.packages {
 		if pkg.ID == packageID && pkg.IsReady() {
 			return true
@@ -104,11 +104,11 @@ type mockHealthDetails struct {
 	ready   bool
 }
 
-func newTestServer(_ *mockQueryService, _ *mockPackageRegistry, _ *mockHealthService) *Server {
+func newTestServer(_ *mockQueryService, _ *mockSourceRegistry, _ *mockHealthService) *Server {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 
 	// Create real services using mocks
-	realRegistry := application.NewPackageRegistry(
+	realRegistry := application.NewSourceRegistry(
 		[]output.SpatialSource{&mockRepository{}},
 		&mockStorage{},
 		noop.NewMeterProvider().Meter("test"),
@@ -205,7 +205,7 @@ func TestHandleReadiness(t *testing.T) {
 	}
 }
 
-func TestHandleListPackages(t *testing.T) {
+func TestHandleListSources(t *testing.T) {
 	srv := newTestServer(nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/packages", nil)
@@ -307,7 +307,7 @@ func TestHandleQueryValidCoordinates(t *testing.T) {
 	}
 }
 
-func TestHandleGetPackageNotFound(t *testing.T) {
+func TestHandleGetSourceNotFound(t *testing.T) {
 	srv := newTestServer(nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/packages/nonexistent", nil)

@@ -24,7 +24,7 @@ func (p *extProvider) Supports(path string) bool { return strings.HasSuffix(path
 
 func (p *extProvider) Open(_ context.Context, path string) (*domain.Source, error) {
 	return &domain.Source{
-		ID:     derivePackageID(path),
+		ID:     deriveSourceID(path),
 		Name:   p.tag,
 		Path:   path,
 		Kind:   domain.SourceKindVector,
@@ -40,9 +40,9 @@ func (p *extProvider) QueryPoint(_ context.Context, _, _ string, _ domain.Coordi
 
 func (p *extProvider) Close(_ context.Context, _ string) error { return nil }
 
-func newRoutingRegistry(providers []output.SpatialSource) *PackageRegistry {
+func newRoutingRegistry(providers []output.SpatialSource) *SourceRegistry {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	return NewPackageRegistry(providers, &mockStorage{}, testMeter(), output.NoOpTracer{}, logger, "/tmp")
+	return NewSourceRegistry(providers, &mockStorage{}, testMeter(), output.NoOpTracer{}, logger, "/tmp")
 }
 
 func TestRegistry_ProviderRoutingByExtension(t *testing.T) {
@@ -51,18 +51,18 @@ func TestRegistry_ProviderRoutingByExtension(t *testing.T) {
 	reg := newRoutingRegistry([]output.SpatialSource{gpkg, zip})
 	ctx := context.Background()
 
-	if err := reg.LoadPackage(ctx, "/data/a.gpkg"); err != nil {
+	if err := reg.LoadSource(ctx, "/data/a.gpkg"); err != nil {
 		t.Fatalf("load gpkg: %v", err)
 	}
-	if err := reg.LoadPackage(ctx, "/data/b.zip"); err != nil {
+	if err := reg.LoadSource(ctx, "/data/b.zip"); err != nil {
 		t.Fatalf("load zip: %v", err)
 	}
 
 	// Each path must have been opened by the adapter that supports its extension.
-	if src, _ := reg.GetPackage(ctx, "a"); src == nil || src.Name != "vector" {
+	if src, _ := reg.GetSource(ctx, "a"); src == nil || src.Name != "vector" {
 		t.Errorf("a.gpkg routed to %v, want vector provider", src)
 	}
-	if src, _ := reg.GetPackage(ctx, "b"); src == nil || src.Name != "raster" {
+	if src, _ := reg.GetSource(ctx, "b"); src == nil || src.Name != "raster" {
 		t.Errorf("b.zip routed to %v, want raster provider", src)
 	}
 
@@ -82,10 +82,10 @@ func TestRegistry_ProviderOrderFirstMatchWins(t *testing.T) {
 	reg := newRoutingRegistry([]output.SpatialSource{first, second})
 	ctx := context.Background()
 
-	if err := reg.LoadPackage(ctx, "/data/x.gpkg"); err != nil {
+	if err := reg.LoadSource(ctx, "/data/x.gpkg"); err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	src, _ := reg.GetPackage(ctx, "x")
+	src, _ := reg.GetSource(ctx, "x")
 	if src == nil || src.Name != "first" {
 		t.Errorf("first matching provider should win, got %v", src)
 	}
@@ -95,12 +95,12 @@ func TestRegistry_LoadUnsupportedSource(t *testing.T) {
 	reg := newRoutingRegistry([]output.SpatialSource{&extProvider{ext: ".gpkg", tag: "vector"}})
 	ctx := context.Background()
 
-	err := reg.LoadPackage(ctx, "/data/elevation.tiff")
+	err := reg.LoadSource(ctx, "/data/elevation.tiff")
 	if !errors.Is(err, domain.ErrUnsupportedSource) {
 		t.Errorf("err = %v, want ErrUnsupportedSource", err)
 	}
-	if reg.PackageCount() != 0 {
-		t.Errorf("unsupported source must not be registered, count = %d", reg.PackageCount())
+	if reg.SourceCount() != 0 {
+		t.Errorf("unsupported source must not be registered, count = %d", reg.SourceCount())
 	}
 }
 
@@ -118,7 +118,7 @@ func TestRegistry_QueryEntryWithoutRepo(t *testing.T) {
 	// a nil-pointer panic.
 	reg := newRoutingRegistry(nil)
 	reg.mu.Lock()
-	reg.packages["broken"] = &packageEntry{
+	reg.packages["broken"] = &sourceEntry{
 		Package: &domain.Source{ID: "broken"},
 		Status:  domain.StatusReady,
 		// Repo intentionally nil
@@ -132,19 +132,19 @@ func TestRegistry_QueryEntryWithoutRepo(t *testing.T) {
 }
 
 func TestRegistry_UnloadEntryWithoutRepo(t *testing.T) {
-	// A malformed entry (no owning adapter) must be dropped by UnloadPackage,
+	// A malformed entry (no owning adapter) must be dropped by UnloadSource,
 	// not left stuck in StatusUnloading.
 	reg := newRoutingRegistry(nil)
 	reg.mu.Lock()
-	reg.packages["broken"] = &packageEntry{
+	reg.packages["broken"] = &sourceEntry{
 		Package: &domain.Source{ID: "broken"},
 		Status:  domain.StatusReady,
 		// Repo intentionally nil
 	}
 	reg.mu.Unlock()
 
-	if err := reg.UnloadPackage(context.Background(), "broken"); err != nil {
-		t.Fatalf("UnloadPackage: %v", err)
+	if err := reg.UnloadSource(context.Background(), "broken"); err != nil {
+		t.Fatalf("UnloadSource: %v", err)
 	}
 	if reg.IsLoaded("broken") {
 		t.Error("malformed entry should have been removed, not left stuck")
@@ -153,7 +153,7 @@ func TestRegistry_UnloadEntryWithoutRepo(t *testing.T) {
 
 func TestRegistry_NoProviders(t *testing.T) {
 	reg := newRoutingRegistry(nil)
-	err := reg.LoadPackage(context.Background(), "/data/a.gpkg")
+	err := reg.LoadSource(context.Background(), "/data/a.gpkg")
 	if !errors.Is(err, domain.ErrUnsupportedSource) {
 		t.Errorf("empty provider set should reject all sources, got %v", err)
 	}

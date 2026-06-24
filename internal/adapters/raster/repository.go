@@ -370,7 +370,7 @@ func (b *bundle) closeFiles() {
 }
 
 // deriveSourceID extracts the source id from a bundle path (filename stem).
-// It mirrors the registry's derivePackageID, including the extension-only edge
+// It mirrors the registry's deriveSourceID, including the extension-only edge
 // case (e.g. ".zip" → ".zip"), so dedup/unload stay consistent across adapters.
 func deriveSourceID(path string) string {
 	base := filepath.Base(path)

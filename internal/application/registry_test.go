@@ -10,7 +10,7 @@ import (
 	"github.com/jobrunner/ortus/internal/ports/output"
 )
 
-func TestPackageRegistryLoadUnload(t *testing.T) {
+func TestSourceRegistryLoadUnload(t *testing.T) {
 	repo := &mockRepository{
 		packages: map[string]*domain.Source{
 			"/data/test.gpkg": {
@@ -24,7 +24,7 @@ func TestPackageRegistryLoadUnload(t *testing.T) {
 		},
 	}
 
-	registry := NewPackageRegistry(
+	registry := NewSourceRegistry(
 		[]output.SpatialSource{repo},
 		&mockStorage{},
 		testMeter(),
@@ -36,91 +36,91 @@ func TestPackageRegistryLoadUnload(t *testing.T) {
 	ctx := context.Background()
 
 	// Load package
-	err := registry.LoadPackage(ctx, "/data/test.gpkg")
+	err := registry.LoadSource(ctx, "/data/test.gpkg")
 	if err != nil {
-		t.Fatalf("LoadPackage failed: %v", err)
+		t.Fatalf("LoadSource failed: %v", err)
 	}
 
 	// Verify package is loaded
-	packages, err := registry.ListPackages(ctx)
+	packages, err := registry.ListSources(ctx)
 	if err != nil {
-		t.Fatalf("ListPackages failed: %v", err)
+		t.Fatalf("ListSources failed: %v", err)
 	}
 	if len(packages) != 1 {
 		t.Errorf("len(packages) = %d, want 1", len(packages))
 	}
 
 	// Get package
-	pkg, err := registry.GetPackage(ctx, "test")
+	pkg, err := registry.GetSource(ctx, "test")
 	if err != nil {
-		t.Fatalf("GetPackage failed: %v", err)
+		t.Fatalf("GetSource failed: %v", err)
 	}
 	if pkg.ID != "test" {
 		t.Errorf("pkg.ID = %q, want %q", pkg.ID, "test")
 	}
 
 	// Unload package
-	err = registry.UnloadPackage(ctx, "test")
+	err = registry.UnloadSource(ctx, "test")
 	if err != nil {
-		t.Fatalf("UnloadPackage failed: %v", err)
+		t.Fatalf("UnloadSource failed: %v", err)
 	}
 
 	// Verify package is unloaded
-	packages, _ = registry.ListPackages(ctx)
+	packages, _ = registry.ListSources(ctx)
 	if len(packages) != 0 {
 		t.Errorf("len(packages) = %d, want 0", len(packages))
 	}
 }
 
-func TestPackageRegistryGetPackageNotFound(t *testing.T) {
+func TestSourceRegistryGetSourceNotFound(t *testing.T) {
 	registry := newTestRegistry()
 	ctx := context.Background()
 
-	_, err := registry.GetPackage(ctx, "nonexistent")
+	_, err := registry.GetSource(ctx, "nonexistent")
 	if err != domain.ErrPackageNotFound {
 		t.Errorf("err = %v, want %v", err, domain.ErrPackageNotFound)
 	}
 }
 
-func TestPackageRegistryGetPackageStatus(t *testing.T) {
+func TestSourceRegistryGetSourceStatus(t *testing.T) {
 	registry := newTestRegistry()
 	ctx := context.Background()
 
 	registry.mu.Lock()
-	registry.packages["test"] = &packageEntry{
+	registry.packages["test"] = &sourceEntry{
 		Package: &domain.Source{ID: "test"},
 		Status:  domain.StatusReady,
 	}
 	registry.mu.Unlock()
 
-	status, err := registry.GetPackageStatus(ctx, "test")
+	status, err := registry.GetSourceStatus(ctx, "test")
 	if err != nil {
-		t.Fatalf("GetPackageStatus failed: %v", err)
+		t.Fatalf("GetSourceStatus failed: %v", err)
 	}
 	if status != domain.StatusReady {
 		t.Errorf("status = %s, want %s", status, domain.StatusReady)
 	}
 }
 
-func TestPackageRegistryGetPackageStatusNotFound(t *testing.T) {
+func TestSourceRegistryGetSourceStatusNotFound(t *testing.T) {
 	registry := newTestRegistry()
 	ctx := context.Background()
 
-	_, err := registry.GetPackageStatus(ctx, "nonexistent")
+	_, err := registry.GetSourceStatus(ctx, "nonexistent")
 	if err != domain.ErrPackageNotFound {
 		t.Errorf("err = %v, want %v", err, domain.ErrPackageNotFound)
 	}
 }
 
-func TestPackageRegistryIsReady(t *testing.T) {
+func TestSourceRegistryIsReady(t *testing.T) {
 	registry := newTestRegistry()
 
 	registry.mu.Lock()
-	registry.packages["ready"] = &packageEntry{
+	registry.packages["ready"] = &sourceEntry{
 		Package: &domain.Source{ID: "ready"},
 		Status:  domain.StatusReady,
 	}
-	registry.packages["loading"] = &packageEntry{
+	registry.packages["loading"] = &sourceEntry{
 		Package: &domain.Source{ID: "loading"},
 		Status:  domain.StatusLoading,
 	}
@@ -144,25 +144,25 @@ func TestPackageRegistryIsReady(t *testing.T) {
 	}
 }
 
-func TestPackageRegistryReadyPackageIDs(t *testing.T) {
+func TestSourceRegistryReadySourceIDs(t *testing.T) {
 	registry := newTestRegistry()
 
 	registry.mu.Lock()
-	registry.packages["ready1"] = &packageEntry{
+	registry.packages["ready1"] = &sourceEntry{
 		Package: &domain.Source{ID: "ready1"},
 		Status:  domain.StatusReady,
 	}
-	registry.packages["ready2"] = &packageEntry{
+	registry.packages["ready2"] = &sourceEntry{
 		Package: &domain.Source{ID: "ready2"},
 		Status:  domain.StatusReady,
 	}
-	registry.packages["loading"] = &packageEntry{
+	registry.packages["loading"] = &sourceEntry{
 		Package: &domain.Source{ID: "loading"},
 		Status:  domain.StatusLoading,
 	}
 	registry.mu.Unlock()
 
-	ids := registry.ReadyPackageIDs()
+	ids := registry.ReadySourceIDs()
 	if len(ids) != 2 {
 		t.Errorf("len(ids) = %d, want 2", len(ids))
 	}
@@ -175,13 +175,13 @@ func TestPackageRegistryReadyPackageIDs(t *testing.T) {
 	}
 }
 
-func TestPackageRegistryUnloadNonexistent(t *testing.T) {
+func TestSourceRegistryUnloadNonexistent(t *testing.T) {
 	registry := newTestRegistry()
 	ctx := context.Background()
 
 	// Should not error when unloading nonexistent package
-	err := registry.UnloadPackage(ctx, "nonexistent")
+	err := registry.UnloadSource(ctx, "nonexistent")
 	if err != nil {
-		t.Errorf("UnloadPackage for nonexistent should not error, got: %v", err)
+		t.Errorf("UnloadSource for nonexistent should not error, got: %v", err)
 	}
 }

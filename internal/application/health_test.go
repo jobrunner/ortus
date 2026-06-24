@@ -10,8 +10,8 @@ import (
 	"github.com/jobrunner/ortus/internal/ports/output"
 )
 
-func newTestRegistry() *PackageRegistry {
-	return NewPackageRegistry(
+func newTestRegistry() *SourceRegistry {
+	return NewSourceRegistry(
 		[]output.SpatialSource{&mockRepository{}},
 		&mockStorage{},
 		testMeter(),
@@ -36,17 +36,17 @@ func TestHealthServiceIsReady(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		packages map[string]*packageEntry
+		packages map[string]*sourceEntry
 		want     bool
 	}{
 		{
 			name:     "empty registry is ready",
-			packages: map[string]*packageEntry{},
+			packages: map[string]*sourceEntry{},
 			want:     true,
 		},
 		{
 			name: "ready package",
-			packages: map[string]*packageEntry{
+			packages: map[string]*sourceEntry{
 				"test": {
 					Package: &domain.Source{
 						ID:      "test",
@@ -60,7 +60,7 @@ func TestHealthServiceIsReady(t *testing.T) {
 		},
 		{
 			name: "no ready packages",
-			packages: map[string]*packageEntry{
+			packages: map[string]*sourceEntry{
 				"test": {
 					Package: &domain.Source{
 						ID:      "test",
@@ -73,7 +73,7 @@ func TestHealthServiceIsReady(t *testing.T) {
 		},
 		{
 			name: "mixed packages - one ready",
-			packages: map[string]*packageEntry{
+			packages: map[string]*sourceEntry{
 				"loading": {
 					Package: &domain.Source{ID: "loading", Indexed: false},
 					Status:  domain.StatusLoading,
@@ -110,7 +110,7 @@ func TestHealthServiceGetHealthDetails(t *testing.T) {
 
 	// Add some packages
 	registry.mu.Lock()
-	registry.packages = map[string]*packageEntry{
+	registry.packages = map[string]*sourceEntry{
 		"ready1": {
 			Package: &domain.Source{
 				ID:      "ready1",
@@ -153,12 +153,12 @@ func TestHealthServiceGetHealthDetails(t *testing.T) {
 	}
 }
 
-func TestHealthServiceGetPackageHealth(t *testing.T) {
+func TestHealthServiceGetSourceHealth(t *testing.T) {
 	registry := newTestRegistry()
 	service := NewHealthService(registry, output.NoOpTracer{})
 
 	registry.mu.Lock()
-	registry.packages = map[string]*packageEntry{
+	registry.packages = map[string]*sourceEntry{
 		"pkg1": {
 			Package: &domain.Source{
 				ID:      "pkg1",
@@ -174,14 +174,14 @@ func TestHealthServiceGetPackageHealth(t *testing.T) {
 	}
 	registry.mu.Unlock()
 
-	health := service.GetPackageHealth(context.Background())
+	health := service.GetSourceHealth(context.Background())
 
 	if len(health) != 2 {
 		t.Errorf("len(health) = %d, want 2", len(health))
 	}
 
 	// Find pkg1
-	var pkg1Health *PackageHealth
+	var pkg1Health *SourceHealth
 	for i := range health {
 		if health[i].ID == "pkg1" {
 			pkg1Health = &health[i]
