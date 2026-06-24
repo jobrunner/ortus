@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-func TestDerivePackageID(t *testing.T) {
+func TestDeriveSourceID(t *testing.T) {
 	tests := []struct {
 		name string
 		path string
@@ -64,8 +64,8 @@ func TestDerivePackageID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := DerivePackageID(tt.path); got != tt.want {
-				t.Errorf("DerivePackageID(%q) = %q, want %q", tt.path, got, tt.want)
+			if got := DeriveSourceID(tt.path); got != tt.want {
+				t.Errorf("DeriveSourceID(%q) = %q, want %q", tt.path, got, tt.want)
 			}
 		})
 	}
@@ -155,7 +155,7 @@ func TestNewRepository(t *testing.T) {
 		t.Error("connections map should be initialized")
 	}
 
-	if repo.packages == nil {
-		t.Error("packages map should be initialized")
+	if repo.sources == nil {
+		t.Error("sources map should be initialized")
 	}
 }

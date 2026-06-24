@@ -70,7 +70,7 @@ func getSpatiaLiteLibraryPaths() []string {
 type Repository struct {
 	mu          sync.RWMutex
 	connections map[string]*sql.DB
-	packages    map[string]*domain.Source
+	sources     map[string]*domain.Source
 	tracer      output.Tracer
 }
 
@@ -91,7 +91,7 @@ func (r *Repository) Prepare(ctx context.Context, sourceID string, layer string)
 func NewRepository() *Repository {
 	return &Repository{
 		connections: make(map[string]*sql.DB),
-		packages:    make(map[string]*domain.Source),
+		sources:     make(map[string]*domain.Source),
 		tracer:      output.NoOpTracer{},
 	}
 }
@@ -115,14 +115,14 @@ func (r *Repository) Open(ctx context.Context, path string) (*domain.Source, err
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	// Derive package ID from filename
-	packageID := DerivePackageID(path)
-	span.SetAttributes(output.String("ortus.source.id", packageID))
+	// Derive source ID from filename
+	sourceID := DeriveSourceID(path)
+	span.SetAttributes(output.String("ortus.source.id", sourceID))
 
 	// Check if already open
-	if pkg, ok := r.packages[packageID]; ok {
+	if src, ok := r.sources[sourceID]; ok {
 		span.AddEvent("already_open")
-		return pkg, nil
+		return src, nil
 	}
 
 	// Open database with SpatiaLite extension
@@ -142,26 +142,26 @@ func (r *Repository) Open(ctx context.Context, path string) (*domain.Source, err
 	}
 
 	// Read GeoPackage metadata
-	pkg, err := r.readPackageMetadata(ctx, db, packageID, path)
+	src, err := r.readSourceMetadata(ctx, db, sourceID, path)
 	if err != nil {
 		_ = db.Close()
 		return nil, err
 	}
 
-	// Store connection and package
-	r.connections[packageID] = db
-	r.packages[packageID] = pkg
+	// Store connection and source
+	r.connections[sourceID] = db
+	r.sources[sourceID] = src
 
-	return pkg, nil
+	return src, nil
 }
 
 // Close closes a GeoPackage connection.
-func (r *Repository) Close(ctx context.Context, packageID string) error {
+func (r *Repository) Close(ctx context.Context, sourceID string) error {
 	_, span := r.tracer.Start(ctx, "Repository.Close",
 		output.WithSpanKind(output.SpanKindClient),
 		output.WithAttributes(
 			output.String("db.system", "sqlite"),
-			output.String("ortus.source.id", packageID),
+			output.String("ortus.source.id", sourceID),
 		),
 	)
 	defer span.End()
@@ -169,7 +169,7 @@ func (r *Repository) Close(ctx context.Context, packageID string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	db, ok := r.connections[packageID]
+	db, ok := r.connections[sourceID]
 	if !ok {
 		span.AddEvent("not_open")
 		return nil
@@ -181,20 +181,20 @@ func (r *Repository) Close(ctx context.Context, packageID string) error {
 		return err
 	}
 
-	delete(r.connections, packageID)
-	delete(r.packages, packageID)
+	delete(r.connections, sourceID)
+	delete(r.sources, sourceID)
 	return nil
 }
 
 // GetLayers returns all layers in a GeoPackage.
-func (r *Repository) GetLayers(ctx context.Context, packageID string) ([]domain.Layer, error) {
+func (r *Repository) GetLayers(ctx context.Context, sourceID string) ([]domain.Layer, error) {
 	_, span := r.tracer.Start(ctx, "Repository.GetLayers",
-		output.WithAttributes(output.String("ortus.source.id", packageID)),
+		output.WithAttributes(output.String("ortus.source.id", sourceID)),
 	)
 	defer span.End()
 
 	r.mu.RLock()
-	pkg, ok := r.packages[packageID]
+	src, ok := r.sources[sourceID]
 	r.mu.RUnlock()
 
 	if !ok {
@@ -203,17 +203,17 @@ func (r *Repository) GetLayers(ctx context.Context, packageID string) ([]domain.
 		return nil, domain.ErrSourceNotFound
 	}
 
-	span.SetAttributes(output.Int("ortus.layers.count", len(pkg.Layers)))
-	return pkg.Layers, nil
+	span.SetAttributes(output.Int("ortus.layers.count", len(src.Layers)))
+	return src.Layers, nil
 }
 
 // QueryPoint performs a point query on a specific layer.
-func (r *Repository) QueryPoint(ctx context.Context, packageID, layerName string, coord domain.Coordinate) ([]domain.Feature, error) {
+func (r *Repository) QueryPoint(ctx context.Context, sourceID, layerName string, coord domain.Coordinate) ([]domain.Feature, error) {
 	ctx, span := r.tracer.Start(ctx, "Repository.QueryPoint",
 		output.WithSpanKind(output.SpanKindClient),
 		output.WithAttributes(
 			output.String("db.system", "sqlite"),
-			output.String("ortus.source.id", packageID),
+			output.String("ortus.source.id", sourceID),
 			output.String("ortus.layer.name", layerName),
 			output.Float64("ortus.coordinate.x", coord.X),
 			output.Float64("ortus.coordinate.y", coord.Y),
@@ -223,8 +223,8 @@ func (r *Repository) QueryPoint(ctx context.Context, packageID, layerName string
 	defer span.End()
 
 	r.mu.RLock()
-	db, ok := r.connections[packageID]
-	pkg := r.packages[packageID]
+	db, ok := r.connections[sourceID]
+	src := r.sources[sourceID]
 	r.mu.RUnlock()
 
 	if !ok {
@@ -234,7 +234,7 @@ func (r *Repository) QueryPoint(ctx context.Context, packageID, layerName string
 	}
 
 	// Find layer
-	layer, found := pkg.GetLayer(layerName)
+	layer, found := src.GetLayer(layerName)
 	if !found {
 		span.RecordError(domain.ErrLayerNotFound)
 		span.SetStatus(output.StatusError, "layer not found")
@@ -261,20 +261,20 @@ func (r *Repository) QueryPoint(ctx context.Context, packageID, layerName string
 // CreateSpatialIndex creates a spatial index for a layer.
 // This creates an R-tree virtual table directly, bypassing SpatiaLite's CreateSpatialIndex()
 // which requires a geometry_columns table that GeoPackage files don't have.
-func (r *Repository) CreateSpatialIndex(ctx context.Context, packageID, layerName string) error {
+func (r *Repository) CreateSpatialIndex(ctx context.Context, sourceID, layerName string) error {
 	ctx, span := r.tracer.Start(ctx, "Repository.CreateSpatialIndex",
 		output.WithSpanKind(output.SpanKindClient),
 		output.WithAttributes(
 			output.String("db.system", "sqlite"),
-			output.String("ortus.source.id", packageID),
+			output.String("ortus.source.id", sourceID),
 			output.String("ortus.layer.name", layerName),
 		),
 	)
 	defer span.End()
 
 	r.mu.RLock()
-	db, ok := r.connections[packageID]
-	pkg := r.packages[packageID]
+	db, ok := r.connections[sourceID]
+	src := r.sources[sourceID]
 	r.mu.RUnlock()
 
 	if !ok {
@@ -283,7 +283,7 @@ func (r *Repository) CreateSpatialIndex(ctx context.Context, packageID, layerNam
 		return domain.ErrSourceNotFound
 	}
 
-	layer, found := pkg.GetLayer(layerName)
+	layer, found := src.GetLayer(layerName)
 	if !found {
 		span.RecordError(domain.ErrLayerNotFound)
 		span.SetStatus(output.StatusError, "layer not found")
@@ -291,7 +291,7 @@ func (r *Repository) CreateSpatialIndex(ctx context.Context, packageID, layerNam
 	}
 
 	// Check if index already exists
-	hasIndex, err := r.HasSpatialIndex(ctx, packageID, layerName)
+	hasIndex, err := r.HasSpatialIndex(ctx, sourceID, layerName)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(output.StatusError, "index probe failed")
@@ -300,7 +300,7 @@ func (r *Repository) CreateSpatialIndex(ctx context.Context, packageID, layerNam
 	if hasIndex {
 		// Index already exists, just update the layer status
 		span.SetAttributes(output.Bool("ortus.index.preexisting", true))
-		if err := r.setLayerIndexStatus(packageID, layerName, true); err != nil {
+		if err := r.setLayerIndexStatus(sourceID, layerName, true); err != nil {
 			span.RecordError(err)
 			span.SetStatus(output.StatusError, "status update failed")
 			return err
@@ -318,7 +318,7 @@ func (r *Repository) CreateSpatialIndex(ctx context.Context, packageID, layerNam
 	)
 	if _, err := db.ExecContext(ctx, createQuery); err != nil {
 		idxErr := &domain.IndexError{
-			SourceID: packageID,
+			SourceID: sourceID,
 			Layer:    layerName,
 			Err:      fmt.Errorf("creating R-tree table: %w", err),
 		}
@@ -349,7 +349,7 @@ func (r *Repository) CreateSpatialIndex(ctx context.Context, packageID, layerNam
 		//nolint:gocritic // sprintfQuotedString: SQL identifiers need double quotes, not Go's %q
 		_, _ = db.ExecContext(ctx, fmt.Sprintf(`DROP TABLE IF EXISTS "%s"`, indexTable))
 		idxErr := &domain.IndexError{
-			SourceID: packageID,
+			SourceID: sourceID,
 			Layer:    layerName,
 			Err:      fmt.Errorf("populating R-tree index: %w", err),
 		}
@@ -359,7 +359,7 @@ func (r *Repository) CreateSpatialIndex(ctx context.Context, packageID, layerNam
 	}
 
 	// Update layer status
-	if err := r.setLayerIndexStatus(packageID, layerName, true); err != nil {
+	if err := r.setLayerIndexStatus(sourceID, layerName, true); err != nil {
 		span.RecordError(err)
 		span.SetStatus(output.StatusError, "status update failed")
 		return err
@@ -368,19 +368,19 @@ func (r *Repository) CreateSpatialIndex(ctx context.Context, packageID, layerNam
 }
 
 // setLayerIndexStatus safely updates the HasIndex status for a layer.
-// It handles concurrent access and checks if the package still exists.
-func (r *Repository) setLayerIndexStatus(packageID, layerName string, hasIndex bool) error {
+// It handles concurrent access and checks if the source still exists.
+func (r *Repository) setLayerIndexStatus(sourceID, layerName string, hasIndex bool) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	pkg, ok := r.packages[packageID]
+	src, ok := r.sources[sourceID]
 	if !ok {
 		return domain.ErrSourceNotFound
 	}
 
-	for i := range pkg.Layers {
-		if pkg.Layers[i].Name == layerName {
-			pkg.Layers[i].HasIndex = hasIndex
+	for i := range src.Layers {
+		if src.Layers[i].Name == layerName {
+			src.Layers[i].HasIndex = hasIndex
 			return nil
 		}
 	}
@@ -389,20 +389,20 @@ func (r *Repository) setLayerIndexStatus(packageID, layerName string, hasIndex b
 }
 
 // HasSpatialIndex checks if a layer has a spatial index.
-func (r *Repository) HasSpatialIndex(ctx context.Context, packageID, layerName string) (bool, error) {
+func (r *Repository) HasSpatialIndex(ctx context.Context, sourceID, layerName string) (bool, error) {
 	ctx, span := r.tracer.Start(ctx, "Repository.HasSpatialIndex",
 		output.WithSpanKind(output.SpanKindClient),
 		output.WithAttributes(
 			output.String("db.system", "sqlite"),
-			output.String("ortus.source.id", packageID),
+			output.String("ortus.source.id", sourceID),
 			output.String("ortus.layer.name", layerName),
 		),
 	)
 	defer span.End()
 
 	r.mu.RLock()
-	db, ok := r.connections[packageID]
-	pkg := r.packages[packageID]
+	db, ok := r.connections[sourceID]
+	src := r.sources[sourceID]
 	r.mu.RUnlock()
 
 	if !ok {
@@ -411,7 +411,7 @@ func (r *Repository) HasSpatialIndex(ctx context.Context, packageID, layerName s
 		return false, domain.ErrSourceNotFound
 	}
 
-	layer, found := pkg.GetLayer(layerName)
+	layer, found := src.GetLayer(layerName)
 	if !found {
 		span.RecordError(domain.ErrLayerNotFound)
 		span.SetStatus(output.StatusError, "layer not found")
@@ -469,11 +469,11 @@ func (r *Repository) loadSpatiaLite(ctx context.Context, db *sql.DB) error {
 	return nil
 }
 
-// readPackageMetadata reads metadata from a GeoPackage.
-func (r *Repository) readPackageMetadata(ctx context.Context, db *sql.DB, packageID, path string) (*domain.Source, error) {
-	pkg := &domain.Source{
-		ID:   packageID,
-		Name: packageID,
+// readSourceMetadata reads metadata from a GeoPackage.
+func (r *Repository) readSourceMetadata(ctx context.Context, db *sql.DB, sourceID, path string) (*domain.Source, error) {
+	src := &domain.Source{
+		ID:   sourceID,
+		Name: sourceID,
 		Path: path,
 		Kind: domain.SourceKindVector,
 	}
@@ -483,12 +483,12 @@ func (r *Repository) readPackageMetadata(ctx context.Context, db *sql.DB, packag
 	if err != nil {
 		return nil, err
 	}
-	pkg.Layers = layers
+	src.Layers = layers
 
 	// Try to read metadata from gpkg_metadata if available
-	_ = r.readMetadata(ctx, db, pkg)
+	_ = r.readMetadata(ctx, db, src)
 
-	return pkg, nil
+	return src, nil
 }
 
 // readLayers reads layer information from gpkg_contents.
@@ -549,7 +549,7 @@ func (r *Repository) readLayers(ctx context.Context, db *sql.DB) ([]domain.Layer
 }
 
 // readMetadata reads optional metadata from gpkg_metadata.
-func (r *Repository) readMetadata(ctx context.Context, db *sql.DB, pkg *domain.Source) error {
+func (r *Repository) readMetadata(ctx context.Context, db *sql.DB, src *domain.Source) error {
 	// Check if metadata table exists
 	var exists int
 	err := db.QueryRowContext(ctx,
@@ -567,7 +567,7 @@ func (r *Repository) readMetadata(ctx context.Context, db *sql.DB, pkg *domain.S
 	}
 
 	// Parse metadata (simplified - would need proper XML parsing for full support)
-	pkg.Metadata.Description = metadata
+	src.Metadata.Description = metadata
 	return nil
 }
 
@@ -752,9 +752,9 @@ func (r *Repository) scanFeature(rows *sql.Rows, columns []string, layerName, ge
 	return feature, nil
 }
 
-// DerivePackageID derives a package ID from the file path.
-// It extracts the filename without extension as the package identifier.
-func DerivePackageID(path string) string {
+// DeriveSourceID derives a source ID from the file path.
+// It extracts the filename without extension as the source identifier.
+func DeriveSourceID(path string) string {
 	base := filepath.Base(path)
 	ext := filepath.Ext(base)
 	return strings.TrimSuffix(base, ext)
