@@ -15,7 +15,7 @@ import (
 
 // QueryService handles point queries across registered sources.
 type QueryService struct {
-	registry      *PackageRegistry
+	registry      *SourceRegistry
 	transformer   output.CoordinateTransformer
 	tracer        output.Tracer
 	queryCount    metric.Int64Counter
@@ -37,7 +37,7 @@ type QueryServiceConfig struct {
 // to define query-level instruments — no MetricsCollector indirection. Pass
 // noop.NewMeterProvider().Meter("test") to disable metrics in tests.
 func NewQueryService(
-	registry *PackageRegistry,
+	registry *SourceRegistry,
 	transformer output.CoordinateTransformer,
 	meter metric.Meter,
 	tracer output.Tracer,
@@ -100,7 +100,7 @@ func (s *QueryService) QueryPoint(ctx context.Context, req domain.QueryRequest) 
 			output.Float64("ortus.coordinate.x", req.Coordinate.X),
 			output.Float64("ortus.coordinate.y", req.Coordinate.Y),
 			output.Int("ortus.coordinate.srid", req.Coordinate.SRID),
-			output.String("ortus.package.id", req.PackageID),
+			output.String("ortus.source.id", req.PackageID),
 			output.Int("ortus.properties.count", len(req.Properties)),
 		),
 	)
@@ -118,7 +118,7 @@ func (s *QueryService) QueryPoint(ctx context.Context, req domain.QueryRequest) 
 	}
 
 	// Get all ready packages
-	packageIDs := s.registry.ReadyPackageIDs()
+	packageIDs := s.registry.ReadySourceIDs()
 
 	// Filter by specific package if requested
 	if req.PackageID != "" {
@@ -137,11 +137,11 @@ func (s *QueryService) QueryPoint(ctx context.Context, req domain.QueryRequest) 
 		}
 	}
 
-	span.SetAttributes(output.Int("ortus.packages.queried", len(packageIDs)))
+	span.SetAttributes(output.Int("ortus.sources.queried", len(packageIDs)))
 
 	// Query each package
 	for _, pkgID := range packageIDs {
-		result, err := s.QueryPointInPackage(ctx, pkgID, req)
+		result, err := s.QueryPointInSource(ctx, pkgID, req)
 		if err != nil {
 			s.logger.Warn("query failed for package", "package", pkgID, "error", err)
 			s.queryCount.Add(ctx, 1, metric.WithAttributes(
@@ -169,19 +169,19 @@ func (s *QueryService) QueryPoint(ctx context.Context, req domain.QueryRequest) 
 	return response, nil
 }
 
-// QueryPointInPackage performs a point query in a specific GeoPackage.
-func (s *QueryService) QueryPointInPackage(ctx context.Context, packageID string, req domain.QueryRequest) (*domain.QueryResult, error) {
+// QueryPointInSource performs a point query in a specific GeoPackage.
+func (s *QueryService) QueryPointInSource(ctx context.Context, packageID string, req domain.QueryRequest) (*domain.QueryResult, error) {
 	start := time.Now()
 
-	ctx, span := s.tracer.Start(ctx, "QueryService.QueryPointInPackage",
+	ctx, span := s.tracer.Start(ctx, "QueryService.QueryPointInSource",
 		output.WithAttributes(
-			output.String("ortus.package.id", packageID),
+			output.String("ortus.source.id", packageID),
 		),
 	)
 	defer span.End()
 
 	// Get package info
-	pkg, err := s.registry.GetPackage(ctx, packageID)
+	pkg, err := s.registry.GetSource(ctx, packageID)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(output.StatusError, "get package")
@@ -195,7 +195,7 @@ func (s *QueryService) QueryPointInPackage(ctx context.Context, packageID string
 	}
 
 	span.SetAttributes(
-		output.String("ortus.package.name", pkg.Name),
+		output.String("ortus.source.name", pkg.Name),
 		output.Int("ortus.layers.count", len(pkg.Layers)),
 	)
 
@@ -227,7 +227,7 @@ func (s *QueryService) QueryPointInPackage(ctx context.Context, packageID string
 func (s *QueryService) queryLayer(ctx context.Context, packageID string, layer *domain.Layer, req *domain.QueryRequest, result *domain.QueryResult) bool {
 	ctx, span := s.tracer.Start(ctx, "QueryService.queryLayer",
 		output.WithAttributes(
-			output.String("ortus.package.id", packageID),
+			output.String("ortus.source.id", packageID),
 			output.String("ortus.layer.name", layer.Name),
 			output.Int("ortus.layer.srid", layer.SRID),
 			output.String("ortus.layer.geometry_type", layer.GeometryType),

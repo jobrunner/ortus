@@ -17,7 +17,7 @@ import (
 // metric output. Centralized so the import + helper stays in one place.
 func testMeter() metric.Meter { return noop.NewMeterProvider().Meter("test") }
 
-func newTestQueryService(registry *PackageRegistry) *QueryService {
+func newTestQueryService(registry *SourceRegistry) *QueryService {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	return NewQueryService(
 		registry,
@@ -109,7 +109,7 @@ func TestQueryServiceQueryPointWithFeatures(t *testing.T) {
 
 	// Add a ready package owned by the features repo.
 	registry.mu.Lock()
-	registry.packages["test-pkg"] = &packageEntry{
+	registry.packages["test-pkg"] = &sourceEntry{
 		Package: &domain.Source{
 			ID:      "test-pkg",
 			Name:    "Test Package",
@@ -158,7 +158,7 @@ func TestQueryServiceQueryPointSpecificPackage(t *testing.T) {
 
 	// Add two ready packages owned by the features repo.
 	registry.mu.Lock()
-	registry.packages["pkg1"] = &packageEntry{
+	registry.packages["pkg1"] = &sourceEntry{
 		Package: &domain.Source{
 			ID:      "pkg1",
 			Indexed: true,
@@ -167,7 +167,7 @@ func TestQueryServiceQueryPointSpecificPackage(t *testing.T) {
 		Repo:   repo,
 		Status: domain.StatusReady,
 	}
-	registry.packages["pkg2"] = &packageEntry{
+	registry.packages["pkg2"] = &sourceEntry{
 		Package: &domain.Source{
 			ID:      "pkg2",
 			Indexed: true,

@@ -246,8 +246,8 @@ func (w *Watcher) processPending(ctx context.Context) {
 
 		// Call handler in goroutine to not block. The handler runs under a
 		// fresh root span — file events have no parent request context, so
-		// this span is the trace root that any downstream LoadPackage /
-		// UnloadPackage spans hang off.
+		// this span is the trace root that any downstream LoadSource /
+		// UnloadSource spans hang off.
 		go func(e Event) {
 			spanCtx, span := w.tracer.Start(ctx, "Watcher.handle",
 				output.WithAttributes(

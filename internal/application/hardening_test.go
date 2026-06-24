@@ -30,7 +30,7 @@ func (p *countingProvider) Supports(path string) bool { return strings.HasSuffix
 func (p *countingProvider) Open(_ context.Context, path string) (*domain.Source, error) {
 	p.opens++
 	return &domain.Source{
-		ID:      derivePackageID(path),
+		ID:      deriveSourceID(path),
 		Name:    fmt.Sprintf("v%d", p.version),
 		Kind:    domain.SourceKindVector,
 		Indexed: true,
@@ -43,20 +43,20 @@ func (p *countingProvider) QueryPoint(_ context.Context, _, _ string, _ domain.C
 }
 func (p *countingProvider) Close(_ context.Context, _ string) error { p.closes++; return nil }
 
-// TestLoadPackageReloadsModifiedSource is the regression test for the hot-reload
+// TestLoadSourceReloadsModifiedSource is the regression test for the hot-reload
 // stale-data bug: re-loading an already-loaded source must unload the stale
 // instance first (so the adapter re-reads the file), not return the cached one.
-func TestLoadPackageReloadsModifiedSource(t *testing.T) {
+func TestLoadSourceReloadsModifiedSource(t *testing.T) {
 	p := &countingProvider{ext: ".gpkg", version: 1}
 	reg := newRoutingRegistry([]output.SpatialSource{p})
 	ctx := context.Background()
 
-	if err := reg.LoadPackage(ctx, "/data/a.gpkg"); err != nil {
+	if err := reg.LoadSource(ctx, "/data/a.gpkg"); err != nil {
 		t.Fatalf("initial load: %v", err)
 	}
 	// File "changes" and the watcher fires a modify → reload.
 	p.version = 2
-	if err := reg.LoadPackage(ctx, "/data/a.gpkg"); err != nil {
+	if err := reg.LoadSource(ctx, "/data/a.gpkg"); err != nil {
 		t.Fatalf("reload: %v", err)
 	}
 
@@ -66,11 +66,11 @@ func TestLoadPackageReloadsModifiedSource(t *testing.T) {
 	if p.closes != 1 {
 		t.Errorf("closes = %d, want 1 (reload must unload the stale instance)", p.closes)
 	}
-	if reg.PackageCount() != 1 {
-		t.Errorf("count = %d, want 1 (reload must not duplicate)", reg.PackageCount())
+	if reg.SourceCount() != 1 {
+		t.Errorf("count = %d, want 1 (reload must not duplicate)", reg.SourceCount())
 	}
-	if src, _ := reg.GetPackage(ctx, "a"); src == nil || src.Name != "v2" {
-		t.Errorf("after reload GetPackage = %v, want the v2 instance", src)
+	if src, _ := reg.GetSource(ctx, "a"); src == nil || src.Name != "v2" {
+		t.Errorf("after reload GetSource = %v, want the v2 instance", src)
 	}
 }
 
@@ -80,7 +80,7 @@ type blockingProvider struct{}
 func (blockingProvider) Supports(path string) bool { return strings.HasSuffix(path, ".gpkg") }
 func (blockingProvider) Open(_ context.Context, path string) (*domain.Source, error) {
 	return &domain.Source{
-		ID: derivePackageID(path), Kind: domain.SourceKindVector, Indexed: true,
+		ID: deriveSourceID(path), Kind: domain.SourceKindVector, Indexed: true,
 		Layers: []domain.Layer{{Name: "l", SRID: 4326, HasIndex: true}},
 	}, nil
 }
@@ -95,7 +95,7 @@ func (blockingProvider) Close(_ context.Context, _ string) error { return nil }
 // hung adapter query instead of blocking forever.
 func TestQueryTimeoutIsEnforced(t *testing.T) {
 	reg := newRoutingRegistry([]output.SpatialSource{blockingProvider{}})
-	if err := reg.LoadPackage(context.Background(), "/data/a.gpkg"); err != nil {
+	if err := reg.LoadSource(context.Background(), "/data/a.gpkg"); err != nil {
 		t.Fatalf("load: %v", err)
 	}
 	svc := NewQueryService(reg, nil, testMeter(), output.NoOpTracer{}, testLogger(),

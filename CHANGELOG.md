@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (internal vocabulary + observability — ADR-0012 Stage A+B)
+- Renamed the source abstraction from "Package" to "Source" across the
+  application core: `PackageRegistry`→`SourceRegistry`, `LoadPackage`/
+  `UnloadPackage`/`ListPackages`/`GetPackage`/`GetPackageStatus`/`ReadyPackageIDs`/
+  `PackageCount`→`LoadSource`/`UnloadSource`/`ListSources`/`GetSource`/
+  `GetSourceStatus`/`ReadySourceIDs`/`SourceCount`, `PackageHealth`→`SourceHealth`,
+  `QueryPointInPackage`→
+  `QueryPointInSource`, and the `input.PackageRegistry` port→`input.SourceRegistry`.
+- **Observability rename (breaks dashboards/alerts):** span names
+  `PackageRegistry.*`→`SourceRegistry.*`, span attributes `ortus.package.*`→
+  `ortus.source.*` (now consistent across the GeoPackage *and* raster adapters),
+  metrics `ortus.packages.{loaded,ready}`→`ortus.sources.{loaded,ready}`.
+- **No functional or public-API change:** HTTP request/response shape (incl.
+  `package_id`/`package_name`/`/api/v1/packages`) and MCP tool names
+  (`list_packages`/`get_package`/…) are unchanged — that breaking rename is a
+  separate, versioned step (ADR-0012 Stage C). Verified: full suite, including
+  the span-name contract test and HTTP/MCP tests, stays green.
+
 ### Fixed
 - **Hot-reload served stale data.** A file-watcher *modify* event reloaded a
   source, but the adapter returned its cached, pre-modification instance — the

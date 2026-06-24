@@ -6,8 +6,8 @@ import "github.com/jobrunner/ortus/internal/ports/input"
 // ports. Adapters depend on these interfaces; these checks fail the build if a
 // service ever drifts from its port contract.
 var (
-	_ input.QueryService    = (*QueryService)(nil)
-	_ input.PackageRegistry = (*PackageRegistry)(nil)
-	_ input.HealthChecker   = (*HealthService)(nil)
-	_ input.Syncer          = (*SyncService)(nil)
+	_ input.QueryService   = (*QueryService)(nil)
+	_ input.SourceRegistry = (*SourceRegistry)(nil)
+	_ input.HealthChecker  = (*HealthService)(nil)
+	_ input.Syncer         = (*SyncService)(nil)
 )

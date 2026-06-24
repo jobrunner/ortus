@@ -72,7 +72,7 @@ func buildDeps(t *testing.T) mcpAdapter.Deps {
 
 	tr := telemetry.NewTracer(tp.TracerProvider())
 	store := storage.NewTracedStorage(stubStorage{}, tr, "local")
-	reg := application.NewPackageRegistry([]output.SpatialSource{fakeRepo{}}, store, meter, tr, logger, "/tmp")
+	reg := application.NewSourceRegistry([]output.SpatialSource{fakeRepo{}}, store, meter, tr, logger, "/tmp")
 	qs := application.NewQueryService(reg, nil, meter, tr, logger, application.QueryServiceConfig{})
 	hs := application.NewHealthService(reg, tr)
 
@@ -210,9 +210,9 @@ func TestHealthTool(t *testing.T) {
 	}
 }
 
-// TestListPackagesTool round-trips list_packages and asserts the
+// TestListSourcesTool round-trips list_packages and asserts the
 // response shape matches what doc/MCP.md promises.
-func TestListPackagesTool(t *testing.T) {
+func TestListSourcesTool(t *testing.T) {
 	session := connectClient(t, startTestServer(t, ""))
 	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "list_packages"})
 	if err != nil {

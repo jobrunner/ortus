@@ -19,7 +19,7 @@ type SyncResult = input.SyncResult
 
 // SyncService manages periodic synchronization with remote storage.
 type SyncService struct {
-	registry *PackageRegistry
+	registry *SourceRegistry
 	interval time.Duration
 	logger   *slog.Logger
 	tracer   output.Tracer
@@ -41,7 +41,7 @@ type SyncService struct {
 }
 
 // NewSyncService creates a new sync service.
-func NewSyncService(registry *PackageRegistry, interval time.Duration, tracer output.Tracer, logger *slog.Logger) *SyncService {
+func NewSyncService(registry *SourceRegistry, interval time.Duration, tracer output.Tracer, logger *slog.Logger) *SyncService {
 	if tracer == nil {
 		tracer = output.NoOpTracer{}
 	}
@@ -146,12 +146,12 @@ func (s *SyncService) doSync(ctx context.Context) {
 	s.logger.Info("sync completed",
 		"added", stats.Added,
 		"removed", stats.Removed,
-		"total", s.registry.PackageCount(),
+		"total", s.registry.SourceCount(),
 	)
 	span.SetAttributes(
 		output.Int("sync.added", stats.Added),
 		output.Int("sync.removed", stats.Removed),
-		output.Int("sync.total", s.registry.PackageCount()),
+		output.Int("sync.total", s.registry.SourceCount()),
 	)
 	span.SetStatus(output.StatusOK, "")
 }
@@ -177,14 +177,14 @@ func (s *SyncService) doSyncWithResult(ctx context.Context) (SyncResult, error) 
 	span.SetAttributes(
 		output.Int("sync.added", stats.Added),
 		output.Int("sync.removed", stats.Removed),
-		output.Int("sync.total", s.registry.PackageCount()),
+		output.Int("sync.total", s.registry.SourceCount()),
 	)
 	span.SetStatus(output.StatusOK, "")
 
 	return SyncResult{
 		PackagesAdded:   stats.Added,
 		PackagesRemoved: stats.Removed,
-		PackagesTotal:   s.registry.PackageCount(),
+		PackagesTotal:   s.registry.SourceCount(),
 		SyncedAt:        time.Now(),
 		NextScheduledAt: s.getNextSync(),
 	}, nil

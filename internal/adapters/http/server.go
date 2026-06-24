@@ -24,7 +24,7 @@ type Server struct {
 	server         *http.Server
 	router         *mux.Router
 	queryService   input.QueryService
-	registry       input.PackageRegistry
+	registry       input.SourceRegistry
 	health         input.HealthChecker
 	syncService    input.Syncer
 	logger         *slog.Logger
@@ -48,7 +48,7 @@ type ServerOptions struct {
 func NewServer(
 	cfg config.ServerConfig,
 	queryService input.QueryService,
-	registry input.PackageRegistry,
+	registry input.SourceRegistry,
 	health input.HealthChecker,
 	syncService input.Syncer,
 	logger *slog.Logger,
@@ -149,8 +149,8 @@ func (s *Server) setupRoutes() *mux.Router {
 	api.HandleFunc("/query/{packageId}", s.handleQueryPackage).Methods(http.MethodGet)
 
 	// Package management endpoints
-	api.HandleFunc("/packages", s.handleListPackages).Methods(http.MethodGet)
-	api.HandleFunc("/packages/{packageId}", s.handleGetPackage).Methods(http.MethodGet)
+	api.HandleFunc("/packages", s.handleListSources).Methods(http.MethodGet)
+	api.HandleFunc("/packages/{packageId}", s.handleGetSource).Methods(http.MethodGet)
 	api.HandleFunc("/packages/{packageId}/layers", s.handleGetLayers).Methods(http.MethodGet)
 
 	// Sync endpoint (only if sync service is configured)
