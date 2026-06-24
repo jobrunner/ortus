@@ -10,8 +10,8 @@ import (
 	"github.com/jobrunner/ortus/internal/ports/output"
 )
 
-func newTestRegistry() *PackageRegistry {
-	return NewPackageRegistry(
+func newTestRegistry() *SourceRegistry {
+	return NewSourceRegistry(
 		[]output.SpatialSource{&mockRepository{}},
 		&mockStorage{},
 		testMeter(),
@@ -36,19 +36,19 @@ func TestHealthServiceIsReady(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		packages map[string]*packageEntry
+		packages map[string]*sourceEntry
 		want     bool
 	}{
 		{
 			name:     "empty registry is ready",
-			packages: map[string]*packageEntry{},
+			packages: map[string]*sourceEntry{},
 			want:     true,
 		},
 		{
 			name: "ready package",
-			packages: map[string]*packageEntry{
+			packages: map[string]*sourceEntry{
 				"test": {
-					Package: &domain.Source{
+					Source: &domain.Source{
 						ID:      "test",
 						Indexed: true,
 						Layers:  []domain.Layer{{Name: "layer1", HasIndex: true}},
@@ -60,9 +60,9 @@ func TestHealthServiceIsReady(t *testing.T) {
 		},
 		{
 			name: "no ready packages",
-			packages: map[string]*packageEntry{
+			packages: map[string]*sourceEntry{
 				"test": {
-					Package: &domain.Source{
+					Source: &domain.Source{
 						ID:      "test",
 						Indexed: false,
 					},
@@ -73,13 +73,13 @@ func TestHealthServiceIsReady(t *testing.T) {
 		},
 		{
 			name: "mixed packages - one ready",
-			packages: map[string]*packageEntry{
+			packages: map[string]*sourceEntry{
 				"loading": {
-					Package: &domain.Source{ID: "loading", Indexed: false},
-					Status:  domain.StatusLoading,
+					Source: &domain.Source{ID: "loading", Indexed: false},
+					Status: domain.StatusLoading,
 				},
 				"ready": {
-					Package: &domain.Source{
+					Source: &domain.Source{
 						ID:      "ready",
 						Indexed: true,
 						Layers:  []domain.Layer{{Name: "layer1", HasIndex: true}},
@@ -94,7 +94,7 @@ func TestHealthServiceIsReady(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			registry.mu.Lock()
-			registry.packages = tt.packages
+			registry.sources = tt.packages
 			registry.mu.Unlock()
 
 			if got := service.IsReady(context.Background()); got != tt.want {
@@ -110,9 +110,9 @@ func TestHealthServiceGetHealthDetails(t *testing.T) {
 
 	// Add some packages
 	registry.mu.Lock()
-	registry.packages = map[string]*packageEntry{
+	registry.sources = map[string]*sourceEntry{
 		"ready1": {
-			Package: &domain.Source{
+			Source: &domain.Source{
 				ID:      "ready1",
 				Indexed: true,
 				Layers:  []domain.Layer{{Name: "l1", HasIndex: true}},
@@ -120,7 +120,7 @@ func TestHealthServiceGetHealthDetails(t *testing.T) {
 			Status: domain.StatusReady,
 		},
 		"ready2": {
-			Package: &domain.Source{
+			Source: &domain.Source{
 				ID:      "ready2",
 				Indexed: true,
 				Layers:  []domain.Layer{{Name: "l2", HasIndex: true}},
@@ -128,8 +128,8 @@ func TestHealthServiceGetHealthDetails(t *testing.T) {
 			Status: domain.StatusReady,
 		},
 		"loading": {
-			Package: &domain.Source{ID: "loading", Indexed: false},
-			Status:  domain.StatusLoading,
+			Source: &domain.Source{ID: "loading", Indexed: false},
+			Status: domain.StatusLoading,
 		},
 	}
 	registry.mu.Unlock()
@@ -153,14 +153,14 @@ func TestHealthServiceGetHealthDetails(t *testing.T) {
 	}
 }
 
-func TestHealthServiceGetPackageHealth(t *testing.T) {
+func TestHealthServiceGetSourceHealth(t *testing.T) {
 	registry := newTestRegistry()
 	service := NewHealthService(registry, output.NoOpTracer{})
 
 	registry.mu.Lock()
-	registry.packages = map[string]*packageEntry{
+	registry.sources = map[string]*sourceEntry{
 		"pkg1": {
-			Package: &domain.Source{
+			Source: &domain.Source{
 				ID:      "pkg1",
 				Indexed: true,
 				Layers:  []domain.Layer{{Name: "l1", HasIndex: true}},
@@ -168,20 +168,20 @@ func TestHealthServiceGetPackageHealth(t *testing.T) {
 			Status: domain.StatusReady,
 		},
 		"pkg2": {
-			Package: &domain.Source{ID: "pkg2", Indexed: false},
-			Status:  domain.StatusIndexing,
+			Source: &domain.Source{ID: "pkg2", Indexed: false},
+			Status: domain.StatusIndexing,
 		},
 	}
 	registry.mu.Unlock()
 
-	health := service.GetPackageHealth(context.Background())
+	health := service.GetSourceHealth(context.Background())
 
 	if len(health) != 2 {
 		t.Errorf("len(health) = %d, want 2", len(health))
 	}
 
 	// Find pkg1
-	var pkg1Health *PackageHealth
+	var pkg1Health *SourceHealth
 	for i := range health {
 		if health[i].ID == "pkg1" {
 			pkg1Health = &health[i]

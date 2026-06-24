@@ -10,12 +10,12 @@ import (
 
 // HealthService provides health check functionality.
 type HealthService struct {
-	registry *PackageRegistry
+	registry *SourceRegistry
 	tracer   output.Tracer
 }
 
 // NewHealthService creates a new health service.
-func NewHealthService(registry *PackageRegistry, tracer output.Tracer) *HealthService {
+func NewHealthService(registry *SourceRegistry, tracer output.Tracer) *HealthService {
 	if tracer == nil {
 		tracer = output.NoOpTracer{}
 	}
@@ -38,7 +38,7 @@ func (s *HealthService) IsReady(ctx context.Context) bool {
 	ctx, span := s.tracer.Start(ctx, "HealthService.IsReady")
 	defer span.End()
 
-	packages, err := s.registry.ListPackages(ctx)
+	packages, err := s.registry.ListSources(ctx)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(output.StatusError, "list packages failed")
@@ -71,7 +71,7 @@ func (s *HealthService) GetHealthDetails(ctx context.Context) input.HealthDetail
 	ctx, span := s.tracer.Start(ctx, "HealthService.GetHealthDetails")
 	defer span.End()
 
-	packages, _ := s.registry.ListPackages(ctx)
+	packages, _ := s.registry.ListSources(ctx)
 
 	loaded := len(packages)
 	ready := 0
@@ -99,24 +99,24 @@ func (s *HealthService) GetHealthDetails(ctx context.Context) input.HealthDetail
 	}
 }
 
-// PackageHealth contains health info for a single package.
-type PackageHealth struct {
+// SourceHealth contains health info for a single source.
+type SourceHealth struct {
 	ID     string
 	Status domain.SourceStatus
 	Ready  bool
 }
 
-// GetPackageHealth returns health info for all packages.
-func (s *HealthService) GetPackageHealth(ctx context.Context) []PackageHealth {
-	ctx, span := s.tracer.Start(ctx, "HealthService.GetPackageHealth")
+// GetSourceHealth returns health info for all sources.
+func (s *HealthService) GetSourceHealth(ctx context.Context) []SourceHealth {
+	ctx, span := s.tracer.Start(ctx, "HealthService.GetSourceHealth")
 	defer span.End()
 
-	packages, _ := s.registry.ListPackages(ctx)
+	packages, _ := s.registry.ListSources(ctx)
 
-	health := make([]PackageHealth, len(packages))
+	health := make([]SourceHealth, len(packages))
 	for i, pkg := range packages {
-		status, _ := s.registry.GetPackageStatus(ctx, pkg.ID)
-		health[i] = PackageHealth{
+		status, _ := s.registry.GetSourceStatus(ctx, pkg.ID)
+		health[i] = SourceHealth{
 			ID:     pkg.ID,
 			Status: status,
 			Ready:  pkg.IsReady(),

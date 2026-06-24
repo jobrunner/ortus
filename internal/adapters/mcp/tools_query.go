@@ -14,9 +14,9 @@ import (
 // agent actually USE ortus (rather than just observe it).
 func registerQueryTools(srv *mcp.Server, deps Deps, logger *slog.Logger) {
 	addQueryPoint(srv, deps, logger)
-	addListPackages(srv, deps, logger)
-	addGetPackage(srv, deps, logger)
-	addGetPackageLayers(srv, deps, logger)
+	addListSources(srv, deps, logger)
+	addGetSource(srv, deps, logger)
+	addGetSourceLayers(srv, deps, logger)
 }
 
 // ---- query_point ----------------------------------------------------------
@@ -99,13 +99,13 @@ type listPackagesOut struct {
 	Count    int              `json:"count"`
 }
 
-func addListPackages(srv *mcp.Server, deps Deps, _ *slog.Logger) {
+func addListSources(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 	mcp.AddTool(srv, &mcp.Tool{
 		Name: "list_packages",
 		Description: "List every GeoPackage currently loaded into ortus, with ready " +
 			"state, layer count, and ID. Equivalent to GET /api/v1/packages.",
 	}, func(ctx toolCtx, _ *callRequest, _ any) (*callResult, listPackagesOut, error) {
-		pkgs, err := deps.Registry.ListPackages(ctx)
+		pkgs, err := deps.Registry.ListSources(ctx)
 		if err != nil {
 			return nil, listPackagesOut{}, err
 		}
@@ -130,7 +130,7 @@ type getPackageIn struct {
 	PackageID string `json:"package_id" jsonschema:"id of the package (matches GET /api/v1/packages/{id})"`
 }
 
-func addGetPackage(srv *mcp.Server, deps Deps, _ *slog.Logger) {
+func addGetSource(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 	mcp.AddTool(srv, &mcp.Tool{
 		Name: "get_package",
 		Description: "Fetch the full metadata for one GeoPackage: layers, extent, " +
@@ -139,7 +139,7 @@ func addGetPackage(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 		if strings.TrimSpace(in.PackageID) == "" {
 			return nil, nil, fmt.Errorf("package_id is required")
 		}
-		pkg, err := deps.Registry.GetPackage(ctx, in.PackageID)
+		pkg, err := deps.Registry.GetSource(ctx, in.PackageID)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -170,7 +170,7 @@ type getPackageLayersOut struct {
 	Count     int            `json:"count"`
 }
 
-func addGetPackageLayers(srv *mcp.Server, deps Deps, _ *slog.Logger) {
+func addGetSourceLayers(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 	mcp.AddTool(srv, &mcp.Tool{
 		Name: "get_package_layers",
 		Description: "List the layers in a single GeoPackage, with geometry type, SRID, " +
@@ -179,7 +179,7 @@ func addGetPackageLayers(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 		if strings.TrimSpace(in.PackageID) == "" {
 			return nil, getPackageLayersOut{}, fmt.Errorf("package_id is required")
 		}
-		pkg, err := deps.Registry.GetPackage(ctx, in.PackageID)
+		pkg, err := deps.Registry.GetSource(ctx, in.PackageID)
 		if err != nil {
 			return nil, getPackageLayersOut{}, err
 		}

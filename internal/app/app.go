@@ -32,7 +32,7 @@ type App struct {
 	Storage           output.ObjectStorage
 	Repository        *geopackage.Repository
 	RasterRepository  *raster.Repository
-	Registry          *application.PackageRegistry
+	Registry          *application.SourceRegistry
 	QueryService      *application.QueryService
 	HealthService     *application.HealthService
 	SyncService       *application.SyncService
@@ -145,10 +145,10 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*App, er
 	app.RasterRepository = raster.NewRepository("")
 	app.RasterRepository.SetTracer(app.Tracer)
 
-	// Initialize package registry with the available source adapters. The
+	// Initialize source registry with the available source adapters. The
 	// registry routes each file to the first adapter whose Supports matches
 	// (geopackage: *.gpkg, raster: *.zip).
-	app.Registry = application.NewPackageRegistry(
+	app.Registry = application.NewSourceRegistry(
 		[]output.SpatialSource{app.Repository, app.RasterRepository},
 		app.Storage,
 		meter,
@@ -332,7 +332,7 @@ func (a *App) Start(ctx context.Context) error {
 		startupSpan.RecordError(err)
 		startupOK = false
 	}
-	startupSpan.SetAttributes(output.Int("ortus.packages.loaded", a.Registry.PackageCount()))
+	startupSpan.SetAttributes(output.Int("ortus.sources.loaded", a.Registry.SourceCount()))
 
 	// Start file watcher. Pass the parent ctx (NOT startupCtx) — the
 	// watcher keeps the ctx for the life of the process and uses it as the
@@ -441,9 +441,9 @@ func (a *App) Shutdown(ctx context.Context) error {
 	}
 
 	// Close all packages
-	packages, _ := a.Registry.ListPackages(ctx)
+	packages, _ := a.Registry.ListSources(ctx)
 	for _, pkg := range packages {
-		if err := a.Registry.UnloadPackage(ctx, pkg.ID); err != nil {
+		if err := a.Registry.UnloadSource(ctx, pkg.ID); err != nil {
 			a.Logger.Error("failed to unload package", "id", pkg.ID, "error", err)
 		}
 	}
@@ -481,7 +481,7 @@ func (a *App) handleFileEvent(ctx context.Context, event watcher.Event) error {
 	switch event.Operation {
 	case watcher.OpCreate, watcher.OpModify:
 		// Reload the package
-		if err := a.Registry.LoadPackage(ctx, event.Path); err != nil {
+		if err := a.Registry.LoadSource(ctx, event.Path); err != nil {
 			span.RecordError(err)
 			span.SetStatus(output.StatusError, "load failed")
 			return err
@@ -494,7 +494,7 @@ func (a *App) handleFileEvent(ctx context.Context, event watcher.Event) error {
 		// source kind (.gpkg, .zip, …).
 		packageID := a.Registry.DeriveSourceID(event.Path)
 		span.SetAttributes(output.String("ortus.source.id", packageID))
-		if err := a.Registry.UnloadPackage(ctx, packageID); err != nil {
+		if err := a.Registry.UnloadSource(ctx, packageID); err != nil {
 			a.Logger.Warn("failed to unload deleted source", "id", packageID, "error", err)
 			span.RecordError(err)
 			span.SetStatus(output.StatusError, "unload failed")

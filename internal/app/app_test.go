@@ -44,7 +44,7 @@ func TestHandleFileEvent(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
 	gpkg := &fakeProvider{ext: ".gpkg"}
 	zip := &fakeProvider{ext: ".zip"}
-	reg := application.NewPackageRegistry(
+	reg := application.NewSourceRegistry(
 		[]output.SpatialSource{gpkg, zip}, nil, nil, output.NoOpTracer{}, logger, "/tmp")
 	a := &App{Tracer: output.NoOpTracer{}, Logger: logger, Registry: reg}
 	ctx := context.Background()
@@ -76,8 +76,8 @@ func TestHandleFileEvent(t *testing.T) {
 	if gpkg.opens != 2 || gpkg.closes != 1 {
 		t.Errorf("modify should reload: opens=%d closes=%d, want 2/1", gpkg.opens, gpkg.closes)
 	}
-	if reg.PackageCount() != 2 {
-		t.Errorf("count = %d, want 2 (reload must not duplicate)", reg.PackageCount())
+	if reg.SourceCount() != 2 {
+		t.Errorf("count = %d, want 2 (reload must not duplicate)", reg.SourceCount())
 	}
 
 	// Delete the .gpkg → unloaded via registry id derivation.

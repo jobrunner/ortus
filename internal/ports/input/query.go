@@ -16,20 +16,20 @@ type QueryService interface {
 	// QueryPoint performs a point query across all registered sources.
 	QueryPoint(ctx context.Context, req domain.QueryRequest) (*domain.QueryResponse, error)
 
-	// QueryPointInPackage performs a point query in a specific source.
-	QueryPointInPackage(ctx context.Context, packageID string, req domain.QueryRequest) (*domain.QueryResult, error)
+	// QueryPointInSource performs a point query in a specific source.
+	QueryPointInSource(ctx context.Context, sourceID string, req domain.QueryRequest) (*domain.QueryResult, error)
 }
 
-// PackageRegistry defines the primary port for source management.
-type PackageRegistry interface {
-	// ListPackages returns all registered sources.
-	ListPackages(ctx context.Context) ([]domain.Source, error)
+// SourceRegistry defines the primary port for source management.
+type SourceRegistry interface {
+	// ListSources returns all registered sources.
+	ListSources(ctx context.Context) ([]domain.Source, error)
 
-	// GetPackage returns a specific source by ID.
-	GetPackage(ctx context.Context, id string) (*domain.Source, error)
+	// GetSource returns a specific source by ID.
+	GetSource(ctx context.Context, id string) (*domain.Source, error)
 
-	// GetPackageStatus returns the status of a source.
-	GetPackageStatus(ctx context.Context, id string) (domain.SourceStatus, error)
+	// GetSourceStatus returns the status of a source.
+	GetSourceStatus(ctx context.Context, id string) (domain.SourceStatus, error)
 }
 
 // Syncer defines the primary port for triggering storage synchronization.

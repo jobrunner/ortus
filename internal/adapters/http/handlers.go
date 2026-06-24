@@ -108,9 +108,9 @@ func (s *Server) handleReadiness(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleListPackages returns all registered packages.
-func (s *Server) handleListPackages(w http.ResponseWriter, r *http.Request) {
-	packages, err := s.registry.ListPackages(r.Context())
+// handleListSources returns all registered packages.
+func (s *Server) handleListSources(w http.ResponseWriter, r *http.Request) {
+	packages, err := s.registry.ListSources(r.Context())
 	if err != nil {
 		s.writeError(w, http.StatusInternalServerError, "Failed to list packages")
 		return
@@ -127,12 +127,12 @@ func (s *Server) handleListPackages(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleGetPackage returns a specific package.
-func (s *Server) handleGetPackage(w http.ResponseWriter, r *http.Request) {
+// handleGetSource returns a specific package.
+func (s *Server) handleGetSource(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	packageID := vars["packageId"]
 
-	pkg, err := s.registry.GetPackage(r.Context(), packageID)
+	pkg, err := s.registry.GetSource(r.Context(), packageID)
 	if err != nil {
 		if errors.Is(err, domain.ErrPackageNotFound) {
 			s.writeError(w, http.StatusNotFound, "Package not found")
@@ -150,7 +150,7 @@ func (s *Server) handleGetLayers(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	packageID := vars["packageId"]
 
-	pkg, err := s.registry.GetPackage(r.Context(), packageID)
+	pkg, err := s.registry.GetSource(r.Context(), packageID)
 	if err != nil {
 		if errors.Is(err, domain.ErrPackageNotFound) {
 			s.writeError(w, http.StatusNotFound, "Package not found")

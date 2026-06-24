@@ -108,7 +108,7 @@ func (r *Repository) SetTracer(t output.Tracer) {
 // Open opens a GeoPackage file and returns its metadata.
 func (r *Repository) Open(ctx context.Context, path string) (*domain.Source, error) {
 	ctx, span := r.tracer.Start(ctx, "Repository.Open",
-		output.WithAttributes(output.String("ortus.package.path", path)),
+		output.WithAttributes(output.String("ortus.source.path", path)),
 	)
 	defer span.End()
 
@@ -117,7 +117,7 @@ func (r *Repository) Open(ctx context.Context, path string) (*domain.Source, err
 
 	// Derive package ID from filename
 	packageID := DerivePackageID(path)
-	span.SetAttributes(output.String("ortus.package.id", packageID))
+	span.SetAttributes(output.String("ortus.source.id", packageID))
 
 	// Check if already open
 	if pkg, ok := r.packages[packageID]; ok {
@@ -161,7 +161,7 @@ func (r *Repository) Close(ctx context.Context, packageID string) error {
 		output.WithSpanKind(output.SpanKindClient),
 		output.WithAttributes(
 			output.String("db.system", "sqlite"),
-			output.String("ortus.package.id", packageID),
+			output.String("ortus.source.id", packageID),
 		),
 	)
 	defer span.End()
@@ -189,7 +189,7 @@ func (r *Repository) Close(ctx context.Context, packageID string) error {
 // GetLayers returns all layers in a GeoPackage.
 func (r *Repository) GetLayers(ctx context.Context, packageID string) ([]domain.Layer, error) {
 	_, span := r.tracer.Start(ctx, "Repository.GetLayers",
-		output.WithAttributes(output.String("ortus.package.id", packageID)),
+		output.WithAttributes(output.String("ortus.source.id", packageID)),
 	)
 	defer span.End()
 
@@ -213,7 +213,7 @@ func (r *Repository) QueryPoint(ctx context.Context, packageID, layerName string
 		output.WithSpanKind(output.SpanKindClient),
 		output.WithAttributes(
 			output.String("db.system", "sqlite"),
-			output.String("ortus.package.id", packageID),
+			output.String("ortus.source.id", packageID),
 			output.String("ortus.layer.name", layerName),
 			output.Float64("ortus.coordinate.x", coord.X),
 			output.Float64("ortus.coordinate.y", coord.Y),
@@ -266,7 +266,7 @@ func (r *Repository) CreateSpatialIndex(ctx context.Context, packageID, layerNam
 		output.WithSpanKind(output.SpanKindClient),
 		output.WithAttributes(
 			output.String("db.system", "sqlite"),
-			output.String("ortus.package.id", packageID),
+			output.String("ortus.source.id", packageID),
 			output.String("ortus.layer.name", layerName),
 		),
 	)
@@ -394,7 +394,7 @@ func (r *Repository) HasSpatialIndex(ctx context.Context, packageID, layerName s
 		output.WithSpanKind(output.SpanKindClient),
 		output.WithAttributes(
 			output.String("db.system", "sqlite"),
-			output.String("ortus.package.id", packageID),
+			output.String("ortus.source.id", packageID),
 			output.String("ortus.layer.name", layerName),
 		),
 	)

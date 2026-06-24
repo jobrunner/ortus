@@ -54,7 +54,7 @@ func TestEndToEnd_QueryServiceProducesSpansInBuffer(t *testing.T) {
 
 	tracer := telemetry.NewTracer(provider.TracerProvider())
 
-	registry := application.NewPackageRegistry(
+	registry := application.NewSourceRegistry(
 		[]output.SpatialSource{stubRepo{}},
 		nil, // storage unused in this path
 		noop.NewMeterProvider().Meter("test"),

@@ -70,12 +70,12 @@ func TestTracingCoverage_AllPathsProduceSpans(t *testing.T) {
 		"ObjectStorage.List",
 		"ObjectStorage.Download",
 		// Registry
-		"PackageRegistry.LoadAll",
-		"PackageRegistry.LoadPackage",
-		"PackageRegistry.UnloadPackage",
-		"PackageRegistry.ListPackages",
-		"PackageRegistry.GetPackage",
-		"PackageRegistry.GetPackageStatus",
+		"SourceRegistry.LoadAll",
+		"SourceRegistry.LoadSource",
+		"SourceRegistry.UnloadSource",
+		"SourceRegistry.ListSources",
+		"SourceRegistry.GetSource",
+		"SourceRegistry.GetSourceStatus",
 		// Repository (via fake — won't hit SQL paths, but every interface method must trace)
 		"Repository.Open",
 		"Repository.Close",
@@ -84,13 +84,13 @@ func TestTracingCoverage_AllPathsProduceSpans(t *testing.T) {
 		"Repository.CreateSpatialIndex",
 		// QueryService
 		"QueryService.QueryPoint",
-		"QueryService.QueryPointInPackage",
+		"QueryService.QueryPointInSource",
 		"QueryService.queryLayer",
 		// HealthService
 		"HealthService.IsHealthy",
 		"HealthService.IsReady",
 		"HealthService.GetHealthDetails",
-		"HealthService.GetPackageHealth",
+		"HealthService.GetSourceHealth",
 	}
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
@@ -109,7 +109,7 @@ func TestTracingCoverage_AllPathsProduceSpans(t *testing.T) {
 
 	repo := &tracedFakeRepo{inner: coverageRepo{}, tracer: tr}
 	store := storage.NewTracedStorage(coverageStorage{}, tr, "local")
-	reg := application.NewPackageRegistry([]output.SpatialSource{repo}, store, noop.NewMeterProvider().Meter("test"), tr, logger, "/tmp")
+	reg := application.NewSourceRegistry([]output.SpatialSource{repo}, store, noop.NewMeterProvider().Meter("test"), tr, logger, "/tmp")
 	qs := application.NewQueryService(reg, nil, noop.NewMeterProvider().Meter("test"), tr, logger, application.QueryServiceConfig{})
 	hs := application.NewHealthService(reg, tr)
 
@@ -135,16 +135,16 @@ func TestTracingCoverage_AllPathsProduceSpans(t *testing.T) {
 	})
 
 	asRequest("HTTP GET /api/v1/packages", func(ctx context.Context) {
-		if _, err := reg.ListPackages(ctx); err != nil {
-			t.Fatalf("ListPackages: %v", err)
+		if _, err := reg.ListSources(ctx); err != nil {
+			t.Fatalf("ListSources: %v", err)
 		}
 	})
 	asRequest("HTTP GET /api/v1/packages/{id}", func(ctx context.Context) {
-		if _, err := reg.GetPackage(ctx, "fake"); err != nil {
-			t.Fatalf("GetPackage: %v", err)
+		if _, err := reg.GetSource(ctx, "fake"); err != nil {
+			t.Fatalf("GetSource: %v", err)
 		}
-		if _, err := reg.GetPackageStatus(ctx, "fake"); err != nil {
-			t.Fatalf("GetPackageStatus: %v", err)
+		if _, err := reg.GetSourceStatus(ctx, "fake"); err != nil {
+			t.Fatalf("GetSourceStatus: %v", err)
 		}
 	})
 
@@ -152,7 +152,7 @@ func TestTracingCoverage_AllPathsProduceSpans(t *testing.T) {
 		_ = hs.IsHealthy(ctx)
 		_ = hs.IsReady(ctx)
 		_ = hs.GetHealthDetails(ctx)
-		_ = hs.GetPackageHealth(ctx)
+		_ = hs.GetSourceHealth(ctx)
 	})
 
 	// GetLayers and HasSpatialIndex aren't reached through the higher-level
@@ -167,8 +167,8 @@ func TestTracingCoverage_AllPathsProduceSpans(t *testing.T) {
 	})
 
 	asRequest("watcher delete event", func(ctx context.Context) {
-		if err := reg.UnloadPackage(ctx, "fake"); err != nil {
-			t.Fatalf("UnloadPackage: %v", err)
+		if err := reg.UnloadSource(ctx, "fake"); err != nil {
+			t.Fatalf("UnloadSource: %v", err)
 		}
 	})
 
