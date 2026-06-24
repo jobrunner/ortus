@@ -220,19 +220,19 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Lint Dockerfile
-        uses: hadolint/hadolint-action@v3.1.0
+        uses: hadolint/hadolint-action@v3.3.0
         with:
           dockerfile: Dockerfile
           failure-threshold: error
 
       - name: Lint Dockerfile.alpine
-        uses: hadolint/hadolint-action@v3.1.0
+        uses: hadolint/hadolint-action@v3.3.0
         with:
           dockerfile: Dockerfile.alpine
           failure-threshold: error
 
       - name: Lint Dockerfile.ubuntu
-        uses: hadolint/hadolint-action@v3.1.0
+        uses: hadolint/hadolint-action@v3.3.0
         with:
           dockerfile: Dockerfile.ubuntu
           failure-threshold: error
