@@ -101,7 +101,7 @@ fmt: ## Formatiere Go Code
 format: fmt ## Alias für fmt
 
 fmt-check: ## Prüfe Formatierung ohne zu ändern (CI/Hook)
-	@unformatted=$$(gofmt -l cmd internal pkg api 2>/dev/null); \
+	@unformatted=$$(gofmt -l cmd internal api); \
 	if [ -n "$$unformatted" ]; then \
 		echo "❌ Nicht formatiert (gofmt -w ausführen):"; echo "$$unformatted"; exit 1; \
 	fi
@@ -113,8 +113,12 @@ check: fmt vet lint test ## Alle Qualitätsprüfungen (vor Commit)
 # Kanonische, NICHT-mutierende Grün-Prüfung. Dies ist die maßgebliche Quelle
 # für "ist es grün?" — Editor-/LSP-Diagnosen sind bei großen Renames unzuverlässig
 # (siehe ADR/Memory); der Compiler entscheidet. Gleiche Schritte wie die CI.
-verify: fmt-check vet build test lint ## Maßgebliche Grün-Prüfung (gofmt-check+vet+build+test+lint)
-	@echo "\n✅ verify bestanden — Build/Test/Lint/Format grün."
+# Bewusst KEIN Aufruf des `build`-Targets (das schreibt ./ortus); stattdessen
+# ein binärloser Compile-Check via `go build ./...`.
+verify: fmt-check vet lint test ## Maßgebliche Grün-Prüfung (gofmt-check+vet+compile+test+lint)
+	@echo "Compile-Check (go build ./...)…"
+	@$(GO) build ./...
+	@echo "\n✅ verify bestanden — Compile/Test/Lint/Format grün."
 
 hooks: ## Installiere git pre-commit Hook (.githooks)
 	git config core.hooksPath .githooks
