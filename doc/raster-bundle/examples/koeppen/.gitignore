@@ -1,0 +1,11 @@
+# Downloaded source data and built artifacts must NOT be committed — ortus is
+# not a bundle factory. Only the tutorial + pipeline scripts live here.
+# See TUTORIAL.md.
+*.zip
+*.tif
+*.tiff
+legend.txt
+beck_kg_v1*
+src/
+stage/
+warped*

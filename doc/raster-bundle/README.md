@@ -126,7 +126,10 @@ raw GeoTIFF(s) + legend.txt (named anything, any CRS)
   → zip
 ```
 
-See [`examples/koeppen/`](./examples/koeppen/) for a runnable reference implementation.
+See [`examples/koeppen/TUTORIAL.md`](./examples/koeppen/TUTORIAL.md) for a complete,
+verified end-to-end walkthrough — building the Köppen-Geiger 1 km bundle from the
+published source and serving it from ortus — plus [`build.sh`](./examples/koeppen/build.sh)
+as the one-shot pipeline.
 
 ## What COG does and does not give you
 
