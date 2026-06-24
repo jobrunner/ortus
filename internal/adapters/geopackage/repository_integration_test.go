@@ -247,8 +247,8 @@ func TestIntegration_QueryErrors(t *testing.T) {
 	if _, err := repo.QueryPoint(ctx, "regions", "missing", domain.NewWGS84Coordinate(2, 2)); err != domain.ErrLayerNotFound {
 		t.Errorf("unknown layer err = %v, want ErrLayerNotFound", err)
 	}
-	if _, err := repo.QueryPoint(ctx, "nonexistent", "regions", domain.NewWGS84Coordinate(2, 2)); err != domain.ErrPackageNotFound {
-		t.Errorf("unknown package err = %v, want ErrPackageNotFound", err)
+	if _, err := repo.QueryPoint(ctx, "nonexistent", "regions", domain.NewWGS84Coordinate(2, 2)); err != domain.ErrSourceNotFound {
+		t.Errorf("unknown package err = %v, want ErrSourceNotFound", err)
 	}
 }
 

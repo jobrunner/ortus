@@ -77,8 +77,8 @@ func TestSourceRegistryGetSourceNotFound(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := registry.GetSource(ctx, "nonexistent")
-	if err != domain.ErrPackageNotFound {
-		t.Errorf("err = %v, want %v", err, domain.ErrPackageNotFound)
+	if err != domain.ErrSourceNotFound {
+		t.Errorf("err = %v, want %v", err, domain.ErrSourceNotFound)
 	}
 }
 
@@ -107,8 +107,8 @@ func TestSourceRegistryGetSourceStatusNotFound(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := registry.GetSourceStatus(ctx, "nonexistent")
-	if err != domain.ErrPackageNotFound {
-		t.Errorf("err = %v, want %v", err, domain.ErrPackageNotFound)
+	if err != domain.ErrSourceNotFound {
+		t.Errorf("err = %v, want %v", err, domain.ErrSourceNotFound)
 	}
 }
 

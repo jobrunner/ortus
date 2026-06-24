@@ -157,11 +157,11 @@ func addTracingStats(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 // ---- health ---------------------------------------------------------------
 
 type healthOut struct {
-	Healthy        bool              `json:"healthy"`
-	Ready          bool              `json:"ready"`
-	PackagesLoaded int               `json:"packages_loaded"`
-	PackagesReady  int               `json:"packages_ready"`
-	Components     map[string]string `json:"components"`
+	Healthy       bool              `json:"healthy"`
+	Ready         bool              `json:"ready"`
+	SourcesLoaded int               `json:"sources_loaded"`
+	SourcesReady  int               `json:"sources_ready"`
+	Components    map[string]string `json:"components"`
 }
 
 func addHealth(srv *mcp.Server, deps Deps, _ *slog.Logger) {
@@ -173,11 +173,11 @@ func addHealth(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 	}, func(ctx toolCtx, _ *callRequest, _ any) (*callResult, healthOut, error) {
 		d := deps.HealthService.GetHealthDetails(ctx)
 		return nil, healthOut{
-			Healthy:        d.Healthy,
-			Ready:          d.Ready,
-			PackagesLoaded: d.PackagesLoaded,
-			PackagesReady:  d.PackagesReady,
-			Components:     d.Components,
+			Healthy:       d.Healthy,
+			Ready:         d.Ready,
+			SourcesLoaded: d.SourcesLoaded,
+			SourcesReady:  d.SourcesReady,
+			Components:    d.Components,
 		}, nil
 	})
 }

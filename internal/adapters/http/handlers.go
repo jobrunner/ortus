@@ -22,7 +22,7 @@ type QueryParams struct {
 	Properties []string `json:"properties,omitempty"`
 }
 
-// handleQuery handles point queries across all packages.
+// handleQuery handles point queries across all sources.
 func (s *Server) handleQuery(w http.ResponseWriter, r *http.Request) {
 	params, err := s.parseQueryParams(r)
 	if err != nil {
@@ -45,10 +45,10 @@ func (s *Server) handleQuery(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, http.StatusOK, s.formatQueryResponse(response))
 }
 
-// handleQueryPackage handles point queries for a specific package.
-func (s *Server) handleQueryPackage(w http.ResponseWriter, r *http.Request) {
+// handleQuerySource handles point queries for a specific source.
+func (s *Server) handleQuerySource(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	packageID := vars["packageId"]
+	sourceID := vars["sourceId"]
 
 	params, err := s.parseQueryParams(r)
 	if err != nil {
@@ -60,7 +60,7 @@ func (s *Server) handleQueryPackage(w http.ResponseWriter, r *http.Request) {
 		Coordinate: s.paramsToCoordinate(params),
 		SourceSRID: params.SRID,
 		Properties: params.Properties,
-		PackageID:  packageID,
+		SourceID:   sourceID,
 	}
 
 	response, err := s.queryService.QueryPoint(r.Context(), req)
@@ -82,11 +82,11 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.writeJSON(w, status, map[string]interface{}{
-		"status":          boolToStatus(details.Healthy),
-		"ready":           details.Ready,
-		"packages_loaded": details.PackagesLoaded,
-		"packages_ready":  details.PackagesReady,
-		"components":      details.Components,
+		"status":         boolToStatus(details.Healthy),
+		"ready":          details.Ready,
+		"sources_loaded": details.SourcesLoaded,
+		"sources_ready":  details.SourcesReady,
+		"components":     details.Components,
 	})
 }
 
@@ -108,55 +108,55 @@ func (s *Server) handleReadiness(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleListSources returns all registered packages.
+// handleListSources returns all registered sources.
 func (s *Server) handleListSources(w http.ResponseWriter, r *http.Request) {
-	packages, err := s.registry.ListSources(r.Context())
+	sources, err := s.registry.ListSources(r.Context())
 	if err != nil {
-		s.writeError(w, http.StatusInternalServerError, "Failed to list packages")
+		s.writeError(w, http.StatusInternalServerError, "Failed to list sources")
 		return
 	}
 
-	response := make([]map[string]interface{}, len(packages))
-	for i, pkg := range packages {
-		response[i] = s.formatPackage(&pkg)
+	response := make([]map[string]interface{}, len(sources))
+	for i := range sources {
+		response[i] = s.formatSource(&sources[i])
 	}
 
 	s.writeJSON(w, http.StatusOK, map[string]interface{}{
-		"packages": response,
-		"count":    len(packages),
+		"sources": response,
+		"count":   len(sources),
 	})
 }
 
-// handleGetSource returns a specific package.
+// handleGetSource returns a specific source.
 func (s *Server) handleGetSource(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	packageID := vars["packageId"]
+	sourceID := vars["sourceId"]
 
-	pkg, err := s.registry.GetSource(r.Context(), packageID)
+	pkg, err := s.registry.GetSource(r.Context(), sourceID)
 	if err != nil {
-		if errors.Is(err, domain.ErrPackageNotFound) {
-			s.writeError(w, http.StatusNotFound, "Package not found")
+		if errors.Is(err, domain.ErrSourceNotFound) {
+			s.writeError(w, http.StatusNotFound, "Source not found")
 			return
 		}
-		s.writeError(w, http.StatusInternalServerError, "Failed to get package")
+		s.writeError(w, http.StatusInternalServerError, "Failed to get source")
 		return
 	}
 
-	s.writeJSON(w, http.StatusOK, s.formatPackage(pkg))
+	s.writeJSON(w, http.StatusOK, s.formatSource(pkg))
 }
 
-// handleGetLayers returns layers for a specific package.
+// handleGetLayers returns layers for a specific source.
 func (s *Server) handleGetLayers(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	packageID := vars["packageId"]
+	sourceID := vars["sourceId"]
 
-	pkg, err := s.registry.GetSource(r.Context(), packageID)
+	pkg, err := s.registry.GetSource(r.Context(), sourceID)
 	if err != nil {
-		if errors.Is(err, domain.ErrPackageNotFound) {
-			s.writeError(w, http.StatusNotFound, "Package not found")
+		if errors.Is(err, domain.ErrSourceNotFound) {
+			s.writeError(w, http.StatusNotFound, "Source not found")
 			return
 		}
-		s.writeError(w, http.StatusInternalServerError, "Failed to get package")
+		s.writeError(w, http.StatusInternalServerError, "Failed to get source")
 		return
 	}
 
@@ -182,9 +182,9 @@ func (s *Server) handleGetLayers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.writeJSON(w, http.StatusOK, map[string]interface{}{
-		"package_id": packageID,
-		"layers":     layers,
-		"count":      len(layers),
+		"source_id": sourceID,
+		"layers":    layers,
+		"count":     len(layers),
 	})
 }
 
@@ -303,8 +303,8 @@ func (s *Server) formatQueryResponse(resp *domain.QueryResponse) map[string]inte
 		}
 
 		results[i] = map[string]interface{}{
-			"package_id":    r.PackageID,
-			"package_name":  r.PackageName,
+			"source_id":     r.SourceID,
+			"source_name":   r.SourceName,
 			"features":      features,
 			"feature_count": r.FeatureCount(),
 			"query_time_ms": r.QueryTime.Milliseconds(),
@@ -331,8 +331,8 @@ func (s *Server) formatQueryResponse(resp *domain.QueryResponse) map[string]inte
 	}
 }
 
-// formatPackage formats a source for JSON output.
-func (s *Server) formatPackage(pkg *domain.Source) map[string]interface{} {
+// formatSource formats a source for JSON output.
+func (s *Server) formatSource(pkg *domain.Source) map[string]interface{} {
 	return map[string]interface{}{
 		"id":           pkg.ID,
 		"name":         pkg.Name,
@@ -354,8 +354,8 @@ func (s *Server) handleQueryError(w http.ResponseWriter, err error) {
 		return
 	}
 
-	if errors.Is(err, domain.ErrPackageNotFound) {
-		s.writeError(w, http.StatusNotFound, "Package not found")
+	if errors.Is(err, domain.ErrSourceNotFound) {
+		s.writeError(w, http.StatusNotFound, "Source not found")
 		return
 	}
 

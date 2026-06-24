@@ -21,13 +21,13 @@ func TestRoutePath_CollapsesDynamicSegments(t *testing.T) {
 
 	r := mux.NewRouter()
 	r.Use(hm.middleware)
-	r.HandleFunc("/api/v1/packages/{packageId}", func(w http.ResponseWriter, _ *http.Request) {
+	r.HandleFunc("/api/v1/sources/{sourceId}", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}).Methods(http.MethodGet)
 
 	// Three different IDs hitting the same template.
 	for _, id := range []string{"alpha", "beta", "gamma"} {
-		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/packages/"+id, nil)
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/sources/"+id, nil)
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, req)
 		if w.Code != http.StatusOK {
@@ -43,8 +43,8 @@ func TestRoutePath_CollapsesDynamicSegments(t *testing.T) {
 		if count != 3 {
 			t.Errorf("counter value = %d, want 3", count)
 		}
-		if path, ok := attrs.Value("path"); !ok || path.AsString() != "/api/v1/packages/{packageId}" {
-			t.Errorf("path label = %v, want %q", path, "/api/v1/packages/{packageId}")
+		if path, ok := attrs.Value("path"); !ok || path.AsString() != "/api/v1/sources/{sourceId}" {
+			t.Errorf("path label = %v, want %q", path, "/api/v1/sources/{sourceId}")
 		}
 	}
 }

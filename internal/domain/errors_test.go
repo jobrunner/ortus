@@ -34,17 +34,17 @@ func TestQueryError(t *testing.T) {
 		{
 			name: "with layer",
 			err: &QueryError{
-				PackageID: "test-pkg",
-				Layer:     "test-layer",
-				Err:       errors.New("query failed"),
+				SourceID: "test-pkg",
+				Layer:    "test-layer",
+				Err:      errors.New("query failed"),
 			},
 			wantEmpty: false,
 		},
 		{
 			name: "without layer",
 			err: &QueryError{
-				PackageID: "test-pkg",
-				Err:       errors.New("query failed"),
+				SourceID: "test-pkg",
+				Err:      errors.New("query failed"),
 			},
 			wantEmpty: false,
 		},
@@ -104,9 +104,9 @@ func TestStorageError(t *testing.T) {
 
 func TestIndexError(t *testing.T) {
 	err := &IndexError{
-		PackageID: "test-pkg",
-		Layer:     "test-layer",
-		Err:       errors.New("index creation failed"),
+		SourceID: "test-pkg",
+		Layer:    "test-layer",
+		Err:      errors.New("index creation failed"),
 	}
 
 	got := err.Error()
@@ -144,7 +144,7 @@ func TestSentinelErrors(t *testing.T) {
 		err     error
 		wantErr error
 	}{
-		{"ErrPackageNotFound", ErrPackageNotFound, ErrNotFound},
+		{"ErrSourceNotFound", ErrSourceNotFound, ErrNotFound},
 		{"ErrLayerNotFound", ErrLayerNotFound, ErrNotFound},
 		{"ErrInvalidCoordinate", ErrInvalidCoordinate, ErrInvalidInput},
 		{"ErrInvalidSRID", ErrInvalidSRID, ErrInvalidInput},

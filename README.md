@@ -124,7 +124,7 @@ GET /api/v1/query?lon={longitude}&lat={latitude}
 GET /api/v1/query?x={x}&y={y}&srid={srid}
 ```
 
-Query all loaded GeoPackages for features containing the given coordinate.
+Query all loaded sources for features containing the given coordinate.
 
 **Parameters:**
 - `lon` / `lat`: WGS84 coordinates (SRID 4326)
@@ -156,8 +156,8 @@ curl "http://localhost:8080/api/v1/query?lon=13.405&lat=52.52&properties=name,po
   },
   "results": [
     {
-      "package_id": "districts",
-      "package_name": "districts.gpkg",
+      "source_id": "districts",
+      "source_name": "districts.gpkg",
       "features": [
         {
           "id": 42,
@@ -177,35 +177,35 @@ curl "http://localhost:8080/api/v1/query?lon=13.405&lat=52.52&properties=name,po
 }
 ```
 
-#### Query Specific Package
+#### Query Specific Source
 
 ```
-GET /api/v1/query/{packageId}?lon={longitude}&lat={latitude}
+GET /api/v1/query/{sourceId}?lon={longitude}&lat={latitude}
 ```
 
-Query a specific GeoPackage by its ID.
+Query a specific source by its ID.
 
 ```bash
 curl "http://localhost:8080/api/v1/query/districts?lon=13.405&lat=52.52"
 ```
 
-### Package Management
+### Source Management
 
-#### List All Packages
+#### List All Sources
 
 ```
-GET /api/v1/packages
+GET /api/v1/sources
 ```
 
 ```bash
-curl "http://localhost:8080/api/v1/packages"
+curl "http://localhost:8080/api/v1/sources"
 ```
 
 **Response:**
 
 ```json
 {
-  "packages": [
+  "sources": [
     {
       "id": "districts",
       "name": "districts.gpkg",
@@ -220,31 +220,31 @@ curl "http://localhost:8080/api/v1/packages"
 }
 ```
 
-#### Get Package Details
+#### Get Source Details
 
 ```
-GET /api/v1/packages/{packageId}
-```
-
-```bash
-curl "http://localhost:8080/api/v1/packages/districts"
-```
-
-#### Get Package Layers
-
-```
-GET /api/v1/packages/{packageId}/layers
+GET /api/v1/sources/{sourceId}
 ```
 
 ```bash
-curl "http://localhost:8080/api/v1/packages/districts/layers"
+curl "http://localhost:8080/api/v1/sources/districts"
+```
+
+#### Get Source Layers
+
+```
+GET /api/v1/sources/{sourceId}/layers
+```
+
+```bash
+curl "http://localhost:8080/api/v1/sources/districts/layers"
 ```
 
 **Response:**
 
 ```json
 {
-  "package_id": "districts",
+  "source_id": "districts",
   "layers": [
     {
       "name": "districts",
@@ -284,9 +284,9 @@ curl -X POST "http://localhost:8080/api/v1/sync"
 
 ```json
 {
-  "packages_added": 2,
-  "packages_removed": 1,
-  "packages_total": 5,
+  "sources_added": 2,
+  "sources_removed": 1,
+  "sources_total": 5,
   "synced_at": "2025-12-22T12:00:00Z",
   "next_scheduled_at": "2025-12-22T13:00:00Z"
 }
@@ -442,9 +442,9 @@ curl -X POST "http://localhost:8080/api/v1/sync"
 
 ```json
 {
-  "packages_added": 2,
-  "packages_removed": 1,
-  "packages_total": 5,
+  "sources_added": 2,
+  "sources_removed": 1,
+  "sources_total": 5,
   "synced_at": "2025-12-22T12:00:00Z",
   "next_scheduled_at": "2025-12-22T13:00:00Z"
 }
@@ -491,7 +491,7 @@ uses) enable `metrics.otlp.enabled`; the endpoint falls back to
 `tracing.endpoint` when not set explicitly. The HTTP request metrics
 (`ortus_http_requests_total`, `ortus_http_request_duration_seconds`)
 use the matched gorilla/mux route template as the `path` label, so
-dynamic segments like `{packageId}` collapse to a single bounded label
+dynamic segments like `{sourceId}` collapse to a single bounded label
 combination.
 
 ## MCP (AI integration)

@@ -1,5 +1,14 @@
 # Architekturplan - Ortus
 
+> **Historisches Dokument — ursprünglicher Entwurf.** Dieser Plan beschreibt die
+> *geplante* Architektur vor der Umsetzung. Einzelne Code-Snippets und Bezeichner
+> (z. B. `domain.GeoPackage`, `GeoPackagePort`, Datei `ports/input/geopackage.go`)
+> spiegeln den frühen Entwurf wider und weichen vom umgesetzten Stand ab. Maßgeblich
+> für den aktuellen Stand sind der Code, die ADRs (insb. [ADR-0012](adr/0012-source-vocabulary-migration.md):
+> `Package`→`Source`) und die OpenAPI-Spezifikation. Die REST-Routen/JSON-Felder oben
+> wurden auf die `source`-Sprache aktualisiert; die tiefer liegenden Schnittstellen-
+> Snippets sind bewusst als Zeitdokument belassen.
+
 ## 1. Executive Summary
 
 Ortus ist ein Go-basierter Geo-Service mit REST-API, der Punktabfragen auf GeoPackage-Dateien ermöglicht. Der Service nimmt Koordinaten in verschiedenen Projektionen entgegen, führt geometriebasierte Abfragen durch und liefert Features mit Lizenz- und Attributionsinformationen zurück.
@@ -426,10 +435,10 @@ type GeoPackagePort interface {
     // GetPackage gibt ein spezifisches GeoPackage zurück
     GetPackage(ctx context.Context, id string) (*domain.GeoPackage, error)
 
-    // GetPackageLayers gibt die Layer eines GeoPackages zurück
+    // GetPackageLayers gibt die Layer einer Datenquelle zurück
     GetPackageLayers(ctx context.Context, id string) ([]domain.Layer, error)
 
-    // GetPackageMetadata gibt die Metadaten eines GeoPackages zurück
+    // GetPackageMetadata gibt die Metadaten einer Datenquelle zurück
     GetPackageMetadata(ctx context.Context, id string) (*domain.Metadata, error)
 }
 ```
@@ -951,12 +960,12 @@ FileSystem              Watcher              Registry            Repository
 
 | Methode | Pfad | Beschreibung |
 |---------|------|--------------|
-| GET | `/api/v1/query` | Punktabfrage auf allen GeoPackages |
-| GET | `/api/v1/query/{packageId}` | Punktabfrage auf einem GeoPackage |
-| GET | `/api/v1/packages` | Liste aller registrierten GeoPackages |
-| GET | `/api/v1/packages/{packageId}` | Details zu einem GeoPackage |
-| GET | `/api/v1/packages/{packageId}/layers` | Layer eines GeoPackages |
-| GET | `/api/v1/packages/{packageId}/metadata` | Metadaten eines GeoPackages |
+| GET | `/api/v1/query` | Punktabfrage auf allen Datenquellen |
+| GET | `/api/v1/query/{sourceId}` | Punktabfrage auf einer Datenquelle |
+| GET | `/api/v1/sources` | Liste aller registrierten Datenquellen |
+| GET | `/api/v1/sources/{sourceId}` | Details zu einer Datenquelle |
+| GET | `/api/v1/sources/{sourceId}/layers` | Layer einer Datenquelle |
+| GET | `/api/v1/sources/{sourceId}/metadata` | Metadaten einer Datenquelle |
 | GET | `/health/ready` | Readiness-Check |
 | GET | `/health/live` | Liveness-Check |
 | GET | `/metrics` | Prometheus-Metriken |
@@ -986,8 +995,8 @@ Accept: application/json
   },
   "results": [
     {
-      "package_id": "administrative-boundaries",
-      "package_name": "Administrative Grenzen Deutschland",
+      "source_id": "administrative-boundaries",
+      "source_name": "Administrative Grenzen Deutschland",
       "license": {
         "name": "Datenlizenz Deutschland - Namensnennung - Version 2.0",
         "url": "https://www.govdata.de/dl-de/by-2-0",
@@ -1011,8 +1020,8 @@ Accept: application/json
       ]
     },
     {
-      "package_id": "soil-types",
-      "package_name": "Bodenarten",
+      "source_id": "soil-types",
+      "source_name": "Bodenarten",
       "license": {
         "name": "CC BY 4.0",
         "url": "https://creativecommons.org/licenses/by/4.0/",
@@ -1041,7 +1050,7 @@ Accept: application/json
 
 **Request:**
 ```http
-GET /api/v1/packages HTTP/1.1
+GET /api/v1/sources HTTP/1.1
 Host: ortus.example.com
 Accept: application/json
 ```
@@ -1084,7 +1093,7 @@ Host: ortus.example.com
   "checks": {
     "geopackages": {
       "status": "pass",
-      "packages_loaded": 5,
+      "sources_loaded": 5,
       "all_indexed": true
     },
     "storage": {
@@ -1105,7 +1114,7 @@ Host: ortus.example.com
     "geopackages": {
       "status": "fail",
       "message": "Creating spatial indices: 2/5 complete",
-      "packages_loaded": 5,
+      "sources_loaded": 5,
       "all_indexed": false
     }
   }
@@ -1612,7 +1621,7 @@ var (
             Name: "ortus_queries_total",
             Help: "Total number of point queries",
         },
-        []string{"package_id", "status"},
+        []string{"source_id", "status"},
     )
 
     QueryDuration = promauto.NewHistogramVec(
@@ -1621,7 +1630,7 @@ var (
             Help:    "Query duration in seconds",
             Buckets: []float64{.001, .005, .01, .025, .05, .1, .25, .5, 1},
         },
-        []string{"package_id"},
+        []string{"source_id"},
     )
 
     FeaturesReturned = promauto.NewHistogramVec(
@@ -1630,12 +1639,12 @@ var (
             Help:    "Number of features returned per query",
             Buckets: []float64{0, 1, 5, 10, 50, 100, 500, 1000},
         },
-        []string{"package_id"},
+        []string{"source_id"},
     )
 
     // GeoPackage-Metriken
     GeoPackagesLoaded = promauto.NewGauge(prometheus.GaugeOpts{
-        Name: "ortus_geopackages_loaded",
+        Name: "ortus_sources_loaded",
         Help: "Number of loaded GeoPackages",
     })
 
@@ -1650,7 +1659,7 @@ var (
             Help:    "Spatial index creation duration",
             Buckets: []float64{1, 5, 10, 30, 60, 120, 300, 600},
         },
-        []string{"package_id", "layer"},
+        []string{"source_id", "layer"},
     )
 
     // Storage-Metriken

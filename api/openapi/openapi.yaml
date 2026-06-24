@@ -1,11 +1,11 @@
 openapi: 3.0.3
 info:
-  title: Ortus GeoPackage Query API
+  title: Ortus Source Query API
   description: |
-    REST API für die Abfrage von GeoPackage-Dateien mittels Punktkoordinaten.
+    REST API für die Abfrage von Datenquellen mittels Punktkoordinaten.
 
-    Ortus ermöglicht die effiziente räumliche Abfrage von GeoPackage-Daten und unterstützt
-    verschiedene Koordinatensysteme (SRIDs). Die API kann mehrere GeoPackages gleichzeitig
+    Ortus ermöglicht die effiziente räumliche Abfrage von Datenquellen und unterstützt
+    verschiedene Koordinatensysteme (SRIDs). Die API kann mehrere Datenquellen gleichzeitig
     verwalten und abfragen.
 
     ## Koordinatensysteme
@@ -35,9 +35,9 @@ servers:
 
 tags:
   - name: Query
-    description: Räumliche Punktabfragen auf GeoPackages
-  - name: Packages
-    description: GeoPackage-Verwaltung und -Information
+    description: Räumliche Punktabfragen auf Datenquellen
+  - name: Sources
+    description: Datenquellen-Verwaltung und -Information
   - name: Health
     description: Gesundheitsprüfungen und Kubernetes-Probes
 
@@ -46,13 +46,13 @@ paths:
     get:
       tags:
         - Query
-      summary: Alle Pakete abfragen
+      summary: Alle Datenquellen abfragen
       description: |
-        Führt eine Punktabfrage über alle registrierten GeoPackages durch.
+        Führt eine Punktabfrage über alle registrierten Datenquellen durch.
 
         Koordinaten können entweder als `lon/lat` (für WGS84) oder als `x/y`
         (für andere Koordinatensysteme) angegeben werden.
-      operationId: queryAllPackages
+      operationId: queryAllSources
       parameters:
         - $ref: '#/components/parameters/LonParam'
         - $ref: '#/components/parameters/LatParam'
@@ -73,8 +73,8 @@ paths:
                   y: 52.52
                   srid: 4326
                 results:
-                  - package_id: districts
-                    package_name: districts.gpkg
+                  - source_id: districts
+                    source_name: districts.gpkg
                     features:
                       - id: 42
                         layer: districts
@@ -116,15 +116,15 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /query/{packageId}:
+  /query/{sourceId}:
     get:
       tags:
         - Query
-      summary: Spezifisches Paket abfragen
-      description: Führt eine Punktabfrage auf einem bestimmten GeoPackage durch.
-      operationId: queryPackage
+      summary: Spezifische Datenquelle abfragen
+      description: Führt eine Punktabfrage auf einer bestimmten Datenquelle durch.
+      operationId: querySource
       parameters:
-        - $ref: '#/components/parameters/PackageIdParam'
+        - $ref: '#/components/parameters/SourceIdParam'
         - $ref: '#/components/parameters/LonParam'
         - $ref: '#/components/parameters/LatParam'
         - $ref: '#/components/parameters/XParam'
@@ -145,14 +145,14 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '404':
-          description: Paket nicht gefunden
+          description: Datenquelle nicht gefunden
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
               example:
                 error: Not Found
-                message: Package not found
+                message: Source not found
         '500':
           description: Interner Serverfehler
           content:
@@ -160,22 +160,22 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /packages:
+  /sources:
     get:
       tags:
-        - Packages
-      summary: Alle Pakete auflisten
-      description: Gibt eine Liste aller registrierten GeoPackages zurück.
-      operationId: listPackages
+        - Sources
+      summary: Alle Datenquellen auflisten
+      description: Gibt eine Liste aller registrierten Datenquellen zurück.
+      operationId: listSources
       responses:
         '200':
-          description: Liste der Pakete
+          description: Liste der Datenquellen
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PackageList'
+                $ref: '#/components/schemas/SourceList'
               example:
-                packages:
+                sources:
                   - id: districts
                     name: districts.gpkg
                     path: /data/districts.gpkg
@@ -193,24 +193,24 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /packages/{packageId}:
+  /sources/{sourceId}:
     get:
       tags:
-        - Packages
-      summary: Paketdetails abrufen
-      description: Gibt detaillierte Informationen zu einem bestimmten GeoPackage zurück.
-      operationId: getPackage
+        - Sources
+      summary: Datenquellen-Details abrufen
+      description: Gibt detaillierte Informationen zu einer bestimmten Datenquelle zurück.
+      operationId: getSource
       parameters:
-        - $ref: '#/components/parameters/PackageIdParam'
+        - $ref: '#/components/parameters/SourceIdParam'
       responses:
         '200':
-          description: Paketdetails
+          description: Datenquellen-Details
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Package'
+                $ref: '#/components/schemas/Source'
         '404':
-          description: Paket nicht gefunden
+          description: Datenquelle nicht gefunden
           content:
             application/json:
               schema:
@@ -222,15 +222,15 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /packages/{packageId}/layers:
+  /sources/{sourceId}/layers:
     get:
       tags:
-        - Packages
-      summary: Paket-Layer abrufen
-      description: Gibt alle Layer eines bestimmten GeoPackages zurück.
-      operationId: getPackageLayers
+        - Sources
+      summary: Datenquellen-Layer abrufen
+      description: Gibt alle Layer einer bestimmten Datenquelle zurück.
+      operationId: getSourceLayers
       parameters:
-        - $ref: '#/components/parameters/PackageIdParam'
+        - $ref: '#/components/parameters/SourceIdParam'
       responses:
         '200':
           description: Liste der Layer
@@ -239,7 +239,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/LayerList'
               example:
-                package_id: districts
+                source_id: districts
                 layers:
                   - name: districts
                     description: Administrative Bezirke
@@ -255,7 +255,7 @@ paths:
                       max_y: 52.675
                 count: 1
         '404':
-          description: Paket nicht gefunden
+          description: Datenquelle nicht gefunden
           content:
             application/json:
               schema:
@@ -274,7 +274,7 @@ paths:
       summary: Detaillierter Gesundheitsstatus
       description: |
         Gibt detaillierte Informationen über den Gesundheitszustand des Services zurück.
-        Enthält Informationen über geladene Pakete und den Status einzelner Komponenten.
+        Enthält Informationen über geladene Datenquellen und den Status einzelner Komponenten.
       operationId: getHealth
       servers:
         - url: /
@@ -289,8 +289,8 @@ paths:
               example:
                 status: ok
                 ready: true
-                packages_loaded: 3
-                packages_ready: 3
+                sources_loaded: 3
+                sources_ready: 3
                 components:
                   storage: ok
         '503':
@@ -302,8 +302,8 @@ paths:
               example:
                 status: unhealthy
                 ready: false
-                packages_loaded: 0
-                packages_ready: 0
+                sources_loaded: 0
+                sources_ready: 0
                 components:
                   storage: ok
 
@@ -369,11 +369,11 @@ paths:
 
 components:
   parameters:
-    PackageIdParam:
-      name: packageId
+    SourceIdParam:
+      name: sourceId
       in: path
       required: true
-      description: Die eindeutige ID des GeoPackages
+      description: Die eindeutige ID der Datenquelle
       schema:
         type: string
       example: districts
@@ -521,14 +521,14 @@ components:
 
     QueryResult:
       type: object
-      description: Abfrageergebnis für ein einzelnes GeoPackage
+      description: Abfrageergebnis für eine einzelne Datenquelle
       properties:
-        package_id:
+        source_id:
           type: string
-          description: ID des GeoPackages
-        package_name:
+          description: ID der Datenquelle
+        source_name:
           type: string
-          description: Name des GeoPackages
+          description: Name der Datenquelle
         features:
           type: array
           items:
@@ -544,8 +544,8 @@ components:
         license:
           $ref: '#/components/schemas/License'
       required:
-        - package_id
-        - package_name
+        - source_id
+        - source_name
         - features
         - feature_count
         - query_time_ms
@@ -560,7 +560,7 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/QueryResult'
-          description: Ergebnisse pro GeoPackage
+          description: Ergebnisse pro Datenquelle
         total_features:
           type: integer
           description: Gesamtanzahl der gefundenen Features
@@ -598,7 +598,7 @@ components:
 
     Layer:
       type: object
-      description: GeoPackage-Layer
+      description: Datenquellen-Layer
       properties:
         name:
           type: string
@@ -643,9 +643,9 @@ components:
       type: object
       description: Liste von Layern
       properties:
-        package_id:
+        source_id:
           type: string
-          description: ID des GeoPackages
+          description: ID der Datenquelle
         layers:
           type: array
           items:
@@ -654,17 +654,17 @@ components:
           type: integer
           description: Anzahl der Layer
       required:
-        - package_id
+        - source_id
         - layers
         - count
 
-    Package:
+    Source:
       type: object
-      description: GeoPackage-Informationen
+      description: Datenquellen-Informationen
       properties:
         id:
           type: string
-          description: Eindeutige ID des Pakets
+          description: Eindeutige ID der Datenquelle
         name:
           type: string
           description: Anzeigename
@@ -701,19 +701,19 @@ components:
         - indexed
         - ready
 
-    PackageList:
+    SourceList:
       type: object
-      description: Liste von GeoPackages
+      description: Liste von Datenquellen
       properties:
-        packages:
+        sources:
           type: array
           items:
-            $ref: '#/components/schemas/Package'
+            $ref: '#/components/schemas/Source'
         count:
           type: integer
-          description: Anzahl der Pakete
+          description: Anzahl der Datenquellen
       required:
-        - packages
+        - sources
         - count
 
     HealthStatus:
@@ -728,12 +728,12 @@ components:
         ready:
           type: boolean
           description: Service ist bereit für Anfragen
-        packages_loaded:
+        sources_loaded:
           type: integer
-          description: Anzahl geladener Pakete
-        packages_ready:
+          description: Anzahl geladener Datenquellen
+        sources_ready:
           type: integer
-          description: Anzahl abfragebereiter Pakete
+          description: Anzahl abfragebereiter Datenquellen
         components:
           type: object
           additionalProperties:
@@ -742,8 +742,8 @@ components:
       required:
         - status
         - ready
-        - packages_loaded
-        - packages_ready
+        - sources_loaded
+        - sources_ready
 
     SimpleStatus:
       type: object

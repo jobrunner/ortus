@@ -38,29 +38,29 @@ func (s *HealthService) IsReady(ctx context.Context) bool {
 	ctx, span := s.tracer.Start(ctx, "HealthService.IsReady")
 	defer span.End()
 
-	packages, err := s.registry.ListSources(ctx)
+	sources, err := s.registry.ListSources(ctx)
 	if err != nil {
 		span.RecordError(err)
-		span.SetStatus(output.StatusError, "list packages failed")
+		span.SetStatus(output.StatusError, "list sources failed")
 		span.SetAttributes(output.Bool("health.ready", false))
 		return false
 	}
 
-	span.SetAttributes(output.Int("health.packages_total", len(packages)))
+	span.SetAttributes(output.Int("health.sources_total", len(sources)))
 
-	// Ready if at least one package is ready
-	for _, pkg := range packages {
-		if pkg.IsReady() {
-			span.SetAttributes(output.Bool("health.ready", true), output.String("health.reason", "package_ready"))
+	// Ready if at least one source is ready
+	for _, src := range sources {
+		if src.IsReady() {
+			span.SetAttributes(output.Bool("health.ready", true), output.String("health.reason", "source_ready"))
 			return true
 		}
 	}
 
-	// Also ready if no packages are configured (empty state)
-	ready := len(packages) == 0
-	reason := "no_packages"
+	// Also ready if no sources are configured (empty state)
+	ready := len(sources) == 0
+	reason := "no_sources"
 	if !ready {
-		reason = "no_ready_packages"
+		reason = "no_ready_sources"
 	}
 	span.SetAttributes(output.Bool("health.ready", ready), output.String("health.reason", reason))
 	return ready
@@ -71,12 +71,12 @@ func (s *HealthService) GetHealthDetails(ctx context.Context) input.HealthDetail
 	ctx, span := s.tracer.Start(ctx, "HealthService.GetHealthDetails")
 	defer span.End()
 
-	packages, _ := s.registry.ListSources(ctx)
+	sources, _ := s.registry.ListSources(ctx)
 
-	loaded := len(packages)
+	loaded := len(sources)
 	ready := 0
-	for _, pkg := range packages {
-		if pkg.IsReady() {
+	for _, src := range sources {
+		if src.IsReady() {
 			ready++
 		}
 	}
@@ -86,16 +86,16 @@ func (s *HealthService) GetHealthDetails(ctx context.Context) input.HealthDetail
 	}
 
 	span.SetAttributes(
-		output.Int("health.packages_loaded", loaded),
-		output.Int("health.packages_ready", ready),
+		output.Int("health.sources_loaded", loaded),
+		output.Int("health.sources_ready", ready),
 	)
 
 	return input.HealthDetails{
-		Healthy:        s.IsHealthy(ctx),
-		Ready:          s.IsReady(ctx),
-		PackagesLoaded: loaded,
-		PackagesReady:  ready,
-		Components:     components,
+		Healthy:       s.IsHealthy(ctx),
+		Ready:         s.IsReady(ctx),
+		SourcesLoaded: loaded,
+		SourcesReady:  ready,
+		Components:    components,
 	}
 }
 
@@ -111,18 +111,18 @@ func (s *HealthService) GetSourceHealth(ctx context.Context) []SourceHealth {
 	ctx, span := s.tracer.Start(ctx, "HealthService.GetSourceHealth")
 	defer span.End()
 
-	packages, _ := s.registry.ListSources(ctx)
+	sources, _ := s.registry.ListSources(ctx)
 
-	health := make([]SourceHealth, len(packages))
-	for i, pkg := range packages {
-		status, _ := s.registry.GetSourceStatus(ctx, pkg.ID)
+	health := make([]SourceHealth, len(sources))
+	for i, src := range sources {
+		status, _ := s.registry.GetSourceStatus(ctx, src.ID)
 		health[i] = SourceHealth{
-			ID:     pkg.ID,
+			ID:     src.ID,
 			Status: status,
-			Ready:  pkg.IsReady(),
+			Ready:  src.IsReady(),
 		}
 	}
 
-	span.SetAttributes(output.Int("health.packages.count", len(health)))
+	span.SetAttributes(output.Int("health.sources.count", len(health)))
 	return health
 }

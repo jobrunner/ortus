@@ -52,7 +52,7 @@ func (m *mockRepository) GetLayers(_ context.Context, packageID string) ([]domai
 			return pkg.Layers, nil
 		}
 	}
-	return nil, domain.ErrPackageNotFound
+	return nil, domain.ErrSourceNotFound
 }
 
 func (m *mockRepository) QueryPoint(_ context.Context, packageID, layerName string, _ domain.Coordinate) ([]domain.Feature, error) {

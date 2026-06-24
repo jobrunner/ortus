@@ -108,8 +108,8 @@ func TestRegistry_QueryUnknownSource(t *testing.T) {
 	reg := newRoutingRegistry([]output.SpatialSource{&extProvider{ext: ".gpkg", tag: "vector"}})
 
 	_, err := reg.Query(context.Background(), "missing", "l", domain.NewWGS84Coordinate(1, 1))
-	if err != domain.ErrPackageNotFound {
-		t.Errorf("err = %v, want ErrPackageNotFound", err)
+	if err != domain.ErrSourceNotFound {
+		t.Errorf("err = %v, want ErrSourceNotFound", err)
 	}
 }
 
@@ -126,8 +126,8 @@ func TestRegistry_QueryEntryWithoutRepo(t *testing.T) {
 	reg.mu.Unlock()
 
 	_, err := reg.Query(context.Background(), "broken", "l", domain.NewWGS84Coordinate(1, 1))
-	if err != domain.ErrPackageNotFound {
-		t.Errorf("err = %v, want ErrPackageNotFound", err)
+	if err != domain.ErrSourceNotFound {
+		t.Errorf("err = %v, want ErrSourceNotFound", err)
 	}
 }
 

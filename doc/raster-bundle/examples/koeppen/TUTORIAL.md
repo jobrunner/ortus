@@ -175,7 +175,7 @@ Check readiness and that the source is listed:
 
 ```bash
 curl -s localhost:8099/health/ready          # {"status":"ok"}
-curl -s localhost:8099/api/v1/packages        # id=koeppen-geiger-1980-2016, ready:true
+curl -s localhost:8099/api/v1/sources        # id=koeppen-geiger-1980-2016, ready:true
 ```
 
 ## Step 7 — Verify with point queries
@@ -208,8 +208,8 @@ attributes land in `properties`, and the license/attribution is carried through:
 {
   "coordinate": {"srid": 4326, "x": 13.4, "y": 52.5},
   "results": [{
-    "package_id": "koeppen-geiger-1980-2016",
-    "package_name": "Köppen-Geiger climate classification 1980–2016 (Beck et al. 2018, V1)",
+    "source_id": "koeppen-geiger-1980-2016",
+    "source_name": "Köppen-Geiger climate classification 1980–2016 (Beck et al. 2018, V1)",
     "features": [{
       "id": 26, "layer": "classification",
       "properties": {"code": "Dfb", "description": "Cold, no dry season, warm summer",

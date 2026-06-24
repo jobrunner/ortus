@@ -54,8 +54,8 @@ func (l *License) String() string {
 
 // QueryResult represents the result of a point query.
 type QueryResult struct {
-	PackageID   string        // GeoPackage identifier
-	PackageName string        // GeoPackage display name
+	SourceID    string        // source identifier
+	SourceName  string        // source display name
 	Features    []Feature     // Found features
 	License     License       // License information
 	Attribution string        // Attribution text
@@ -77,12 +77,12 @@ type QueryRequest struct {
 	Coordinate Coordinate // Query coordinate
 	SourceSRID int        // Source coordinate system
 	Properties []string   // Properties to return (empty = all)
-	PackageID  string     // Specific package (empty = all)
+	SourceID   string     // Specific source (empty = all)
 }
 
 // QueryResponse represents the full query response.
 type QueryResponse struct {
-	Results        []QueryResult // Results per GeoPackage
+	Results        []QueryResult // Results per source
 	TotalFeatures  int           // Total feature count
 	ProcessingTime time.Duration // Total processing time
 	Coordinate     Coordinate    // Queried coordinate

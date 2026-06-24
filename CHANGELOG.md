@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (BREAKING — public API & MCP vocabulary, ADR-0012 Stage C)
+- **HTTP API:** routes `/api/v1/packages*` → `/api/v1/sources*` (`/sources`,
+  `/sources/{id}`, `/sources/{id}/layers`); the `{packageId}` path parameter is now
+  `{sourceId}`. JSON keys `package_id`/`package_name` → `source_id`/`source_name`,
+  the source-list key `packages` → `sources`, health `packages_{loaded,ready}` →
+  `sources_{loaded,ready}`, and sync `packages_{added,removed,total}` →
+  `sources_{added,removed,total}`.
+- **MCP tools:** `list_packages`/`get_package`/`get_package_layers` →
+  `list_sources`/`get_source`/`get_source_layers`; the `package_id` tool argument →
+  `source_id`.
+- **Domain:** `QueryResult.PackageID/PackageName` → `SourceID/SourceName`,
+  `QueryRequest.PackageID` → `SourceID`, `domain.ErrPackageNotFound` →
+  `ErrSourceNotFound`.
+- Clean hard rename with **no compatibility shim** — no `/api/v2`, no dual-output,
+  no MCP tool aliases: the service is not yet deployed, so the old names are removed
+  outright. The embedded OpenAPI spec, Swagger UI, and query frontend are updated to
+  match. This completes ADR-0012; the codebase, observability, API and MCP now speak
+  `source` uniformly.
+
 ### Changed (internal vocabulary + observability — ADR-0012 Stage A+B)
 - Renamed the source abstraction from "Package" to "Source" across the
   application core: `PackageRegistry`→`SourceRegistry`, `LoadPackage`/
@@ -19,11 +38,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `PackageRegistry.*`→`SourceRegistry.*`, span attributes `ortus.package.*`→
   `ortus.source.*` (now consistent across the GeoPackage *and* raster adapters),
   metrics `ortus.packages.{loaded,ready}`→`ortus.sources.{loaded,ready}`.
-- **No functional or public-API change:** HTTP request/response shape (incl.
-  `package_id`/`package_name`/`/api/v1/packages`) and MCP tool names
-  (`list_packages`/`get_package`/…) are unchanged — that breaking rename is a
-  separate, versioned step (ADR-0012 Stage C). Verified: full suite, including
-  the span-name contract test and HTTP/MCP tests, stays green.
+- **Public API/MCP left unchanged in Stage A+B** — the breaking public rename is
+  the Stage C entry above, now landing in the same release. Verified: full suite,
+  including the span-name contract test and HTTP/MCP tests, stays green.
 
 ### Fixed
 - **Hot-reload served stale data.** A file-watcher *modify* event reloaded a

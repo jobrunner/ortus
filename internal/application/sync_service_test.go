@@ -33,8 +33,8 @@ func TestSyncService_RateLimiting(t *testing.T) {
 	if err != nil {
 		t.Errorf("first sync should succeed, got error: %v", err)
 	}
-	if result.PackagesAdded != 0 {
-		t.Errorf("expected 0 packages added with empty storage, got %d", result.PackagesAdded)
+	if result.SourcesAdded != 0 {
+		t.Errorf("expected 0 sources added with empty storage, got %d", result.SourcesAdded)
 	}
 
 	// Immediate second call should be rate limited
@@ -92,7 +92,7 @@ func TestSyncService_Interval(t *testing.T) {
 	}
 }
 
-func TestSyncService_SyncAddsNewPackages(t *testing.T) {
+func TestSyncService_SyncAddsNewSources(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 
 	// Create storage with some mock objects
@@ -116,16 +116,16 @@ func TestSyncService_SyncAddsNewPackages(t *testing.T) {
 
 	ctx := context.Background()
 
-	// First sync should add packages
+	// First sync should add sources
 	result, err := service.TriggerSync(ctx)
 	if err != nil {
 		t.Fatalf("sync failed: %v", err)
 	}
-	if result.PackagesAdded != 2 {
-		t.Errorf("expected 2 packages added, got %d", result.PackagesAdded)
+	if result.SourcesAdded != 2 {
+		t.Errorf("expected 2 sources added, got %d", result.SourcesAdded)
 	}
-	if result.PackagesTotal != 2 {
-		t.Errorf("expected 2 total packages, got %d", result.PackagesTotal)
+	if result.SourcesTotal != 2 {
+		t.Errorf("expected 2 total sources, got %d", result.SourcesTotal)
 	}
 }
 
@@ -141,16 +141,16 @@ func TestRegistry_IsLoaded(t *testing.T) {
 	}
 
 	// Initially not loaded
-	if registry.IsLoaded("test-package") {
-		t.Error("expected package to not be loaded initially")
+	if registry.IsLoaded("test-source") {
+		t.Error("expected source to not be loaded initially")
 	}
 
-	// Add a package manually
-	registry.sources["test-package"] = &sourceEntry{}
+	// Add a source manually
+	registry.sources["test-source"] = &sourceEntry{}
 
 	// Now it should be loaded
-	if !registry.IsLoaded("test-package") {
-		t.Error("expected package to be loaded after adding")
+	if !registry.IsLoaded("test-source") {
+		t.Error("expected source to be loaded after adding")
 	}
 }
 
@@ -166,21 +166,21 @@ func TestRegistry_SourceCount(t *testing.T) {
 	}
 
 	if registry.SourceCount() != 0 {
-		t.Errorf("expected 0 packages, got %d", registry.SourceCount())
+		t.Errorf("expected 0 sources, got %d", registry.SourceCount())
 	}
 
 	registry.sources["pkg1"] = &sourceEntry{}
 	registry.sources["pkg2"] = &sourceEntry{}
 
 	if registry.SourceCount() != 2 {
-		t.Errorf("expected 2 packages, got %d", registry.SourceCount())
+		t.Errorf("expected 2 sources, got %d", registry.SourceCount())
 	}
 }
 
-func TestRegistry_SyncRemovesDeletedPackages(t *testing.T) {
+func TestRegistry_SyncRemovesDeletedSources(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 
-	// Create storage with two packages initially
+	// Create storage with two sources initially
 	storage := &mockStorage{
 		objects: []output.StorageObject{
 			{Key: "test1.gpkg"},
@@ -199,40 +199,40 @@ func TestRegistry_SyncRemovesDeletedPackages(t *testing.T) {
 
 	ctx := context.Background()
 
-	// First sync should add both packages
+	// First sync should add both sources
 	stats, err := registry.Sync(ctx)
 	if err != nil {
 		t.Fatalf("first sync failed: %v", err)
 	}
 	if stats.Added != 2 {
-		t.Errorf("expected 2 packages added, got %d", stats.Added)
+		t.Errorf("expected 2 sources added, got %d", stats.Added)
 	}
 	if stats.Removed != 0 {
-		t.Errorf("expected 0 packages removed, got %d", stats.Removed)
+		t.Errorf("expected 0 sources removed, got %d", stats.Removed)
 	}
 
-	// Remove one package from storage
+	// Remove one source from storage
 	storage.objects = []output.StorageObject{
 		{Key: "test1.gpkg"},
 	}
 
-	// Second sync should remove the deleted package
+	// Second sync should remove the deleted source
 	stats, err = registry.Sync(ctx)
 	if err != nil {
 		t.Fatalf("second sync failed: %v", err)
 	}
 	if stats.Added != 0 {
-		t.Errorf("expected 0 packages added, got %d", stats.Added)
+		t.Errorf("expected 0 sources added, got %d", stats.Added)
 	}
 	if stats.Removed != 1 {
-		t.Errorf("expected 1 package removed, got %d", stats.Removed)
+		t.Errorf("expected 1 source removed, got %d", stats.Removed)
 	}
 	if registry.SourceCount() != 1 {
-		t.Errorf("expected 1 total package, got %d", registry.SourceCount())
+		t.Errorf("expected 1 total source, got %d", registry.SourceCount())
 	}
 }
 
-func TestRegistry_FindPackagesToRemove(t *testing.T) {
+func TestRegistry_FindSourcesToRemove(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 
 	registry := &SourceRegistry{
@@ -243,28 +243,28 @@ func TestRegistry_FindPackagesToRemove(t *testing.T) {
 		tracer:    output.NoOpTracer{},
 	}
 
-	// Add some packages locally
+	// Add some sources locally
 	registry.sources["pkg1"] = &sourceEntry{}
 	registry.sources["pkg2"] = &sourceEntry{}
 	registry.sources["pkg3"] = &sourceEntry{}
 
 	// Only pkg1 and pkg3 are in remote
-	remotePackages := map[string]string{
+	remoteSources := map[string]string{
 		"pkg1": "pkg1.gpkg",
 		"pkg3": "pkg3.gpkg",
 	}
 
-	toRemove := registry.findPackagesToRemove(remotePackages)
+	toRemove := registry.findSourcesToRemove(remoteSources)
 
 	if len(toRemove) != 1 {
-		t.Errorf("expected 1 package to remove, got %d", len(toRemove))
+		t.Errorf("expected 1 source to remove, got %d", len(toRemove))
 	}
 	if len(toRemove) > 0 && toRemove[0].id != "pkg2" {
 		t.Errorf("expected pkg2 to be removed, got %s", toRemove[0].id)
 	}
 }
 
-func TestDerivePackageID(t *testing.T) {
+func TestDeriveSourceID(t *testing.T) {
 	tests := []struct {
 		name     string
 		path     string

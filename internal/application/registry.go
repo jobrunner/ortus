@@ -100,7 +100,7 @@ func (r *SourceRegistry) LoadSource(ctx context.Context, path string) error {
 	)
 	defer span.End()
 
-	r.logger.Info("loading package", "path", path)
+	r.logger.Info("loading source", "path", path)
 
 	// Reload semantics: if this source is already loaded (e.g. a file-watcher
 	// modify event), unload it first. Otherwise the adapter would return its
@@ -121,25 +121,25 @@ func (r *SourceRegistry) LoadSource(ctx context.Context, path string) error {
 		return err
 	}
 
-	// Open the package
-	pkg, err := provider.Open(ctx, path)
+	// Open the source
+	src, err := provider.Open(ctx, path)
 	if err != nil {
-		r.logger.Error("failed to open package", "path", path, "error", err)
+		r.logger.Error("failed to open source", "path", path, "error", err)
 		span.RecordError(err)
 		span.SetStatus(output.StatusError, "open failed")
 		return err
 	}
 
 	span.SetAttributes(
-		output.String("ortus.source.id", pkg.ID),
-		output.String("ortus.source.kind", string(pkg.Kind)),
-		output.Int("ortus.layers.count", len(pkg.Layers)),
+		output.String("ortus.source.id", src.ID),
+		output.String("ortus.source.kind", string(src.Kind)),
+		output.Int("ortus.layers.count", len(src.Layers)),
 	)
 
-	// Register the package
+	// Register the source
 	r.mu.Lock()
-	r.sources[pkg.ID] = &sourceEntry{
-		Source: pkg,
+	r.sources[src.ID] = &sourceEntry{
+		Source: src,
 		Repo:   provider,
 		Status: domain.StatusIndexing,
 	}
@@ -147,10 +147,10 @@ func (r *SourceRegistry) LoadSource(ctx context.Context, path string) error {
 
 	// Prepare all layers (builds spatial indices for vector sources; a no-op
 	// for sources that are ready on open).
-	for _, layer := range pkg.Layers {
-		r.logger.Debug("preparing layer", "package", pkg.ID, "layer", layer.Name)
-		if err := provider.Prepare(ctx, pkg.ID, layer.Name); err != nil {
-			r.logger.Warn("failed to prepare layer", "package", pkg.ID, "layer", layer.Name, "error", err)
+	for _, layer := range src.Layers {
+		r.logger.Debug("preparing layer", "source", src.ID, "layer", layer.Name)
+		if err := provider.Prepare(ctx, src.ID, layer.Name); err != nil {
+			r.logger.Warn("failed to prepare layer", "source", src.ID, "layer", layer.Name, "error", err)
 			span.AddEvent("layer preparation failed",
 				output.String("ortus.layer.name", layer.Name),
 				output.String("error", err.Error()),
@@ -162,7 +162,7 @@ func (r *SourceRegistry) LoadSource(ctx context.Context, path string) error {
 	// (Prepare updates each layer's HasIndex), not an unconditional assumption —
 	// a failed Prepare leaves its layer unindexed and the source not fully ready.
 	r.mu.Lock()
-	if entry, ok := r.sources[pkg.ID]; ok {
+	if entry, ok := r.sources[src.ID]; ok {
 		entry.Status = domain.StatusReady
 		entry.Source.LoadedAt = time.Now()
 		entry.Source.Indexed = allLayersIndexed(entry.Source.Layers)
@@ -170,7 +170,7 @@ func (r *SourceRegistry) LoadSource(ctx context.Context, path string) error {
 	r.mu.Unlock()
 
 	r.updateMetrics()
-	r.logger.Info("package loaded", "id", pkg.ID, "layers", len(pkg.Layers))
+	r.logger.Info("source loaded", "id", src.ID, "layers", len(src.Layers))
 	span.SetStatus(output.StatusOK, "")
 
 	return nil
@@ -183,7 +183,7 @@ func (r *SourceRegistry) UnloadSource(ctx context.Context, sourceID string) erro
 	)
 	defer span.End()
 
-	r.logger.Info("unloading package", "id", sourceID)
+	r.logger.Info("unloading source", "id", sourceID)
 
 	r.mu.Lock()
 	entry, ok := r.sources[sourceID]
@@ -204,7 +204,7 @@ func (r *SourceRegistry) UnloadSource(ctx context.Context, sourceID string) erro
 	r.mu.Unlock()
 
 	if err := repo.Close(ctx, sourceID); err != nil {
-		r.logger.Error("failed to close package", "id", sourceID, "error", err)
+		r.logger.Error("failed to close source", "id", sourceID, "error", err)
 		span.RecordError(err)
 		span.SetStatus(output.StatusError, "close failed")
 		return err
@@ -251,7 +251,7 @@ func (r *SourceRegistry) Query(ctx context.Context, sourceID, layer string, coor
 	if !ok || entry.Repo == nil {
 		// entry.Repo is always set by LoadSource; guard anyway so a
 		// malformed entry surfaces a clean error instead of a nil panic.
-		return nil, domain.ErrPackageNotFound
+		return nil, domain.ErrSourceNotFound
 	}
 	return entry.Repo.QueryPoint(ctx, sourceID, layer, coord)
 }
@@ -285,9 +285,9 @@ func (r *SourceRegistry) GetSource(ctx context.Context, id string) (*domain.Sour
 
 	entry, ok := r.sources[id]
 	if !ok {
-		span.RecordError(domain.ErrPackageNotFound)
-		span.SetStatus(output.StatusError, "package not found")
-		return nil, domain.ErrPackageNotFound
+		span.RecordError(domain.ErrSourceNotFound)
+		span.SetStatus(output.StatusError, "source not found")
+		return nil, domain.ErrSourceNotFound
 	}
 
 	return entry.Source, nil
@@ -305,16 +305,16 @@ func (r *SourceRegistry) GetSourceStatus(ctx context.Context, id string) (domain
 
 	entry, ok := r.sources[id]
 	if !ok {
-		span.RecordError(domain.ErrPackageNotFound)
-		span.SetStatus(output.StatusError, "package not found")
-		return "", domain.ErrPackageNotFound
+		span.RecordError(domain.ErrSourceNotFound)
+		span.SetStatus(output.StatusError, "source not found")
+		return "", domain.ErrSourceNotFound
 	}
 
 	span.SetAttributes(output.String("ortus.source.status", string(entry.Status)))
 	return entry.Status, nil
 }
 
-// IsReady returns true if a package is ready for queries.
+// IsReady returns true if a source is ready for queries.
 func (r *SourceRegistry) IsReady(sourceID string) bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -327,7 +327,7 @@ func (r *SourceRegistry) IsReady(sourceID string) bool {
 	return entry.Status == domain.StatusReady
 }
 
-// ReadySourceIDs returns IDs of all ready packages.
+// ReadySourceIDs returns IDs of all ready sources.
 func (r *SourceRegistry) ReadySourceIDs() []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -365,7 +365,7 @@ func (r *SourceRegistry) LoadAll(ctx context.Context) error {
 	ctx, span := r.tracer.Start(ctx, "SourceRegistry.LoadAll")
 	defer span.End()
 
-	r.logger.Info("loading all packages from storage")
+	r.logger.Info("loading all sources from storage")
 
 	objects, err := r.storage.List(ctx)
 	if err != nil {
@@ -387,13 +387,13 @@ func (r *SourceRegistry) LoadAll(ctx context.Context) error {
 			continue
 		}
 		if err := r.storage.Download(ctx, obj.Key, localPath); err != nil {
-			r.logger.Error("failed to download package", "key", obj.Key, "error", err)
+			r.logger.Error("failed to download source", "key", obj.Key, "error", err)
 			failed++
 			continue
 		}
 
 		if err := r.LoadSource(ctx, localPath); err != nil {
-			r.logger.Error("failed to load package", "path", localPath, "error", err)
+			r.logger.Error("failed to load source", "path", localPath, "error", err)
 			failed++
 			continue
 		}
@@ -408,7 +408,7 @@ func (r *SourceRegistry) LoadAll(ctx context.Context) error {
 	return nil
 }
 
-// IsLoaded returns true if a package with the given ID is already loaded.
+// IsLoaded returns true if a source with the given ID is already loaded.
 func (r *SourceRegistry) IsLoaded(sourceID string) bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -416,7 +416,7 @@ func (r *SourceRegistry) IsLoaded(sourceID string) bool {
 	return ok
 }
 
-// SourceCount returns the number of loaded packages.
+// SourceCount returns the number of loaded sources.
 func (r *SourceRegistry) SourceCount() int {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -429,14 +429,14 @@ type SyncStats struct {
 	Removed int
 }
 
-// Sync synchronizes with remote storage, downloading new packages and removing
-// packages that no longer exist in remote storage.
-// Returns statistics about added and removed packages.
+// Sync synchronizes with remote storage, downloading new sources and removing
+// sources that no longer exist in remote storage.
+// Returns statistics about added and removed sources.
 func (r *SourceRegistry) Sync(ctx context.Context) (SyncStats, error) {
 	ctx, span := r.tracer.Start(ctx, "SourceRegistry.Sync")
 	defer span.End()
 
-	r.logger.Info("syncing packages from storage")
+	r.logger.Info("syncing sources from storage")
 
 	objects, err := r.storage.List(ctx)
 	if err != nil {
@@ -445,34 +445,34 @@ func (r *SourceRegistry) Sync(ctx context.Context) (SyncStats, error) {
 		return SyncStats{}, err
 	}
 
-	// Build set of remote package IDs
-	remotePackages := make(map[string]string) // sourceID -> objectKey
+	// Build set of remote source IDs
+	remoteSources := make(map[string]string) // sourceID -> objectKey
 	for _, obj := range objects {
 		sourceID := deriveSourceID(obj.Key)
-		remotePackages[sourceID] = obj.Key
+		remoteSources[sourceID] = obj.Key
 	}
 
 	stats := SyncStats{}
-	stats.Added = r.syncAddNew(ctx, remotePackages)
+	stats.Added = r.syncAddNew(ctx, remoteSources)
 
-	// Remove packages that no longer exist in remote storage
-	// We capture both ID and path in findPackagesToRemove to avoid race conditions
-	packagesToRemove := r.findPackagesToRemove(remotePackages)
-	for _, pkg := range packagesToRemove {
-		r.logger.Info("removing package not in remote storage", "id", pkg.id)
+	// Remove sources that no longer exist in remote storage
+	// We capture both ID and path in findSourcesToRemove to avoid race conditions
+	sourcesToRemove := r.findSourcesToRemove(remoteSources)
+	for _, src := range sourcesToRemove {
+		r.logger.Info("removing source not in remote storage", "id", src.id)
 
-		// Unload the package
-		if err := r.UnloadSource(ctx, pkg.id); err != nil {
-			r.logger.Error("failed to unload removed package", "id", pkg.id, "error", err)
+		// Unload the source
+		if err := r.UnloadSource(ctx, src.id); err != nil {
+			r.logger.Error("failed to unload removed source", "id", src.id, "error", err)
 			continue
 		}
 
 		// Delete local cache file
-		if pkg.path != "" {
-			if err := os.Remove(pkg.path); err != nil && !os.IsNotExist(err) {
-				r.logger.Warn("failed to delete local cache file", "path", pkg.path, "error", err)
+		if src.path != "" {
+			if err := os.Remove(src.path); err != nil && !os.IsNotExist(err) {
+				r.logger.Warn("failed to delete local cache file", "path", src.path, "error", err)
 			} else {
-				r.logger.Debug("deleted local cache file", "path", pkg.path)
+				r.logger.Debug("deleted local cache file", "path", src.path)
 			}
 		}
 
@@ -492,11 +492,11 @@ func (r *SourceRegistry) Sync(ctx context.Context) (SyncStats, error) {
 // syncAddNew downloads and loads every remote source not already loaded,
 // returning the number added. Unsafe object keys and download/load failures are
 // logged and skipped (one bad source must not abort the whole sync).
-func (r *SourceRegistry) syncAddNew(ctx context.Context, remotePackages map[string]string) int {
+func (r *SourceRegistry) syncAddNew(ctx context.Context, remoteSources map[string]string) int {
 	added := 0
-	for sourceID, objectKey := range remotePackages {
+	for sourceID, objectKey := range remoteSources {
 		if r.IsLoaded(sourceID) {
-			r.logger.Debug("package already loaded, skipping", "id", sourceID)
+			r.logger.Debug("source already loaded, skipping", "id", sourceID)
 			continue
 		}
 		localPath, err := r.safeLocalPath(objectKey)
@@ -505,39 +505,39 @@ func (r *SourceRegistry) syncAddNew(ctx context.Context, remotePackages map[stri
 			continue
 		}
 		if err := r.storage.Download(ctx, objectKey, localPath); err != nil {
-			r.logger.Error("failed to download package", "key", objectKey, "error", err)
+			r.logger.Error("failed to download source", "key", objectKey, "error", err)
 			continue
 		}
 		if err := r.LoadSource(ctx, localPath); err != nil {
-			r.logger.Error("failed to load package", "path", localPath, "error", err)
+			r.logger.Error("failed to load source", "path", localPath, "error", err)
 			continue
 		}
 		added++
-		r.logger.Info("new package synced", "id", sourceID)
+		r.logger.Info("new source synced", "id", sourceID)
 	}
 	return added
 }
 
-// packageToRemove holds information about a package that should be removed.
-type packageToRemove struct {
+// sourceToRemove holds information about a source that should be removed.
+type sourceToRemove struct {
 	id   string
 	path string
 }
 
-// findPackagesToRemove returns packages that are loaded but not in remote storage.
+// findSourcesToRemove returns sources that are loaded but not in remote storage.
 // This captures both ID and path in a single lock acquisition to avoid race conditions.
-func (r *SourceRegistry) findPackagesToRemove(remotePackages map[string]string) []packageToRemove {
+func (r *SourceRegistry) findSourcesToRemove(remoteSources map[string]string) []sourceToRemove {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	var toRemove []packageToRemove
+	var toRemove []sourceToRemove
 	for sourceID, entry := range r.sources {
-		if _, exists := remotePackages[sourceID]; !exists {
+		if _, exists := remoteSources[sourceID]; !exists {
 			path := ""
 			if entry.Source != nil {
 				path = entry.Source.Path
 			}
-			toRemove = append(toRemove, packageToRemove{id: sourceID, path: path})
+			toRemove = append(toRemove, sourceToRemove{id: sourceID, path: path})
 		}
 	}
 	return toRemove

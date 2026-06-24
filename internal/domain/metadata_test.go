@@ -221,12 +221,12 @@ func TestQueryResponseAddResult(t *testing.T) {
 	response := &QueryResponse{}
 
 	result1 := QueryResult{
-		PackageID: "pkg1",
-		Features:  []Feature{{ID: 1}, {ID: 2}},
+		SourceID: "pkg1",
+		Features: []Feature{{ID: 1}, {ID: 2}},
 	}
 	result2 := QueryResult{
-		PackageID: "pkg2",
-		Features:  []Feature{{ID: 3}},
+		SourceID: "pkg2",
+		Features: []Feature{{ID: 3}},
 	}
 
 	response.AddResult(result1)
@@ -250,7 +250,7 @@ func TestQueryResponseAddResult(t *testing.T) {
 
 func TestQueryResultWithQueryTime(t *testing.T) {
 	result := QueryResult{
-		PackageID: "test-pkg",
+		SourceID:  "test-pkg",
 		Features:  []Feature{{ID: 1}},
 		QueryTime: 100 * time.Millisecond,
 	}

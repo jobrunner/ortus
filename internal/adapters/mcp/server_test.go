@@ -166,7 +166,7 @@ func TestToolsRegistered(t *testing.T) {
 		// Diagnostic
 		"list_traces", "get_trace", "list_active_spans", "tracing_stats", "health",
 		// Query
-		"query_point", "list_packages", "get_package", "get_package_layers",
+		"query_point", "list_sources", "get_source", "get_source_layers",
 	}
 	have := map[string]bool{}
 	for _, tt := range list.Tools {
@@ -210,16 +210,16 @@ func TestHealthTool(t *testing.T) {
 	}
 }
 
-// TestListSourcesTool round-trips list_packages and asserts the
+// TestListSourcesTool round-trips list_sources and asserts the
 // response shape matches what doc/MCP.md promises.
 func TestListSourcesTool(t *testing.T) {
 	session := connectClient(t, startTestServer(t, ""))
-	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "list_packages"})
+	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "list_sources"})
 	if err != nil {
-		t.Fatalf("CallTool list_packages: %v", err)
+		t.Fatalf("CallTool list_sources: %v", err)
 	}
 	if res.IsError {
-		t.Fatalf("list_packages returned IsError; content=%v", res.Content)
+		t.Fatalf("list_sources returned IsError; content=%v", res.Content)
 	}
 }
 

@@ -19,7 +19,7 @@ import (
 type stubRepo struct{}
 
 func (stubRepo) Open(_ context.Context, _ string) (*domain.Source, error) {
-	return nil, domain.ErrPackageNotFound
+	return nil, domain.ErrSourceNotFound
 }
 func (stubRepo) Close(_ context.Context, _ string) error      { return nil }
 func (stubRepo) Supports(_ string) bool                       { return true }
