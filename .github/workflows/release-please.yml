@@ -1,0 +1,40 @@
+# Release automation via release-please.
+#
+# On every push to master, release-please inspects the Conventional Commits
+# since the last release and maintains a "release PR" that:
+#   - bumps the VERSION file (generic updater, x-release-please-version marker),
+#   - cuts CHANGELOG.md ([Unreleased]-style accumulation → a versioned section),
+#   - and, when merged, tags vX.Y.Z + creates the GitHub Release.
+#
+# This replaces the manual "bump VERSION + edit CHANGELOG" dance (and the custom
+# version-bump gate that used to enforce it on every PR).
+#
+# NOTE: tags pushed with GITHUB_TOKEN do NOT trigger other workflows. So the
+# goreleaser `release.yml` (on: push tags v*) will NOT auto-fire from the tag
+# release-please creates. To auto-build binaries on release, either set a PAT
+# (`secrets.RELEASE_PLEASE_TOKEN`) as the `token:` below, or fold the goreleaser
+# step into this workflow under `if: steps.rp.outputs.release_created`. Docker
+# images are unaffected — docker-release.yml runs on master push regardless.
+name: release-please
+
+on:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write       # create the release PR, tag, and GitHub Release
+      pull-requests: write   # open/maintain the release PR
+    steps:
+      - id: rp
+        uses: googleapis/release-please-action@v4
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+          token: ${{ secrets.GITHUB_TOKEN }}

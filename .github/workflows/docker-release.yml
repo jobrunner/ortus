@@ -44,7 +44,9 @@ jobs:
       - name: Read VERSION file
         id: version
         run: |
-          VERSION=$(cat VERSION | tr -d '[:space:]')
+          # First whitespace-delimited token of line 1 — ignores the
+          # release-please marker comment (`0.13.0 # x-release-please-version`).
+          VERSION=$(head -n1 VERSION | awk '{print $1}')
           MAJOR=$(echo "$VERSION" | cut -d. -f1)
           MINOR=$(echo "$VERSION" | cut -d. -f1-2)
 

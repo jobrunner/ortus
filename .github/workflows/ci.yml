@@ -41,7 +41,7 @@ jobs:
             exit 1
           fi
 
-          VERSION=$(cat VERSION | tr -d '[:space:]')
+          VERSION=$(head -n1 VERSION | awk '{print $1}')
           SEMVER_REGEX='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-((0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*)(\.(0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*))*))?(\+([0-9a-zA-Z-]+(\.[0-9a-zA-Z-]+)*))?$'
 
           if [[ ! "$VERSION" =~ $SEMVER_REGEX ]]; then
@@ -55,77 +55,17 @@ jobs:
 
       - name: Check CHANGELOG entry
         run: |
-          VERSION=$(cat VERSION | tr -d '[:space:]')
+          VERSION=$(head -n1 VERSION | awk '{print $1}')
           if ! grep -q "\[$VERSION\]" CHANGELOG.md && ! grep -q "\[Unreleased\]" CHANGELOG.md; then
             echo "⚠️  Version $VERSION not found in CHANGELOG.md"
             echo "   Make sure to document changes before release."
           fi
 
-      - name: Check VERSION/CHANGELOG updated for code changes (PRs only)
-        if: github.event_name == 'pull_request'
-        # Inject the base ref via env (not via ${{ }} expansion inside the
-        # script) so a maliciously-named branch can't break out of the bash
-        # context and execute arbitrary code in our CI. See zizmor
-        # template-injection audit.
-        env:
-          BASE_REF: ${{ github.event.pull_request.base.ref }}
-        run: |
-
-          # Get files changed in this PR
-          CHANGED_FILES=$(git diff --name-only origin/$BASE_REF...HEAD)
-
-          # Check for significant code changes
-          SIGNIFICANT_CHANGES=false
-          while IFS= read -r file; do
-            if [[ "$file" =~ ^(internal/|cmd/|pkg/).*\.go$ ]] || [[ "$file" =~ ^[^/]+\.go$ ]]; then
-              SIGNIFICANT_CHANGES=true
-              echo "📝 Significant change: $file"
-            fi
-          done <<< "$CHANGED_FILES"
-
-          if [[ "$SIGNIFICANT_CHANGES" != "true" ]]; then
-            echo "ℹ️  No significant code changes detected, skipping version check"
-            exit 0
-          fi
-
-          # Check if VERSION was changed
-          VERSION_CHANGED=false
-          if echo "$CHANGED_FILES" | grep -q "^VERSION$"; then
-            VERSION_CHANGED=true
-          fi
-
-          # Check if CHANGELOG was changed
-          CHANGELOG_CHANGED=false
-          if echo "$CHANGED_FILES" | grep -q "^CHANGELOG.md$"; then
-            CHANGELOG_CHANGED=true
-          fi
-
-          # Report results
-          ERRORS=0
-
-          if [[ "$VERSION_CHANGED" != "true" ]]; then
-            echo "❌ VERSION file not updated"
-            echo "   Significant code changes require a version bump"
-            ERRORS=$((ERRORS + 1))
-          else
-            echo "✅ VERSION file updated"
-          fi
-
-          if [[ "$CHANGELOG_CHANGED" != "true" ]]; then
-            echo "❌ CHANGELOG.md not updated"
-            echo "   Please document your changes in CHANGELOG.md"
-            ERRORS=$((ERRORS + 1))
-          else
-            echo "✅ CHANGELOG.md updated"
-          fi
-
-          if [[ $ERRORS -gt 0 ]]; then
-            echo ""
-            echo "💡 To fix this:"
-            echo "   1. Bump the version in VERSION file (current: $(cat VERSION))"
-            echo "   2. Add your changes to CHANGELOG.md under [Unreleased] or a new version"
-            exit 1
-          fi
+      # Versioning + CHANGELOG are owned by release-please (release-please.yml):
+      # feature PRs no longer hand-bump VERSION/CHANGELOG — they just use
+      # Conventional Commits, and release-please opens a release PR that bumps
+      # VERSION and cuts the CHANGELOG. The old "require a manual bump on every
+      # code PR" gate was removed when release-please was adopted.
 
   # =============================================================================
   # Go Linting
