@@ -284,9 +284,9 @@ curl -X POST "http://localhost:8080/api/v1/sync"
 
 ```json
 {
-  "packages_added": 2,
-  "packages_removed": 1,
-  "packages_total": 5,
+  "sources_added": 2,
+  "sources_removed": 1,
+  "sources_total": 5,
   "synced_at": "2025-12-22T12:00:00Z",
   "next_scheduled_at": "2025-12-22T13:00:00Z"
 }
@@ -442,9 +442,9 @@ curl -X POST "http://localhost:8080/api/v1/sync"
 
 ```json
 {
-  "packages_added": 2,
-  "packages_removed": 1,
-  "packages_total": 5,
+  "sources_added": 2,
+  "sources_removed": 1,
+  "sources_total": 5,
   "synced_at": "2025-12-22T12:00:00Z",
   "next_scheduled_at": "2025-12-22T13:00:00Z"
 }

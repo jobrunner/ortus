@@ -67,23 +67,23 @@ Every named operation produces a span; a coverage test in
 
 | Span name                              | Where                          | Notable attributes                                       |
 |----------------------------------------|--------------------------------|----------------------------------------------------------|
-| `GET /api/v1/query/{packageId}` (etc.) | `otelmux` middleware           | standard `http.*`                                        |
+| `GET /api/v1/query/{sourceId}` (etc.) | `otelmux` middleware           | standard `http.*`                                        |
 | `App.Startup` / `App.Shutdown`         | `internal/app`                 | `ortus.{tracing,metrics,sync,watcher}.enabled`           |
 | `App.handleFileEvent`                  | `internal/app`                 | `watcher.{path,operation}`                               |
 | `Watcher.handle`                       | `internal/adapters/watcher`    | `watcher.{path,operation}`                               |
-| `QueryService.QueryPoint`              | `internal/application`         | `ortus.coordinate.{x,y,srid}`, `ortus.packages.queried`  |
-| `QueryService.QueryPointInPackage`     | `internal/application`         | `ortus.package.{id,name}`, `ortus.features.count`        |
+| `QueryService.QueryPoint`              | `internal/application`         | `ortus.coordinate.{x,y,srid}`, `ortus.sources.queried`  |
+| `QueryService.QueryPointInSource`     | `internal/application`         | `ortus.source.{id,name}`, `ortus.features.count`        |
 | `QueryService.queryLayer`              | `internal/application`         | `ortus.layer.{name,srid,geometry_type}`                  |
 | `QueryService.transformCoordinate`     | `internal/application`         | `ortus.coordinate.{from_srid,to_srid}`                   |
-| `PackageRegistry.LoadAll`              | `internal/application`         | `ortus.packages.{loaded,failed}`                         |
-| `PackageRegistry.LoadPackage`          | `internal/application`         | `ortus.package.{id,path}`                                |
-| `PackageRegistry.UnloadPackage`        | `internal/application`         | `ortus.package.id`                                       |
-| `PackageRegistry.ListPackages`         | `internal/application`         | `ortus.packages.count`                                   |
-| `PackageRegistry.GetPackage`           | `internal/application`         | `ortus.package.id`                                       |
-| `PackageRegistry.GetPackageStatus`     | `internal/application`         | `ortus.package.{id,status}`                              |
-| `PackageRegistry.Sync`                 | `internal/application`         | `ortus.sync.{added,removed}`                             |
-| `Repository.Open`                      | `internal/adapters/geopackage` | `db.system=sqlite`, `ortus.package.{id,path}`            |
-| `Repository.Close`                     | `internal/adapters/geopackage` | `db.system=sqlite`, `ortus.package.id`                   |
+| `SourceRegistry.LoadAll`              | `internal/application`         | `ortus.sources.{loaded,failed}`                         |
+| `SourceRegistry.LoadSource`          | `internal/application`         | `ortus.source.{id,path}`                                |
+| `SourceRegistry.UnloadSource`        | `internal/application`         | `ortus.source.id`                                       |
+| `SourceRegistry.ListSources`         | `internal/application`         | `ortus.sources.count`                                   |
+| `SourceRegistry.GetSource`           | `internal/application`         | `ortus.source.id`                                       |
+| `SourceRegistry.GetSourceStatus`     | `internal/application`         | `ortus.source.{id,status}`                              |
+| `SourceRegistry.Sync`                 | `internal/application`         | `ortus.sync.{added,removed}`                             |
+| `Repository.Open`                      | `internal/adapters/geopackage` | `db.system=sqlite`, `ortus.source.{id,path}`            |
+| `Repository.Close`                     | `internal/adapters/geopackage` | `db.system=sqlite`, `ortus.source.id`                   |
 | `Repository.QueryPoint`                | `internal/adapters/geopackage` | `db.system=sqlite`, `ortus.layer.*`, `ortus.features.count` |
 | `Repository.executePointQuery`         | `internal/adapters/geopackage` | `db.statement`, `ortus.rtree.used`                       |
 | `Repository.CreateSpatialIndex`        | `internal/adapters/geopackage` | `db.system=sqlite`                                       |
@@ -94,8 +94,8 @@ Every named operation produces a span; a coverage test in
 | `ObjectStorage.List/Download/...`      | `internal/adapters/storage`    | `storage.system`, `storage.key`                          |
 | `HealthService.IsHealthy`              | `internal/application`         | `health.healthy`                                         |
 | `HealthService.IsReady`                | `internal/application`         | `health.ready`, `health.reason`                          |
-| `HealthService.GetHealthDetails`       | `internal/application`         | `health.packages_{loaded,ready}`                         |
-| `HealthService.GetPackageHealth`       | `internal/application`         | `health.packages.count`                                  |
+| `HealthService.GetHealthDetails`       | `internal/application`         | `health.sources_{loaded,ready}`                         |
+| `HealthService.GetSourceHealth`       | `internal/application`         | `health.sources.count`                                  |
 | `SyncService.do{Sync,SyncWithResult}`  | `internal/application`         | `sync.trigger` (`scheduled` \| `manual`)                 |
 
 In addition, the HTTP recovery middleware records any panic on the active

@@ -51,16 +51,16 @@ func (s *HealthService) IsReady(ctx context.Context) bool {
 	// Ready if at least one source is ready
 	for _, pkg := range packages {
 		if pkg.IsReady() {
-			span.SetAttributes(output.Bool("health.ready", true), output.String("health.reason", "package_ready"))
+			span.SetAttributes(output.Bool("health.ready", true), output.String("health.reason", "source_ready"))
 			return true
 		}
 	}
 
 	// Also ready if no sources are configured (empty state)
 	ready := len(packages) == 0
-	reason := "no_packages"
+	reason := "no_sources"
 	if !ready {
-		reason = "no_ready_packages"
+		reason = "no_ready_sources"
 	}
 	span.SetAttributes(output.Bool("health.ready", ready), output.String("health.reason", reason))
 	return ready
@@ -123,6 +123,6 @@ func (s *HealthService) GetSourceHealth(ctx context.Context) []SourceHealth {
 		}
 	}
 
-	span.SetAttributes(output.Int("health.packages.count", len(health)))
+	span.SetAttributes(output.Int("health.sources.count", len(health)))
 	return health
 }
