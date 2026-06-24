@@ -1,18 +1,21 @@
 #!/usr/bin/env bash
 #
-# Reference pipeline: build an ortus raster bundle for the present-day Köppen-Geiger
-# classification (Beck et al. V3). This is the per-dataset pipeline that absorbs the
-# upstream chaos and emits the one canonical bundle ortus consumes.
+# Reference pipeline: build an ortus raster bundle for the Köppen-Geiger climate
+# classification over the 1980–2016 reference period (Beck et al. 2018, V1). This is
+# the per-dataset pipeline that absorbs the upstream chaos and emits the one canonical
+# bundle ortus consumes. (For V3 / 1991–2020, change SRC_URL + SRC_ID/SRC_NAME below;
+# the steps are identical.)
 #
-# Requirements: gdal (gdalwarp, gdalinfo, gdal_translate), python3, zip, and a JSON
-# Schema validator (we use `check-jsonschema`; swap for your tool of choice).
+# Requirements: gdal (gdalwarp, gdalinfo, gdal_translate), python3, zip. A JSON-Schema
+# validator is optional — step 5 uses check-jsonschema if present, else python
+# jsonschema+PyYAML, else skips (ortus validates against the same schema at ingest).
 #
 # What it does:
-#   1. download + unzip the V3 GeoTIFFs and legend.txt
+#   1. download + unzip the GeoTIFF + legend.txt
 #   2. reproject to the canonical CRS (no-op for Köppen — already EPSG:4326)
-#   3. write a Cloud Optimized GeoTIFF
+#   3. write a Cloud Optimized GeoTIFF (LZW)
 #   4. generate ortus-raster.yaml (inline mapping) from legend.txt
-#   5. VALIDATE against the schema  — the build fails here, never ortus
+#   5. validate against the schema if a validator is available
 #   6. zip into the bundle
 #
 set -euo pipefail
