@@ -12,10 +12,10 @@ pipeline** and ortus only ever sees one well-defined shape.
 
 ## What you drop into storage
 
-A single ZIP, e.g. `koeppen-geiger-present.zip`:
+A single ZIP, e.g. `koeppen-geiger-1980-2016.zip`:
 
 ```
-koeppen-geiger-present.zip
+koeppen-geiger-1980-2016.zip
 ├── ortus-raster.yaml      # the manifest — fixed name, ZIP root, the contract
 ├── koeppen.cog.tif        # normalized Cloud Optimized GeoTIFF
 └── mapping.json           # OPTIONAL sidecar, only for large tables
@@ -31,16 +31,17 @@ objects into the local cache, so a ZIP fits the current model with no streaming 
 
 ```yaml
 schema_version: 1
-id: koeppen-geiger-present          # stable source id, kebab-case, globally unique
-name: Köppen-Geiger 1980–2016 (V3)
-description: Present-day Köppen-Geiger classification, 1 km.
+id: koeppen-geiger-1980-2016        # stable source id, kebab-case, globally unique;
+                                    # encode the reference PERIOD, never "present"/"latest"
+name: Köppen-Geiger climate classification 1980–2016 (Beck et al. 2018, V1)
+description: Köppen-Geiger classification over the 1980–2016 reference period, 1 km.
 license:
   name: CC-BY-4.0
   attribution: Beck et al. (2018), Scientific Data
   url: https://www.gloh2o.org/koppen/
 crs: EPSG:4326                      # canonical — pipeline already reprojected to this
 layers:
-  - id: present
+  - id: classification
     file: koeppen.cog.tif           # relative to ZIP root
     band: 1
     nodata: 0
@@ -56,7 +57,7 @@ layers:
 | Field | Required | Notes |
 |---|---|---|
 | `schema_version` | yes | `1`. |
-| `id` | yes | Kebab-case, becomes the ortus source id, must be unique across bundles. |
+| `id` | yes | Kebab-case, becomes the ortus source id, must be unique across bundles **and equal the bundle filename stem**. Encode the dataset's reference period (e.g. `…-1980-2016`), never `present`/`latest`, so a future release doesn't silently shadow it. |
 | `name` | yes | Human-readable. |
 | `description` | no | Free text. |
 | `license.name` | yes | SPDX id or license name. |
@@ -126,7 +127,10 @@ raw GeoTIFF(s) + legend.txt (named anything, any CRS)
   → zip
 ```
 
-See [`examples/koeppen/`](./examples/koeppen/) for a runnable reference implementation.
+See [`examples/koeppen/TUTORIAL.md`](./examples/koeppen/TUTORIAL.md) for a complete,
+verified end-to-end walkthrough — building the Köppen-Geiger 1 km bundle from the
+published source and serving it from ortus — plus [`build.sh`](./examples/koeppen/build.sh)
+as the one-shot pipeline.
 
 ## What COG does and does not give you
 
