@@ -169,8 +169,9 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*App, er
 		app.Tracer,
 		logger,
 		application.QueryServiceConfig{
-			DefaultSRID: cfg.Query.DefaultSRID,
-			MaxFeatures: cfg.Query.MaxFeatures,
+			DefaultSRID:  cfg.Query.DefaultSRID,
+			MaxFeatures:  cfg.Query.MaxFeatures,
+			QueryTimeout: cfg.Query.Timeout,
 		},
 	)
 
@@ -314,6 +315,16 @@ func (a *App) Start(ctx context.Context) error {
 	// Track whether any startup step failed so the span status reflects
 	// real outcome rather than always claiming OK after RecordError.
 	startupOK := true
+
+	// Remove raster unpack directories orphaned by a previous crash before they
+	// accumulate and exhaust disk.
+	if a.RasterRepository != nil {
+		if n, err := a.RasterRepository.CleanupOrphaned(); err != nil {
+			a.Logger.Warn("failed to clean orphaned raster temp dirs", "error", err)
+		} else if n > 0 {
+			a.Logger.Info("removed orphaned raster temp dirs", "count", n)
+		}
+	}
 
 	// Load all packages from storage
 	if err := a.Registry.LoadAll(startupCtx); err != nil {
@@ -478,11 +489,13 @@ func (a *App) handleFileEvent(ctx context.Context, event watcher.Event) error {
 		return nil
 
 	case watcher.OpDelete:
-		// Unload the package by deriving the package ID from the file path
-		packageID := geopackage.DerivePackageID(event.Path)
-		span.SetAttributes(output.String("ortus.package.id", packageID))
+		// Unload the source by deriving its id from the file path. Use the
+		// registry's derivation (not an adapter's) so it stays correct for any
+		// source kind (.gpkg, .zip, …).
+		packageID := a.Registry.DeriveSourceID(event.Path)
+		span.SetAttributes(output.String("ortus.source.id", packageID))
 		if err := a.Registry.UnloadPackage(ctx, packageID); err != nil {
-			a.Logger.Warn("failed to unload deleted package", "id", packageID, "error", err)
+			a.Logger.Warn("failed to unload deleted source", "id", packageID, "error", err)
 			span.RecordError(err)
 			span.SetStatus(output.StatusError, "unload failed")
 		}

@@ -59,6 +59,43 @@ func (r *Repository) SetTracer(t output.Tracer) {
 	r.tracer = t
 }
 
+// tempDirPrefix is the prefix of the per-bundle unpack directories. Kept in one
+// place so CleanupOrphaned can find them.
+const tempDirPrefix = "ortus-raster-"
+
+// cacheRoot is where unpack dirs live (the OS temp dir when cacheDir is "").
+func (r *Repository) cacheRoot() string {
+	if r.cacheDir != "" {
+		return r.cacheDir
+	}
+	return os.TempDir()
+}
+
+// CleanupOrphaned removes leftover unpack directories from a previous run that
+// crashed before Close could remove them (Close is the only normal cleanup, so
+// a SIGKILL/OOM/panic would otherwise leak them and eventually fill the disk).
+// Call once at startup, before loading. NOTE: it removes ALL ortus-raster-*
+// directories under the cache root, so do not point two instances at the same
+// cacheDir.
+func (r *Repository) CleanupOrphaned() (int, error) {
+	matches, err := filepath.Glob(filepath.Join(r.cacheRoot(), tempDirPrefix+"*"))
+	if err != nil {
+		return 0, err
+	}
+	removed := 0
+	for _, m := range matches {
+		info, statErr := os.Stat(m)
+		if statErr != nil || !info.IsDir() {
+			continue
+		}
+		if err := os.RemoveAll(m); err != nil {
+			return removed, err
+		}
+		removed++
+	}
+	return removed, nil
+}
+
 // Supports reports whether this adapter handles the path. Raster bundles are
 // ZIP archives.
 func (r *Repository) Supports(path string) bool {
@@ -87,7 +124,7 @@ func (r *Repository) Open(ctx context.Context, path string) (*domain.Source, err
 		return existing.source, nil
 	}
 
-	dir, err := os.MkdirTemp(r.cacheDir, "ortus-raster-"+sourceID+"-")
+	dir, err := os.MkdirTemp(r.cacheDir, tempDirPrefix+sourceID+"-")
 	if err != nil {
 		return nil, fmt.Errorf("creating unpack dir: %w", err)
 	}

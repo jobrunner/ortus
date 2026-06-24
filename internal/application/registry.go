@@ -3,6 +3,7 @@ package application
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -100,6 +101,16 @@ func (r *PackageRegistry) LoadPackage(ctx context.Context, path string) error {
 	defer span.End()
 
 	r.logger.Info("loading package", "path", path)
+
+	// Reload semantics: if this source is already loaded (e.g. a file-watcher
+	// modify event), unload it first. Otherwise the adapter would return its
+	// cached, pre-modification instance and the change would never take effect.
+	if id := derivePackageID(path); r.IsLoaded(id) {
+		r.logger.Info("reloading source — unloading stale instance first", "id", id)
+		if err := r.UnloadPackage(ctx, id); err != nil {
+			r.logger.Warn("failed to unload before reload", "id", id, "error", err)
+		}
+	}
 
 	// Resolve the adapter that owns this file kind.
 	provider, err := r.providerFor(path)
@@ -367,8 +378,14 @@ func (r *PackageRegistry) LoadAll(ctx context.Context) error {
 
 	loaded, failed := 0, 0
 	for _, obj := range objects {
-		// Download to local path using filepath.Join for consistent path handling
-		localPath := filepath.Join(r.localPath, obj.Key)
+		// Reject keys that would escape the local cache dir (a hostile remote
+		// store could return "../../etc/..." object keys → arbitrary write).
+		localPath, err := r.safeLocalPath(obj.Key)
+		if err != nil {
+			r.logger.Error("rejecting unsafe storage key", "key", obj.Key, "error", err)
+			failed++
+			continue
+		}
 		if err := r.storage.Download(ctx, obj.Key, localPath); err != nil {
 			r.logger.Error("failed to download package", "key", obj.Key, "error", err)
 			failed++
@@ -436,30 +453,7 @@ func (r *PackageRegistry) Sync(ctx context.Context) (SyncStats, error) {
 	}
 
 	stats := SyncStats{}
-
-	// Add new packages
-	for packageID, objectKey := range remotePackages {
-		if r.IsLoaded(packageID) {
-			r.logger.Debug("package already loaded, skipping", "id", packageID)
-			continue
-		}
-
-		// Download to local path
-		localPath := filepath.Join(r.localPath, objectKey)
-		if err := r.storage.Download(ctx, objectKey, localPath); err != nil {
-			r.logger.Error("failed to download package", "key", objectKey, "error", err)
-			continue
-		}
-
-		// Load the package
-		if err := r.LoadPackage(ctx, localPath); err != nil {
-			r.logger.Error("failed to load package", "path", localPath, "error", err)
-			continue
-		}
-
-		stats.Added++
-		r.logger.Info("new package synced", "id", packageID)
-	}
+	stats.Added = r.syncAddNew(ctx, remotePackages)
 
 	// Remove packages that no longer exist in remote storage
 	// We capture both ID and path in findPackagesToRemove to avoid race conditions
@@ -495,6 +489,35 @@ func (r *PackageRegistry) Sync(ctx context.Context) (SyncStats, error) {
 	return stats, nil
 }
 
+// syncAddNew downloads and loads every remote source not already loaded,
+// returning the number added. Unsafe object keys and download/load failures are
+// logged and skipped (one bad source must not abort the whole sync).
+func (r *PackageRegistry) syncAddNew(ctx context.Context, remotePackages map[string]string) int {
+	added := 0
+	for packageID, objectKey := range remotePackages {
+		if r.IsLoaded(packageID) {
+			r.logger.Debug("package already loaded, skipping", "id", packageID)
+			continue
+		}
+		localPath, err := r.safeLocalPath(objectKey)
+		if err != nil {
+			r.logger.Error("rejecting unsafe storage key", "key", objectKey, "error", err)
+			continue
+		}
+		if err := r.storage.Download(ctx, objectKey, localPath); err != nil {
+			r.logger.Error("failed to download package", "key", objectKey, "error", err)
+			continue
+		}
+		if err := r.LoadPackage(ctx, localPath); err != nil {
+			r.logger.Error("failed to load package", "path", localPath, "error", err)
+			continue
+		}
+		added++
+		r.logger.Info("new package synced", "id", packageID)
+	}
+	return added
+}
+
 // packageToRemove holds information about a package that should be removed.
 type packageToRemove struct {
 	id   string
@@ -518,6 +541,30 @@ func (r *PackageRegistry) findPackagesToRemove(remotePackages map[string]string)
 		}
 	}
 	return toRemove
+}
+
+// safeLocalPath joins a storage object key onto the local cache dir, rejecting
+// absolute paths and parent-traversal that would escape it (a hostile remote
+// store must not be able to make ortus write outside its data directory).
+func (r *PackageRegistry) safeLocalPath(key string) (string, error) {
+	clean := filepath.Clean(key)
+	if filepath.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("object key %q escapes the local cache dir", key)
+	}
+	joined := filepath.Join(r.localPath, clean)
+	base := filepath.Clean(r.localPath)
+	if joined != base && !strings.HasPrefix(joined, base+string(filepath.Separator)) {
+		return "", fmt.Errorf("object key %q escapes the local cache dir", key)
+	}
+	return joined, nil
+}
+
+// DeriveSourceID derives a source id from a file path or object key (the
+// filename stem), matching the id every adapter assigns. Callers that need to
+// unload/route by path (e.g. the file watcher) should use this rather than an
+// adapter-specific derivation, so the registry stays the single source of truth.
+func (r *PackageRegistry) DeriveSourceID(path string) string {
+	return derivePackageID(path)
 }
 
 // derivePackageID extracts a package ID from a file path or object key.
