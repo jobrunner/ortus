@@ -118,9 +118,9 @@ func TestRegistry_QueryEntryWithoutRepo(t *testing.T) {
 	// a nil-pointer panic.
 	reg := newRoutingRegistry(nil)
 	reg.mu.Lock()
-	reg.packages["broken"] = &sourceEntry{
-		Package: &domain.Source{ID: "broken"},
-		Status:  domain.StatusReady,
+	reg.sources["broken"] = &sourceEntry{
+		Source: &domain.Source{ID: "broken"},
+		Status: domain.StatusReady,
 		// Repo intentionally nil
 	}
 	reg.mu.Unlock()
@@ -136,9 +136,9 @@ func TestRegistry_UnloadEntryWithoutRepo(t *testing.T) {
 	// not left stuck in StatusUnloading.
 	reg := newRoutingRegistry(nil)
 	reg.mu.Lock()
-	reg.packages["broken"] = &sourceEntry{
-		Package: &domain.Source{ID: "broken"},
-		Status:  domain.StatusReady,
+	reg.sources["broken"] = &sourceEntry{
+		Source: &domain.Source{ID: "broken"},
+		Status: domain.StatusReady,
 		// Repo intentionally nil
 	}
 	reg.mu.Unlock()

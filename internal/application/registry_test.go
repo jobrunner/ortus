@@ -87,9 +87,9 @@ func TestSourceRegistryGetSourceStatus(t *testing.T) {
 	ctx := context.Background()
 
 	registry.mu.Lock()
-	registry.packages["test"] = &sourceEntry{
-		Package: &domain.Source{ID: "test"},
-		Status:  domain.StatusReady,
+	registry.sources["test"] = &sourceEntry{
+		Source: &domain.Source{ID: "test"},
+		Status: domain.StatusReady,
 	}
 	registry.mu.Unlock()
 
@@ -116,13 +116,13 @@ func TestSourceRegistryIsReady(t *testing.T) {
 	registry := newTestRegistry()
 
 	registry.mu.Lock()
-	registry.packages["ready"] = &sourceEntry{
-		Package: &domain.Source{ID: "ready"},
-		Status:  domain.StatusReady,
+	registry.sources["ready"] = &sourceEntry{
+		Source: &domain.Source{ID: "ready"},
+		Status: domain.StatusReady,
 	}
-	registry.packages["loading"] = &sourceEntry{
-		Package: &domain.Source{ID: "loading"},
-		Status:  domain.StatusLoading,
+	registry.sources["loading"] = &sourceEntry{
+		Source: &domain.Source{ID: "loading"},
+		Status: domain.StatusLoading,
 	}
 	registry.mu.Unlock()
 
@@ -148,17 +148,17 @@ func TestSourceRegistryReadySourceIDs(t *testing.T) {
 	registry := newTestRegistry()
 
 	registry.mu.Lock()
-	registry.packages["ready1"] = &sourceEntry{
-		Package: &domain.Source{ID: "ready1"},
-		Status:  domain.StatusReady,
+	registry.sources["ready1"] = &sourceEntry{
+		Source: &domain.Source{ID: "ready1"},
+		Status: domain.StatusReady,
 	}
-	registry.packages["ready2"] = &sourceEntry{
-		Package: &domain.Source{ID: "ready2"},
-		Status:  domain.StatusReady,
+	registry.sources["ready2"] = &sourceEntry{
+		Source: &domain.Source{ID: "ready2"},
+		Status: domain.StatusReady,
 	}
-	registry.packages["loading"] = &sourceEntry{
-		Package: &domain.Source{ID: "loading"},
-		Status:  domain.StatusLoading,
+	registry.sources["loading"] = &sourceEntry{
+		Source: &domain.Source{ID: "loading"},
+		Status: domain.StatusLoading,
 	}
 	registry.mu.Unlock()
 

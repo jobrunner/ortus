@@ -48,7 +48,7 @@ func TestHealthServiceIsReady(t *testing.T) {
 			name: "ready package",
 			packages: map[string]*sourceEntry{
 				"test": {
-					Package: &domain.Source{
+					Source: &domain.Source{
 						ID:      "test",
 						Indexed: true,
 						Layers:  []domain.Layer{{Name: "layer1", HasIndex: true}},
@@ -62,7 +62,7 @@ func TestHealthServiceIsReady(t *testing.T) {
 			name: "no ready packages",
 			packages: map[string]*sourceEntry{
 				"test": {
-					Package: &domain.Source{
+					Source: &domain.Source{
 						ID:      "test",
 						Indexed: false,
 					},
@@ -75,11 +75,11 @@ func TestHealthServiceIsReady(t *testing.T) {
 			name: "mixed packages - one ready",
 			packages: map[string]*sourceEntry{
 				"loading": {
-					Package: &domain.Source{ID: "loading", Indexed: false},
-					Status:  domain.StatusLoading,
+					Source: &domain.Source{ID: "loading", Indexed: false},
+					Status: domain.StatusLoading,
 				},
 				"ready": {
-					Package: &domain.Source{
+					Source: &domain.Source{
 						ID:      "ready",
 						Indexed: true,
 						Layers:  []domain.Layer{{Name: "layer1", HasIndex: true}},
@@ -94,7 +94,7 @@ func TestHealthServiceIsReady(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			registry.mu.Lock()
-			registry.packages = tt.packages
+			registry.sources = tt.packages
 			registry.mu.Unlock()
 
 			if got := service.IsReady(context.Background()); got != tt.want {
@@ -110,9 +110,9 @@ func TestHealthServiceGetHealthDetails(t *testing.T) {
 
 	// Add some packages
 	registry.mu.Lock()
-	registry.packages = map[string]*sourceEntry{
+	registry.sources = map[string]*sourceEntry{
 		"ready1": {
-			Package: &domain.Source{
+			Source: &domain.Source{
 				ID:      "ready1",
 				Indexed: true,
 				Layers:  []domain.Layer{{Name: "l1", HasIndex: true}},
@@ -120,7 +120,7 @@ func TestHealthServiceGetHealthDetails(t *testing.T) {
 			Status: domain.StatusReady,
 		},
 		"ready2": {
-			Package: &domain.Source{
+			Source: &domain.Source{
 				ID:      "ready2",
 				Indexed: true,
 				Layers:  []domain.Layer{{Name: "l2", HasIndex: true}},
@@ -128,8 +128,8 @@ func TestHealthServiceGetHealthDetails(t *testing.T) {
 			Status: domain.StatusReady,
 		},
 		"loading": {
-			Package: &domain.Source{ID: "loading", Indexed: false},
-			Status:  domain.StatusLoading,
+			Source: &domain.Source{ID: "loading", Indexed: false},
+			Status: domain.StatusLoading,
 		},
 	}
 	registry.mu.Unlock()
@@ -158,9 +158,9 @@ func TestHealthServiceGetSourceHealth(t *testing.T) {
 	service := NewHealthService(registry, output.NoOpTracer{})
 
 	registry.mu.Lock()
-	registry.packages = map[string]*sourceEntry{
+	registry.sources = map[string]*sourceEntry{
 		"pkg1": {
-			Package: &domain.Source{
+			Source: &domain.Source{
 				ID:      "pkg1",
 				Indexed: true,
 				Layers:  []domain.Layer{{Name: "l1", HasIndex: true}},
@@ -168,8 +168,8 @@ func TestHealthServiceGetSourceHealth(t *testing.T) {
 			Status: domain.StatusReady,
 		},
 		"pkg2": {
-			Package: &domain.Source{ID: "pkg2", Indexed: false},
-			Status:  domain.StatusIndexing,
+			Source: &domain.Source{ID: "pkg2", Indexed: false},
+			Status: domain.StatusIndexing,
 		},
 	}
 	registry.mu.Unlock()

@@ -99,14 +99,14 @@ func (s *HealthService) GetHealthDetails(ctx context.Context) input.HealthDetail
 	}
 }
 
-// SourceHealth contains health info for a single package.
+// SourceHealth contains health info for a single source.
 type SourceHealth struct {
 	ID     string
 	Status domain.SourceStatus
 	Ready  bool
 }
 
-// GetSourceHealth returns health info for all packages.
+// GetSourceHealth returns health info for all sources.
 func (s *HealthService) GetSourceHealth(ctx context.Context) []SourceHealth {
 	ctx, span := s.tracer.Start(ctx, "HealthService.GetSourceHealth")
 	defer span.End()

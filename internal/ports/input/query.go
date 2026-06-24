@@ -17,7 +17,7 @@ type QueryService interface {
 	QueryPoint(ctx context.Context, req domain.QueryRequest) (*domain.QueryResponse, error)
 
 	// QueryPointInSource performs a point query in a specific source.
-	QueryPointInSource(ctx context.Context, packageID string, req domain.QueryRequest) (*domain.QueryResult, error)
+	QueryPointInSource(ctx context.Context, sourceID string, req domain.QueryRequest) (*domain.QueryResult, error)
 }
 
 // SourceRegistry defines the primary port for source management.

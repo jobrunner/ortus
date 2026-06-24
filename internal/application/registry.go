@@ -22,7 +22,7 @@ import (
 // SourceRegistry manages loaded spatial sources (GeoPackages, raster bundles).
 type SourceRegistry struct {
 	mu        sync.RWMutex
-	packages  map[string]*sourceEntry
+	sources   map[string]*sourceEntry
 	providers []output.SpatialSource
 	storage   output.ObjectStorage
 	tracer    output.Tracer
@@ -37,13 +37,13 @@ type SourceRegistry struct {
 }
 
 type sourceEntry struct {
-	Package *domain.Source
-	Repo    output.SpatialSource // adapter that opened this source
-	Status  domain.SourceStatus
-	Error   error
+	Source *domain.Source
+	Repo   output.SpatialSource // adapter that opened this source
+	Status domain.SourceStatus
+	Error  error
 }
 
-// NewSourceRegistry creates a new package registry. providers are the source
+// NewSourceRegistry creates a new source registry. providers are the source
 // adapters consulted (in order) to open a file; the first whose Supports
 // reports true for a path owns that source.
 func NewSourceRegistry(
@@ -62,7 +62,7 @@ func NewSourceRegistry(
 	}
 
 	r := &SourceRegistry{
-		packages:  make(map[string]*sourceEntry),
+		sources:   make(map[string]*sourceEntry),
 		providers: providers,
 		storage:   storage,
 		tracer:    tracer,
@@ -70,16 +70,16 @@ func NewSourceRegistry(
 		localPath: localPath,
 	}
 
-	// Register observable gauges for packages.loaded / packages.ready.
+	// Register observable gauges for sources.loaded / sources.ready.
 	// The callback reads from atomic counters maintained by updateMetrics()
 	// so the read is lock-free and safe from any goroutine the SDK uses.
 	loaded, _ := meter.Int64ObservableGauge(
 		"ortus.sources.loaded",
-		metric.WithDescription("Number of loaded GeoPackages"),
+		metric.WithDescription("Number of loaded sources"),
 	)
 	ready, _ := meter.Int64ObservableGauge(
 		"ortus.sources.ready",
-		metric.WithDescription("Number of GeoPackages ready to serve queries"),
+		metric.WithDescription("Number of sources ready to serve queries"),
 	)
 	_, _ = meter.RegisterCallback(
 		func(_ context.Context, o metric.Observer) error {
@@ -138,10 +138,10 @@ func (r *SourceRegistry) LoadSource(ctx context.Context, path string) error {
 
 	// Register the package
 	r.mu.Lock()
-	r.packages[pkg.ID] = &sourceEntry{
-		Package: pkg,
-		Repo:    provider,
-		Status:  domain.StatusIndexing,
+	r.sources[pkg.ID] = &sourceEntry{
+		Source: pkg,
+		Repo:   provider,
+		Status: domain.StatusIndexing,
 	}
 	r.mu.Unlock()
 
@@ -162,10 +162,10 @@ func (r *SourceRegistry) LoadSource(ctx context.Context, path string) error {
 	// (Prepare updates each layer's HasIndex), not an unconditional assumption —
 	// a failed Prepare leaves its layer unindexed and the source not fully ready.
 	r.mu.Lock()
-	if entry, ok := r.packages[pkg.ID]; ok {
+	if entry, ok := r.sources[pkg.ID]; ok {
 		entry.Status = domain.StatusReady
-		entry.Package.LoadedAt = time.Now()
-		entry.Package.Indexed = allLayersIndexed(entry.Package.Layers)
+		entry.Source.LoadedAt = time.Now()
+		entry.Source.Indexed = allLayersIndexed(entry.Source.Layers)
 	}
 	r.mu.Unlock()
 
@@ -177,16 +177,16 @@ func (r *SourceRegistry) LoadSource(ctx context.Context, path string) error {
 }
 
 // UnloadSource unloads a GeoPackage.
-func (r *SourceRegistry) UnloadSource(ctx context.Context, packageID string) error {
+func (r *SourceRegistry) UnloadSource(ctx context.Context, sourceID string) error {
 	ctx, span := r.tracer.Start(ctx, "SourceRegistry.UnloadSource",
-		output.WithAttributes(output.String("ortus.source.id", packageID)),
+		output.WithAttributes(output.String("ortus.source.id", sourceID)),
 	)
 	defer span.End()
 
-	r.logger.Info("unloading package", "id", packageID)
+	r.logger.Info("unloading package", "id", sourceID)
 
 	r.mu.Lock()
-	entry, ok := r.packages[packageID]
+	entry, ok := r.sources[sourceID]
 	if !ok {
 		r.mu.Unlock()
 		return nil // not loaded — nothing to do
@@ -196,22 +196,22 @@ func (r *SourceRegistry) UnloadSource(ctx context.Context, packageID string) err
 	if repo == nil {
 		// Malformed entry with no owning adapter: nothing to close, but it
 		// must not be left stuck in StatusUnloading — drop it.
-		delete(r.packages, packageID)
+		delete(r.sources, sourceID)
 		r.mu.Unlock()
 		r.updateMetrics()
 		return nil
 	}
 	r.mu.Unlock()
 
-	if err := repo.Close(ctx, packageID); err != nil {
-		r.logger.Error("failed to close package", "id", packageID, "error", err)
+	if err := repo.Close(ctx, sourceID); err != nil {
+		r.logger.Error("failed to close package", "id", sourceID, "error", err)
 		span.RecordError(err)
 		span.SetStatus(output.StatusError, "close failed")
 		return err
 	}
 
 	r.mu.Lock()
-	delete(r.packages, packageID)
+	delete(r.sources, sourceID)
 	r.mu.Unlock()
 
 	r.updateMetrics()
@@ -246,7 +246,7 @@ func (r *SourceRegistry) providerFor(path string) (output.SpatialSource, error) 
 // agnostic of the source kind.
 func (r *SourceRegistry) Query(ctx context.Context, sourceID, layer string, coord domain.Coordinate) ([]domain.Feature, error) {
 	r.mu.RLock()
-	entry, ok := r.packages[sourceID]
+	entry, ok := r.sources[sourceID]
 	r.mu.RUnlock()
 	if !ok || entry.Repo == nil {
 		// entry.Repo is always set by LoadSource; guard anyway so a
@@ -256,7 +256,7 @@ func (r *SourceRegistry) Query(ctx context.Context, sourceID, layer string, coor
 	return entry.Repo.QueryPoint(ctx, sourceID, layer, coord)
 }
 
-// ListSources returns all registered GeoPackages.
+// ListSources returns all registered sources.
 func (r *SourceRegistry) ListSources(ctx context.Context) ([]domain.Source, error) {
 	_, span := r.tracer.Start(ctx, "SourceRegistry.ListSources")
 	defer span.End()
@@ -264,13 +264,13 @@ func (r *SourceRegistry) ListSources(ctx context.Context) ([]domain.Source, erro
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	packages := make([]domain.Source, 0, len(r.packages))
-	for _, entry := range r.packages {
-		packages = append(packages, *entry.Package)
+	sources := make([]domain.Source, 0, len(r.sources))
+	for _, entry := range r.sources {
+		sources = append(sources, *entry.Source)
 	}
 
-	span.SetAttributes(output.Int("ortus.sources.count", len(packages)))
-	return packages, nil
+	span.SetAttributes(output.Int("ortus.sources.count", len(sources)))
+	return sources, nil
 }
 
 // GetSource returns a specific GeoPackage by ID.
@@ -283,14 +283,14 @@ func (r *SourceRegistry) GetSource(ctx context.Context, id string) (*domain.Sour
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	entry, ok := r.packages[id]
+	entry, ok := r.sources[id]
 	if !ok {
 		span.RecordError(domain.ErrPackageNotFound)
 		span.SetStatus(output.StatusError, "package not found")
 		return nil, domain.ErrPackageNotFound
 	}
 
-	return entry.Package, nil
+	return entry.Source, nil
 }
 
 // GetSourceStatus returns the status of a GeoPackage.
@@ -303,7 +303,7 @@ func (r *SourceRegistry) GetSourceStatus(ctx context.Context, id string) (domain
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	entry, ok := r.packages[id]
+	entry, ok := r.sources[id]
 	if !ok {
 		span.RecordError(domain.ErrPackageNotFound)
 		span.SetStatus(output.StatusError, "package not found")
@@ -315,11 +315,11 @@ func (r *SourceRegistry) GetSourceStatus(ctx context.Context, id string) (domain
 }
 
 // IsReady returns true if a package is ready for queries.
-func (r *SourceRegistry) IsReady(packageID string) bool {
+func (r *SourceRegistry) IsReady(sourceID string) bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	entry, ok := r.packages[packageID]
+	entry, ok := r.sources[sourceID]
 	if !ok {
 		return false
 	}
@@ -333,7 +333,7 @@ func (r *SourceRegistry) ReadySourceIDs() []string {
 	defer r.mu.RUnlock()
 
 	ids := make([]string, 0)
-	for id, entry := range r.packages {
+	for id, entry := range r.sources {
 		if entry.Status == domain.StatusReady {
 			ids = append(ids, id)
 		}
@@ -342,14 +342,14 @@ func (r *SourceRegistry) ReadySourceIDs() []string {
 }
 
 // updateMetrics refreshes the atomic counters that back the
-// packages.loaded / packages.ready observable gauges. Called after every
+// sources.loaded / sources.ready observable gauges. Called after every
 // load/unload so the gauge callback (which can fire at any time) reads
 // a current value without needing r.mu.
 func (r *SourceRegistry) updateMetrics() {
 	r.mu.RLock()
-	total := len(r.packages)
+	total := len(r.sources)
 	ready := 0
-	for _, entry := range r.packages {
+	for _, entry := range r.sources {
 		if entry.Status == domain.StatusReady {
 			ready++
 		}
@@ -360,7 +360,7 @@ func (r *SourceRegistry) updateMetrics() {
 	r.readyCount.Store(int64(ready))
 }
 
-// LoadAll loads all GeoPackages from storage.
+// LoadAll loads all sources from storage.
 func (r *SourceRegistry) LoadAll(ctx context.Context) error {
 	ctx, span := r.tracer.Start(ctx, "SourceRegistry.LoadAll")
 	defer span.End()
@@ -409,10 +409,10 @@ func (r *SourceRegistry) LoadAll(ctx context.Context) error {
 }
 
 // IsLoaded returns true if a package with the given ID is already loaded.
-func (r *SourceRegistry) IsLoaded(packageID string) bool {
+func (r *SourceRegistry) IsLoaded(sourceID string) bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	_, ok := r.packages[packageID]
+	_, ok := r.sources[sourceID]
 	return ok
 }
 
@@ -420,7 +420,7 @@ func (r *SourceRegistry) IsLoaded(packageID string) bool {
 func (r *SourceRegistry) SourceCount() int {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	return len(r.packages)
+	return len(r.sources)
 }
 
 // SyncStats contains statistics from a sync operation.
@@ -446,10 +446,10 @@ func (r *SourceRegistry) Sync(ctx context.Context) (SyncStats, error) {
 	}
 
 	// Build set of remote package IDs
-	remotePackages := make(map[string]string) // packageID -> objectKey
+	remotePackages := make(map[string]string) // sourceID -> objectKey
 	for _, obj := range objects {
-		packageID := deriveSourceID(obj.Key)
-		remotePackages[packageID] = obj.Key
+		sourceID := deriveSourceID(obj.Key)
+		remotePackages[sourceID] = obj.Key
 	}
 
 	stats := SyncStats{}
@@ -494,9 +494,9 @@ func (r *SourceRegistry) Sync(ctx context.Context) (SyncStats, error) {
 // logged and skipped (one bad source must not abort the whole sync).
 func (r *SourceRegistry) syncAddNew(ctx context.Context, remotePackages map[string]string) int {
 	added := 0
-	for packageID, objectKey := range remotePackages {
-		if r.IsLoaded(packageID) {
-			r.logger.Debug("package already loaded, skipping", "id", packageID)
+	for sourceID, objectKey := range remotePackages {
+		if r.IsLoaded(sourceID) {
+			r.logger.Debug("package already loaded, skipping", "id", sourceID)
 			continue
 		}
 		localPath, err := r.safeLocalPath(objectKey)
@@ -513,7 +513,7 @@ func (r *SourceRegistry) syncAddNew(ctx context.Context, remotePackages map[stri
 			continue
 		}
 		added++
-		r.logger.Info("new package synced", "id", packageID)
+		r.logger.Info("new package synced", "id", sourceID)
 	}
 	return added
 }
@@ -531,13 +531,13 @@ func (r *SourceRegistry) findPackagesToRemove(remotePackages map[string]string) 
 	defer r.mu.RUnlock()
 
 	var toRemove []packageToRemove
-	for packageID, entry := range r.packages {
-		if _, exists := remotePackages[packageID]; !exists {
+	for sourceID, entry := range r.sources {
+		if _, exists := remotePackages[sourceID]; !exists {
 			path := ""
-			if entry.Package != nil {
-				path = entry.Package.Path
+			if entry.Source != nil {
+				path = entry.Source.Path
 			}
-			toRemove = append(toRemove, packageToRemove{id: packageID, path: path})
+			toRemove = append(toRemove, packageToRemove{id: sourceID, path: path})
 		}
 	}
 	return toRemove
@@ -567,7 +567,7 @@ func (r *SourceRegistry) DeriveSourceID(path string) string {
 	return deriveSourceID(path)
 }
 
-// deriveSourceID extracts a package ID from a file path or object key.
+// deriveSourceID extracts a source ID from a file path or object key.
 func deriveSourceID(path string) string {
 	base := filepath.Base(path)
 	if base == "" || base == "." {

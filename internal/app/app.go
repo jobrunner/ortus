@@ -145,7 +145,7 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*App, er
 	app.RasterRepository = raster.NewRepository("")
 	app.RasterRepository.SetTracer(app.Tracer)
 
-	// Initialize package registry with the available source adapters. The
+	// Initialize source registry with the available source adapters. The
 	// registry routes each file to the first adapter whose Supports matches
 	// (geopackage: *.gpkg, raster: *.zip).
 	app.Registry = application.NewSourceRegistry(

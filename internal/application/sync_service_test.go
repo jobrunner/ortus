@@ -17,7 +17,7 @@ func TestSyncService_RateLimiting(t *testing.T) {
 
 	// Create a mock registry
 	registry := &SourceRegistry{
-		packages:  make(map[string]*sourceEntry),
+		sources:   make(map[string]*sourceEntry),
 		logger:    logger,
 		localPath: "/tmp",
 		storage:   &mockStorage{},
@@ -48,7 +48,7 @@ func TestSyncService_StartStop(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 
 	registry := &SourceRegistry{
-		packages:  make(map[string]*sourceEntry),
+		sources:   make(map[string]*sourceEntry),
 		logger:    logger,
 		localPath: "/tmp",
 		storage:   &mockStorage{},
@@ -77,7 +77,7 @@ func TestSyncService_Interval(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 
 	registry := &SourceRegistry{
-		packages:  make(map[string]*sourceEntry),
+		sources:   make(map[string]*sourceEntry),
 		logger:    logger,
 		localPath: "/tmp",
 		storage:   &mockStorage{},
@@ -104,7 +104,7 @@ func TestSyncService_SyncAddsNewPackages(t *testing.T) {
 	}
 
 	registry := &SourceRegistry{
-		packages:  make(map[string]*sourceEntry),
+		sources:   make(map[string]*sourceEntry),
 		providers: []output.SpatialSource{&mockRepository{}},
 		logger:    logger,
 		localPath: "/tmp",
@@ -133,7 +133,7 @@ func TestRegistry_IsLoaded(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 
 	registry := &SourceRegistry{
-		packages:  make(map[string]*sourceEntry),
+		sources:   make(map[string]*sourceEntry),
 		logger:    logger,
 		localPath: "/tmp",
 		storage:   &mockStorage{},
@@ -146,7 +146,7 @@ func TestRegistry_IsLoaded(t *testing.T) {
 	}
 
 	// Add a package manually
-	registry.packages["test-package"] = &sourceEntry{}
+	registry.sources["test-package"] = &sourceEntry{}
 
 	// Now it should be loaded
 	if !registry.IsLoaded("test-package") {
@@ -158,7 +158,7 @@ func TestRegistry_SourceCount(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 
 	registry := &SourceRegistry{
-		packages:  make(map[string]*sourceEntry),
+		sources:   make(map[string]*sourceEntry),
 		logger:    logger,
 		localPath: "/tmp",
 		storage:   &mockStorage{},
@@ -169,8 +169,8 @@ func TestRegistry_SourceCount(t *testing.T) {
 		t.Errorf("expected 0 packages, got %d", registry.SourceCount())
 	}
 
-	registry.packages["pkg1"] = &sourceEntry{}
-	registry.packages["pkg2"] = &sourceEntry{}
+	registry.sources["pkg1"] = &sourceEntry{}
+	registry.sources["pkg2"] = &sourceEntry{}
 
 	if registry.SourceCount() != 2 {
 		t.Errorf("expected 2 packages, got %d", registry.SourceCount())
@@ -189,7 +189,7 @@ func TestRegistry_SyncRemovesDeletedPackages(t *testing.T) {
 	}
 
 	registry := &SourceRegistry{
-		packages:  make(map[string]*sourceEntry),
+		sources:   make(map[string]*sourceEntry),
 		providers: []output.SpatialSource{&mockRepository{}},
 		logger:    logger,
 		localPath: "/tmp",
@@ -236,7 +236,7 @@ func TestRegistry_FindPackagesToRemove(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 
 	registry := &SourceRegistry{
-		packages:  make(map[string]*sourceEntry),
+		sources:   make(map[string]*sourceEntry),
 		logger:    logger,
 		localPath: "/tmp",
 		storage:   &mockStorage{},
@@ -244,9 +244,9 @@ func TestRegistry_FindPackagesToRemove(t *testing.T) {
 	}
 
 	// Add some packages locally
-	registry.packages["pkg1"] = &sourceEntry{}
-	registry.packages["pkg2"] = &sourceEntry{}
-	registry.packages["pkg3"] = &sourceEntry{}
+	registry.sources["pkg1"] = &sourceEntry{}
+	registry.sources["pkg2"] = &sourceEntry{}
+	registry.sources["pkg3"] = &sourceEntry{}
 
 	// Only pkg1 and pkg3 are in remote
 	remotePackages := map[string]string{

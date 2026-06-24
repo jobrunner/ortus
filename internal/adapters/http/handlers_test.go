@@ -36,7 +36,7 @@ func (m *mockQueryService) QueryPointInSource(_ context.Context, _ string, _ dom
 	return nil, nil
 }
 
-// mockSourceRegistry implements application.SourceRegistry for testing.
+// mockSourceRegistry implements the input.SourceRegistry port for testing.
 type mockSourceRegistry struct {
 	packages   []domain.Source
 	getPackage *domain.Source

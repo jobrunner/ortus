@@ -169,19 +169,19 @@ func (s *QueryService) QueryPoint(ctx context.Context, req domain.QueryRequest) 
 	return response, nil
 }
 
-// QueryPointInSource performs a point query in a specific GeoPackage.
-func (s *QueryService) QueryPointInSource(ctx context.Context, packageID string, req domain.QueryRequest) (*domain.QueryResult, error) {
+// QueryPointInSource performs a point query in a specific source.
+func (s *QueryService) QueryPointInSource(ctx context.Context, sourceID string, req domain.QueryRequest) (*domain.QueryResult, error) {
 	start := time.Now()
 
 	ctx, span := s.tracer.Start(ctx, "QueryService.QueryPointInSource",
 		output.WithAttributes(
-			output.String("ortus.source.id", packageID),
+			output.String("ortus.source.id", sourceID),
 		),
 	)
 	defer span.End()
 
 	// Get package info
-	pkg, err := s.registry.GetSource(ctx, packageID)
+	pkg, err := s.registry.GetSource(ctx, sourceID)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(output.StatusError, "get package")
@@ -202,7 +202,7 @@ func (s *QueryService) QueryPointInSource(ctx context.Context, packageID string,
 	// Query each layer
 	maxReached := false
 	for _, layer := range pkg.Layers {
-		if s.queryLayer(ctx, packageID, &layer, &req, result) {
+		if s.queryLayer(ctx, sourceID, &layer, &req, result) {
 			maxReached = true
 			break // max features reached
 		}
@@ -210,7 +210,7 @@ func (s *QueryService) QueryPointInSource(ctx context.Context, packageID string,
 
 	result.QueryTime = time.Since(start)
 	s.queryDuration.Record(ctx, result.QueryTime.Seconds(), metric.WithAttributes(
-		attribute.String("package_id", packageID),
+		attribute.String("package_id", sourceID),
 	))
 
 	span.SetAttributes(
@@ -224,10 +224,10 @@ func (s *QueryService) QueryPointInSource(ctx context.Context, packageID string,
 }
 
 // queryLayer queries a single layer and appends results. Returns true if max features reached.
-func (s *QueryService) queryLayer(ctx context.Context, packageID string, layer *domain.Layer, req *domain.QueryRequest, result *domain.QueryResult) bool {
+func (s *QueryService) queryLayer(ctx context.Context, sourceID string, layer *domain.Layer, req *domain.QueryRequest, result *domain.QueryResult) bool {
 	ctx, span := s.tracer.Start(ctx, "QueryService.queryLayer",
 		output.WithAttributes(
-			output.String("ortus.source.id", packageID),
+			output.String("ortus.source.id", sourceID),
 			output.String("ortus.layer.name", layer.Name),
 			output.Int("ortus.layer.srid", layer.SRID),
 			output.String("ortus.layer.geometry_type", layer.GeometryType),
@@ -241,9 +241,9 @@ func (s *QueryService) queryLayer(ctx context.Context, packageID string, layer *
 		return false
 	}
 
-	features, err := s.registry.Query(ctx, packageID, layer.Name, queryCoord)
+	features, err := s.registry.Query(ctx, sourceID, layer.Name, queryCoord)
 	if err != nil {
-		s.logger.Warn("layer query failed", "package", packageID, "layer", layer.Name, "error", err)
+		s.logger.Warn("layer query failed", "package", sourceID, "layer", layer.Name, "error", err)
 		span.RecordError(err)
 		span.SetStatus(output.StatusError, "layer query failed")
 		return false
