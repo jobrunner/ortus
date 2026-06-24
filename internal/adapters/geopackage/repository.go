@@ -199,7 +199,7 @@ func (r *Repository) GetLayers(ctx context.Context, packageID string) ([]domain.
 
 	if !ok {
 		span.RecordError(domain.ErrSourceNotFound)
-		span.SetStatus(output.StatusError, "package not found")
+		span.SetStatus(output.StatusError, "source not found")
 		return nil, domain.ErrSourceNotFound
 	}
 
@@ -229,7 +229,7 @@ func (r *Repository) QueryPoint(ctx context.Context, packageID, layerName string
 
 	if !ok {
 		span.RecordError(domain.ErrSourceNotFound)
-		span.SetStatus(output.StatusError, "package not found")
+		span.SetStatus(output.StatusError, "source not found")
 		return nil, domain.ErrSourceNotFound
 	}
 
@@ -279,7 +279,7 @@ func (r *Repository) CreateSpatialIndex(ctx context.Context, packageID, layerNam
 
 	if !ok {
 		span.RecordError(domain.ErrSourceNotFound)
-		span.SetStatus(output.StatusError, "package not found")
+		span.SetStatus(output.StatusError, "source not found")
 		return domain.ErrSourceNotFound
 	}
 
@@ -407,7 +407,7 @@ func (r *Repository) HasSpatialIndex(ctx context.Context, packageID, layerName s
 
 	if !ok {
 		span.RecordError(domain.ErrSourceNotFound)
-		span.SetStatus(output.StatusError, "package not found")
+		span.SetStatus(output.StatusError, "source not found")
 		return false, domain.ErrSourceNotFound
 	}
 

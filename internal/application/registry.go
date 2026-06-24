@@ -121,25 +121,25 @@ func (r *SourceRegistry) LoadSource(ctx context.Context, path string) error {
 		return err
 	}
 
-	// Open the package
-	pkg, err := provider.Open(ctx, path)
+	// Open the source
+	src, err := provider.Open(ctx, path)
 	if err != nil {
-		r.logger.Error("failed to open package", "path", path, "error", err)
+		r.logger.Error("failed to open source", "path", path, "error", err)
 		span.RecordError(err)
 		span.SetStatus(output.StatusError, "open failed")
 		return err
 	}
 
 	span.SetAttributes(
-		output.String("ortus.source.id", pkg.ID),
-		output.String("ortus.source.kind", string(pkg.Kind)),
-		output.Int("ortus.layers.count", len(pkg.Layers)),
+		output.String("ortus.source.id", src.ID),
+		output.String("ortus.source.kind", string(src.Kind)),
+		output.Int("ortus.layers.count", len(src.Layers)),
 	)
 
-	// Register the package
+	// Register the source
 	r.mu.Lock()
-	r.sources[pkg.ID] = &sourceEntry{
-		Source: pkg,
+	r.sources[src.ID] = &sourceEntry{
+		Source: src,
 		Repo:   provider,
 		Status: domain.StatusIndexing,
 	}
@@ -147,10 +147,10 @@ func (r *SourceRegistry) LoadSource(ctx context.Context, path string) error {
 
 	// Prepare all layers (builds spatial indices for vector sources; a no-op
 	// for sources that are ready on open).
-	for _, layer := range pkg.Layers {
-		r.logger.Debug("preparing layer", "package", pkg.ID, "layer", layer.Name)
-		if err := provider.Prepare(ctx, pkg.ID, layer.Name); err != nil {
-			r.logger.Warn("failed to prepare layer", "package", pkg.ID, "layer", layer.Name, "error", err)
+	for _, layer := range src.Layers {
+		r.logger.Debug("preparing layer", "source", src.ID, "layer", layer.Name)
+		if err := provider.Prepare(ctx, src.ID, layer.Name); err != nil {
+			r.logger.Warn("failed to prepare layer", "source", src.ID, "layer", layer.Name, "error", err)
 			span.AddEvent("layer preparation failed",
 				output.String("ortus.layer.name", layer.Name),
 				output.String("error", err.Error()),
@@ -162,7 +162,7 @@ func (r *SourceRegistry) LoadSource(ctx context.Context, path string) error {
 	// (Prepare updates each layer's HasIndex), not an unconditional assumption —
 	// a failed Prepare leaves its layer unindexed and the source not fully ready.
 	r.mu.Lock()
-	if entry, ok := r.sources[pkg.ID]; ok {
+	if entry, ok := r.sources[src.ID]; ok {
 		entry.Status = domain.StatusReady
 		entry.Source.LoadedAt = time.Now()
 		entry.Source.Indexed = allLayersIndexed(entry.Source.Layers)
@@ -170,7 +170,7 @@ func (r *SourceRegistry) LoadSource(ctx context.Context, path string) error {
 	r.mu.Unlock()
 
 	r.updateMetrics()
-	r.logger.Info("source loaded", "id", pkg.ID, "layers", len(pkg.Layers))
+	r.logger.Info("source loaded", "id", src.ID, "layers", len(src.Layers))
 	span.SetStatus(output.StatusOK, "")
 
 	return nil
@@ -204,7 +204,7 @@ func (r *SourceRegistry) UnloadSource(ctx context.Context, sourceID string) erro
 	r.mu.Unlock()
 
 	if err := repo.Close(ctx, sourceID); err != nil {
-		r.logger.Error("failed to close package", "id", sourceID, "error", err)
+		r.logger.Error("failed to close source", "id", sourceID, "error", err)
 		span.RecordError(err)
 		span.SetStatus(output.StatusError, "close failed")
 		return err
@@ -387,7 +387,7 @@ func (r *SourceRegistry) LoadAll(ctx context.Context) error {
 			continue
 		}
 		if err := r.storage.Download(ctx, obj.Key, localPath); err != nil {
-			r.logger.Error("failed to download package", "key", obj.Key, "error", err)
+			r.logger.Error("failed to download source", "key", obj.Key, "error", err)
 			failed++
 			continue
 		}
@@ -436,7 +436,7 @@ func (r *SourceRegistry) Sync(ctx context.Context) (SyncStats, error) {
 	ctx, span := r.tracer.Start(ctx, "SourceRegistry.Sync")
 	defer span.End()
 
-	r.logger.Info("syncing packages from storage")
+	r.logger.Info("syncing sources from storage")
 
 	objects, err := r.storage.List(ctx)
 	if err != nil {
@@ -458,21 +458,21 @@ func (r *SourceRegistry) Sync(ctx context.Context) (SyncStats, error) {
 	// Remove sources that no longer exist in remote storage
 	// We capture both ID and path in findSourcesToRemove to avoid race conditions
 	sourcesToRemove := r.findSourcesToRemove(remoteSources)
-	for _, pkg := range sourcesToRemove {
-		r.logger.Info("removing package not in remote storage", "id", pkg.id)
+	for _, src := range sourcesToRemove {
+		r.logger.Info("removing source not in remote storage", "id", src.id)
 
-		// Unload the package
-		if err := r.UnloadSource(ctx, pkg.id); err != nil {
-			r.logger.Error("failed to unload removed package", "id", pkg.id, "error", err)
+		// Unload the source
+		if err := r.UnloadSource(ctx, src.id); err != nil {
+			r.logger.Error("failed to unload removed source", "id", src.id, "error", err)
 			continue
 		}
 
 		// Delete local cache file
-		if pkg.path != "" {
-			if err := os.Remove(pkg.path); err != nil && !os.IsNotExist(err) {
-				r.logger.Warn("failed to delete local cache file", "path", pkg.path, "error", err)
+		if src.path != "" {
+			if err := os.Remove(src.path); err != nil && !os.IsNotExist(err) {
+				r.logger.Warn("failed to delete local cache file", "path", src.path, "error", err)
 			} else {
-				r.logger.Debug("deleted local cache file", "path", pkg.path)
+				r.logger.Debug("deleted local cache file", "path", src.path)
 			}
 		}
 
@@ -496,7 +496,7 @@ func (r *SourceRegistry) syncAddNew(ctx context.Context, remoteSources map[strin
 	added := 0
 	for sourceID, objectKey := range remoteSources {
 		if r.IsLoaded(sourceID) {
-			r.logger.Debug("package already loaded, skipping", "id", sourceID)
+			r.logger.Debug("source already loaded, skipping", "id", sourceID)
 			continue
 		}
 		localPath, err := r.safeLocalPath(objectKey)
@@ -505,7 +505,7 @@ func (r *SourceRegistry) syncAddNew(ctx context.Context, remoteSources map[strin
 			continue
 		}
 		if err := r.storage.Download(ctx, objectKey, localPath); err != nil {
-			r.logger.Error("failed to download package", "key", objectKey, "error", err)
+			r.logger.Error("failed to download source", "key", objectKey, "error", err)
 			continue
 		}
 		if err := r.LoadSource(ctx, localPath); err != nil {
@@ -513,7 +513,7 @@ func (r *SourceRegistry) syncAddNew(ctx context.Context, remoteSources map[strin
 			continue
 		}
 		added++
-		r.logger.Info("new package synced", "id", sourceID)
+		r.logger.Info("new source synced", "id", sourceID)
 	}
 	return added
 }
