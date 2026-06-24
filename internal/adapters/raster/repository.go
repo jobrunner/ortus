@@ -84,7 +84,9 @@ func (r *Repository) CleanupOrphaned() (int, error) {
 	}
 	removed := 0
 	for _, m := range matches {
-		info, statErr := os.Stat(m)
+		// Lstat (not Stat) so a symlink matching the prefix is skipped rather
+		// than followed — our unpack dirs are always real directories.
+		info, statErr := os.Lstat(m)
 		if statErr != nil || !info.IsDir() {
 			continue
 		}

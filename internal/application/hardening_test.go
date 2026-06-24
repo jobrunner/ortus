@@ -103,16 +103,27 @@ func TestQueryTimeoutIsEnforced(t *testing.T) {
 
 	done := make(chan struct{})
 	var elapsed time.Duration
+	var resp *domain.QueryResponse
 	go func() {
 		start := time.Now()
-		_, _ = svc.QueryPoint(context.Background(), domain.QueryRequest{Coordinate: domain.NewWGS84Coordinate(1, 1)})
+		resp, _ = svc.QueryPoint(context.Background(), domain.QueryRequest{Coordinate: domain.NewWGS84Coordinate(1, 1)})
 		elapsed = time.Since(start)
 		close(done)
 	}()
 	select {
 	case <-done:
-		if elapsed > 2*time.Second {
-			t.Errorf("query took %s — timeout not enforced", elapsed)
+		// The 50ms deadline must fire well before any sane bound; without the
+		// timeout the blocking adapter would hang until the 5s fatal below.
+		if elapsed > 1*time.Second {
+			t.Errorf("query took %s — timeout not promptly enforced", elapsed)
+		}
+		// The timed-out adapter contributes nothing; the call still returns a
+		// (best-effort, empty) response rather than erroring out.
+		if resp == nil {
+			t.Fatal("expected a response after timeout, got nil")
+		}
+		if resp.TotalFeatures != 0 {
+			t.Errorf("TotalFeatures = %d, want 0 (timed-out adapter yields no features)", resp.TotalFeatures)
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("QueryPoint blocked past 5s — timeout not enforced")
