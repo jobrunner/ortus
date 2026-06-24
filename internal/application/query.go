@@ -118,34 +118,34 @@ func (s *QueryService) QueryPoint(ctx context.Context, req domain.QueryRequest) 
 	}
 
 	// Get all ready sources
-	packageIDs := s.registry.ReadySourceIDs()
+	sourceIDs := s.registry.ReadySourceIDs()
 
 	// Filter by specific source if requested
 	if req.SourceID != "" {
 		found := false
-		for _, id := range packageIDs {
+		for _, id := range sourceIDs {
 			if id == req.SourceID {
-				packageIDs = []string{req.SourceID}
+				sourceIDs = []string{req.SourceID}
 				found = true
 				break
 			}
 		}
 		if !found {
 			span.RecordError(domain.ErrSourceNotFound)
-			span.SetStatus(output.StatusError, "package not found")
+			span.SetStatus(output.StatusError, "source not found")
 			return nil, domain.ErrSourceNotFound
 		}
 	}
 
-	span.SetAttributes(output.Int("ortus.sources.queried", len(packageIDs)))
+	span.SetAttributes(output.Int("ortus.sources.queried", len(sourceIDs)))
 
-	// Query each package
-	for _, pkgID := range packageIDs {
-		result, err := s.QueryPointInSource(ctx, pkgID, req)
+	// Query each source
+	for _, sid := range sourceIDs {
+		result, err := s.QueryPointInSource(ctx, sid, req)
 		if err != nil {
-			s.logger.Warn("query failed for package", "package", pkgID, "error", err)
+			s.logger.Warn("query failed for source", "source", sid, "error", err)
 			s.queryCount.Add(ctx, 1, metric.WithAttributes(
-				attribute.String("source_id", pkgID),
+				attribute.String("source_id", sid),
 				attribute.String("status", "error"),
 			))
 			continue
@@ -155,7 +155,7 @@ func (s *QueryService) QueryPoint(ctx context.Context, req domain.QueryRequest) 
 			response.AddResult(*result)
 		}
 		s.queryCount.Add(ctx, 1, metric.WithAttributes(
-			attribute.String("source_id", pkgID),
+			attribute.String("source_id", sid),
 			attribute.String("status", "success"),
 		))
 	}
@@ -184,7 +184,7 @@ func (s *QueryService) QueryPointInSource(ctx context.Context, sourceID string, 
 	pkg, err := s.registry.GetSource(ctx, sourceID)
 	if err != nil {
 		span.RecordError(err)
-		span.SetStatus(output.StatusError, "get package")
+		span.SetStatus(output.StatusError, "get source")
 		return nil, err
 	}
 
@@ -243,7 +243,7 @@ func (s *QueryService) queryLayer(ctx context.Context, sourceID string, layer *d
 
 	features, err := s.registry.Query(ctx, sourceID, layer.Name, queryCoord)
 	if err != nil {
-		s.logger.Warn("layer query failed", "package", sourceID, "layer", layer.Name, "error", err)
+		s.logger.Warn("layer query failed", "source", sourceID, "layer", layer.Name, "error", err)
 		span.RecordError(err)
 		span.SetStatus(output.StatusError, "layer query failed")
 		return false

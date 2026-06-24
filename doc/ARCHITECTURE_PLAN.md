@@ -426,10 +426,10 @@ type GeoPackagePort interface {
     // GetPackage gibt ein spezifisches GeoPackage zurück
     GetPackage(ctx context.Context, id string) (*domain.GeoPackage, error)
 
-    // GetPackageLayers gibt die Layer eines GeoPackages zurück
+    // GetPackageLayers gibt die Layer einer Datenquelle zurück
     GetPackageLayers(ctx context.Context, id string) ([]domain.Layer, error)
 
-    // GetPackageMetadata gibt die Metadaten eines GeoPackages zurück
+    // GetPackageMetadata gibt die Metadaten einer Datenquelle zurück
     GetPackageMetadata(ctx context.Context, id string) (*domain.Metadata, error)
 }
 ```
@@ -951,12 +951,12 @@ FileSystem              Watcher              Registry            Repository
 
 | Methode | Pfad | Beschreibung |
 |---------|------|--------------|
-| GET | `/api/v1/query` | Punktabfrage auf allen GeoPackages |
-| GET | `/api/v1/query/{sourceId}` | Punktabfrage auf einem GeoPackage |
-| GET | `/api/v1/sources` | Liste aller registrierten GeoPackages |
-| GET | `/api/v1/sources/{sourceId}` | Details zu einem GeoPackage |
-| GET | `/api/v1/sources/{sourceId}/layers` | Layer eines GeoPackages |
-| GET | `/api/v1/sources/{sourceId}/metadata` | Metadaten eines GeoPackages |
+| GET | `/api/v1/query` | Punktabfrage auf allen Datenquellen |
+| GET | `/api/v1/query/{sourceId}` | Punktabfrage auf einer Datenquelle |
+| GET | `/api/v1/sources` | Liste aller registrierten Datenquellen |
+| GET | `/api/v1/sources/{sourceId}` | Details zu einer Datenquelle |
+| GET | `/api/v1/sources/{sourceId}/layers` | Layer einer Datenquelle |
+| GET | `/api/v1/sources/{sourceId}/metadata` | Metadaten einer Datenquelle |
 | GET | `/health/ready` | Readiness-Check |
 | GET | `/health/live` | Liveness-Check |
 | GET | `/metrics` | Prometheus-Metriken |
@@ -1635,7 +1635,7 @@ var (
 
     // GeoPackage-Metriken
     GeoPackagesLoaded = promauto.NewGauge(prometheus.GaugeOpts{
-        Name: "ortus_geosources_loaded",
+        Name: "ortus_sources_loaded",
         Help: "Number of loaded GeoPackages",
     })
 

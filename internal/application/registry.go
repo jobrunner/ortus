@@ -100,7 +100,7 @@ func (r *SourceRegistry) LoadSource(ctx context.Context, path string) error {
 	)
 	defer span.End()
 
-	r.logger.Info("loading package", "path", path)
+	r.logger.Info("loading source", "path", path)
 
 	// Reload semantics: if this source is already loaded (e.g. a file-watcher
 	// modify event), unload it first. Otherwise the adapter would return its
@@ -170,7 +170,7 @@ func (r *SourceRegistry) LoadSource(ctx context.Context, path string) error {
 	r.mu.Unlock()
 
 	r.updateMetrics()
-	r.logger.Info("package loaded", "id", pkg.ID, "layers", len(pkg.Layers))
+	r.logger.Info("source loaded", "id", pkg.ID, "layers", len(pkg.Layers))
 	span.SetStatus(output.StatusOK, "")
 
 	return nil
@@ -183,7 +183,7 @@ func (r *SourceRegistry) UnloadSource(ctx context.Context, sourceID string) erro
 	)
 	defer span.End()
 
-	r.logger.Info("unloading package", "id", sourceID)
+	r.logger.Info("unloading source", "id", sourceID)
 
 	r.mu.Lock()
 	entry, ok := r.sources[sourceID]
@@ -286,7 +286,7 @@ func (r *SourceRegistry) GetSource(ctx context.Context, id string) (*domain.Sour
 	entry, ok := r.sources[id]
 	if !ok {
 		span.RecordError(domain.ErrSourceNotFound)
-		span.SetStatus(output.StatusError, "package not found")
+		span.SetStatus(output.StatusError, "source not found")
 		return nil, domain.ErrSourceNotFound
 	}
 
@@ -306,7 +306,7 @@ func (r *SourceRegistry) GetSourceStatus(ctx context.Context, id string) (domain
 	entry, ok := r.sources[id]
 	if !ok {
 		span.RecordError(domain.ErrSourceNotFound)
-		span.SetStatus(output.StatusError, "package not found")
+		span.SetStatus(output.StatusError, "source not found")
 		return "", domain.ErrSourceNotFound
 	}
 
@@ -393,7 +393,7 @@ func (r *SourceRegistry) LoadAll(ctx context.Context) error {
 		}
 
 		if err := r.LoadSource(ctx, localPath); err != nil {
-			r.logger.Error("failed to load package", "path", localPath, "error", err)
+			r.logger.Error("failed to load source", "path", localPath, "error", err)
 			failed++
 			continue
 		}
@@ -509,7 +509,7 @@ func (r *SourceRegistry) syncAddNew(ctx context.Context, remoteSources map[strin
 			continue
 		}
 		if err := r.LoadSource(ctx, localPath); err != nil {
-			r.logger.Error("failed to load package", "path", localPath, "error", err)
+			r.logger.Error("failed to load source", "path", localPath, "error", err)
 			continue
 		}
 		added++

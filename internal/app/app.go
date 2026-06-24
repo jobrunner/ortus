@@ -328,7 +328,7 @@ func (a *App) Start(ctx context.Context) error {
 
 	// Load all sources from storage
 	if err := a.Registry.LoadAll(startupCtx); err != nil {
-		a.Logger.Warn("failed to load packages", "error", err)
+		a.Logger.Warn("failed to load sources", "error", err)
 		startupSpan.RecordError(err)
 		startupOK = false
 	}
