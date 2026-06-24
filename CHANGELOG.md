@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Hot-reload served stale data.** A file-watcher *modify* event reloaded a
+  source, but the adapter returned its cached, pre-modification instance — the
+  change never took effect. `LoadPackage` now unloads an already-loaded source
+  first (reload semantics for all callers).
+- **Query timeout is now enforced.** `query.timeout` was configured but unused;
+  a hung/expensive adapter query could pin a goroutine indefinitely. The query
+  service now applies the configured deadline via `context.WithTimeout`.
+
+### Security
+- **Storage path traversal guarded.** Remote object keys are validated before
+  joining onto the local cache dir (`registry.safeLocalPath`), so a hostile
+  bucket key like `../../etc/…` can no longer write outside the data directory.
+
+### Changed
+- Raster unpack directories orphaned by a crash are swept at startup
+  (`raster.CleanupOrphaned`) to prevent disk exhaustion.
+- `app.handleFileEvent` derives source ids via `registry.DeriveSourceID`
+  (kind-agnostic) instead of the GeoPackage adapter's helper.
+
+### Docs
+- `doc/production-readiness-review.md`: critical architecture/ops/test review
+  with a prioritized roadmap (incl. the unfinished ADR-0012 vocabulary migration).
+
+## [0.10.0] - 2026-06-24
+
 ### Added
 - **Raster bundle adapter** (`internal/adapters/raster`): a second `SpatialSource`
   implementation that serves point queries against raster bundles (`*.zip` = manifest

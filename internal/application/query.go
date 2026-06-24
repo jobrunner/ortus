@@ -23,12 +23,14 @@ type QueryService struct {
 	logger        *slog.Logger
 	defaultSRID   int
 	maxFeatures   int
+	queryTimeout  time.Duration
 }
 
 // QueryServiceConfig holds configuration for the query service.
 type QueryServiceConfig struct {
-	DefaultSRID int
-	MaxFeatures int
+	DefaultSRID  int
+	MaxFeatures  int
+	QueryTimeout time.Duration // per-query deadline; 0 disables
 }
 
 // NewQueryService creates a new query service. The meter is used directly
@@ -74,12 +76,24 @@ func NewQueryService(
 		logger:        logger,
 		defaultSRID:   cfg.DefaultSRID,
 		maxFeatures:   cfg.MaxFeatures,
+		queryTimeout:  cfg.QueryTimeout,
 	}
 }
 
 // QueryPoint performs a point query across all registered GeoPackages.
 func (s *QueryService) QueryPoint(ctx context.Context, req domain.QueryRequest) (*domain.QueryResponse, error) {
 	start := time.Now()
+
+	// Enforce the configured per-query deadline so an expensive or hung adapter
+	// query can't pin a goroutine/connection indefinitely. Respect a caller's
+	// existing deadline if it already set one.
+	if s.queryTimeout > 0 {
+		if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(ctx, s.queryTimeout)
+			defer cancel()
+		}
+	}
 
 	ctx, span := s.tracer.Start(ctx, "QueryService.QueryPoint",
 		output.WithAttributes(
