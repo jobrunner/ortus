@@ -1,0 +1,43 @@
+# Auto-merge Dependabot PRs once CI is green.
+#
+# Enables GitHub's native auto-merge on Dependabot PRs for non-major updates.
+# Auto-merge respects the branch ruleset (required status checks + conversation
+# resolution), so a PR only merges when CI passes and any review threads are
+# resolved — no --admin override needed.
+#
+# Major bumps are left for manual review (auto-merge is NOT enabled on them).
+name: Dependabot auto-merge
+
+# pull_request_target is required so Dependabot PRs get a read-WRITE token
+# (a plain `pull_request` run gets a read-only token for bot actors and can't
+# merge). Safe here: this workflow never checks out or executes PR HEAD code —
+# it only reads Dependabot metadata and calls the GitHub merge API. So the
+# classic pwn-request footgun does not apply.
+on: pull_request_target  # zizmor: ignore[dangerous-triggers]
+
+# Least privilege; the job needs to enable auto-merge on the PR.
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    runs-on: ubuntu-latest
+    # Use the PR author, not github.actor (which reflects the last triggering
+    # actor and is spoofable — zizmor bot-conditions).
+    if: ${{ github.event.pull_request.user.login == 'dependabot[bot]' }}
+    steps:
+      - name: Fetch Dependabot metadata
+        id: meta
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Enable auto-merge for minor/patch (and grouped) updates. The ruleset
+      # allows only merge commits, so request --merge explicitly.
+      - name: Enable auto-merge (non-major)
+        if: ${{ steps.meta.outputs.update-type != 'version-update:semver-major' }}
+        run: gh pr merge --auto --merge "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

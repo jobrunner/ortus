@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# ortus pre-commit hook. Fast, non-mutating guard so broken/unformatted states
+# don't get committed. Install with: make hooks
+#
+# Intentionally lightweight (gofmt-check + compile). The full gate is `make
+# verify` / CI; this just catches the two cheapest, most common mistakes before
+# they leave the working tree. Skip in a hurry with: git commit --no-verify
+set -euo pipefail
+
+# Only run when Go files are staged.
+staged_go=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.go$' || true)
+if [ -z "$staged_go" ]; then
+	exit 0
+fi
+
+echo "pre-commit: gofmt check…"
+unformatted=$(gofmt -l $staged_go || true)
+if [ -n "$unformatted" ]; then
+	echo "❌ gofmt: diese Dateien sind nicht formatiert (gofmt -w ausführen):"
+	echo "$unformatted"
+	exit 1
+fi
+
+echo "pre-commit: go build…"
+if ! go build ./... ; then
+	echo "❌ go build fehlgeschlagen — Commit abgebrochen."
+	exit 1
+fi
+
+echo "✅ pre-commit ok"

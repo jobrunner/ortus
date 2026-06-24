@@ -5,8 +5,8 @@
 .PHONY: test test-unit test-integration test-coverage test-race test-bench
 .PHONY: lint lint-go lint-fix vet
 .PHONY: security-check vuln-check gosec
-.PHONY: fmt format
-.PHONY: check check-ci
+.PHONY: fmt format fmt-check
+.PHONY: check check-ci verify hooks
 .PHONY: deps deps-update deps-verify
 .PHONY: doc doc-serve
 .PHONY: release release-dry
@@ -100,9 +100,26 @@ fmt: ## Formatiere Go Code
 
 format: fmt ## Alias für fmt
 
+fmt-check: ## Prüfe Formatierung ohne zu ändern (CI/Hook)
+	@unformatted=$$(gofmt -l cmd internal pkg api 2>/dev/null); \
+	if [ -n "$$unformatted" ]; then \
+		echo "❌ Nicht formatiert (gofmt -w ausführen):"; echo "$$unformatted"; exit 1; \
+	fi
+
 ## Quality Gate
 check: fmt vet lint test ## Alle Qualitätsprüfungen (vor Commit)
 	@echo "\n✅ Alle Prüfungen bestanden!"
+
+# Kanonische, NICHT-mutierende Grün-Prüfung. Dies ist die maßgebliche Quelle
+# für "ist es grün?" — Editor-/LSP-Diagnosen sind bei großen Renames unzuverlässig
+# (siehe ADR/Memory); der Compiler entscheidet. Gleiche Schritte wie die CI.
+verify: fmt-check vet build test lint ## Maßgebliche Grün-Prüfung (gofmt-check+vet+build+test+lint)
+	@echo "\n✅ verify bestanden — Build/Test/Lint/Format grün."
+
+hooks: ## Installiere git pre-commit Hook (.githooks)
+	git config core.hooksPath .githooks
+	@chmod +x .githooks/pre-commit
+	@echo "✅ pre-commit Hook aktiv (core.hooksPath=.githooks)."
 
 check-ci: ## CI-optimierte Prüfungen (mit Reports)
 	@mkdir -p $(COVERAGE_DIR)
