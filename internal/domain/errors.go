@@ -16,7 +16,7 @@ var (
 
 // Specific errors.
 var (
-	ErrPackageNotFound       = fmt.Errorf("geopackage: %w", ErrNotFound)
+	ErrSourceNotFound        = fmt.Errorf("source: %w", ErrNotFound)
 	ErrLayerNotFound         = fmt.Errorf("layer: %w", ErrNotFound)
 	ErrInvalidCoordinate     = fmt.Errorf("coordinate: %w", ErrInvalidInput)
 	ErrInvalidSRID           = fmt.Errorf("srid: %w", ErrInvalidInput)
@@ -49,18 +49,18 @@ func (e *ValidationError) Unwrap() error {
 
 // QueryError represents an error during a query operation.
 type QueryError struct {
-	PackageID string // GeoPackage identifier
-	Layer     string // Layer name
-	Err       error  // Underlying error
+	SourceID string // source identifier
+	Layer    string // Layer name
+	Err      error  // Underlying error
 }
 
 // Error implements the error interface.
 func (e *QueryError) Error() string {
 	if e.Layer != "" {
-		return fmt.Sprintf("query error in package %s, layer %s: %v",
-			e.PackageID, e.Layer, e.Err)
+		return fmt.Sprintf("query error in source %s, layer %s: %v",
+			e.SourceID, e.Layer, e.Err)
 	}
-	return fmt.Sprintf("query error in package %s: %v", e.PackageID, e.Err)
+	return fmt.Sprintf("query error in source %s: %v", e.SourceID, e.Err)
 }
 
 // Unwrap returns the underlying error.
@@ -91,15 +91,15 @@ func (e *StorageError) Unwrap() error {
 
 // IndexError represents an error during spatial index operations.
 type IndexError struct {
-	PackageID string // GeoPackage identifier
-	Layer     string // Layer name
-	Err       error  // Underlying error
+	SourceID string // source identifier
+	Layer    string // Layer name
+	Err      error  // Underlying error
 }
 
 // Error implements the error interface.
 func (e *IndexError) Error() string {
-	return fmt.Sprintf("index error for layer %s in package %s: %v",
-		e.Layer, e.PackageID, e.Err)
+	return fmt.Sprintf("index error for layer %s in source %s: %v",
+		e.Layer, e.SourceID, e.Err)
 }
 
 // Unwrap returns the underlying error.

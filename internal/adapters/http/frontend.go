@@ -236,14 +236,14 @@ const frontendHTML = `<!DOCTYPE html>
             color: var(--text-muted);
         }
 
-        .package-card {
+        .source-card {
             border: 1px solid var(--border);
             border-radius: var(--radius);
             margin-bottom: 0.75rem;
             overflow: hidden;
         }
 
-        .package-header {
+        .source-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -253,16 +253,16 @@ const frontendHTML = `<!DOCTYPE html>
             user-select: none;
         }
 
-        .package-header:hover {
+        .source-header:hover {
             background: #f1f5f9;
         }
 
-        .package-name {
+        .source-name {
             font-weight: 500;
             font-size: 0.9375rem;
         }
 
-        .package-meta {
+        .source-meta {
             display: flex;
             gap: 0.75rem;
             font-size: 0.75rem;
@@ -285,13 +285,13 @@ const frontendHTML = `<!DOCTYPE html>
             color: var(--success);
         }
 
-        .package-content {
+        .source-content {
             display: none;
             padding: 1rem;
             border-top: 1px solid var(--border);
         }
 
-        .package-card.expanded .package-content {
+        .source-card.expanded .source-content {
             display: block;
         }
 
@@ -389,7 +389,7 @@ const frontendHTML = `<!DOCTYPE html>
             transition: transform 0.2s;
         }
 
-        .package-card.expanded .toggle-icon {
+        .source-card.expanded .toggle-icon {
             transform: rotate(180deg);
         }
 
@@ -446,7 +446,7 @@ const frontendHTML = `<!DOCTYPE html>
     <div class="container">
         <header>
             <h1>Ortus</h1>
-            <p>GeoPackage Point-in-Polygon Abfrage</p>
+            <p>Point-in-Polygon Abfrage über Datenquellen</p>
         </header>
 
         <div class="card">
@@ -686,12 +686,12 @@ const frontendHTML = `<!DOCTYPE html>
                 } else {
                     let html = '';
                     data.results.forEach(function(pkg, idx) {
-                        html += renderPackage(pkg, idx === 0);
+                        html += renderSource(pkg, idx === 0);
                     });
                     resultContent.innerHTML = html;
 
                     // Add click handlers for expand/collapse
-                    document.querySelectorAll('.package-header').forEach(function(header) {
+                    document.querySelectorAll('.source-header').forEach(function(header) {
                         header.addEventListener('click', function() {
                             this.parentElement.classList.toggle('expanded');
                         });
@@ -701,17 +701,17 @@ const frontendHTML = `<!DOCTYPE html>
                 results.classList.add('active');
             }
 
-            function renderPackage(pkg, expanded) {
-                let html = '<div class="package-card' + (expanded ? ' expanded' : '') + '">';
-                html += '<div class="package-header">';
-                html += '<span class="package-name">' + escapeHtml(pkg.package_name || pkg.package_id) + '</span>';
-                html += '<div class="package-meta">';
+            function renderSource(pkg, expanded) {
+                let html = '<div class="source-card' + (expanded ? ' expanded' : '') + '">';
+                html += '<div class="source-header">';
+                html += '<span class="source-name">' + escapeHtml(pkg.source_name || pkg.source_id) + '</span>';
+                html += '<div class="source-meta">';
                 html += '<span class="badge">' + pkg.feature_count + ' Feature(s)</span>';
                 html += '<span>' + pkg.query_time_ms + 'ms</span>';
                 html += '<svg class="toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>';
                 html += '</div></div>';
 
-                html += '<div class="package-content">';
+                html += '<div class="source-content">';
 
                 if (pkg.features && pkg.features.length > 0) {
                     pkg.features.forEach(function(feature) {

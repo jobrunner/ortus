@@ -297,7 +297,7 @@ func (r *Repository) QueryPoint(ctx context.Context, sourceID, layerName string,
 	b, ok := r.sources[sourceID]
 	r.mu.RUnlock()
 	if !ok {
-		return nil, domain.ErrPackageNotFound
+		return nil, domain.ErrSourceNotFound
 	}
 	layer, ok := b.layers[layerName]
 	if !ok {
@@ -314,7 +314,7 @@ func (r *Repository) QueryPoint(ctx context.Context, sourceID, layerName string,
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(output.StatusError, "sample failed")
-		return nil, &domain.QueryError{PackageID: sourceID, Layer: layerName, Err: err}
+		return nil, &domain.QueryError{SourceID: sourceID, Layer: layerName, Err: err}
 	}
 	value := int64(rd.At(layer.band, 0, 0)) //#nosec G115 -- categorical pixel values fit int64
 
@@ -327,7 +327,7 @@ func (r *Repository) QueryPoint(ctx context.Context, sourceID, layerName string,
 		err := fmt.Errorf("pixel value %d has no mapping entry (raster and legend disagree)", value)
 		span.RecordError(err)
 		span.SetStatus(output.StatusError, "unmapped value")
-		return nil, &domain.QueryError{PackageID: sourceID, Layer: layerName, Err: err}
+		return nil, &domain.QueryError{SourceID: sourceID, Layer: layerName, Err: err}
 	}
 
 	return []domain.Feature{{

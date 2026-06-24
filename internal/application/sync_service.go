@@ -182,9 +182,9 @@ func (s *SyncService) doSyncWithResult(ctx context.Context) (SyncResult, error) 
 	span.SetStatus(output.StatusOK, "")
 
 	return SyncResult{
-		PackagesAdded:   stats.Added,
-		PackagesRemoved: stats.Removed,
-		PackagesTotal:   s.registry.SourceCount(),
+		SourcesAdded:    stats.Added,
+		SourcesRemoved:  stats.Removed,
+		SourcesTotal:    s.registry.SourceCount(),
 		SyncedAt:        time.Now(),
 		NextScheduledAt: s.getNextSync(),
 	}, nil

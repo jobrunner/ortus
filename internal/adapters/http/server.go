@@ -96,7 +96,7 @@ func (s *Server) setupRoutes() *mux.Router {
 
 	// Tracing middleware MUST run first so subsequent middleware (logging,
 	// CORS, handlers) sees the span context. The instrumentation uses the
-	// matched mux route as span name (e.g. "GET /api/v1/query/{packageId}"),
+	// matched mux route as span name (e.g. "GET /api/v1/query/{sourceId}"),
 	// which keeps cardinality low.
 	if s.tracerProvider != nil {
 		r.Use(otelmux.Middleware(
@@ -146,12 +146,12 @@ func (s *Server) setupRoutes() *mux.Router {
 
 	// Query endpoints
 	api.HandleFunc("/query", s.handleQuery).Methods(http.MethodGet)
-	api.HandleFunc("/query/{packageId}", s.handleQueryPackage).Methods(http.MethodGet)
+	api.HandleFunc("/query/{sourceId}", s.handleQuerySource).Methods(http.MethodGet)
 
-	// Package management endpoints
-	api.HandleFunc("/packages", s.handleListSources).Methods(http.MethodGet)
-	api.HandleFunc("/packages/{packageId}", s.handleGetSource).Methods(http.MethodGet)
-	api.HandleFunc("/packages/{packageId}/layers", s.handleGetLayers).Methods(http.MethodGet)
+	// Source management endpoints
+	api.HandleFunc("/sources", s.handleListSources).Methods(http.MethodGet)
+	api.HandleFunc("/sources/{sourceId}", s.handleGetSource).Methods(http.MethodGet)
+	api.HandleFunc("/sources/{sourceId}/layers", s.handleGetLayers).Methods(http.MethodGet)
 
 	// Sync endpoint (only if sync service is configured)
 	if s.syncService != nil {

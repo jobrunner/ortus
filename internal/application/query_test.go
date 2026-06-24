@@ -182,7 +182,7 @@ func TestQueryServiceQueryPointSpecificPackage(t *testing.T) {
 
 	req := domain.QueryRequest{
 		Coordinate: domain.NewWGS84Coordinate(10, 50),
-		PackageID:  "pkg1",
+		SourceID:   "pkg1",
 	}
 
 	resp, err := svc.QueryPoint(context.Background(), req)
@@ -193,8 +193,8 @@ func TestQueryServiceQueryPointSpecificPackage(t *testing.T) {
 	if len(resp.Results) != 1 {
 		t.Errorf("len(Results) = %d, want 1", len(resp.Results))
 	}
-	if resp.Results[0].PackageID != "pkg1" {
-		t.Errorf("PackageID = %s, want pkg1", resp.Results[0].PackageID)
+	if resp.Results[0].SourceID != "pkg1" {
+		t.Errorf("SourceID = %s, want pkg1", resp.Results[0].SourceID)
 	}
 }
 
@@ -204,12 +204,12 @@ func TestQueryServiceQueryPointPackageNotFound(t *testing.T) {
 
 	req := domain.QueryRequest{
 		Coordinate: domain.NewWGS84Coordinate(10, 50),
-		PackageID:  "nonexistent",
+		SourceID:   "nonexistent",
 	}
 
 	_, err := svc.QueryPoint(context.Background(), req)
-	if err != domain.ErrPackageNotFound {
-		t.Errorf("err = %v, want %v", err, domain.ErrPackageNotFound)
+	if err != domain.ErrSourceNotFound {
+		t.Errorf("err = %v, want %v", err, domain.ErrSourceNotFound)
 	}
 }
 

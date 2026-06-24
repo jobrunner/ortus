@@ -42,9 +42,9 @@ type Syncer interface {
 // SyncResult contains the outcome of a synchronization run. It is a driving-port
 // DTO (like HealthDetails) returned to adapters that expose sync.
 type SyncResult struct {
-	PackagesAdded   int       `json:"packages_added"`
-	PackagesRemoved int       `json:"packages_removed"`
-	PackagesTotal   int       `json:"packages_total"`
+	SourcesAdded    int       `json:"sources_added"`
+	SourcesRemoved  int       `json:"sources_removed"`
+	SourcesTotal    int       `json:"sources_total"`
 	SyncedAt        time.Time `json:"synced_at"`
 	NextScheduledAt time.Time `json:"next_scheduled_at,omitempty"`
 }
@@ -63,9 +63,9 @@ type HealthChecker interface {
 
 // HealthDetails contains detailed health information.
 type HealthDetails struct {
-	Healthy        bool              // Overall health status
-	Ready          bool              // Ready to accept requests
-	PackagesLoaded int               // Number of loaded packages
-	PackagesReady  int               // Number of ready packages
-	Components     map[string]string // Component statuses
+	Healthy       bool              // Overall health status
+	Ready         bool              // Ready to accept requests
+	SourcesLoaded int               // Number of loaded sources
+	SourcesReady  int               // Number of ready sources
+	Components    map[string]string // Component statuses
 }

@@ -251,7 +251,7 @@ func (r *SourceRegistry) Query(ctx context.Context, sourceID, layer string, coor
 	if !ok || entry.Repo == nil {
 		// entry.Repo is always set by LoadSource; guard anyway so a
 		// malformed entry surfaces a clean error instead of a nil panic.
-		return nil, domain.ErrPackageNotFound
+		return nil, domain.ErrSourceNotFound
 	}
 	return entry.Repo.QueryPoint(ctx, sourceID, layer, coord)
 }
@@ -285,9 +285,9 @@ func (r *SourceRegistry) GetSource(ctx context.Context, id string) (*domain.Sour
 
 	entry, ok := r.sources[id]
 	if !ok {
-		span.RecordError(domain.ErrPackageNotFound)
+		span.RecordError(domain.ErrSourceNotFound)
 		span.SetStatus(output.StatusError, "package not found")
-		return nil, domain.ErrPackageNotFound
+		return nil, domain.ErrSourceNotFound
 	}
 
 	return entry.Source, nil
@@ -305,16 +305,16 @@ func (r *SourceRegistry) GetSourceStatus(ctx context.Context, id string) (domain
 
 	entry, ok := r.sources[id]
 	if !ok {
-		span.RecordError(domain.ErrPackageNotFound)
+		span.RecordError(domain.ErrSourceNotFound)
 		span.SetStatus(output.StatusError, "package not found")
-		return "", domain.ErrPackageNotFound
+		return "", domain.ErrSourceNotFound
 	}
 
 	span.SetAttributes(output.String("ortus.source.status", string(entry.Status)))
 	return entry.Status, nil
 }
 
-// IsReady returns true if a package is ready for queries.
+// IsReady returns true if a source is ready for queries.
 func (r *SourceRegistry) IsReady(sourceID string) bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -327,7 +327,7 @@ func (r *SourceRegistry) IsReady(sourceID string) bool {
 	return entry.Status == domain.StatusReady
 }
 
-// ReadySourceIDs returns IDs of all ready packages.
+// ReadySourceIDs returns IDs of all ready sources.
 func (r *SourceRegistry) ReadySourceIDs() []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -365,7 +365,7 @@ func (r *SourceRegistry) LoadAll(ctx context.Context) error {
 	ctx, span := r.tracer.Start(ctx, "SourceRegistry.LoadAll")
 	defer span.End()
 
-	r.logger.Info("loading all packages from storage")
+	r.logger.Info("loading all sources from storage")
 
 	objects, err := r.storage.List(ctx)
 	if err != nil {
@@ -408,7 +408,7 @@ func (r *SourceRegistry) LoadAll(ctx context.Context) error {
 	return nil
 }
 
-// IsLoaded returns true if a package with the given ID is already loaded.
+// IsLoaded returns true if a source with the given ID is already loaded.
 func (r *SourceRegistry) IsLoaded(sourceID string) bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -416,7 +416,7 @@ func (r *SourceRegistry) IsLoaded(sourceID string) bool {
 	return ok
 }
 
-// SourceCount returns the number of loaded packages.
+// SourceCount returns the number of loaded sources.
 func (r *SourceRegistry) SourceCount() int {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -429,9 +429,9 @@ type SyncStats struct {
 	Removed int
 }
 
-// Sync synchronizes with remote storage, downloading new packages and removing
-// packages that no longer exist in remote storage.
-// Returns statistics about added and removed packages.
+// Sync synchronizes with remote storage, downloading new sources and removing
+// sources that no longer exist in remote storage.
+// Returns statistics about added and removed sources.
 func (r *SourceRegistry) Sync(ctx context.Context) (SyncStats, error) {
 	ctx, span := r.tracer.Start(ctx, "SourceRegistry.Sync")
 	defer span.End()
@@ -445,20 +445,20 @@ func (r *SourceRegistry) Sync(ctx context.Context) (SyncStats, error) {
 		return SyncStats{}, err
 	}
 
-	// Build set of remote package IDs
-	remotePackages := make(map[string]string) // sourceID -> objectKey
+	// Build set of remote source IDs
+	remoteSources := make(map[string]string) // sourceID -> objectKey
 	for _, obj := range objects {
 		sourceID := deriveSourceID(obj.Key)
-		remotePackages[sourceID] = obj.Key
+		remoteSources[sourceID] = obj.Key
 	}
 
 	stats := SyncStats{}
-	stats.Added = r.syncAddNew(ctx, remotePackages)
+	stats.Added = r.syncAddNew(ctx, remoteSources)
 
-	// Remove packages that no longer exist in remote storage
-	// We capture both ID and path in findPackagesToRemove to avoid race conditions
-	packagesToRemove := r.findPackagesToRemove(remotePackages)
-	for _, pkg := range packagesToRemove {
+	// Remove sources that no longer exist in remote storage
+	// We capture both ID and path in findSourcesToRemove to avoid race conditions
+	sourcesToRemove := r.findSourcesToRemove(remoteSources)
+	for _, pkg := range sourcesToRemove {
 		r.logger.Info("removing package not in remote storage", "id", pkg.id)
 
 		// Unload the package
@@ -492,9 +492,9 @@ func (r *SourceRegistry) Sync(ctx context.Context) (SyncStats, error) {
 // syncAddNew downloads and loads every remote source not already loaded,
 // returning the number added. Unsafe object keys and download/load failures are
 // logged and skipped (one bad source must not abort the whole sync).
-func (r *SourceRegistry) syncAddNew(ctx context.Context, remotePackages map[string]string) int {
+func (r *SourceRegistry) syncAddNew(ctx context.Context, remoteSources map[string]string) int {
 	added := 0
-	for sourceID, objectKey := range remotePackages {
+	for sourceID, objectKey := range remoteSources {
 		if r.IsLoaded(sourceID) {
 			r.logger.Debug("package already loaded, skipping", "id", sourceID)
 			continue
@@ -518,26 +518,26 @@ func (r *SourceRegistry) syncAddNew(ctx context.Context, remotePackages map[stri
 	return added
 }
 
-// packageToRemove holds information about a package that should be removed.
-type packageToRemove struct {
+// sourceToRemove holds information about a source that should be removed.
+type sourceToRemove struct {
 	id   string
 	path string
 }
 
-// findPackagesToRemove returns packages that are loaded but not in remote storage.
+// findSourcesToRemove returns sources that are loaded but not in remote storage.
 // This captures both ID and path in a single lock acquisition to avoid race conditions.
-func (r *SourceRegistry) findPackagesToRemove(remotePackages map[string]string) []packageToRemove {
+func (r *SourceRegistry) findSourcesToRemove(remoteSources map[string]string) []sourceToRemove {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	var toRemove []packageToRemove
+	var toRemove []sourceToRemove
 	for sourceID, entry := range r.sources {
-		if _, exists := remotePackages[sourceID]; !exists {
+		if _, exists := remoteSources[sourceID]; !exists {
 			path := ""
 			if entry.Source != nil {
 				path = entry.Source.Path
 			}
-			toRemove = append(toRemove, packageToRemove{id: sourceID, path: path})
+			toRemove = append(toRemove, sourceToRemove{id: sourceID, path: path})
 		}
 	}
 	return toRemove

@@ -37,8 +37,8 @@ func newHTTPMetrics(meter metric.Meter) *httpMetrics {
 
 // middleware returns the gorilla/mux middleware that records counter +
 // histogram for every request that flows through it. The `path` label is
-// the MATCHED ROUTE TEMPLATE ("/api/v1/packages/{packageId}"), not the
-// raw URL — so 100 distinct package IDs collapse to one label
+// the MATCHED ROUTE TEMPLATE ("/api/v1/sources/{sourceId}"), not the
+// raw URL — so 100 distinct source IDs collapse to one label
 // combination rather than 100.
 //
 // Note: gorilla/mux invokes NotFoundHandler / MethodNotAllowedHandler
@@ -71,7 +71,7 @@ func (m *httpMetrics) middleware(next http.Handler) http.Handler {
 }
 
 // routePath returns the gorilla/mux route template for the matched route
-// (e.g. "/api/v1/packages/{packageId}") so that high-cardinality path
+// (e.g. "/api/v1/sources/{sourceId}") so that high-cardinality path
 // segments collapse into a single Prometheus label combination. Returns
 // "unknown" when no route matched (404/405) or the matched route was
 // registered without a path template.

@@ -34,15 +34,15 @@ type queryPointIn struct {
 	Y          *float64 `json:"y,omitempty" jsonschema:"northing in the given SRID; pair with 'x'"`
 	SRID       int      `json:"srid,omitempty" jsonschema:"spatial reference id for x/y; defaults to 4326 (WGS84) when omitted"`
 	Properties []string `json:"properties,omitempty" jsonschema:"if set, returned features include only these property keys"`
-	PackageID  string   `json:"package_id,omitempty" jsonschema:"if set, query only this single package instead of all loaded packages"`
+	SourceID   string   `json:"source_id,omitempty" jsonschema:"if set, query only this single source instead of all loaded sources"`
 }
 
 func addQueryPoint(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 	mcp.AddTool(srv, &mcp.Tool{
 		Name: "query_point",
 		Description: "Point-in-polygon query: returns every geographic feature " +
-			"containing the given coordinate across all loaded GeoPackages " +
-			"(or a single package if package_id is set). Accepts WGS84 lon/lat " +
+			"containing the given coordinate across all loaded sources " +
+			"(or a single source if source_id is set). Accepts WGS84 lon/lat " +
 			"or an arbitrary x/y/srid combination. Backed by the same QueryService " +
 			"as the GET /api/v1/query REST endpoint, but with stricter coordinate " +
 			"validation: complete pairs only, and (0,0) is a valid input.",
@@ -74,7 +74,7 @@ func addQueryPoint(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 			Coordinate: coord,
 			SourceSRID: srid,
 			Properties: in.Properties,
-			PackageID:  in.PackageID,
+			SourceID:   in.SourceID,
 		}
 		resp, err := deps.QueryService.QueryPoint(ctx, req)
 		if err != nil {
@@ -84,9 +84,9 @@ func addQueryPoint(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 	})
 }
 
-// ---- list_packages --------------------------------------------------------
+// ---- list_sources ---------------------------------------------------------
 
-type packageSummary struct {
+type sourceSummary struct {
 	ID         string `json:"id"`
 	Name       string `json:"name"`
 	LayerCount int    `json:"layer_count"`
@@ -94,25 +94,25 @@ type packageSummary struct {
 	Ready      bool   `json:"ready"`
 }
 
-type listPackagesOut struct {
-	Packages []packageSummary `json:"packages"`
-	Count    int              `json:"count"`
+type listSourcesOut struct {
+	Sources []sourceSummary `json:"sources"`
+	Count   int             `json:"count"`
 }
 
 func addListSources(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 	mcp.AddTool(srv, &mcp.Tool{
-		Name: "list_packages",
-		Description: "List every GeoPackage currently loaded into ortus, with ready " +
-			"state, layer count, and ID. Equivalent to GET /api/v1/packages.",
-	}, func(ctx toolCtx, _ *callRequest, _ any) (*callResult, listPackagesOut, error) {
+		Name: "list_sources",
+		Description: "List every source currently loaded into ortus, with ready " +
+			"state, layer count, and ID. Equivalent to GET /api/v1/sources.",
+	}, func(ctx toolCtx, _ *callRequest, _ any) (*callResult, listSourcesOut, error) {
 		pkgs, err := deps.Registry.ListSources(ctx)
 		if err != nil {
-			return nil, listPackagesOut{}, err
+			return nil, listSourcesOut{}, err
 		}
-		out := make([]packageSummary, 0, len(pkgs))
+		out := make([]sourceSummary, 0, len(pkgs))
 		for i := range pkgs {
 			p := &pkgs[i]
-			out = append(out, packageSummary{
+			out = append(out, sourceSummary{
 				ID:         p.ID,
 				Name:       p.Name,
 				LayerCount: p.LayerCount(),
@@ -120,26 +120,26 @@ func addListSources(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 				Ready:      p.IsReady(),
 			})
 		}
-		return nil, listPackagesOut{Packages: out, Count: len(out)}, nil
+		return nil, listSourcesOut{Sources: out, Count: len(out)}, nil
 	})
 }
 
-// ---- get_package ----------------------------------------------------------
+// ---- get_source ----------------------------------------------------------
 
-type getPackageIn struct {
-	PackageID string `json:"package_id" jsonschema:"id of the package (matches GET /api/v1/packages/{id})"`
+type getSourceIn struct {
+	SourceID string `json:"source_id" jsonschema:"id of the source (matches GET /api/v1/sources/{id})"`
 }
 
 func addGetSource(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 	mcp.AddTool(srv, &mcp.Tool{
-		Name: "get_package",
-		Description: "Fetch the full metadata for one GeoPackage: layers, extent, " +
-			"size, license, last-queried timestamp. Equivalent to GET /api/v1/packages/{id}.",
-	}, func(ctx toolCtx, _ *callRequest, in getPackageIn) (*callResult, *domain.Source, error) {
-		if strings.TrimSpace(in.PackageID) == "" {
-			return nil, nil, fmt.Errorf("package_id is required")
+		Name: "get_source",
+		Description: "Fetch the full metadata for one source: layers, extent, " +
+			"size, license, last-queried timestamp. Equivalent to GET /api/v1/sources/{id}.",
+	}, func(ctx toolCtx, _ *callRequest, in getSourceIn) (*callResult, *domain.Source, error) {
+		if strings.TrimSpace(in.SourceID) == "" {
+			return nil, nil, fmt.Errorf("source_id is required")
 		}
-		pkg, err := deps.Registry.GetSource(ctx, in.PackageID)
+		pkg, err := deps.Registry.GetSource(ctx, in.SourceID)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -147,10 +147,10 @@ func addGetSource(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 	})
 }
 
-// ---- get_package_layers ---------------------------------------------------
+// ---- get_source_layers ---------------------------------------------------
 
-type getPackageLayersIn struct {
-	PackageID string `json:"package_id" jsonschema:"id of the package to list layers from"`
+type getSourceLayersIn struct {
+	SourceID string `json:"source_id" jsonschema:"id of the source to list layers from"`
 }
 
 type layerSummary struct {
@@ -164,24 +164,24 @@ type layerSummary struct {
 	Extent         *domain.Extent `json:"extent,omitempty"`
 }
 
-type getPackageLayersOut struct {
-	PackageID string         `json:"package_id"`
-	Layers    []layerSummary `json:"layers"`
-	Count     int            `json:"count"`
+type getSourceLayersOut struct {
+	SourceID string         `json:"source_id"`
+	Layers   []layerSummary `json:"layers"`
+	Count    int            `json:"count"`
 }
 
 func addGetSourceLayers(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 	mcp.AddTool(srv, &mcp.Tool{
-		Name: "get_package_layers",
-		Description: "List the layers in a single GeoPackage, with geometry type, SRID, " +
-			"feature count, and bounding-box extent. Equivalent to GET /api/v1/packages/{id}/layers.",
-	}, func(ctx toolCtx, _ *callRequest, in getPackageLayersIn) (*callResult, getPackageLayersOut, error) {
-		if strings.TrimSpace(in.PackageID) == "" {
-			return nil, getPackageLayersOut{}, fmt.Errorf("package_id is required")
+		Name: "get_source_layers",
+		Description: "List the layers in a single source, with geometry type, SRID, " +
+			"feature count, and bounding-box extent. Equivalent to GET /api/v1/sources/{id}/layers.",
+	}, func(ctx toolCtx, _ *callRequest, in getSourceLayersIn) (*callResult, getSourceLayersOut, error) {
+		if strings.TrimSpace(in.SourceID) == "" {
+			return nil, getSourceLayersOut{}, fmt.Errorf("source_id is required")
 		}
-		pkg, err := deps.Registry.GetSource(ctx, in.PackageID)
+		pkg, err := deps.Registry.GetSource(ctx, in.SourceID)
 		if err != nil {
-			return nil, getPackageLayersOut{}, err
+			return nil, getSourceLayersOut{}, err
 		}
 		out := make([]layerSummary, 0, len(pkg.Layers))
 		for i := range pkg.Layers {
@@ -197,10 +197,10 @@ func addGetSourceLayers(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 				Extent:         l.Extent,
 			})
 		}
-		return nil, getPackageLayersOut{
-			PackageID: in.PackageID,
-			Layers:    out,
-			Count:     len(out),
+		return nil, getSourceLayersOut{
+			SourceID: in.SourceID,
+			Layers:   out,
+			Count:    len(out),
 		}, nil
 	})
 }

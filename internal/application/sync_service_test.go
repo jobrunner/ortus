@@ -33,8 +33,8 @@ func TestSyncService_RateLimiting(t *testing.T) {
 	if err != nil {
 		t.Errorf("first sync should succeed, got error: %v", err)
 	}
-	if result.PackagesAdded != 0 {
-		t.Errorf("expected 0 packages added with empty storage, got %d", result.PackagesAdded)
+	if result.SourcesAdded != 0 {
+		t.Errorf("expected 0 packages added with empty storage, got %d", result.SourcesAdded)
 	}
 
 	// Immediate second call should be rate limited
@@ -121,11 +121,11 @@ func TestSyncService_SyncAddsNewPackages(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sync failed: %v", err)
 	}
-	if result.PackagesAdded != 2 {
-		t.Errorf("expected 2 packages added, got %d", result.PackagesAdded)
+	if result.SourcesAdded != 2 {
+		t.Errorf("expected 2 packages added, got %d", result.SourcesAdded)
 	}
-	if result.PackagesTotal != 2 {
-		t.Errorf("expected 2 total packages, got %d", result.PackagesTotal)
+	if result.SourcesTotal != 2 {
+		t.Errorf("expected 2 total packages, got %d", result.SourcesTotal)
 	}
 }
 
@@ -249,12 +249,12 @@ func TestRegistry_FindPackagesToRemove(t *testing.T) {
 	registry.sources["pkg3"] = &sourceEntry{}
 
 	// Only pkg1 and pkg3 are in remote
-	remotePackages := map[string]string{
+	remoteSources := map[string]string{
 		"pkg1": "pkg1.gpkg",
 		"pkg3": "pkg3.gpkg",
 	}
 
-	toRemove := registry.findPackagesToRemove(remotePackages)
+	toRemove := registry.findSourcesToRemove(remoteSources)
 
 	if len(toRemove) != 1 {
 		t.Errorf("expected 1 package to remove, got %d", len(toRemove))

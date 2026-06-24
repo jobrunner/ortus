@@ -190,8 +190,8 @@ func TestQueryErrors(t *testing.T) {
 	if _, err := repo.QueryPoint(ctx, "regions", "nope", domain.NewWGS84Coordinate(20, 20)); err != domain.ErrLayerNotFound {
 		t.Errorf("unknown layer: %v, want ErrLayerNotFound", err)
 	}
-	if _, err := repo.QueryPoint(ctx, "missing", "main", domain.NewWGS84Coordinate(20, 20)); err != domain.ErrPackageNotFound {
-		t.Errorf("unknown source: %v, want ErrPackageNotFound", err)
+	if _, err := repo.QueryPoint(ctx, "missing", "main", domain.NewWGS84Coordinate(20, 20)); err != domain.ErrSourceNotFound {
+		t.Errorf("unknown source: %v, want ErrSourceNotFound", err)
 	}
 }
 
@@ -357,8 +357,8 @@ func TestCloseRemovesBundle(t *testing.T) {
 		t.Fatalf("Close: %v", err)
 	}
 	// Querying a closed source errors; unpack dir is gone.
-	if _, err := repo.QueryPoint(context.Background(), "regions", "main", domain.NewWGS84Coordinate(20, 20)); err != domain.ErrPackageNotFound {
-		t.Errorf("after Close: %v, want ErrPackageNotFound", err)
+	if _, err := repo.QueryPoint(context.Background(), "regions", "main", domain.NewWGS84Coordinate(20, 20)); err != domain.ErrSourceNotFound {
+		t.Errorf("after Close: %v, want ErrSourceNotFound", err)
 	}
 	entries, _ := os.ReadDir(cache)
 	if len(entries) != 0 {

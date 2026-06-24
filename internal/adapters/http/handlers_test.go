@@ -208,7 +208,7 @@ func TestHandleReadiness(t *testing.T) {
 func TestHandleListSources(t *testing.T) {
 	srv := newTestServer(nil, nil, nil)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/packages", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/sources", nil)
 	rr := httptest.NewRecorder()
 
 	srv.router.ServeHTTP(rr, req)
@@ -310,7 +310,7 @@ func TestHandleQueryValidCoordinates(t *testing.T) {
 func TestHandleGetSourceNotFound(t *testing.T) {
 	srv := newTestServer(nil, nil, nil)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/packages/nonexistent", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/sources/nonexistent", nil)
 	rr := httptest.NewRecorder()
 
 	srv.router.ServeHTTP(rr, req)
@@ -323,7 +323,7 @@ func TestHandleGetSourceNotFound(t *testing.T) {
 func TestHandleGetLayersNotFound(t *testing.T) {
 	srv := newTestServer(nil, nil, nil)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/packages/nonexistent/layers", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/sources/nonexistent/layers", nil)
 	rr := httptest.NewRecorder()
 
 	srv.router.ServeHTTP(rr, req)
@@ -333,7 +333,7 @@ func TestHandleGetLayersNotFound(t *testing.T) {
 	}
 }
 
-func TestHandleQueryPackageNotFound(t *testing.T) {
+func TestHandleQuerySourceNotFound(t *testing.T) {
 	srv := newTestServer(nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/query/nonexistent?lon=10&lat=50", nil)

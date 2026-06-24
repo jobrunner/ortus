@@ -1,5 +1,5 @@
 // Package mcp adapts ortus to the Model Context Protocol so AI agents
-// (Claude Desktop, Claude Code, …) can query traces, package metadata,
+// (Claude Desktop, Claude Code, …) can query traces, source metadata,
 // and perform point queries via a typed tool surface.
 //
 // The MCP server runs on its own HTTP port (so a network policy can

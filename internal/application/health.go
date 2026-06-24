@@ -46,9 +46,9 @@ func (s *HealthService) IsReady(ctx context.Context) bool {
 		return false
 	}
 
-	span.SetAttributes(output.Int("health.packages_total", len(packages)))
+	span.SetAttributes(output.Int("health.sources_total", len(packages)))
 
-	// Ready if at least one package is ready
+	// Ready if at least one source is ready
 	for _, pkg := range packages {
 		if pkg.IsReady() {
 			span.SetAttributes(output.Bool("health.ready", true), output.String("health.reason", "package_ready"))
@@ -56,7 +56,7 @@ func (s *HealthService) IsReady(ctx context.Context) bool {
 		}
 	}
 
-	// Also ready if no packages are configured (empty state)
+	// Also ready if no sources are configured (empty state)
 	ready := len(packages) == 0
 	reason := "no_packages"
 	if !ready {
@@ -86,16 +86,16 @@ func (s *HealthService) GetHealthDetails(ctx context.Context) input.HealthDetail
 	}
 
 	span.SetAttributes(
-		output.Int("health.packages_loaded", loaded),
-		output.Int("health.packages_ready", ready),
+		output.Int("health.sources_loaded", loaded),
+		output.Int("health.sources_ready", ready),
 	)
 
 	return input.HealthDetails{
-		Healthy:        s.IsHealthy(ctx),
-		Ready:          s.IsReady(ctx),
-		PackagesLoaded: loaded,
-		PackagesReady:  ready,
-		Components:     components,
+		Healthy:       s.IsHealthy(ctx),
+		Ready:         s.IsReady(ctx),
+		SourcesLoaded: loaded,
+		SourcesReady:  ready,
+		Components:    components,
 	}
 }
 

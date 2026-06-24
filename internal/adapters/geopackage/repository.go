@@ -198,9 +198,9 @@ func (r *Repository) GetLayers(ctx context.Context, packageID string) ([]domain.
 	r.mu.RUnlock()
 
 	if !ok {
-		span.RecordError(domain.ErrPackageNotFound)
+		span.RecordError(domain.ErrSourceNotFound)
 		span.SetStatus(output.StatusError, "package not found")
-		return nil, domain.ErrPackageNotFound
+		return nil, domain.ErrSourceNotFound
 	}
 
 	span.SetAttributes(output.Int("ortus.layers.count", len(pkg.Layers)))
@@ -228,9 +228,9 @@ func (r *Repository) QueryPoint(ctx context.Context, packageID, layerName string
 	r.mu.RUnlock()
 
 	if !ok {
-		span.RecordError(domain.ErrPackageNotFound)
+		span.RecordError(domain.ErrSourceNotFound)
 		span.SetStatus(output.StatusError, "package not found")
-		return nil, domain.ErrPackageNotFound
+		return nil, domain.ErrSourceNotFound
 	}
 
 	// Find layer
@@ -278,9 +278,9 @@ func (r *Repository) CreateSpatialIndex(ctx context.Context, packageID, layerNam
 	r.mu.RUnlock()
 
 	if !ok {
-		span.RecordError(domain.ErrPackageNotFound)
+		span.RecordError(domain.ErrSourceNotFound)
 		span.SetStatus(output.StatusError, "package not found")
-		return domain.ErrPackageNotFound
+		return domain.ErrSourceNotFound
 	}
 
 	layer, found := pkg.GetLayer(layerName)
@@ -318,9 +318,9 @@ func (r *Repository) CreateSpatialIndex(ctx context.Context, packageID, layerNam
 	)
 	if _, err := db.ExecContext(ctx, createQuery); err != nil {
 		idxErr := &domain.IndexError{
-			PackageID: packageID,
-			Layer:     layerName,
-			Err:       fmt.Errorf("creating R-tree table: %w", err),
+			SourceID: packageID,
+			Layer:    layerName,
+			Err:      fmt.Errorf("creating R-tree table: %w", err),
 		}
 		span.RecordError(idxErr)
 		span.SetStatus(output.StatusError, "create R-tree table failed")
@@ -349,9 +349,9 @@ func (r *Repository) CreateSpatialIndex(ctx context.Context, packageID, layerNam
 		//nolint:gocritic // sprintfQuotedString: SQL identifiers need double quotes, not Go's %q
 		_, _ = db.ExecContext(ctx, fmt.Sprintf(`DROP TABLE IF EXISTS "%s"`, indexTable))
 		idxErr := &domain.IndexError{
-			PackageID: packageID,
-			Layer:     layerName,
-			Err:       fmt.Errorf("populating R-tree index: %w", err),
+			SourceID: packageID,
+			Layer:    layerName,
+			Err:      fmt.Errorf("populating R-tree index: %w", err),
 		}
 		span.RecordError(idxErr)
 		span.SetStatus(output.StatusError, "populate R-tree failed")
@@ -375,7 +375,7 @@ func (r *Repository) setLayerIndexStatus(packageID, layerName string, hasIndex b
 
 	pkg, ok := r.packages[packageID]
 	if !ok {
-		return domain.ErrPackageNotFound
+		return domain.ErrSourceNotFound
 	}
 
 	for i := range pkg.Layers {
@@ -406,9 +406,9 @@ func (r *Repository) HasSpatialIndex(ctx context.Context, packageID, layerName s
 	r.mu.RUnlock()
 
 	if !ok {
-		span.RecordError(domain.ErrPackageNotFound)
+		span.RecordError(domain.ErrSourceNotFound)
 		span.SetStatus(output.StatusError, "package not found")
-		return false, domain.ErrPackageNotFound
+		return false, domain.ErrSourceNotFound
 	}
 
 	layer, found := pkg.GetLayer(layerName)

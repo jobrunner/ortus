@@ -326,7 +326,7 @@ func (a *App) Start(ctx context.Context) error {
 		}
 	}
 
-	// Load all packages from storage
+	// Load all sources from storage
 	if err := a.Registry.LoadAll(startupCtx); err != nil {
 		a.Logger.Warn("failed to load packages", "error", err)
 		startupSpan.RecordError(err)
@@ -440,7 +440,7 @@ func (a *App) Shutdown(ctx context.Context) error {
 		a.Logger.Error("HTTP server shutdown error", "error", err)
 	}
 
-	// Close all packages
+	// Close all sources
 	packages, _ := a.Registry.ListSources(ctx)
 	for _, pkg := range packages {
 		if err := a.Registry.UnloadSource(ctx, pkg.ID); err != nil {
@@ -492,10 +492,10 @@ func (a *App) handleFileEvent(ctx context.Context, event watcher.Event) error {
 		// Unload the source by deriving its id from the file path. Use the
 		// registry's derivation (not an adapter's) so it stays correct for any
 		// source kind (.gpkg, .zip, …).
-		packageID := a.Registry.DeriveSourceID(event.Path)
-		span.SetAttributes(output.String("ortus.source.id", packageID))
-		if err := a.Registry.UnloadSource(ctx, packageID); err != nil {
-			a.Logger.Warn("failed to unload deleted source", "id", packageID, "error", err)
+		sourceID := a.Registry.DeriveSourceID(event.Path)
+		span.SetAttributes(output.String("ortus.source.id", sourceID))
+		if err := a.Registry.UnloadSource(ctx, sourceID); err != nil {
+			a.Logger.Warn("failed to unload deleted source", "id", sourceID, "error", err)
 			span.RecordError(err)
 			span.SetStatus(output.StatusError, "unload failed")
 		}

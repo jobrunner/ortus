@@ -185,7 +185,7 @@ this, a single bad event could empty the entire ring buffer on restart.
 
 Prometheus metrics on `/metrics` are now produced via the OTel meter API and
 exported through `go.opentelemetry.io/otel/exporters/prometheus`. The metric
-names (`ortus_queries_total`, `ortus_packages_loaded` …) and labels are kept
+names (`ortus_queries_total`, `ortus_sources_loaded` …) and labels are kept
 stable; only the underlying instrument library changed. This unlocks pulling
 the same instrumentation through OTLP later if desired, without touching the
 collectors that already scrape `/metrics`.

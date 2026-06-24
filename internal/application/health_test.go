@@ -142,11 +142,11 @@ func TestHealthServiceGetHealthDetails(t *testing.T) {
 	if !details.Ready {
 		t.Error("Ready should be true")
 	}
-	if details.PackagesLoaded != 3 {
-		t.Errorf("PackagesLoaded = %d, want 3", details.PackagesLoaded)
+	if details.SourcesLoaded != 3 {
+		t.Errorf("SourcesLoaded = %d, want 3", details.SourcesLoaded)
 	}
-	if details.PackagesReady != 2 {
-		t.Errorf("PackagesReady = %d, want 2", details.PackagesReady)
+	if details.SourcesReady != 2 {
+		t.Errorf("SourcesReady = %d, want 2", details.SourcesReady)
 	}
 	if details.Components["storage"] != "ok" {
 		t.Errorf("Components[storage] = %q, want %q", details.Components["storage"], "ok")

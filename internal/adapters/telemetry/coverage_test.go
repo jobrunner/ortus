@@ -134,12 +134,12 @@ func TestTracingCoverage_AllPathsProduceSpans(t *testing.T) {
 		}
 	})
 
-	asRequest("HTTP GET /api/v1/packages", func(ctx context.Context) {
+	asRequest("HTTP GET /api/v1/sources", func(ctx context.Context) {
 		if _, err := reg.ListSources(ctx); err != nil {
 			t.Fatalf("ListSources: %v", err)
 		}
 	})
-	asRequest("HTTP GET /api/v1/packages/{id}", func(ctx context.Context) {
+	asRequest("HTTP GET /api/v1/sources/{id}", func(ctx context.Context) {
 		if _, err := reg.GetSource(ctx, "fake"); err != nil {
 			t.Fatalf("GetSource: %v", err)
 		}

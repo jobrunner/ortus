@@ -79,10 +79,10 @@ agent the data it needs to debug ortus from inside a conversation.
 
 | Tool | What it does |
 |---|---|
-| `query_point` | Point-in-polygon query across packages. Accepts WGS84 (`lon`/`lat`) or arbitrary (`x`/`y`/`srid`). Optional `package_id` filter and `properties` projection. |
-| `list_packages` | All currently loaded packages with ready state and layer count. |
-| `get_package` | Full metadata for one package: layers, extent, size, license. |
-| `get_package_layers` | Layers in a package with geometry type, SRID, feature count, bounding box. |
+| `query_point` | Point-in-polygon query across sources. Accepts WGS84 (`lon`/`lat`) or arbitrary (`x`/`y`/`srid`). Optional `source_id` filter and `properties` projection. |
+| `list_sources` | All currently loaded sources with ready state and layer count. |
+| `get_source` | Full metadata for one source: layers, extent, size, license. |
+| `get_source_layers` | Layers in a source with geometry type, SRID, feature count, bounding box. |
 
 ## Auth model
 
