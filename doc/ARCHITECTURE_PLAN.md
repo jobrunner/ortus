@@ -1,5 +1,14 @@
 # Architekturplan - Ortus
 
+> **Historisches Dokument — ursprünglicher Entwurf.** Dieser Plan beschreibt die
+> *geplante* Architektur vor der Umsetzung. Einzelne Code-Snippets und Bezeichner
+> (z. B. `domain.GeoPackage`, `GeoPackagePort`, Datei `ports/input/geopackage.go`)
+> spiegeln den frühen Entwurf wider und weichen vom umgesetzten Stand ab. Maßgeblich
+> für den aktuellen Stand sind der Code, die ADRs (insb. [ADR-0012](adr/0012-source-vocabulary-migration.md):
+> `Package`→`Source`) und die OpenAPI-Spezifikation. Die REST-Routen/JSON-Felder oben
+> wurden auf die `source`-Sprache aktualisiert; die tiefer liegenden Schnittstellen-
+> Snippets sind bewusst als Zeitdokument belassen.
+
 ## 1. Executive Summary
 
 Ortus ist ein Go-basierter Geo-Service mit REST-API, der Punktabfragen auf GeoPackage-Dateien ermöglicht. Der Service nimmt Koordinaten in verschiedenen Projektionen entgegen, führt geometriebasierte Abfragen durch und liefert Features mit Lizenz- und Attributionsinformationen zurück.
