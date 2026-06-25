@@ -62,9 +62,16 @@ adapters → app and forbid inward/sideways imports (incl. adapter→adapter);
 `go mod tidy -diff` gates module hygiene; `commitlint` guards the Conventional
 Commits release-please depends on. Run locally via `make arch` (folded into
 `make verify`); in CI via the Lint + Architecture jobs + the Commit Lint
-workflow. Findings A1–A3 are the kind of drift this harness now prevents from
-recurring. Planned next: HTTP-route↔OpenAPI consistency test, MCP-tool golden
-snapshot, `oasdiff` breaking-change gate.
+workflow. Findings A1–A4 are the kind of drift this harness now prevents from
+recurring.
+
+Contract-drift layer added on top: an **HTTP-route↔OpenAPI consistency test**
+(`http.TestRoutesMatchOpenAPISpec` — every `/api/v1` route is documented and
+vice-versa), an **MCP-tool golden snapshot** (`mcp.TestMCPToolContract` — tool
+names + input schemas are frozen; a rename must update the golden), an
+**`oasdiff` breaking-change gate** (`openapi-diff.yml` — breaking spec changes
+vs. the PR base fail CI), and **CODEOWNERS** auto-requesting review on the
+`ports/`/`domain/` seams and the harness config.
 
 ## Recommended — Operational hardening
 

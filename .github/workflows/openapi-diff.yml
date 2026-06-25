@@ -1,0 +1,49 @@
+# Detect BREAKING changes to the public HTTP API by diffing the OpenAPI spec
+# against the PR's base. A breaking change (removed path, removed/renamed field,
+# tightened type, …) fails the check — forcing a deliberate version decision,
+# which is exactly the discipline that was missing during the Package→Source
+# (Stage C) rename.
+#
+# Runs only when the spec actually changes (paths filter).
+name: OpenAPI Diff
+
+on:
+  pull_request:
+    branches:
+      - main
+      - master
+    paths:
+      # The embedded spec is the canonical, served contract — and the one the
+      # diff step compares. (api/openapi/openapi.yaml is a kept-in-sync copy.)
+      - 'internal/adapters/http/openapi.yaml'
+
+permissions:
+  contents: read
+
+env:
+  GO_VERSION: '1.26.4'
+
+jobs:
+  breaking:
+    name: Breaking-change check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0  # need the base commit to diff against
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Install oasdiff
+        run: go install github.com/oasdiff/oasdiff@latest
+
+      - name: Breaking-change check vs base
+        # BASE_SHA via env (not ${{ }} in-script) to avoid template injection.
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git show "$BASE_SHA:internal/adapters/http/openapi.yaml" > /tmp/base-openapi.yaml
+          oasdiff breaking /tmp/base-openapi.yaml internal/adapters/http/openapi.yaml --fail-on ERR

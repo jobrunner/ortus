@@ -1,0 +1,165 @@
+[
+  {
+    "name": "get_source",
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "source_id": {
+          "description": "id of the source (matches GET /api/v1/sources/{id})",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_id"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "get_source_layers",
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "source_id": {
+          "description": "id of the source to list layers from",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_id"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "get_trace",
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "trace_id": {
+          "description": "hex-encoded 32-character trace id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "trace_id"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "health",
+    "input_schema": {
+      "type": "object"
+    }
+  },
+  {
+    "name": "list_active_spans",
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "limit": {
+          "description": "maximum number of spans to return (default 50). Sorted newest-start first.",
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    }
+  },
+  {
+    "name": "list_sources",
+    "input_schema": {
+      "type": "object"
+    }
+  },
+  {
+    "name": "list_traces",
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "limit": {
+          "description": "maximum number of traces to return (default 20)",
+          "type": "integer"
+        },
+        "min_duration_ms": {
+          "description": "only return traces whose duration is at least this many milliseconds",
+          "type": "number"
+        },
+        "name_contains": {
+          "description": "substring match against the root span name (case-insensitive)",
+          "type": "string"
+        },
+        "since_iso": {
+          "description": "only return traces that ended at or after this RFC3339 timestamp",
+          "type": "string"
+        },
+        "status": {
+          "description": "filter by OTel status code: 'Ok', 'Error', or 'Unset'",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  {
+    "name": "query_point",
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "lat": {
+          "description": "latitude in WGS84 (EPSG:4326); pair with 'lon'",
+          "type": [
+            "null",
+            "number"
+          ]
+        },
+        "lon": {
+          "description": "longitude in WGS84 (EPSG:4326); pair with 'lat'",
+          "type": [
+            "null",
+            "number"
+          ]
+        },
+        "properties": {
+          "description": "if set, returned features include only these property keys",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "source_id": {
+          "description": "if set, query only this single source instead of all loaded sources",
+          "type": "string"
+        },
+        "srid": {
+          "description": "spatial reference id for x/y; defaults to 4326 (WGS84) when omitted",
+          "type": "integer"
+        },
+        "x": {
+          "description": "easting in the given SRID; pair with 'y'",
+          "type": [
+            "null",
+            "number"
+          ]
+        },
+        "y": {
+          "description": "northing in the given SRID; pair with 'x'",
+          "type": [
+            "null",
+            "number"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  {
+    "name": "tracing_stats",
+    "input_schema": {
+      "type": "object"
+    }
+  }
+]

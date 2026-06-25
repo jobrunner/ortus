@@ -1,0 +1,19 @@
+# Architectural seams + the harness that enforces them. Changes here are
+# deliberate by definition, so they auto-request a maintainer review.
+#
+# NOTE: this auto-REQUESTS review on the listed paths. It only *blocks* merge
+# once the branch ruleset enables "require code owner review" AND there is a
+# second maintainer who can approve (a solo maintainer can't approve their own
+# PR). Until then it documents ownership and surfaces seam changes in the PR.
+
+# Hexagonal seams — the contracts everything else depends on.
+/internal/ports/        @jobrunner
+/internal/domain/       @jobrunner
+
+# The harness configuration itself (changing the rules must be intentional).
+/.golangci.yml          @jobrunner
+/.github/workflows/     @jobrunner
+/.commitlintrc.yml      @jobrunner
+
+# Architecture decisions.
+/doc/adr/               @jobrunner
