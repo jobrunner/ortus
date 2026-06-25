@@ -1,0 +1,14 @@
+# Conventional Commits validation. Critical for release-please: it derives the
+# next version + CHANGELOG from these commit types (feat → minor, fix → patch,
+# `!`/BREAKING CHANGE → major). Non-conventional commits would mis-version.
+extends:
+  - '@commitlint/config-conventional'
+rules:
+  # Repo commits occasionally carry a scope + parenthetical (e.g.
+  # "refactor!: Package→Source public API (ADR-0012 Stage C)"); allow headroom.
+  header-max-length: [2, always, 120]
+  # Allow the types the repo actually uses (config-conventional set + our usage).
+  type-enum:
+    - 2
+    - always
+    - [build, chore, ci, docs, feat, fix, perf, refactor, revert, style, test]

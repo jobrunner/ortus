@@ -45,6 +45,28 @@ Three id-derivation copies (`registry.deriveSourceID`, `geopackage.DerivePackage
 `raster.deriveSourceID`) and two `isSupportedSourceFile` copies (storage, watcher).
 Consolidate after A1 (the registry is now the canonical deriver via `DeriveSourceID`).
 
+### A4 🟠 MCP adapter is coupled to the telemetry adapter (tracked by the arch harness)
+`internal/adapters/mcp` imports `internal/adapters/telemetry` directly —
+`tools_diag.go` consumes `RingBuffer`, `CapturedTrace`, `TraceFilter`,
+`ActiveSpan`, `Stats` to expose traces to AI agents. That's adapter→adapter
+coupling. **Clean fix:** a trace-query port (e.g. `input.TraceQuery` / a
+`output.TraceStore`) with domain-level trace DTOs, implemented by `telemetry`
+and consumed by `mcp`; `app` wires it. Until then it is a **narrowly-scoped,
+documented depguard exception** (`.golangci.yml` exclusions — only this one
+import is allowed; every other cross-adapter import is still blocked).
+
+### Architecture harness (drift prevention)
+The hexagonal import boundaries are now **enforced**, not just reviewed:
+`depguard` rules in `.golangci.yml` codify domain → ports → application →
+adapters → app and forbid inward/sideways imports (incl. adapter→adapter);
+`gomodguard` blocks direct use of `mongo-driver` (transitive via gocog, ADR-0013);
+`go mod tidy -diff` gates module hygiene; `commitlint` guards the Conventional
+Commits release-please depends on. Run locally via `make arch` (folded into
+`make verify`); in CI via the Lint + Architecture jobs + the Commit Lint
+workflow. Findings A1–A3 are the kind of drift this harness now prevents from
+recurring. Planned next: HTTP-route↔OpenAPI consistency test, MCP-tool golden
+snapshot, `oasdiff` breaking-change gate.
+
 ## Recommended — Operational hardening
 
 ### O1 🟠 Source-id collisions across extensions

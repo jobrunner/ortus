@@ -41,7 +41,54 @@ linters:
     - unparam       # Ungenutzte Parameter
     - whitespace    # Leerzeichen-Probleme
 
+    # Architektur-Harness (Drift-Schutz, siehe doc/ARCHITECTURE_PLAN.md)
+    - depguard        # Hexagonale Import-Grenzen erzwingen
+    - gomodguard_v2   # Modul-Blocklist (Dependency-Bloat verhindern)
+
   settings:
+    # Hexagonale Import-Grenzen. Erlaubte Richtung:
+    #   domain → (nichts Internes)
+    #   ports → domain
+    #   application → domain, ports
+    #   adapters → domain, ports        (NICHT application, NICHT Geschwister-Adapter)
+    #   app/cmd → alles (Composition Root)
+    # `files` matcht Dateipfade; deny listet verbotene Importe (einwärts/seitwärts).
+    depguard:
+      rules:
+        domain:
+          files: ["**/internal/domain/**"]
+          deny:
+            - { pkg: github.com/jobrunner/ortus/internal/application, desc: "domain ist der innerste Kern und darf nichts importieren" }
+            - { pkg: github.com/jobrunner/ortus/internal/ports, desc: "domain darf ports nicht kennen" }
+            - { pkg: github.com/jobrunner/ortus/internal/adapters, desc: "domain darf adapters nicht kennen" }
+            - { pkg: github.com/jobrunner/ortus/internal/app, desc: "domain darf den Composition Root nicht kennen" }
+            - { pkg: github.com/jobrunner/ortus/internal/config, desc: "domain bleibt konfigurationsfrei" }
+        ports:
+          files: ["**/internal/ports/**"]
+          deny:
+            - { pkg: github.com/jobrunner/ortus/internal/application, desc: "ports definieren nur Verträge über domain" }
+            - { pkg: github.com/jobrunner/ortus/internal/adapters, desc: "ports dürfen adapters nicht kennen" }
+            - { pkg: github.com/jobrunner/ortus/internal/app }
+            - { pkg: github.com/jobrunner/ortus/internal/config }
+        application:
+          files: ["**/internal/application/**"]
+          deny:
+            - { pkg: github.com/jobrunner/ortus/internal/adapters, desc: "der Core spricht Adapter nur über ports an" }
+            - { pkg: github.com/jobrunner/ortus/internal/app, desc: "der Core kennt den Composition Root nicht" }
+        adapters:
+          files: ["**/internal/adapters/**"]
+          deny:
+            - { pkg: github.com/jobrunner/ortus/internal/application, desc: "Adapter sprechen den Core nur über ports an" }
+            - { pkg: github.com/jobrunner/ortus/internal/app, desc: "Adapter kennen den Composition Root nicht" }
+            - { pkg: github.com/jobrunner/ortus/internal/adapters, desc: "kein Adapter→Adapter-Import (Querkopplung); gemeinsame Logik gehört in domain/ports" }
+
+    gomodguard_v2:
+      blocked:
+        # gocog zieht mongo-driver/bson transitiv ein (ADR-0013). Transitiv
+        # akzeptiert, aber NIE direkt im First-Party-Code importieren.
+        - module: go.mongodb.org/mongo-driver
+          reason: "Nur transitive Abhängigkeit über gocog (ADR-0013); nicht direkt verwenden."
+
     gocyclo:
       min-complexity: 16
 
@@ -106,6 +153,21 @@ linters:
           - gocognit
           - goconst   # Tests legitimately repeat literals
           - noctx     # httptest.NewRequest is the conventional helper in tests
+          - depguard  # Tests sind der "Test-Composition-Root" und dürfen über
+                      # Schichten hinweg echte Implementierungen verdrahten
+                      # (Integrations-/Coverage-Tests). Produktionscode bleibt streng.
+
+      # BEKANNTE SCHULD (getrackt): Der MCP-Adapter liest die Telemetrie-Trace-
+      # Strukturen (RingBuffer/CapturedTrace/TraceFilter/ActiveSpan/Stats) direkt,
+      # um sie an AI-Agenten auszugeben — Adapter→Adapter-Kopplung. Saubere Lösung:
+      # ein Trace-Query-Port mit domain-Typen, von telemetry implementiert, von mcp
+      # konsumiert. Bis dahin eng begrenzte Ausnahme (NUR dieser eine Import), damit
+      # JEDE andere Querkopplung weiterhin gefangen wird. Siehe
+      # doc/production-readiness-review.md (A-Reihe).
+      - path: internal/adapters/mcp/
+        linters:
+          - depguard
+        text: internal/adapters/telemetry
 
       # main.go darf globale Variablen haben
       - path: main\.go
