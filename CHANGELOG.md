@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.13.0] - 2026-06-25
 
 ### Changed (BREAKING — public API & MCP vocabulary, ADR-0012 Stage C)
 - **HTTP API:** routes `/api/v1/packages*` → `/api/v1/sources*` (`/sources`,
