@@ -7,9 +7,10 @@
 # they leave the working tree. Skip in a hurry with: git commit --no-verify
 set -euo pipefail
 
-# Only run when Go files are staged. NUL-delimited so paths with spaces or
-# newlines survive intact (no word-splitting on the file list).
-mapfile -d '' -t staged_go < <(git diff --cached --name-only --diff-filter=ACM -z | grep -zE '\.go$' || true)
+# Only run when Go files are staged. Filter with a git pathspec (portable —
+# no `grep -z`, which BSD/macOS grep lacks) and read NUL-delimited so paths
+# with spaces or newlines survive intact (no word-splitting).
+mapfile -d '' -t staged_go < <(git diff --cached --name-only --diff-filter=ACM -z -- '*.go')
 if [ ${#staged_go[@]} -eq 0 ]; then
 	exit 0
 fi
