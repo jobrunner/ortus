@@ -13,8 +13,9 @@ on:
       - main
       - master
     paths:
+      # The embedded spec is the canonical, served contract — and the one the
+      # diff step compares. (api/openapi/openapi.yaml is a kept-in-sync copy.)
       - 'internal/adapters/http/openapi.yaml'
-      - 'api/openapi/openapi.yaml'
 
 permissions:
   contents: read

@@ -19,14 +19,20 @@ import (
 func TestRoutesMatchOpenAPISpec(t *testing.T) {
 	srv := newTestServer(nil, nil, nil)
 
-	// 1. Registered /api/v1 route templates (path relative to the /api/v1 server).
+	// Compare "METHOD path" pairs (not just paths) so a GET→POST drift on the
+	// same path is caught too.
+
+	// 1. Registered /api/v1 operations (path relative to the /api/v1 server).
 	routes := map[string]bool{}
 	err := srv.Router().Walk(func(route *mux.Route, _ *mux.Router, _ []*mux.Route) error {
 		// GetPathTemplate errors for matcher-only routes (no path) — those just
 		// aren't path routes, so act only on the ones that have a template.
 		if tmpl, tErr := route.GetPathTemplate(); tErr == nil {
 			if rel, ok := strings.CutPrefix(tmpl, "/api/v1"); ok && rel != "" {
-				routes[rel] = true
+				methods, _ := route.GetMethods()
+				for _, m := range methods {
+					routes[strings.ToUpper(m)+" "+rel] = true
+				}
 			}
 		}
 		return nil
@@ -35,35 +41,43 @@ func TestRoutesMatchOpenAPISpec(t *testing.T) {
 		t.Fatalf("walk router: %v", err)
 	}
 
-	// 2. Documented paths from the embedded spec (the bytes actually served at
-	// /openapi.json), minus the root health endpoints.
+	// 2. Documented operations from the embedded spec (the bytes actually served
+	// at /openapi.json), minus the root health endpoints.
 	specJSON, err := getOpenAPIJSON()
 	if err != nil {
 		t.Fatalf("getOpenAPIJSON: %v", err)
 	}
 	var spec struct {
-		Paths map[string]json.RawMessage `json:"paths"`
+		Paths map[string]map[string]json.RawMessage `json:"paths"`
 	}
 	if err := json.Unmarshal(specJSON, &spec); err != nil {
 		t.Fatalf("unmarshal spec: %v", err)
 	}
+	httpMethods := map[string]bool{
+		"GET": true, "POST": true, "PUT": true, "DELETE": true,
+		"PATCH": true, "HEAD": true, "OPTIONS": true,
+	}
 	documented := map[string]bool{}
-	for p := range spec.Paths {
+	for p, ops := range spec.Paths {
 		if strings.HasPrefix(p, "/health") {
 			continue
 		}
-		documented[p] = true
+		for op := range ops {
+			if m := strings.ToUpper(op); httpMethods[m] {
+				documented[m+" "+p] = true
+			}
+		}
 	}
 
 	// 3. Both directions.
 	for r := range routes {
 		if !documented[r] {
-			t.Errorf("route /api/v1%s is registered but NOT documented in openapi.yaml", r)
+			t.Errorf("route %q (under /api/v1) is registered but NOT documented in openapi.yaml", r)
 		}
 	}
-	for p := range documented {
-		if !routes[p] {
-			t.Errorf("openapi.yaml documents %q but no /api/v1 route is registered for it", p)
+	for op := range documented {
+		if !routes[op] {
+			t.Errorf("openapi.yaml documents %q but no matching /api/v1 route is registered", op)
 		}
 	}
 }
