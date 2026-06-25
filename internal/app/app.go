@@ -283,16 +283,18 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*App, er
 // the stdio-mode subcommand can build the same Deps struct without
 // duplicating field-by-field wiring.
 func (a *App) mcpDeps() mcp.Deps {
-	var buf *telemetry.RingBuffer
+	// Keep the interface nil (not a typed-nil) when tracing is off, so the MCP
+	// tools' `deps.Telemetry == nil` checks degrade gracefully.
+	var tq input.TelemetryQuery
 	if a.TelemetryProvider != nil {
-		buf = a.TelemetryProvider.Buffer()
+		tq = a.TelemetryProvider.Buffer()
 	}
 	version := a.Config.Build.Version
 	if version == "" {
 		version = "dev"
 	}
 	return mcp.Deps{
-		Buffer:        buf,
+		Telemetry:     tq,
 		QueryService:  a.QueryService,
 		Registry:      a.Registry,
 		HealthService: a.HealthService,

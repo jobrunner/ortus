@@ -24,7 +24,6 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jobrunner/ortus/internal/adapters/telemetry"
 	"github.com/jobrunner/ortus/internal/domain"
 	"github.com/jobrunner/ortus/internal/ports/input"
 )
@@ -34,7 +33,7 @@ import (
 // services, so both adapters share one set of contracts and stay decoupled
 // from the core implementation.
 type Deps struct {
-	Buffer        *telemetry.RingBuffer // may be nil when tracing is off — tools degrade gracefully
+	Telemetry     input.TelemetryQuery // may be nil when tracing is off — tools degrade gracefully
 	QueryService  input.QueryService
 	Registry      input.SourceRegistry
 	HealthService input.HealthChecker

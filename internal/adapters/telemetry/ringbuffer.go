@@ -11,88 +11,28 @@ import (
 
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
+
+	"github.com/jobrunner/ortus/internal/ports/input"
 )
 
-// CapturedEvent is a serializable copy of a span event.
-type CapturedEvent struct {
-	Name       string         `json:"name"`
-	Time       time.Time      `json:"time"`
-	Attributes map[string]any `json:"attributes,omitempty"`
-}
-
-// CapturedSpan is a serializable copy of a span. Only data useful for the MCP
-// server is retained — no SDK objects.
-type CapturedSpan struct {
-	TraceID      string          `json:"trace_id"`
-	SpanID       string          `json:"span_id"`
-	ParentSpanID string          `json:"parent_span_id,omitempty"`
-	Name         string          `json:"name"`
-	Kind         string          `json:"kind"`
-	Start        time.Time       `json:"start"`
-	End          time.Time       `json:"end"`
-	DurationMS   float64         `json:"duration_ms"`
-	StatusCode   string          `json:"status_code"`
-	StatusMsg    string          `json:"status_message,omitempty"`
-	Attributes   map[string]any  `json:"attributes,omitempty"`
-	Events       []CapturedEvent `json:"events,omitempty"`
-}
-
-// CapturedTrace is a complete trace tree as captured by the ring buffer.
-type CapturedTrace struct {
-	TraceID    string         `json:"trace_id"`
-	RootName   string         `json:"root_name"`
-	Service    string         `json:"service"`
-	Start      time.Time      `json:"start"`
-	End        time.Time      `json:"end"`
-	DurationMS float64        `json:"duration_ms"`
-	StatusCode string         `json:"status_code"`
-	SpanCount  int            `json:"span_count"`
-	Spans      []CapturedSpan `json:"spans"`
-}
-
-// ActiveSpan is a lightweight snapshot of an in-flight span. Returned by
-// RingBuffer.ListActive so the MCP server can answer "what's currently
-// running?" — the question you need to ask when something hangs.
-type ActiveSpan struct {
-	TraceID      string         `json:"trace_id"`
-	SpanID       string         `json:"span_id"`
-	ParentSpanID string         `json:"parent_span_id,omitempty"`
-	Name         string         `json:"name"`
-	Kind         string         `json:"kind"`
-	Start        time.Time      `json:"start"`
-	AgeMS        float64        `json:"age_ms"`
-	Attributes   map[string]any `json:"attributes,omitempty"`
-}
-
-// TraceFilter narrows down ListTraces results.
-type TraceFilter struct {
-	// MinDuration retains only traces longer than this. Zero means no filter.
-	MinDuration time.Duration
-	// Status retains only traces with this status. Valid values follow the
-	// OTel codes.Code stringification: "Ok", "Error", "Unset" (mixed case).
-	// Empty means no filter.
-	Status string
-	// NameContains retains only traces whose root span name contains this
-	// substring. Empty means no filter.
-	NameContains string
-	// Since retains only traces that ended at or after this time. Zero means
-	// no filter.
-	Since time.Time
-	// Limit caps the number of results. Zero means no cap.
-	Limit int
-}
-
-// Stats summarizes ring-buffer contents for /health, /stats, and MCP overview.
-type Stats struct {
-	Capacity          int       `json:"capacity"`      // per-pool capacity
-	TracesActive      int       `json:"traces_active"` // traces with at least one open span
-	SpansActive       int       `json:"spans_active"`  // open spans (across all traces)
-	TracesStored      int       `json:"traces_stored"` // successful, retained
-	ErrorTracesStored int       `json:"error_traces_stored"`
-	Evicted           uint64    `json:"evicted_total"`
-	OldestEnd         time.Time `json:"oldest_end,omitempty"`
-	NewestEnd         time.Time `json:"newest_end,omitempty"`
-}
+// The captured-trace DTOs and TraceFilter are the MCP-facing contract; they live
+// in the input port (internal/ports/input) so the MCP adapter and this telemetry
+// adapter share them without importing each other. These aliases keep the
+// buffer's internal code referring to the short names unchanged.
+type (
+	// CapturedEvent aliases the input-port DTO for a span event.
+	CapturedEvent = input.CapturedEvent
+	// CapturedSpan aliases the input-port DTO for a captured span.
+	CapturedSpan = input.CapturedSpan
+	// CapturedTrace aliases the input-port DTO for a captured trace.
+	CapturedTrace = input.CapturedTrace
+	// ActiveSpan aliases the input-port DTO for an in-flight span snapshot.
+	ActiveSpan = input.ActiveSpan
+	// TraceFilter aliases the input-port DTO for ListTraces filtering.
+	TraceFilter = input.TraceFilter
+	// Stats aliases the input-port DTO for buffer statistics.
+	Stats = input.Stats
+)
 
 // RingBuffer is an in-memory trace-grouped span store. It implements
 // sdktrace.SpanProcessor so it sits inside the regular OTel pipeline.
@@ -409,6 +349,14 @@ func (r *RingBuffer) Stats() Stats {
 	}
 	return s
 }
+
+// OTelErrorCount exposes the process-wide OTel internal-error count so the
+// buffer fully satisfies input.TelemetryQuery (the MCP-facing port). It just
+// forwards the package-level counter.
+func (r *RingBuffer) OTelErrorCount() uint64 { return OTelErrorCount() }
+
+// Compile-time proof that the ring buffer implements the MCP-facing port.
+var _ input.TelemetryQuery = (*RingBuffer)(nil)
 
 func filterMatch(t *CapturedTrace, f TraceFilter) bool {
 	if f.MinDuration > 0 && time.Duration(t.DurationMS*float64(time.Millisecond)) < f.MinDuration {
