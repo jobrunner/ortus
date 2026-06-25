@@ -54,11 +54,14 @@ updates:
       azure-sdk:
         patterns:
           - "github.com/Azure/azure-sdk-for-go/*"
-      # Everything else: all remaining minor/patch bumps in ONE PR per week, so
+      # Everything else: remaining minor/patch bumps in ONE PR per week, so
       # go.mod/go.sum changes don't serialize into conflicting single-module PRs
-      # (the cause of #40's post-merge conflict). Majors stay individual for
-      # review. A dependency lands in the first matching group above; anything
-      # not matched falls through to here.
+      # (the cause of #40's post-merge conflict). A dependency lands in the first
+      # matching group above, so the lockstep groups (OTel/AWS/Azure) still
+      # capture their own bumps INCLUDING majors (intentional — siblings must
+      # move together). Only a *major* bump of a dependency that matches none of
+      # those groups falls outside this minor/patch catch-all and gets its own
+      # individual PR for review.
       go-minor-patch:
         patterns:
           - "*"
