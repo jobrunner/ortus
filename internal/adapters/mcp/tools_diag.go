@@ -8,7 +8,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jobrunner/ortus/internal/adapters/telemetry"
+	"github.com/jobrunner/ortus/internal/ports/input"
 )
 
 // registerDiagnosticTools mounts the five read-only tools that let an
@@ -32,8 +32,8 @@ type listTracesIn struct {
 }
 
 type listTracesOut struct {
-	Traces []*telemetry.CapturedTrace `json:"traces"`
-	Count  int                        `json:"count"`
+	Traces []*input.CapturedTrace `json:"traces"`
+	Count  int                    `json:"count"`
 }
 
 func addListTraces(srv *mcp.Server, deps Deps, _ *slog.Logger) {
@@ -43,14 +43,14 @@ func addListTraces(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 			"Both successful and error traces are searched. " +
 			"Newest first. Use filters to narrow the result set.",
 	}, func(_ toolCtx, _ *callRequest, in listTracesIn) (*callResult, listTracesOut, error) {
-		if deps.Buffer == nil {
+		if deps.Telemetry == nil {
 			return nil, listTracesOut{}, fmt.Errorf("tracing is disabled — set tracing.enabled in ortus config")
 		}
 		limit := in.Limit
 		if limit <= 0 {
 			limit = 20
 		}
-		filter := telemetry.TraceFilter{
+		filter := input.TraceFilter{
 			MinDuration:  time.Duration(in.MinDurationMS * float64(time.Millisecond)),
 			Status:       in.Status,
 			NameContains: in.NameContains,
@@ -63,7 +63,7 @@ func addListTraces(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 			}
 			filter.Since = t
 		}
-		traces := deps.Buffer.ListTraces(filter)
+		traces := deps.Telemetry.ListTraces(filter)
 		return nil, listTracesOut{Traces: traces, Count: len(traces)}, nil
 	})
 }
@@ -75,8 +75,8 @@ type getTraceIn struct {
 }
 
 type getTraceOut struct {
-	Trace *telemetry.CapturedTrace `json:"trace,omitempty"`
-	Found bool                     `json:"found"`
+	Trace *input.CapturedTrace `json:"trace,omitempty"`
+	Found bool                 `json:"found"`
 }
 
 func addGetTrace(srv *mcp.Server, deps Deps, _ *slog.Logger) {
@@ -86,10 +86,10 @@ func addGetTrace(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 			"every span with its attributes, events, and any recorded errors. " +
 			"Returns found=false if the trace was evicted from the buffer or never existed.",
 	}, func(_ toolCtx, _ *callRequest, in getTraceIn) (*callResult, getTraceOut, error) {
-		if deps.Buffer == nil {
+		if deps.Telemetry == nil {
 			return nil, getTraceOut{}, fmt.Errorf("tracing is disabled — set tracing.enabled in ortus config")
 		}
-		t := deps.Buffer.GetTrace(in.TraceID)
+		t := deps.Telemetry.GetTrace(in.TraceID)
 		return nil, getTraceOut{Trace: t, Found: t != nil}, nil
 	})
 }
@@ -101,8 +101,8 @@ type listActiveSpansIn struct {
 }
 
 type listActiveSpansOut struct {
-	Spans []*telemetry.ActiveSpan `json:"spans"`
-	Count int                     `json:"count"`
+	Spans []*input.ActiveSpan `json:"spans"`
+	Count int                 `json:"count"`
 }
 
 func addListActiveSpans(srv *mcp.Server, deps Deps, _ *slog.Logger) {
@@ -112,10 +112,10 @@ func addListActiveSpans(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 			"Spans here have started but not yet ended. The age_ms field tells you how long " +
 			"each has been running. Sorted newest-start first.",
 	}, func(_ toolCtx, _ *callRequest, in listActiveSpansIn) (*callResult, listActiveSpansOut, error) {
-		if deps.Buffer == nil {
+		if deps.Telemetry == nil {
 			return nil, listActiveSpansOut{}, fmt.Errorf("tracing is disabled — set tracing.enabled in ortus config")
 		}
-		spans := deps.Buffer.ListActive()
+		spans := deps.Telemetry.ListActive()
 		limit := in.Limit
 		if limit <= 0 {
 			limit = 50
@@ -130,9 +130,9 @@ func addListActiveSpans(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 // ---- tracing_stats --------------------------------------------------------
 
 type tracingStatsOut struct {
-	Enabled        bool             `json:"enabled"`
-	Stats          *telemetry.Stats `json:"stats,omitempty"`
-	OTelErrorCount uint64           `json:"otel_error_count" jsonschema:"count of OTLP-exporter / SDK errors observed since process start"`
+	Enabled        bool         `json:"enabled"`
+	Stats          *input.Stats `json:"stats,omitempty"`
+	OTelErrorCount uint64       `json:"otel_error_count" jsonschema:"count of OTLP-exporter / SDK errors observed since process start"`
 }
 
 func addTracingStats(srv *mcp.Server, deps Deps, _ *slog.Logger) {
@@ -142,12 +142,10 @@ func addTracingStats(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 			"and the number of internal OTel errors observed (mostly OTLP-exporter failures). " +
 			"Use this to know whether ortus' tracing is functioning before relying on the other diagnostic tools.",
 	}, func(_ toolCtx, _ *callRequest, _ any) (*callResult, tracingStatsOut, error) {
-		out := tracingStatsOut{
-			Enabled:        deps.Buffer != nil,
-			OTelErrorCount: telemetry.OTelErrorCount(),
-		}
-		if deps.Buffer != nil {
-			s := deps.Buffer.Stats()
+		out := tracingStatsOut{Enabled: deps.Telemetry != nil}
+		if deps.Telemetry != nil {
+			out.OTelErrorCount = deps.Telemetry.OTelErrorCount()
+			s := deps.Telemetry.Stats()
 			out.Stats = &s
 		}
 		return nil, out, nil

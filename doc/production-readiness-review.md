@@ -45,15 +45,14 @@ Three id-derivation copies (`registry.deriveSourceID`, `geopackage.DerivePackage
 `raster.deriveSourceID`) and two `isSupportedSourceFile` copies (storage, watcher).
 Consolidate after A1 (the registry is now the canonical deriver via `DeriveSourceID`).
 
-### A4 🟠 MCP adapter is coupled to the telemetry adapter (tracked by the arch harness)
-`internal/adapters/mcp` imports `internal/adapters/telemetry` directly —
-`tools_diag.go` consumes `RingBuffer`, `CapturedTrace`, `TraceFilter`,
-`ActiveSpan`, `Stats` to expose traces to AI agents. That's adapter→adapter
-coupling. **Clean fix:** a trace-query port (e.g. `input.TraceQuery` / a
-`output.TraceStore`) with domain-level trace DTOs, implemented by `telemetry`
-and consumed by `mcp`; `app` wires it. Until then it is a **narrowly-scoped,
-documented depguard exception** (`.golangci.yml` exclusions — only this one
-import is allowed; every other cross-adapter import is still blocked).
+### A4 ✅ MCP↔telemetry coupling removed via a trace-query port
+**Resolved.** `internal/adapters/mcp` no longer imports the telemetry adapter.
+The trace DTOs (`CapturedTrace`/`CapturedSpan`/`CapturedEvent`/`ActiveSpan`/
+`TraceFilter`/`Stats`) and the query surface now live in `input.TelemetryQuery`
+(`internal/ports/input/telemetry.go`); the telemetry ring buffer implements that
+port (type-aliasing the DTOs so its internals are unchanged), MCP depends only on
+the port, and `app` wires them. The temporary depguard exception is **removed** —
+depguard is green with no adapter→adapter allowance.
 
 ### Architecture harness (drift prevention)
 The hexagonal import boundaries are now **enforced**, not just reviewed:

@@ -157,17 +157,6 @@ linters:
                       # Schichten hinweg echte Implementierungen verdrahten
                       # (Integrations-/Coverage-Tests). Produktionscode bleibt streng.
 
-      # BEKANNTE SCHULD (getrackt): Der MCP-Adapter liest die Telemetrie-Trace-
-      # Strukturen (RingBuffer/CapturedTrace/TraceFilter/ActiveSpan/Stats) direkt,
-      # um sie an AI-Agenten auszugeben — Adapter→Adapter-Kopplung. Saubere Lösung:
-      # ein Trace-Query-Port mit domain-Typen, von telemetry implementiert, von mcp
-      # konsumiert. Bis dahin eng begrenzte Ausnahme (NUR dieser eine Import), damit
-      # JEDE andere Querkopplung weiterhin gefangen wird. Siehe
-      # doc/production-readiness-review.md (A-Reihe).
-      - path: internal/adapters/mcp/
-        linters:
-          - depguard
-        text: internal/adapters/telemetry
 
       # main.go darf globale Variablen haben
       - path: main\.go

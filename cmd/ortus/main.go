@@ -18,6 +18,7 @@ import (
 	mcpAdapter "github.com/jobrunner/ortus/internal/adapters/mcp"
 	"github.com/jobrunner/ortus/internal/adapters/telemetry"
 	"github.com/jobrunner/ortus/internal/app"
+	"github.com/jobrunner/ortus/internal/ports/input"
 
 	"github.com/jobrunner/ortus/internal/config"
 )
@@ -333,12 +334,12 @@ func buildHandler(cfg config.LoggingConfig, w io.Writer) slog.Handler {
 // the App.mcpDeps method but lives here so the subcommand doesn't need
 // to import internal/app's private state.
 func mcpDepsFromApp(a *app.App) mcpAdapter.Deps {
-	var buf *telemetry.RingBuffer
+	var tq input.TelemetryQuery
 	if a.TelemetryProvider != nil {
-		buf = a.TelemetryProvider.Buffer()
+		tq = a.TelemetryProvider.Buffer()
 	}
 	return mcpAdapter.Deps{
-		Buffer:        buf,
+		Telemetry:     tq,
 		QueryService:  a.QueryService,
 		Registry:      a.Registry,
 		HealthService: a.HealthService,

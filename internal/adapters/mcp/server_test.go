@@ -77,7 +77,7 @@ func buildDeps(t *testing.T) mcpAdapter.Deps {
 	hs := application.NewHealthService(reg, tr)
 
 	return mcpAdapter.Deps{
-		Buffer:        tp.Buffer(),
+		Telemetry:     tp.Buffer(),
 		QueryService:  qs,
 		Registry:      reg,
 		HealthService: hs,
