@@ -91,7 +91,7 @@ if [[ ${#MISSING_FILES[@]} -gt 0 ]]; then
     echo "   Missing updates: ${MISSING_FILES[*]}" >&2
     echo "" >&2
     echo "   For feature additions or changes, please:" >&2
-    echo "   1. Bump VERSION (current: $(cat "$PROJECT_DIR/VERSION" 2>/dev/null || echo 'N/A'))" >&2
+    echo "   1. Bump VERSION (current: $(head -n1 "$PROJECT_DIR/VERSION" 2>/dev/null | awk '{print $1}' || echo 'N/A'))" >&2
     echo "   2. Add entry to CHANGELOG.md under [Unreleased] or new version" >&2
     echo "" >&2
     echo "   To skip this check for documentation-only changes:" >&2

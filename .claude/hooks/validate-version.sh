@@ -34,8 +34,10 @@ if [[ ! -f "$VERSION_FILE" ]]; then
     exit 1
 fi
 
-# Read and validate version format (semver: MAJOR.MINOR.PATCH[-PRERELEASE][+BUILD])
-VERSION=$(cat "$VERSION_FILE" | tr -d '[:space:]')
+# Read and validate version format (semver: MAJOR.MINOR.PATCH[-PRERELEASE][+BUILD]).
+# First whitespace-delimited token of line 1 — ignores the release-please marker
+# comment ("0.13.0 # x-release-please-version").
+VERSION=$(head -n1 "$VERSION_FILE" | awk '{print $1}')
 SEMVER_REGEX='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-((0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*)(\.(0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*))*))?(\+([0-9a-zA-Z-]+(\.[0-9a-zA-Z-]+)*))?$'
 
 if [[ ! "$VERSION" =~ $SEMVER_REGEX ]]; then
