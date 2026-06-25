@@ -6,7 +6,7 @@
 .PHONY: lint lint-go lint-fix vet
 .PHONY: security-check vuln-check gosec
 .PHONY: fmt format fmt-check
-.PHONY: check check-ci verify hooks
+.PHONY: check check-ci verify hooks arch
 .PHONY: deps deps-update deps-verify
 .PHONY: doc doc-serve
 .PHONY: release release-dry
@@ -115,10 +115,19 @@ check: fmt vet lint test ## Alle Qualitätsprüfungen (vor Commit)
 # (siehe ADR/Memory); der Compiler entscheidet. Gleiche Schritte wie die CI.
 # Bewusst KEIN Aufruf des `build`-Targets (das schreibt ./ortus); stattdessen
 # ein binärloser Compile-Check via `go build ./...`.
-verify: fmt-check vet lint test ## Maßgebliche Grün-Prüfung (gofmt-check+vet+compile+test+lint)
+verify: fmt-check vet lint test arch ## Maßgebliche Grün-Prüfung (gofmt-check+vet+compile+test+lint+arch)
 	@echo "Compile-Check (go build ./...)…"
 	@$(GO) build ./...
-	@echo "\n✅ verify bestanden — Compile/Test/Lint/Format grün."
+	@echo "\n✅ verify bestanden — Compile/Test/Lint/Format/Arch grün."
+
+# Architektur-Fitness: hexagonale Import-Grenzen (depguard), Modul-Blocklist
+# (gomodguard) und go.mod-Hygiene. Eigenständig aufrufbar für einen fokussierten,
+# schnellen Drift-Check; in `verify` und im CI-Job `architecture` eingebunden.
+# (depguard/gomodguard laufen auch im vollen `lint`; hier explizit für klare Signale.)
+arch: ## Architektur-Fitness: Import-Grenzen + Modul-Hygiene
+	$(GOLINT) run --enable-only depguard,gomodguard_v2 ./...
+	$(GO) mod tidy -diff
+	@echo "✅ arch ok — Import-Grenzen & Modul-Hygiene grün."
 
 hooks: ## Installiere git pre-commit Hook (.githooks)
 	git config core.hooksPath .githooks

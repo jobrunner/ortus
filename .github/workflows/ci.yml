@@ -130,6 +130,26 @@ jobs:
           govulncheck ./...
 
   # =============================================================================
+  # Architecture harness — module hygiene gate.
+  # The hexagonal import-boundary rules (depguard) and the module blocklist
+  # (gomodguard) run inside the Lint job (golangci-lint ./...). This job adds the
+  # go.mod/go.sum tidiness gate. Together they are `make arch` locally.
+  # =============================================================================
+  architecture:
+    name: Architecture
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: go.mod tidiness
+        run: go mod tidy -diff
+
+  # =============================================================================
   # Go Build
   # =============================================================================
   build:

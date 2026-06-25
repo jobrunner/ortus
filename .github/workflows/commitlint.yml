@@ -1,0 +1,31 @@
+# Validate that a PR's commits follow Conventional Commits.
+#
+# This protects the release automation: release-please (release-please.yml)
+# derives the next version + CHANGELOG from commit types. A non-conventional
+# commit would be mis-categorised (or skipped), so we gate it at PR time.
+#
+# Config lives in .commitlintrc.yml. Uses `pull_request` (read-only token,
+# PR's own context) — it only reads commit messages, never executes PR code.
+name: Commit Lint
+
+on:
+  pull_request:
+    branches:
+      - main
+      - master
+
+permissions:
+  contents: read
+
+jobs:
+  commitlint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Full history so the action can lint every commit in the PR range.
+          fetch-depth: 0
+      - name: Lint PR commits
+        uses: wagoid/commitlint-github-action@v6
+        with:
+          configFile: .commitlintrc.yml
