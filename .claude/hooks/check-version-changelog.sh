@@ -85,20 +85,18 @@ if [[ "$CHANGELOG_STAGED" != "true" ]]; then
 fi
 
 if [[ ${#MISSING_FILES[@]} -gt 0 ]]; then
+    # Informational only — do NOT block. Versioning + CHANGELOG are owned by
+    # release-please now (see .github/workflows/release-please.yml): you commit
+    # with Conventional Commit messages, and release-please opens a release PR
+    # that bumps VERSION and cuts the CHANGELOG. A manual bump per commit is no
+    # longer expected, so this is just a reminder to write a good commit message.
     echo "" >&2
-    echo "⚠️  Significant code changes detected but version tracking files not updated!" >&2
+    echo "ℹ️  Significant code changes detected. VERSION/CHANGELOG are managed by" >&2
+    echo "   release-please from your Conventional Commit messages — no manual" >&2
+    echo "   bump needed. Just make sure the commit message is conventional" >&2
+    echo "   (feat:/fix:/…) so the next release PR picks it up." >&2
     echo "" >&2
-    echo "   Missing updates: ${MISSING_FILES[*]}" >&2
-    echo "" >&2
-    echo "   For feature additions or changes, please:" >&2
-    echo "   1. Bump VERSION (current: $(head -n1 "$PROJECT_DIR/VERSION" 2>/dev/null | awk '{print $1}' || echo 'N/A'))" >&2
-    echo "   2. Add entry to CHANGELOG.md under [Unreleased] or new version" >&2
-    echo "" >&2
-    echo "   To skip this check for documentation-only changes:" >&2
-    echo "   export SKIP_VERSION_CHECK=1" >&2
-    echo "" >&2
-    # Return non-zero to BLOCK the commit
-    exit 1
+    exit 0
 fi
 
 echo "✅ VERSION and CHANGELOG.md are staged for commit" >&2

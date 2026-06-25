@@ -225,8 +225,16 @@ jobs:
         id: changelog
         run: |
           VERSION="${{ needs.version.outputs.version }}"
-          # Extract the section for this version from CHANGELOG.md
-          NOTES=$(awk "/## \[$VERSION\]/,/## \[/" CHANGELOG.md | sed '1d;$d' | head -100)
+          # Extract the body of this version's section: lines AFTER the
+          # `## [VERSION]` heading up to (but not including) the NEXT `## [`
+          # heading. (The old `/start/,/end/` range used `/## \[/` as the end
+          # pattern, which matched the start heading itself, collapsing the
+          # range to one line and yielding empty notes.)
+          NOTES=$(awk -v ver="$VERSION" '
+            $0 ~ "^## \\[" ver "\\]" { flag=1; next }
+            flag && /^## \[/ { exit }
+            flag { print }
+          ' CHANGELOG.md | head -100)
           if [[ -z "$NOTES" ]]; then
             NOTES="Release v$VERSION"
           fi
