@@ -34,16 +34,17 @@ adapters.
   `get_source_layers`. Clean hard rename (no dual-output/alias — the service was
   not yet deployed); shipped under a breaking minor bump. See ADR-0012.
 
-### A2 🟠 Application services depend on the concrete `*SourceRegistry`
-`QueryService`, `HealthService`, `SyncService` take the concrete registry, not
-the `input.*` port. Driving ports are otherwise wired (HTTP/MCP). Injecting the
-interface would complete the hexagon and ease mocking. (The new `DeriveSourceID`
-should join the registry port when A1 lands.)
+### A2 ✅ Application services depend on a port interface, not the concrete registry
+`QueryService`, `HealthService`, `SyncService` now accept small consumer-side
+interfaces (`sourceQuerier`/`sourceInspector`/`sourceSyncer`) instead of
+`*SourceRegistry` — "accept interfaces", decoupled and mockable. (`input.*` was
+not reused because it lacks `ReadySourceIDs`/`Query`/`Sync`/`SourceCount`.)
 
-### A3 🟢 Duplicated id-derivation & file-filter
-Three id-derivation copies (`registry.deriveSourceID`, `geopackage.DerivePackageID`,
-`raster.deriveSourceID`) and two `isSupportedSourceFile` copies (storage, watcher).
-Consolidate after A1 (the registry is now the canonical deriver via `DeriveSourceID`).
+### A3 ✅ id-derivation & file-filter de-duplicated
+`DeriveSourceID` and `IsSupportedSourceFile` now live once in `internal/domain`
+(`sourceid.go`); the registry, raster, geopackage, storage and watcher all use
+them. The dead `geopackage.DeriveSourceID` and the duplicate `isSupportedSourceFile`
+copies are gone; the three duplicate tests collapsed into one domain test.
 
 ### A4 ✅ MCP↔telemetry coupling removed via a trace-query port
 **Resolved.** `internal/adapters/mcp` no longer imports the telemetry adapter.

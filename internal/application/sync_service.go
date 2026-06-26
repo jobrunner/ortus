@@ -17,9 +17,17 @@ import (
 // adapters depend on input.SyncResult, not an application type.
 type SyncResult = input.SyncResult
 
+// sourceSyncer is the minimal registry surface the sync service needs.
+// Declared consumer-side so the service depends on an interface, not the
+// concrete *SourceRegistry.
+type sourceSyncer interface {
+	Sync(ctx context.Context) (SyncStats, error)
+	SourceCount() int
+}
+
 // SyncService manages periodic synchronization with remote storage.
 type SyncService struct {
-	registry *SourceRegistry
+	registry sourceSyncer
 	interval time.Duration
 	logger   *slog.Logger
 	tracer   output.Tracer
@@ -41,7 +49,7 @@ type SyncService struct {
 }
 
 // NewSyncService creates a new sync service.
-func NewSyncService(registry *SourceRegistry, interval time.Duration, tracer output.Tracer, logger *slog.Logger) *SyncService {
+func NewSyncService(registry sourceSyncer, interval time.Duration, tracer output.Tracer, logger *slog.Logger) *SyncService {
 	if tracer == nil {
 		tracer = output.NoOpTracer{}
 	}

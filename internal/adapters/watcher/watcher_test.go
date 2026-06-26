@@ -83,30 +83,3 @@ func TestOperationString(t *testing.T) {
 		})
 	}
 }
-
-func TestIsSupportedSourceFile(t *testing.T) {
-	tests := []struct {
-		path     string
-		expected bool
-	}{
-		{"test.gpkg", true},
-		{"test.GPKG", true},
-		{"test.GpKg", true},
-		{"/path/to/file.gpkg", true},
-		{"bundle.zip", true},
-		{"bundle.ZIP", true},
-		{"/data/koeppen.zip", true},
-		{"test.txt", false},
-		{"test.gpkg.bak", false},
-		{"gpkg", false},
-		{"", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.path, func(t *testing.T) {
-			if got := isSupportedSourceFile(tt.path); got != tt.expected {
-				t.Errorf("isSupportedSourceFile(%q) = %v, want %v", tt.path, got, tt.expected)
-			}
-		})
-	}
-}

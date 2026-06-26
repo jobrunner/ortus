@@ -13,6 +13,7 @@ import (
 
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
+	"github.com/jobrunner/ortus/internal/domain"
 	"github.com/jobrunner/ortus/internal/ports/output"
 )
 
@@ -93,7 +94,7 @@ func (s *HTTPStorage) List(ctx context.Context) ([]output.StorageObject, error) 
 		}
 
 		// Only include loadable sources: GeoPackages and raster bundles.
-		if !isSupportedSourceFile(line) {
+		if !domain.IsSupportedSourceFile(line) {
 			continue
 		}
 

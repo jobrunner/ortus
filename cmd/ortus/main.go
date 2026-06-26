@@ -18,7 +18,6 @@ import (
 	mcpAdapter "github.com/jobrunner/ortus/internal/adapters/mcp"
 	"github.com/jobrunner/ortus/internal/adapters/telemetry"
 	"github.com/jobrunner/ortus/internal/app"
-	"github.com/jobrunner/ortus/internal/ports/input"
 
 	"github.com/jobrunner/ortus/internal/config"
 )
@@ -277,7 +276,7 @@ func runMCPStdio(_ *cobra.Command, _ []string) error {
 		logger.Warn("LoadAll failed during MCP startup", "error", err)
 	}
 
-	deps := mcpDepsFromApp(application)
+	deps := application.MCPDeps()
 
 	// Cancel on signal — RunStdio blocks on stdin.
 	go func() {
@@ -328,21 +327,4 @@ func buildHandler(cfg config.LoggingConfig, w io.Writer) slog.Handler {
 		return slog.NewTextHandler(w, opts)
 	}
 	return slog.NewJSONHandler(w, opts)
-}
-
-// mcpDepsFromApp constructs the MCP Deps from a running App. Mirrors
-// the App.mcpDeps method but lives here so the subcommand doesn't need
-// to import internal/app's private state.
-func mcpDepsFromApp(a *app.App) mcpAdapter.Deps {
-	var tq input.TelemetryQuery
-	if a.TelemetryProvider != nil {
-		tq = a.TelemetryProvider.Buffer()
-	}
-	return mcpAdapter.Deps{
-		Telemetry:     tq,
-		QueryService:  a.QueryService,
-		Registry:      a.Registry,
-		HealthService: a.HealthService,
-		Version:       version,
-	}
 }

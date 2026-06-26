@@ -8,14 +8,22 @@ import (
 	"github.com/jobrunner/ortus/internal/ports/output"
 )
 
+// sourceInspector is the minimal registry surface the health service needs.
+// Declared consumer-side so the service depends on an interface, not the
+// concrete *SourceRegistry.
+type sourceInspector interface {
+	ListSources(ctx context.Context) ([]domain.Source, error)
+	GetSourceStatus(ctx context.Context, id string) (domain.SourceStatus, error)
+}
+
 // HealthService provides health check functionality.
 type HealthService struct {
-	registry *SourceRegistry
+	registry sourceInspector
 	tracer   output.Tracer
 }
 
 // NewHealthService creates a new health service.
-func NewHealthService(registry *SourceRegistry, tracer output.Tracer) *HealthService {
+func NewHealthService(registry sourceInspector, tracer output.Tracer) *HealthService {
 	if tracer == nil {
 		tracer = output.NoOpTracer{}
 	}

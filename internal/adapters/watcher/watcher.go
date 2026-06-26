@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"log/slog"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
 
+	"github.com/jobrunner/ortus/internal/domain"
 	"github.com/jobrunner/ortus/internal/ports/output"
 )
 
@@ -157,7 +157,7 @@ func (w *Watcher) eventLoop(ctx context.Context) {
 // handleFsEvent processes a single fsnotify event.
 func (w *Watcher) handleFsEvent(event fsnotify.Event) {
 	// Only process supported source files
-	if !isSupportedSourceFile(event.Name) {
+	if !domain.IsSupportedSourceFile(event.Name) {
 		return
 	}
 
@@ -295,13 +295,6 @@ func fsnotifyOpToOperation(op fsnotify.Op) Operation {
 		// Write, Chmod, etc. are treated as modify
 		return OpModify
 	}
-}
-
-// isSupportedSourceFile checks if the path is a source ortus can load: a
-// GeoPackage (.gpkg) or a raster bundle (.zip).
-func isSupportedSourceFile(path string) bool {
-	p := strings.ToLower(path)
-	return strings.HasSuffix(p, ".gpkg") || strings.HasSuffix(p, ".zip")
 }
 
 // AddPath adds a path to watch.

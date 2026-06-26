@@ -116,7 +116,7 @@ func (r *Repository) Open(ctx context.Context, path string) (*domain.Source, err
 	defer r.mu.Unlock()
 
 	// Derive source ID from filename
-	sourceID := DeriveSourceID(path)
+	sourceID := domain.DeriveSourceID(path)
 	span.SetAttributes(output.String("ortus.source.id", sourceID))
 
 	// Check if already open
@@ -750,14 +750,6 @@ func (r *Repository) scanFeature(rows *sql.Rows, columns []string, layerName, ge
 	}
 
 	return feature, nil
-}
-
-// DeriveSourceID derives a source ID from the file path.
-// It extracts the filename without extension as the source identifier.
-func DeriveSourceID(path string) string {
-	base := filepath.Base(path)
-	ext := filepath.Ext(base)
-	return strings.TrimSuffix(base, ext)
 }
 
 // extractGeometryType extracts the geometry type from WKT.

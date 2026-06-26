@@ -346,26 +346,35 @@ func (s *Server) formatSource(pkg *domain.Source) map[string]interface{} {
 	}
 }
 
-// handleQueryError handles query errors and returns appropriate HTTP status.
+// handleQueryError maps a domain error to the appropriate HTTP status. The
+// checks use the domain's sentinel base errors (ErrInvalidInput / ErrUnsupported
+// / ErrUnavailable), so the specific errors that wrap them (ErrInvalidCoordinate,
+// ErrInvalidSRID, ErrUnsupportedProjection, StorageError, …) are classified
+// correctly instead of all falling through to 500.
 func (s *Server) handleQueryError(w http.ResponseWriter, err error) {
 	var validationErr *domain.ValidationError
-	if errors.As(err, &validationErr) {
+	var storageErr *domain.StorageError
+	switch {
+	case errors.As(err, &validationErr):
 		s.writeError(w, http.StatusBadRequest, validationErr.Message)
-		return
-	}
-
-	if errors.Is(err, domain.ErrSourceNotFound) {
+	case errors.Is(err, domain.ErrSourceNotFound):
 		s.writeError(w, http.StatusNotFound, "Source not found")
-		return
-	}
-
-	if errors.Is(err, domain.ErrLayerNotFound) {
+	case errors.Is(err, domain.ErrLayerNotFound):
 		s.writeError(w, http.StatusNotFound, "Layer not found")
-		return
+	case errors.Is(err, domain.ErrInvalidInput):
+		// Bad coordinate / SRID / other invalid input.
+		s.writeError(w, http.StatusBadRequest, "Invalid query parameters")
+	case errors.Is(err, domain.ErrUnsupported):
+		// Unsupported projection or source kind.
+		s.writeError(w, http.StatusUnprocessableEntity, "Unsupported query")
+	case errors.As(err, &storageErr), errors.Is(err, domain.ErrUnavailable):
+		s.logger.Error("query unavailable", "error", err)
+		s.writeError(w, http.StatusServiceUnavailable, "Service temporarily unavailable")
+	default:
+		// QueryError / IndexError / unexpected — a server-side failure.
+		s.logger.Error("query error", "error", err)
+		s.writeError(w, http.StatusInternalServerError, "Query failed")
 	}
-
-	s.logger.Error("query error", "error", err)
-	s.writeError(w, http.StatusInternalServerError, "Query failed")
 }
 
 // writeJSON writes a JSON response.
