@@ -2,7 +2,7 @@
 
 ## Status
 
-Vorgeschlagen
+Akzeptiert — vollständig umgesetzt (Stufe A+B in #49, Stufe C in #50).
 
 ## Kontext
 

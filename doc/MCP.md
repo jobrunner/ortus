@@ -28,7 +28,7 @@ mcp:
 
 ```bash
 export ORTUS_MCP_TOKEN="$(openssl rand -hex 32)"   # required for non-loopback
-./ortus serve
+./ortus
 ```
 
 The MCP endpoint is now available at `http://<host>:9091/mcp` with
