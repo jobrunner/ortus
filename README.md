@@ -63,7 +63,6 @@ Flags:
       --tls-domains strings   TLS domains for Let's Encrypt
       --tls-email string      Email for Let's Encrypt
       --log-level string      Log level: debug, info, warn, error (default "info")
-      --metrics               Enable Prometheus metrics (default true)
   -h, --help                  Show help
 ```
 
@@ -388,7 +387,7 @@ storage:
 ```bash
 export AWS_ACCESS_KEY_ID=...
 export AWS_SECRET_ACCESS_KEY=...
-./ortus serve --storage-type=s3
+./ortus --storage-type=s3
 ```
 
 ### Azure Blob Storage
@@ -459,7 +458,7 @@ The sync operation both adds new packages and removes packages that no longer ex
 Enable automatic TLS with Let's Encrypt:
 
 ```bash
-./ortus serve \
+./ortus \
   --tls \
   --tls-domains=ortus.example.com \
   --tls-email=admin@example.com

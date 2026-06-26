@@ -965,11 +965,10 @@ FileSystem              Watcher              Registry            Repository
 | GET | `/api/v1/sources` | Liste aller registrierten Datenquellen |
 | GET | `/api/v1/sources/{sourceId}` | Details zu einer Datenquelle |
 | GET | `/api/v1/sources/{sourceId}/layers` | Layer einer Datenquelle |
-| GET | `/api/v1/sources/{sourceId}/metadata` | Metadaten einer Datenquelle |
 | GET | `/health/ready` | Readiness-Check |
 | GET | `/health/live` | Liveness-Check |
 | GET | `/metrics` | Prometheus-Metriken |
-| GET | `/api/openapi.yaml` | OpenAPI-Spezifikation |
+| GET | `/openapi.json` | OpenAPI-Spezifikation |
 
 ### 8.2 Request/Response-Beispiele
 
