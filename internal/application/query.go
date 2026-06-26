@@ -13,9 +13,18 @@ import (
 	"github.com/jobrunner/ortus/internal/ports/output"
 )
 
+// sourceQuerier is the minimal registry surface the query service needs —
+// declared here (consumer side) so the service depends on an interface, not the
+// concrete *SourceRegistry. *SourceRegistry satisfies it.
+type sourceQuerier interface {
+	ReadySourceIDs() []string
+	GetSource(ctx context.Context, id string) (*domain.Source, error)
+	Query(ctx context.Context, sourceID, layer string, coord domain.Coordinate) ([]domain.Feature, error)
+}
+
 // QueryService handles point queries across registered sources.
 type QueryService struct {
-	registry      *SourceRegistry
+	registry      sourceQuerier
 	transformer   output.CoordinateTransformer
 	tracer        output.Tracer
 	queryCount    metric.Int64Counter
@@ -37,7 +46,7 @@ type QueryServiceConfig struct {
 // to define query-level instruments — no MetricsCollector indirection. Pass
 // noop.NewMeterProvider().Meter("test") to disable metrics in tests.
 func NewQueryService(
-	registry *SourceRegistry,
+	registry sourceQuerier,
 	transformer output.CoordinateTransformer,
 	meter metric.Meter,
 	tracer output.Tracer,

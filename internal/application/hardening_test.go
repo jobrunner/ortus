@@ -30,7 +30,7 @@ func (p *countingProvider) Supports(path string) bool { return strings.HasSuffix
 func (p *countingProvider) Open(_ context.Context, path string) (*domain.Source, error) {
 	p.opens++
 	return &domain.Source{
-		ID:      deriveSourceID(path),
+		ID:      domain.DeriveSourceID(path),
 		Name:    fmt.Sprintf("v%d", p.version),
 		Kind:    domain.SourceKindVector,
 		Indexed: true,
@@ -80,7 +80,7 @@ type blockingProvider struct{}
 func (blockingProvider) Supports(path string) bool { return strings.HasSuffix(path, ".gpkg") }
 func (blockingProvider) Open(_ context.Context, path string) (*domain.Source, error) {
 	return &domain.Source{
-		ID: deriveSourceID(path), Kind: domain.SourceKindVector, Indexed: true,
+		ID: domain.DeriveSourceID(path), Kind: domain.SourceKindVector, Indexed: true,
 		Layers: []domain.Layer{{Name: "l", SRID: 4326, HasIndex: true}},
 	}, nil
 }

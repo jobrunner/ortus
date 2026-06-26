@@ -265,7 +265,7 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*App, er
 				Path:  cfg.MCP.Path,
 				Token: cfg.MCP.Token,
 			},
-			app.mcpDeps(),
+			app.MCPDeps(),
 			logger,
 		)
 		logger.Info("MCP server configured",
@@ -279,10 +279,10 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*App, er
 	return app, nil
 }
 
-// mcpDeps bundles the dependencies the MCP adapter needs. Extracted so
-// the stdio-mode subcommand can build the same Deps struct without
-// duplicating field-by-field wiring.
-func (a *App) mcpDeps() mcp.Deps {
+// MCPDeps bundles the dependencies the MCP adapter needs. Exported so the
+// stdio-mode subcommand (cmd/ortus) builds the exact same Deps struct via this
+// one definition instead of duplicating the field-by-field wiring.
+func (a *App) MCPDeps() mcp.Deps {
 	// Keep the interface nil (not a typed-nil) when tracing is off, so the MCP
 	// tools' `deps.Telemetry == nil` checks degrade gracefully.
 	var tq input.TelemetryQuery

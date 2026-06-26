@@ -116,7 +116,7 @@ func (r *Repository) Open(ctx context.Context, path string) (*domain.Source, err
 	)
 	defer span.End()
 
-	sourceID := deriveSourceID(path)
+	sourceID := domain.DeriveSourceID(path)
 
 	r.mu.RLock()
 	existing, ok := r.sources[sourceID]
@@ -369,21 +369,6 @@ func (b *bundle) closeFiles() {
 			_ = l.file.Close()
 		}
 	}
-}
-
-// deriveSourceID extracts the source id from a bundle path (filename stem).
-// It mirrors the registry's deriveSourceID, including the extension-only edge
-// case (e.g. ".zip" → ".zip"), so dedup/unload stay consistent across adapters.
-func deriveSourceID(path string) string {
-	base := filepath.Base(path)
-	if base == "" || base == "." {
-		return ""
-	}
-	ext := filepath.Ext(base)
-	if ext == "" || len(base) == len(ext) {
-		return base
-	}
-	return strings.TrimSuffix(base, ext)
 }
 
 // parseEPSG parses an "EPSG:<n>" CRS string into its numeric SRID.

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/jobrunner/ortus/internal/domain"
 	"github.com/jobrunner/ortus/internal/ports/output"
 )
 
@@ -34,7 +35,7 @@ func (s *LocalStorage) List(_ context.Context) ([]output.StorageObject, error) {
 		}
 
 		// Only include loadable sources: GeoPackages and raster bundles.
-		if !isSupportedSourceFile(info.Name()) {
+		if !domain.IsSupportedSourceFile(info.Name()) {
 			return nil
 		}
 

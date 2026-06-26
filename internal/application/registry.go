@@ -105,7 +105,7 @@ func (r *SourceRegistry) LoadSource(ctx context.Context, path string) error {
 	// Reload semantics: if this source is already loaded (e.g. a file-watcher
 	// modify event), unload it first. Otherwise the adapter would return its
 	// cached, pre-modification instance and the change would never take effect.
-	if id := deriveSourceID(path); r.IsLoaded(id) {
+	if id := domain.DeriveSourceID(path); r.IsLoaded(id) {
 		r.logger.Info("reloading source — unloading stale instance first", "id", id)
 		if err := r.UnloadSource(ctx, id); err != nil {
 			r.logger.Warn("failed to unload before reload", "id", id, "error", err)
@@ -448,7 +448,7 @@ func (r *SourceRegistry) Sync(ctx context.Context) (SyncStats, error) {
 	// Build set of remote source IDs
 	remoteSources := make(map[string]string) // sourceID -> objectKey
 	for _, obj := range objects {
-		sourceID := deriveSourceID(obj.Key)
+		sourceID := domain.DeriveSourceID(obj.Key)
 		remoteSources[sourceID] = obj.Key
 	}
 
@@ -564,21 +564,5 @@ func (r *SourceRegistry) safeLocalPath(key string) (string, error) {
 // unload/route by path (e.g. the file watcher) should use this rather than an
 // adapter-specific derivation, so the registry stays the single source of truth.
 func (r *SourceRegistry) DeriveSourceID(path string) string {
-	return deriveSourceID(path)
-}
-
-// deriveSourceID extracts a source ID from a file path or object key.
-func deriveSourceID(path string) string {
-	base := filepath.Base(path)
-	if base == "" || base == "." {
-		return ""
-	}
-
-	ext := filepath.Ext(base)
-	// Handle edge case where basename is only the extension (e.g., ".gpkg")
-	if ext == "" || len(base) == len(ext) {
-		return base
-	}
-
-	return strings.TrimSuffix(base, ext)
+	return domain.DeriveSourceID(path)
 }

@@ -24,7 +24,7 @@ func (p *extProvider) Supports(path string) bool { return strings.HasSuffix(path
 
 func (p *extProvider) Open(_ context.Context, path string) (*domain.Source, error) {
 	return &domain.Source{
-		ID:     deriveSourceID(path),
+		ID:     domain.DeriveSourceID(path),
 		Name:   p.tag,
 		Path:   path,
 		Kind:   domain.SourceKindVector,
