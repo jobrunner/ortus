@@ -86,7 +86,7 @@ func newFixtureRepo(t *testing.T) (*Repository, *domain.Source) {
 	path := filepath.Join(t.TempDir(), "regions.gpkg")
 	buildFixtureGPKG(t, path)
 
-	repo := NewRepository()
+	repo := NewRepository(Options{})
 	t.Cleanup(func() { _ = repo.Close(context.Background(), "regions") })
 
 	src, err := repo.Open(context.Background(), path)

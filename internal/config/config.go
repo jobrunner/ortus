@@ -132,6 +132,29 @@ type QueryConfig struct {
 	Timeout      time.Duration `mapstructure:"timeout"`
 	MaxFeatures  int           `mapstructure:"max_features"`
 	WithGeometry bool          `mapstructure:"with_geometry"` // Include geometry in results (default: false)
+	SQLite       SQLiteConfig  `mapstructure:"sqlite"`
+}
+
+// SQLiteConfig tunes how the GeoPackage adapter opens its SQLite databases.
+// Defaults are conservative read-oriented values; calibrate with a load test on
+// the target infra (see doc/load-test.md).
+type SQLiteConfig struct {
+	// CacheMode is the SQLite cache mode: "private" (default — each connection
+	// has its own cache, allowing true concurrent reads) or "shared" (legacy;
+	// serializes via table-level locks and hurts read concurrency).
+	CacheMode string `mapstructure:"cache_mode"`
+	// BusyTimeoutMS makes a connection wait up to this long for a lock instead of
+	// failing immediately with SQLITE_BUSY (matters during one-off index builds).
+	// 0 disables the timeout.
+	BusyTimeoutMS int `mapstructure:"busy_timeout_ms"`
+	// JournalMode, when set (e.g. "WAL"), is applied to each opened database.
+	// Empty leaves the file's existing mode untouched.
+	JournalMode string `mapstructure:"journal_mode"`
+	// MaxOpenConns bounds open connections per source DB (each is a cgo handle +
+	// its own page cache). 0 = unlimited (database/sql default).
+	MaxOpenConns int `mapstructure:"max_open_conns"`
+	// MaxIdleConns is the idle connection pool size per source DB.
+	MaxIdleConns int `mapstructure:"max_idle_conns"`
 }
 
 // TLSConfig holds TLS/CertMagic configuration.
@@ -250,6 +273,11 @@ func Defaults() {
 	viper.SetDefault("query.timeout", 30*time.Second)
 	viper.SetDefault("query.max_features", 1000)
 	viper.SetDefault("query.with_geometry", false)
+	viper.SetDefault("query.sqlite.cache_mode", "private")
+	viper.SetDefault("query.sqlite.busy_timeout_ms", 5000)
+	viper.SetDefault("query.sqlite.journal_mode", "")
+	viper.SetDefault("query.sqlite.max_open_conns", 0)
+	viper.SetDefault("query.sqlite.max_idle_conns", 4)
 
 	// TLS defaults
 	viper.SetDefault("tls.enabled", false)

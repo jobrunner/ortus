@@ -88,6 +88,11 @@ All configuration options can be set via environment variables with the `ORTUS_`
 | `ORTUS_SERVER_RATE_LIMIT_TRUSTED_PROXIES` | `[]` | Front-proxy CIDRs allowed to set `X-Forwarded-For` (comma-separated) |
 | `ORTUS_SYNC_ENABLED` | `false` | Enable periodic remote storage sync |
 | `ORTUS_SYNC_INTERVAL` | `1h` | Sync interval (e.g., 30m, 1h, 24h) |
+| `ORTUS_QUERY_SQLITE_CACHE_MODE` | `private` | SQLite cache mode (`private`/`shared`) |
+| `ORTUS_QUERY_SQLITE_BUSY_TIMEOUT_MS` | `5000` | Busy timeout in ms before a locked-DB query errors |
+| `ORTUS_QUERY_SQLITE_JOURNAL_MODE` | (file's) | Journal mode (e.g. `WAL`); empty leaves the file's mode |
+| `ORTUS_QUERY_SQLITE_MAX_OPEN_CONNS` | `0` | Max open connections per source (`0` = unlimited) |
+| `ORTUS_QUERY_SQLITE_MAX_IDLE_CONNS` | `4` | Max idle connections per source |
 
 ### Config File
 
@@ -113,7 +118,27 @@ logging:
 metrics:
   enabled: true
   path: "/metrics"
+
+query:
+  sqlite:
+    cache_mode: private      # private favours read concurrency; shared serialises
+    busy_timeout_ms: 5000     # wait on a locked DB before erroring
+    journal_mode: ""          # e.g. WAL; empty leaves the file's existing mode
+    max_open_conns: 0         # per source; 0 = unlimited
+    max_idle_conns: 4
 ```
+
+## SQLite Tuning & Load Testing
+
+ortus serves point queries directly off SQLite/SpatiaLite. The `query.sqlite.*`
+keys above tune how each GeoPackage is opened — `cache_mode`, `busy_timeout_ms`,
+`journal_mode`, and the connection-pool limits. Defaults are chosen for read
+concurrency (`private` cache) and are safe to leave as-is.
+
+To find the right values for *your* data and hardware, run the env-gated local
+load-test harness against your own large files — see
+**[doc/load-test.md](doc/load-test.md)** (`make load-test`). A setting that wins
+there maps one-to-one onto these config keys.
 
 ## API Endpoints
 
