@@ -17,6 +17,9 @@ services:
       - ORTUS_LOGGING_FORMAT=json
       - ORTUS_METRICS_ENABLED=true
       - ORTUS_METRICS_PATH=/metrics
+      # Metrics are served on their own port (default 9090), not on 8080.
+      # Prometheus scrapes ortus:9090 over the compose network (see prometheus.yaml).
+      - ORTUS_METRICS_PORT=9090
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health/live"]
       interval: 30s

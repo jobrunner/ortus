@@ -1,0 +1,6 @@
+# Native ortus log output tailed by Promtail (keep the dir, ignore the logs).
+logs/*.log
+# Vegeta run artifacts.
+vegeta/*.bin
+vegeta/*.json
+vegeta/*.hdr

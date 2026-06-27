@@ -1,0 +1,14 @@
+# Scrapes the NATIVE ortus process running on the host. A 2s interval gives the
+# load-test latency/throughput panels enough resolution for short runs.
+global:
+  scrape_interval: 2s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: 'ortus'
+    static_configs:
+      # ortus serves /metrics on its own port (config metrics.port). `make
+      # load-serve` sets it to 2112 to avoid clashing with this Prometheus's
+      # own :9090 on the host.
+      - targets: ['host.docker.internal:2112']
+    metrics_path: /metrics

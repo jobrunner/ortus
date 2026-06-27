@@ -1,0 +1,30 @@
+# Promtail tails the native ortus process's JSON log file (written by
+# `make load-serve` into deploy/loadtest/logs/) and pushes it to Loki.
+#
+# trace_id is NOT promoted to a label here (it is high-cardinality); instead the
+# Grafana Loki datasource extracts it as a derived field and links to Tempo.
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: ortus
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: ortus
+          __path__: /var/log/ortus/*.log
+    pipeline_stages:
+      # Parse the slog JSON so the log level becomes a low-cardinality label
+      # for filtering in Grafana. trace_id stays in the line body (derived field).
+      - json:
+          expressions:
+            level: level
+      - labels:
+          level:

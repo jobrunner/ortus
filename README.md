@@ -140,6 +140,12 @@ load-test harness against your own large files — see
 **[doc/load-test.md](doc/load-test.md)** (`make load-test`). A setting that wins
 there maps one-to-one onto these config keys.
 
+For a **full-stack** load test with metrics, traces and logs correlated in a
+single local Grafana (`make load-stack-up` + `make load-serve` + `make
+load-attack`, using Vegeta + Tempo/Loki/Prometheus under
+[`deploy/loadtest/`](deploy/loadtest/)), see the *Observable load test* section
+of the same guide.
+
 ## API Endpoints
 
 All API endpoints are prefixed with `/api/v1`.

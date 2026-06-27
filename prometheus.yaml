@@ -5,5 +5,8 @@ global:
 scrape_configs:
   - job_name: 'ortus'
     static_configs:
-      - targets: ['ortus:8080']
+      # ortus serves /metrics on its dedicated metrics port (metrics.port,
+      # default 9090) — NOT on the API port 8080. Reachable container-to-
+      # container over the compose network without publishing it to the host.
+      - targets: ['ortus:9090']
     metrics_path: /metrics

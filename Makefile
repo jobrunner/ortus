@@ -3,6 +3,7 @@
 
 .PHONY: all build build-all install run clean help
 .PHONY: test test-unit test-integration test-coverage test-race test-bench load-test
+.PHONY: load-stack-up load-stack-down load-stack-clean load-serve load-attack
 .PHONY: lint lint-go lint-fix vet
 .PHONY: security-check vuln-check gosec
 .PHONY: fmt format fmt-check
@@ -26,6 +27,10 @@ GOLINT := golangci-lint
 # Verzeichnisse
 BUILD_DIR := build
 COVERAGE_DIR := coverage
+
+# Lokaler Observability-Lasttest (Grafana/Tempo/Loki/Prometheus + Vegeta)
+LOADTEST_DIR := deploy/loadtest
+LOADTEST_COMPOSE := docker compose -f $(LOADTEST_DIR)/docker-compose.yaml
 
 # Standard-Target
 all: check build
@@ -80,6 +85,34 @@ load-test: ## Lokaler Lasttest auf großen Quellen (setze ORTUS_LOADTEST_GPKG; s
 	fi
 	$(GO) test -run='^$$' -bench=BenchmarkLoadTest -benchmem -benchtime=$(if $(BENCHTIME),$(BENCHTIME),3s) \
 		$(if $(CPU),-cpu=$(CPU),) -v ./internal/adapters/geopackage/
+
+load-stack-up: ## Observability-Stack starten (Grafana/Tempo/Loki/Prometheus) — siehe doc/load-test.md
+	$(LOADTEST_COMPOSE) up -d
+	@echo "Grafana:    http://localhost:3000  (anonym, Admin-Rolle)"
+	@echo "Prometheus: http://localhost:9090"
+	@echo "Tempo OTLP: localhost:4318 (HTTP) / :4317 (gRPC)"
+
+load-stack-down: ## Observability-Stack stoppen (Daten-Volumes bleiben erhalten)
+	$(LOADTEST_COMPOSE) down
+
+load-stack-clean: ## Observability-Stack stoppen UND Daten-Volumes löschen
+	$(LOADTEST_COMPOSE) down -v
+
+load-serve: build ## ortus NATIV mit Tracing+Metrics starten (ORTUS_LOADTEST_DATA=Verzeichnis; SAMPLE überschreibbar)
+	@if [ -z "$(ORTUS_LOADTEST_DATA)" ]; then \
+		echo "ORTUS_LOADTEST_DATA (Verzeichnis mit großen GeoPackages) nicht gesetzt — siehe doc/load-test.md"; \
+		exit 1; \
+	fi
+	@mkdir -p $(LOADTEST_DIR)/logs
+	@bash -c 'set -o pipefail; \
+		ORTUS_STORAGE_TYPE=local ORTUS_STORAGE_LOCAL_PATH=$(ORTUS_LOADTEST_DATA) \
+		ORTUS_LOGGING_FORMAT=json ORTUS_METRICS_ENABLED=true ORTUS_METRICS_PORT=2112 \
+		./$(BINARY_NAME) --tracing --tracing-endpoint=localhost:4318 --tracing-transport=http \
+			--tracing-sample-ratio=$(if $(SAMPLE),$(SAMPLE),1.0) 2>&1 | tee $(LOADTEST_DIR)/logs/ortus.log'
+
+load-attack: ## Last mit Vegeta erzeugen (RATE, DURATION, TARGETS überschreibbar)
+	$(LOADTEST_COMPOSE) run --rm vegeta \
+		"vegeta attack -targets=/vegeta/$(if $(TARGETS),$(TARGETS),targets.txt) -rate=$(if $(RATE),$(RATE),200) -duration=$(if $(DURATION),$(DURATION),30s) | tee /vegeta/results.bin | vegeta report"
 
 ## Lint & Analyse Targets
 lint: lint-go ## Führe alle Linter aus (Alias für lint-go)
