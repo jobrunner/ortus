@@ -17,6 +17,7 @@ var (
 // Specific errors.
 var (
 	ErrSourceNotFound        = fmt.Errorf("source: %w", ErrNotFound)
+	ErrSourceIDCollision     = fmt.Errorf("source id collision: %w", ErrInvalidInput)
 	ErrLayerNotFound         = fmt.Errorf("layer: %w", ErrNotFound)
 	ErrInvalidCoordinate     = fmt.Errorf("coordinate: %w", ErrInvalidInput)
 	ErrInvalidSRID           = fmt.Errorf("srid: %w", ErrInvalidInput)

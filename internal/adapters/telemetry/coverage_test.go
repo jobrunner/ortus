@@ -111,7 +111,7 @@ func TestTracingCoverage_AllPathsProduceSpans(t *testing.T) {
 	store := storage.NewTracedStorage(coverageStorage{}, tr, "local")
 	reg := application.NewSourceRegistry([]output.SpatialSource{repo}, store, noop.NewMeterProvider().Meter("test"), tr, logger, "/tmp")
 	qs := application.NewQueryService(reg, nil, noop.NewMeterProvider().Meter("test"), tr, logger, application.QueryServiceConfig{})
-	hs := application.NewHealthService(reg, tr)
+	hs := application.NewHealthService(reg, true, tr)
 
 	// Each "request" runs in its own root context — this mirrors how
 	// otelmux creates a fresh root span per incoming HTTP request in prod.

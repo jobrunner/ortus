@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"os"
 	"testing"
@@ -9,6 +10,34 @@ import (
 	"github.com/jobrunner/ortus/internal/domain"
 	"github.com/jobrunner/ortus/internal/ports/output"
 )
+
+// TestLoadSourceRejectsIDCollision verifies O1: two different files that derive
+// the same source id don't silently evict each other — the second is rejected
+// and the first stays loaded. Same-path reload still works.
+func TestLoadSourceRejectsIDCollision(t *testing.T) {
+	reg := newTestRegistry()
+	ctx := context.Background()
+
+	if err := reg.LoadSource(ctx, "/data/foo.gpkg"); err != nil {
+		t.Fatalf("first load: %v", err)
+	}
+	// Different file, same derived id "foo" → collision.
+	if err := reg.LoadSource(ctx, "/other/foo.gpkg"); !errors.Is(err, domain.ErrSourceIDCollision) {
+		t.Fatalf("second load: want ErrSourceIDCollision, got %v", err)
+	}
+	// First source is NOT evicted.
+	src, err := reg.GetSource(ctx, "foo")
+	if err != nil {
+		t.Fatalf("first source should still be loaded: %v", err)
+	}
+	if src.Path != "/data/foo.gpkg" {
+		t.Errorf("loaded path = %q, want /data/foo.gpkg (first must not be evicted)", src.Path)
+	}
+	// Re-loading the SAME path is a legitimate reload, not a collision.
+	if err := reg.LoadSource(ctx, "/data/foo.gpkg"); err != nil {
+		t.Errorf("same-path reload should succeed, got %v", err)
+	}
+}
 
 func TestSourceRegistryLoadUnload(t *testing.T) {
 	repo := &mockRepository{

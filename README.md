@@ -81,6 +81,7 @@ All configuration options can be set via environment variables with the `ORTUS_`
 | `ORTUS_LOGGING_FORMAT` | `json` | Log format (json/text) |
 | `ORTUS_TLS_ENABLED` | `false` | Enable TLS |
 | `ORTUS_METRICS_ENABLED` | `true` | Enable Prometheus metrics |
+| `ORTUS_SERVER_READY_WHEN_EMPTY` | `true` | Report ready with zero loaded sources (after initial load) |
 | `ORTUS_SYNC_ENABLED` | `false` | Enable periodic remote storage sync |
 | `ORTUS_SYNC_INTERVAL` | `1h` | Sync interval (e.g., 30m, 1h, 24h) |
 
@@ -314,6 +315,20 @@ curl "http://localhost:8080/health/live"
 # Kubernetes readiness probe
 curl "http://localhost:8080/health/ready"
 ```
+
+**Readiness semantics:** `/health/ready` reports **not ready only during the
+initial load** (while sources are being downloaded/indexed) so clients retry
+while data is being brought online. Once the initial load pass completes it
+reports ready — including with **zero sources** ("ready, no data today"). It does
+**not** flip back to not-ready when new sources arrive later via sync, so the
+instance keeps serving the sources it already has. `/health` lists per-source
+status (`loading`/`indexing`/`ready`/`error`) so a client can tell that one
+specific source is still coming online. Set `ORTUS_SERVER_READY_WHEN_EMPTY=false`
+to additionally require at least one ready source.
+
+Recommended Kubernetes probes: a **startupProbe** on `/health/ready` (generous
+`failureThreshold` to cover the initial load), `readinessProbe` → `/health/ready`,
+`livenessProbe` → `/health/live`.
 
 ### API Documentation
 

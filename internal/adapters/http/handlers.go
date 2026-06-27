@@ -86,6 +86,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		"ready":          details.Ready,
 		"sources_loaded": details.SourcesLoaded,
 		"sources_ready":  details.SourcesReady,
+		"sources":        details.Sources,
 		"components":     details.Components,
 	})
 }

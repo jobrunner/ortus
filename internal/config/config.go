@@ -61,6 +61,10 @@ type ServerConfig struct {
 	RateLimit       RateLimitConfig `mapstructure:"rate_limit"`
 	CORS            CORSConfig      `mapstructure:"cors"`
 	FrontendEnabled bool            `mapstructure:"frontend_enabled"` // Enable web frontend at /
+	// ReadyWhenEmpty: when true (default), readiness reports ready once the
+	// initial load pass is done even with zero sources ("no data today"). When
+	// false, readiness additionally requires at least one ready source.
+	ReadyWhenEmpty bool `mapstructure:"ready_when_empty"`
 }
 
 // CORSConfig holds CORS configuration.
@@ -227,6 +231,7 @@ func Defaults() {
 	viper.SetDefault("server.rate_limit.burst", 200)
 	viper.SetDefault("server.cors.allowed_origins", []string{})
 	viper.SetDefault("server.frontend_enabled", true)
+	viper.SetDefault("server.ready_when_empty", true)
 
 	// Storage defaults
 	viper.SetDefault("storage.type", StorageTypeLocal)

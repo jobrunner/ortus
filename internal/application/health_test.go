@@ -21,81 +21,93 @@ func newTestRegistry() *SourceRegistry {
 	)
 }
 
-func TestHealthServiceIsHealthy(t *testing.T) {
-	registry := newTestRegistry()
-	service := NewHealthService(registry, output.NoOpTracer{})
+// markLoaded simulates the initial LoadAll pass having completed.
+func markLoaded(r *SourceRegistry) { r.initialLoadDone.Store(true) }
 
+func setSources(r *SourceRegistry, srcs map[string]*sourceEntry) {
+	r.mu.Lock()
+	r.sources = srcs
+	r.mu.Unlock()
+}
+
+func readyEntry(id string) *sourceEntry {
+	return &sourceEntry{
+		Source: &domain.Source{ID: id, Indexed: true, Layers: []domain.Layer{{Name: "l", HasIndex: true}}},
+		Status: domain.StatusReady,
+	}
+}
+
+func loadingEntry(id string) *sourceEntry {
+	return &sourceEntry{Source: &domain.Source{ID: id, Indexed: false}, Status: domain.StatusLoading}
+}
+
+func TestHealthServiceIsHealthy(t *testing.T) {
+	service := NewHealthService(newTestRegistry(), true, output.NoOpTracer{})
 	if !service.IsHealthy(context.Background()) {
 		t.Error("IsHealthy should return true")
 	}
 }
 
 func TestHealthServiceIsReady(t *testing.T) {
-	registry := newTestRegistry()
-	service := NewHealthService(registry, output.NoOpTracer{})
-
 	tests := []struct {
-		name     string
-		packages map[string]*sourceEntry
-		want     bool
+		name           string
+		initialDone    bool
+		readyWhenEmpty bool
+		sources        map[string]*sourceEntry
+		want           bool
 	}{
 		{
-			name:     "empty registry is ready",
-			packages: map[string]*sourceEntry{},
-			want:     true,
+			name:        "initial load not done → not ready (even with a ready source)",
+			initialDone: false, readyWhenEmpty: true,
+			sources: map[string]*sourceEntry{"a": readyEntry("a")},
+			want:    false,
 		},
 		{
-			name: "ready package",
-			packages: map[string]*sourceEntry{
-				"test": {
-					Source: &domain.Source{
-						ID:      "test",
-						Indexed: true,
-						Layers:  []domain.Layer{{Name: "layer1", HasIndex: true}},
-					},
-					Status: domain.StatusReady,
-				},
-			},
-			want: true,
+			name:        "empty + ready_when_empty=true → ready",
+			initialDone: true, readyWhenEmpty: true,
+			sources: map[string]*sourceEntry{},
+			want:    true,
 		},
 		{
-			name: "no ready packages",
-			packages: map[string]*sourceEntry{
-				"test": {
-					Source: &domain.Source{
-						ID:      "test",
-						Indexed: false,
-					},
-					Status: domain.StatusLoading,
-				},
-			},
-			want: false,
+			name:        "empty + ready_when_empty=false → not ready",
+			initialDone: true, readyWhenEmpty: false,
+			sources: map[string]*sourceEntry{},
+			want:    false,
 		},
 		{
-			name: "mixed packages - one ready",
-			packages: map[string]*sourceEntry{
-				"loading": {
-					Source: &domain.Source{ID: "loading", Indexed: false},
-					Status: domain.StatusLoading,
-				},
-				"ready": {
-					Source: &domain.Source{
-						ID:      "ready",
-						Indexed: true,
-						Layers:  []domain.Layer{{Name: "layer1", HasIndex: true}},
-					},
-					Status: domain.StatusReady,
-				},
-			},
-			want: true,
+			name:        "ready source → ready",
+			initialDone: true, readyWhenEmpty: false,
+			sources: map[string]*sourceEntry{"a": readyEntry("a")},
+			want:    true,
+		},
+		{
+			name:        "sources present but none ready, ready_when_empty=true → ready",
+			initialDone: true, readyWhenEmpty: true,
+			sources: map[string]*sourceEntry{"a": loadingEntry("a")},
+			want:    true,
+		},
+		{
+			name:        "sources present but none ready, ready_when_empty=false → not ready",
+			initialDone: true, readyWhenEmpty: false,
+			sources: map[string]*sourceEntry{"a": loadingEntry("a")},
+			want:    false,
+		},
+		{
+			name:        "mixed — one ready → ready",
+			initialDone: true, readyWhenEmpty: false,
+			sources: map[string]*sourceEntry{"a": loadingEntry("a"), "b": readyEntry("b")},
+			want:    true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			registry.mu.Lock()
-			registry.sources = tt.packages
-			registry.mu.Unlock()
+			registry := newTestRegistry()
+			if tt.initialDone {
+				markLoaded(registry)
+			}
+			setSources(registry, tt.sources)
+			service := NewHealthService(registry, tt.readyWhenEmpty, output.NoOpTracer{})
 
 			if got := service.IsReady(context.Background()); got != tt.want {
 				t.Errorf("IsReady() = %v, want %v", got, tt.want)
@@ -106,33 +118,14 @@ func TestHealthServiceIsReady(t *testing.T) {
 
 func TestHealthServiceGetHealthDetails(t *testing.T) {
 	registry := newTestRegistry()
-	service := NewHealthService(registry, output.NoOpTracer{})
+	markLoaded(registry)
+	service := NewHealthService(registry, true, output.NoOpTracer{})
 
-	// Add some packages
-	registry.mu.Lock()
-	registry.sources = map[string]*sourceEntry{
-		"ready1": {
-			Source: &domain.Source{
-				ID:      "ready1",
-				Indexed: true,
-				Layers:  []domain.Layer{{Name: "l1", HasIndex: true}},
-			},
-			Status: domain.StatusReady,
-		},
-		"ready2": {
-			Source: &domain.Source{
-				ID:      "ready2",
-				Indexed: true,
-				Layers:  []domain.Layer{{Name: "l2", HasIndex: true}},
-			},
-			Status: domain.StatusReady,
-		},
-		"loading": {
-			Source: &domain.Source{ID: "loading", Indexed: false},
-			Status: domain.StatusLoading,
-		},
-	}
-	registry.mu.Unlock()
+	setSources(registry, map[string]*sourceEntry{
+		"ready1":  readyEntry("ready1"),
+		"ready2":  readyEntry("ready2"),
+		"loading": loadingEntry("loading"),
+	})
 
 	details := service.GetHealthDetails(context.Background())
 
@@ -155,48 +148,32 @@ func TestHealthServiceGetHealthDetails(t *testing.T) {
 
 func TestHealthServiceGetSourceHealth(t *testing.T) {
 	registry := newTestRegistry()
-	service := NewHealthService(registry, output.NoOpTracer{})
+	service := NewHealthService(registry, true, output.NoOpTracer{})
 
-	registry.mu.Lock()
-	registry.sources = map[string]*sourceEntry{
-		"pkg1": {
-			Source: &domain.Source{
-				ID:      "pkg1",
-				Indexed: true,
-				Layers:  []domain.Layer{{Name: "l1", HasIndex: true}},
-			},
-			Status: domain.StatusReady,
-		},
-		"pkg2": {
-			Source: &domain.Source{ID: "pkg2", Indexed: false},
-			Status: domain.StatusIndexing,
-		},
-	}
-	registry.mu.Unlock()
+	setSources(registry, map[string]*sourceEntry{
+		"pkg1": readyEntry("pkg1"),
+		"pkg2": {Source: &domain.Source{ID: "pkg2", Indexed: false}, Status: domain.StatusIndexing},
+	})
 
 	health := service.GetSourceHealth(context.Background())
-
 	if len(health) != 2 {
 		t.Errorf("len(health) = %d, want 2", len(health))
 	}
 
-	// Find pkg1
-	var pkg1Health *SourceHealth
+	var pkg1 *SourceHealth
 	for i := range health {
 		if health[i].ID == "pkg1" {
-			pkg1Health = &health[i]
+			pkg1 = &health[i]
 			break
 		}
 	}
-
-	if pkg1Health == nil {
+	if pkg1 == nil {
 		t.Fatal("pkg1 not found in health results")
 	}
-
-	if pkg1Health.Status != domain.StatusReady {
-		t.Errorf("pkg1.Status = %s, want %s", pkg1Health.Status, domain.StatusReady)
+	if pkg1.Status != domain.StatusReady {
+		t.Errorf("pkg1.Status = %s, want %s", pkg1.Status, domain.StatusReady)
 	}
-	if !pkg1Health.Ready {
+	if !pkg1.Ready {
 		t.Error("pkg1.Ready should be true")
 	}
 }
