@@ -472,20 +472,45 @@ func (r *Repository) openDB(ctx context.Context, path string) (*sql.DB, error) {
 	return db, nil
 }
 
-// dsn builds the SQLite DSN from the configured options. Defaults to a private
-// cache (each connection gets its own — allows true concurrent reads, unlike
-// the legacy shared cache).
-func (r *Repository) dsn(path string) string {
-	cache := r.opts.CacheMode
-	if cache == "" {
-		cache = "private"
+// validJournalModes is the set of SQLite journal modes accepted in the DSN.
+var validJournalModes = map[string]bool{
+	"DELETE": true, "TRUNCATE": true, "PERSIST": true,
+	"MEMORY": true, "WAL": true, "OFF": true,
+}
+
+// normalizeCacheMode constrains the cache mode to the two SQLite values. Any
+// other input (including "" or an attempt to smuggle extra DSN params via '&')
+// falls back to the safe read-concurrency default.
+func normalizeCacheMode(m string) string {
+	if strings.EqualFold(strings.TrimSpace(m), "shared") {
+		return "shared"
 	}
-	params := []string{"cache=" + cache}
+	return "private"
+}
+
+// normalizeJournalMode returns a valid upper-case journal mode, or "" to leave
+// the file's existing mode untouched (also when the input is unrecognized, so a
+// typo can't break DB open or inject DSN parameters).
+func normalizeJournalMode(m string) string {
+	up := strings.ToUpper(strings.TrimSpace(m))
+	if validJournalModes[up] {
+		return up
+	}
+	return ""
+}
+
+// dsn builds the SQLite DSN from the configured options. Values are normalized
+// against fixed whitelists before being concatenated, so an invalid or hostile
+// config value cannot break DB open or smuggle extra DSN parameters via '&'.
+// Defaults to a private cache (each connection gets its own — allows true
+// concurrent reads, unlike the legacy shared cache).
+func (r *Repository) dsn(path string) string {
+	params := []string{"cache=" + normalizeCacheMode(r.opts.CacheMode)}
 	if r.opts.BusyTimeoutMS > 0 {
 		params = append(params, fmt.Sprintf("_busy_timeout=%d", r.opts.BusyTimeoutMS))
 	}
-	if r.opts.JournalMode != "" {
-		params = append(params, "_journal_mode="+r.opts.JournalMode)
+	if jm := normalizeJournalMode(r.opts.JournalMode); jm != "" {
+		params = append(params, "_journal_mode="+jm)
 	}
 	return fmt.Sprintf("file:%s?%s", path, strings.Join(params, "&"))
 }

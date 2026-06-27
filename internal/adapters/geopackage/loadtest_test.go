@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -179,14 +180,26 @@ func BenchmarkLoadTestQueryPointConcurrent(b *testing.B) {
 	f := setupLoadTest(b)
 	ctx := context.Background()
 
+	// Capture only the first error and fail once after RunParallel completes,
+	// rather than flooding output (and returning a misleading result) when many
+	// goroutines hit the same fault.
+	var (
+		once     sync.Once
+		firstErr error
+	)
+
 	b.ReportAllocs()
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			if _, err := f.repo.QueryPoint(ctx, f.sourceID, f.layer, f.coord); err != nil {
-				b.Errorf("query: %v", err)
+				once.Do(func() { firstErr = err })
 				return
 			}
 		}
 	})
+	b.StopTimer()
+	if firstErr != nil {
+		b.Fatalf("query: %v", firstErr)
+	}
 }

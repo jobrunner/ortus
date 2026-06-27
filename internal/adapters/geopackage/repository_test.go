@@ -81,7 +81,7 @@ func TestNewRepository(t *testing.T) {
 	repo := NewRepository(Options{})
 
 	if repo == nil {
-		t.Fatal("NewRepository() returned nil")
+		t.Fatal("NewRepository(Options{}) returned nil")
 	}
 
 	if repo.connections == nil {
