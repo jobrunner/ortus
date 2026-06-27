@@ -104,10 +104,11 @@ load-serve: build ## ortus NATIV mit Tracing+Metrics starten (ORTUS_LOADTEST_DAT
 		exit 1; \
 	fi
 	@mkdir -p $(LOADTEST_DIR)/logs
-	ORTUS_STORAGE_TYPE=local ORTUS_STORAGE_LOCAL_PATH=$(ORTUS_LOADTEST_DATA) \
-	ORTUS_LOGGING_FORMAT=json ORTUS_METRICS_ENABLED=true ORTUS_METRICS_PORT=2112 \
-	./$(BINARY_NAME) --tracing --tracing-endpoint=localhost:4318 --tracing-transport=http \
-		--tracing-sample-ratio=$(if $(SAMPLE),$(SAMPLE),1.0) 2>&1 | tee $(LOADTEST_DIR)/logs/ortus.log
+	@bash -c 'set -o pipefail; \
+		ORTUS_STORAGE_TYPE=local ORTUS_STORAGE_LOCAL_PATH=$(ORTUS_LOADTEST_DATA) \
+		ORTUS_LOGGING_FORMAT=json ORTUS_METRICS_ENABLED=true ORTUS_METRICS_PORT=2112 \
+		./$(BINARY_NAME) --tracing --tracing-endpoint=localhost:4318 --tracing-transport=http \
+			--tracing-sample-ratio=$(if $(SAMPLE),$(SAMPLE),1.0) 2>&1 | tee $(LOADTEST_DIR)/logs/ortus.log'
 
 load-attack: ## Last mit Vegeta erzeugen (RATE, DURATION, TARGETS überschreibbar)
 	$(LOADTEST_COMPOSE) run --rm vegeta \

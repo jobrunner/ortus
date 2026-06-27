@@ -47,9 +47,10 @@ datasources:
     jsonData:
       derivedFields:
         - name: trace_id
-          # ortus logs are JSON: {... "trace_id":"<hex>" ...}
+          # ortus logs are JSON: {... "trace_id":"<32-char hex>" ...}.
+          # Constrain to hex so the field can't match unrelated tokens.
           matcherType: regex
-          matcherRegex: '"trace_id":"(\w+)"'
+          matcherRegex: '"trace_id":"([a-fA-F0-9]{32})"'
           url: '${__value.raw}'
           datasourceUid: tempo
           urlDisplayLabel: 'View trace'

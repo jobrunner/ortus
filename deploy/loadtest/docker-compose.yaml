@@ -86,7 +86,11 @@ services:
   # One-shot load driver. Not started by `up`; invoked on demand via
   # `make load-attack` (which runs `docker compose run --rm vegeta ...`).
   vegeta:
-    image: peterevans/vegeta:latest
+    # Pinned by digest for reproducibility (peterevans/vegeta:latest as of the
+    # build). amd64-only image — runs under emulation on Apple Silicon, which is
+    # fine for a load *driver*; for very high rates use a native `vegeta`.
+    image: peterevans/vegeta@sha256:eb65f499cd1b0f1402a56794d7711c49121db6ff8ea7d878513d76601ee0d502
+    platform: linux/amd64
     profiles: ["attack"]
     entrypoint: ["/bin/sh", "-c"]
     command: ["echo 'Run via: make load-attack (or docker compose run --rm vegeta ...)'"]
