@@ -53,7 +53,9 @@ func (r *SourceRegistry) loadedSourcePath(id string) (string, bool) {
 	defer r.mu.RUnlock()
 	entry, ok := r.sources[id]
 	if !ok || entry.Source == nil {
-		return "", ok
+		// No entry, or a malformed placeholder without a Source: report "not a
+		// known-path load" so the caller doesn't treat it as a collision.
+		return "", false
 	}
 	return entry.Source.Path, true
 }

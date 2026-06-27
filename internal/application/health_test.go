@@ -57,9 +57,15 @@ func TestHealthServiceIsReady(t *testing.T) {
 		want           bool
 	}{
 		{
-			name:        "initial load not done → not ready (even with a ready source)",
+			name:        "ready source → ready even before the initial load latch",
 			initialDone: false, readyWhenEmpty: true,
 			sources: map[string]*sourceEntry{"a": readyEntry("a")},
+			want:    true,
+		},
+		{
+			name:        "initial load not done, no ready source → not ready",
+			initialDone: false, readyWhenEmpty: true,
+			sources: map[string]*sourceEntry{"a": loadingEntry("a")},
 			want:    false,
 		},
 		{

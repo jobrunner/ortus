@@ -53,15 +53,6 @@ func (s *HealthService) IsReady(ctx context.Context) bool {
 	ctx, span := s.tracer.Start(ctx, "HealthService.IsReady")
 	defer span.End()
 
-	// During the initial bring-up (sources still being downloaded/indexed),
-	// report not-ready so clients retry. The latch never flips back, so later
-	// background sync activity never drops the instance out of the LB — it keeps
-	// serving the sources it already has.
-	if !s.registry.InitialLoadComplete() {
-		span.SetAttributes(output.Bool("health.ready", false), output.String("health.reason", "initial_load"))
-		return false
-	}
-
 	sources, err := s.registry.ListSources(ctx)
 	if err != nil {
 		span.RecordError(err)
@@ -69,10 +60,11 @@ func (s *HealthService) IsReady(ctx context.Context) bool {
 		span.SetAttributes(output.Bool("health.ready", false))
 		return false
 	}
-
 	span.SetAttributes(output.Int("health.sources_total", len(sources)))
 
-	// Ready if at least one source is ready.
+	// A usable source means ready, regardless of the load latch — this also
+	// covers sources brought online by sync after the initial pass (or after a
+	// startup where storage was briefly unreachable).
 	for _, src := range sources {
 		if src.IsReady() {
 			span.SetAttributes(output.Bool("health.ready", true), output.String("health.reason", "source_ready"))
@@ -80,16 +72,24 @@ func (s *HealthService) IsReady(ctx context.Context) bool {
 		}
 	}
 
-	// No ready source after the initial load: either none configured ("ready,
-	// no data today") or all present sources failed / are reindexing. Default
-	// (readyWhenEmpty) treats this as ready; false keeps the instance out of the
-	// LB until at least one source is ready.
-	reason := "no_sources"
-	if len(sources) > 0 {
-		reason = "no_ready_sources"
+	// No ready source. Until the initial load pass completes we're still
+	// bringing data online → not ready, so clients retry. After it completes,
+	// "no ready source" means no data (or all failed/reindexing): readyWhenEmpty
+	// (default true) treats that as ready ("no data today"); false keeps the
+	// instance out of the LB until a source is ready. A startup where storage
+	// was unreachable stays not-ready (loud) until sync brings a source up.
+	var ready bool
+	var reason string
+	switch {
+	case !s.registry.InitialLoadComplete():
+		ready, reason = false, "initial_load"
+	case len(sources) == 0:
+		ready, reason = s.readyWhenEmpty, "no_sources"
+	default:
+		ready, reason = s.readyWhenEmpty, "no_ready_sources"
 	}
-	span.SetAttributes(output.Bool("health.ready", s.readyWhenEmpty), output.String("health.reason", reason))
-	return s.readyWhenEmpty
+	span.SetAttributes(output.Bool("health.ready", ready), output.String("health.reason", reason))
+	return ready
 }
 
 // GetHealthDetails returns detailed health information.
@@ -103,7 +103,12 @@ func (s *HealthService) GetHealthDetails(ctx context.Context) input.HealthDetail
 	ready := 0
 	states := make([]input.SourceState, 0, len(sources))
 	for _, src := range sources {
-		st, _ := s.registry.GetSourceStatus(ctx, src.ID)
+		st, err := s.registry.GetSourceStatus(ctx, src.ID)
+		if err != nil {
+			// Source vanished between ListSources and here (concurrent unload) —
+			// skip it rather than reporting an empty status.
+			continue
+		}
 		isReady := src.IsReady()
 		if isReady {
 			ready++
