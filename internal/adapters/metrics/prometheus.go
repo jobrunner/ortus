@@ -54,7 +54,7 @@ func New(ctx context.Context, opts Options, logger *slog.Logger) (*Collector, er
 		logger = slog.Default()
 	}
 
-	readers := make([]sdkmetric.Option, 0, 2)
+	readers := make([]sdkmetric.Option, 0, 3)
 
 	promExporter, err := otelprom.New()
 	if err != nil {
@@ -74,6 +74,22 @@ func New(ctx context.Context, opts Options, logger *slog.Logger) (*Collector, er
 			"interval", opts.OTLPInterval,
 		)
 	}
+
+	// The HTTP duration histogram is recorded in SECONDS, but OTel's default
+	// bucket boundaries assume integer milliseconds (5, 10, 25, …), so every
+	// sub-5s request lands in the first bucket and histogram_quantile() can't
+	// resolve p50/p95/p99. Override with seconds-scale boundaries spanning
+	// sub-millisecond to multi-second so latency percentiles are meaningful
+	// under load.
+	readers = append(readers, sdkmetric.WithView(sdkmetric.NewView(
+		sdkmetric.Instrument{Name: "ortus.http.request.duration"},
+		sdkmetric.Stream{Aggregation: sdkmetric.AggregationExplicitBucketHistogram{
+			Boundaries: []float64{
+				0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05,
+				0.1, 0.25, 0.5, 1, 2.5, 5, 10,
+			},
+		}},
+	)))
 
 	provider := sdkmetric.NewMeterProvider(readers...)
 	return &Collector{provider: provider}, nil

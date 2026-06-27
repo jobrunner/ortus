@@ -1,0 +1,101 @@
+# Local observability stack for load testing ortus on a dev machine.
+#
+# ortus itself runs NATIVELY (see `make load-serve`) — not in this compose — so
+# the load test measures real on-metal performance (native arm64, native CGO
+# SpatiaLite, no container memory cap, no x86 emulation). These containers are
+# only the backends + the load driver:
+#
+#   Grafana     :3000  single pane — metrics, traces, logs, all correlated
+#   Prometheus  :9090  scrapes ortus /metrics on the host
+#   Tempo       :4318  receives OTLP traces from native ortus (localhost:4318)
+#   Loki        :3100  stores logs shipped by Promtail
+#   Promtail           tails deploy/loadtest/logs/*.log -> Loki
+#   Vegeta             one-shot load driver (profile "attack", via make load-attack)
+#
+# Bring it up:  make load-stack-up      (or: docker compose -f deploy/loadtest/docker-compose.yaml up -d)
+# Tear it down: make load-stack-down
+name: ortus-loadtest
+
+services:
+  grafana:
+    image: grafana/grafana:11.4.0
+    ports:
+      - "3000:3000"
+    environment:
+      # Dev-only: anonymous admin, no login. Never expose this stack publicly.
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
+      - GF_FEATURE_TOGGLES_ENABLE=traceqlEditor
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+      - tempo
+      - loki
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    ports:
+      - "9090:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    volumes:
+      - ./prometheus.yaml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    # Lets the container reach native ortus on the host at host.docker.internal.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  tempo:
+    image: grafana/tempo:2.7.0
+    command: ['-config.file=/etc/tempo.yaml']
+    ports:
+      - "4318:4318" # OTLP HTTP  — ortus --tracing-endpoint=localhost:4318
+      - "4317:4317" # OTLP gRPC  — ortus --tracing-transport=grpc
+      - "3200:3200" # Tempo query API (used by Grafana inside the network)
+    volumes:
+      - ./tempo.yaml:/etc/tempo.yaml:ro
+      - tempo-data:/var/tempo
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:3.3.2
+    command: ['-config.file=/etc/loki/loki-config.yaml']
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./loki-config.yaml:/etc/loki/loki-config.yaml:ro
+      - loki-data:/loki
+    restart: unless-stopped
+
+  promtail:
+    image: grafana/promtail:3.3.2
+    command: ['-config.file=/etc/promtail/promtail-config.yaml']
+    volumes:
+      - ./promtail-config.yaml:/etc/promtail/promtail-config.yaml:ro
+      - ./logs:/var/log/ortus:ro
+    depends_on:
+      - loki
+    restart: unless-stopped
+
+  # One-shot load driver. Not started by `up`; invoked on demand via
+  # `make load-attack` (which runs `docker compose run --rm vegeta ...`).
+  vegeta:
+    image: peterevans/vegeta:latest
+    profiles: ["attack"]
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["echo 'Run via: make load-attack (or docker compose run --rm vegeta ...)'"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./vegeta:/vegeta
+
+volumes:
+  prometheus-data:
+  tempo-data:
+  loki-data:

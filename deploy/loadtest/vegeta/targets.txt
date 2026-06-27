@@ -1,0 +1,11 @@
+# Vegeta targets — one HTTP request per line (see `make load-attack`).
+#
+# These hit the NATIVE ortus on the host via host.docker.internal. Adjust the
+# coordinates to fall inside your data's extent, and add /api/v1/query/{sourceId}
+# lines to exercise a specific source. lon/lat are WGS84; use x/y[&srid=] for
+# projected coordinates.
+#
+# Tip: mix several coordinates so you're not always hitting one R-tree node.
+GET http://host.docker.internal:8080/api/v1/query?lon=11.5820&lat=48.1351
+GET http://host.docker.internal:8080/api/v1/query?lon=11.5760&lat=48.1372
+GET http://host.docker.internal:8080/api/v1/query?lon=11.5900&lat=48.1300
