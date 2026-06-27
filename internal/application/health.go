@@ -14,22 +14,29 @@ import (
 type sourceInspector interface {
 	ListSources(ctx context.Context) ([]domain.Source, error)
 	GetSourceStatus(ctx context.Context, id string) (domain.SourceStatus, error)
+	InitialLoadComplete() bool
 }
 
 // HealthService provides health check functionality.
 type HealthService struct {
 	registry sourceInspector
 	tracer   output.Tracer
+	// readyWhenEmpty: when true (default), a fully-loaded service with no ready
+	// source still reports ready ("no data today"). When false, readiness
+	// additionally requires at least one ready source.
+	readyWhenEmpty bool
 }
 
-// NewHealthService creates a new health service.
-func NewHealthService(registry sourceInspector, tracer output.Tracer) *HealthService {
+// NewHealthService creates a new health service. readyWhenEmpty controls the
+// no-source readiness policy (see HealthService.readyWhenEmpty).
+func NewHealthService(registry sourceInspector, readyWhenEmpty bool, tracer output.Tracer) *HealthService {
 	if tracer == nil {
 		tracer = output.NoOpTracer{}
 	}
 	return &HealthService{
-		registry: registry,
-		tracer:   tracer,
+		registry:       registry,
+		tracer:         tracer,
+		readyWhenEmpty: readyWhenEmpty,
 	}
 }
 
@@ -53,10 +60,11 @@ func (s *HealthService) IsReady(ctx context.Context) bool {
 		span.SetAttributes(output.Bool("health.ready", false))
 		return false
 	}
-
 	span.SetAttributes(output.Int("health.sources_total", len(sources)))
 
-	// Ready if at least one source is ready
+	// A usable source means ready, regardless of the load latch — this also
+	// covers sources brought online by sync after the initial pass (or after a
+	// startup where storage was briefly unreachable).
 	for _, src := range sources {
 		if src.IsReady() {
 			span.SetAttributes(output.Bool("health.ready", true), output.String("health.reason", "source_ready"))
@@ -64,11 +72,21 @@ func (s *HealthService) IsReady(ctx context.Context) bool {
 		}
 	}
 
-	// Also ready if no sources are configured (empty state)
-	ready := len(sources) == 0
-	reason := "no_sources"
-	if !ready {
-		reason = "no_ready_sources"
+	// No ready source. Until the initial load pass completes we're still
+	// bringing data online → not ready, so clients retry. After it completes,
+	// "no ready source" means no data (or all failed/reindexing): readyWhenEmpty
+	// (default true) treats that as ready ("no data today"); false keeps the
+	// instance out of the LB until a source is ready. A startup where storage
+	// was unreachable stays not-ready (loud) until sync brings a source up.
+	var ready bool
+	var reason string
+	switch {
+	case !s.registry.InitialLoadComplete():
+		ready, reason = false, "initial_load"
+	case len(sources) == 0:
+		ready, reason = s.readyWhenEmpty, "no_sources"
+	default:
+		ready, reason = s.readyWhenEmpty, "no_ready_sources"
 	}
 	span.SetAttributes(output.Bool("health.ready", ready), output.String("health.reason", reason))
 	return ready
@@ -83,10 +101,19 @@ func (s *HealthService) GetHealthDetails(ctx context.Context) input.HealthDetail
 
 	loaded := len(sources)
 	ready := 0
+	states := make([]input.SourceState, 0, len(sources))
 	for _, src := range sources {
-		if src.IsReady() {
+		st, err := s.registry.GetSourceStatus(ctx, src.ID)
+		if err != nil {
+			// Source vanished between ListSources and here (concurrent unload) —
+			// skip it rather than reporting an empty status.
+			continue
+		}
+		isReady := src.IsReady()
+		if isReady {
 			ready++
 		}
+		states = append(states, input.SourceState{ID: src.ID, Status: string(st), Ready: isReady})
 	}
 
 	components := map[string]string{
@@ -104,6 +131,7 @@ func (s *HealthService) GetHealthDetails(ctx context.Context) input.HealthDetail
 		SourcesLoaded: loaded,
 		SourcesReady:  ready,
 		Components:    components,
+		Sources:       states,
 	}
 }
 

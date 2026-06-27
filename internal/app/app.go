@@ -176,7 +176,7 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*App, er
 	)
 
 	// Initialize health service
-	app.HealthService = application.NewHealthService(app.Registry, app.Tracer)
+	app.HealthService = application.NewHealthService(app.Registry, cfg.Server.ReadyWhenEmpty, app.Tracer)
 
 	// Initialize sync service (only for remote storage)
 	if cfg.Sync.Enabled && cfg.Storage.Type != config.StorageTypeLocal {

@@ -68,4 +68,14 @@ type HealthDetails struct {
 	SourcesLoaded int               // Number of loaded sources
 	SourcesReady  int               // Number of ready sources
 	Components    map[string]string // Component statuses
+	Sources       []SourceState     // Per-source status (lets a client see which source is still indexing)
+}
+
+// SourceState is the per-source status exposed via /health, so a client can
+// tell a specific source apart (e.g. a large one still "indexing") without the
+// whole instance being marked not-ready.
+type SourceState struct {
+	ID     string `json:"id"`
+	Status string `json:"status"` // loading | indexing | ready | error | unloading
+	Ready  bool   `json:"ready"`
 }

@@ -74,7 +74,7 @@ func buildDeps(t *testing.T) mcpAdapter.Deps {
 	store := storage.NewTracedStorage(stubStorage{}, tr, "local")
 	reg := application.NewSourceRegistry([]output.SpatialSource{fakeRepo{}}, store, meter, tr, logger, "/tmp")
 	qs := application.NewQueryService(reg, nil, meter, tr, logger, application.QueryServiceConfig{})
-	hs := application.NewHealthService(reg, tr)
+	hs := application.NewHealthService(reg, true, tr)
 
 	return mcpAdapter.Deps{
 		Telemetry:     tp.Buffer(),

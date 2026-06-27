@@ -34,6 +34,30 @@ type SourceRegistry struct {
 	// r.mu. Updated by updateMetrics() after every load/unload.
 	loadedCount atomic.Int64
 	readyCount  atomic.Int64
+	// failedCount reflects how many sources failed in the last LoadAll pass.
+	failedCount atomic.Int64
+
+	// initialLoadDone latches true once the first LoadAll pass completes (even
+	// with zero or partially-failed sources). Readiness uses it so the service
+	// reports not-ready only during the initial bring-up, not when later sync
+	// activity adds sources in the background.
+	initialLoadDone atomic.Bool
+}
+
+// InitialLoadComplete reports whether the first LoadAll pass has finished.
+func (r *SourceRegistry) InitialLoadComplete() bool { return r.initialLoadDone.Load() }
+
+// loadedSourcePath returns the on-disk path of an already-loaded source, if any.
+func (r *SourceRegistry) loadedSourcePath(id string) (string, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	entry, ok := r.sources[id]
+	if !ok || entry.Source == nil {
+		// No entry, or a malformed placeholder without a Source: report "not a
+		// known-path load" so the caller doesn't treat it as a collision.
+		return "", false
+	}
+	return entry.Source.Path, true
 }
 
 type sourceEntry struct {
@@ -81,13 +105,18 @@ func NewSourceRegistry(
 		"ortus.sources.ready",
 		metric.WithDescription("Number of sources ready to serve queries"),
 	)
+	failed, _ := meter.Int64ObservableGauge(
+		"ortus.sources.failed",
+		metric.WithDescription("Number of sources that failed to load in the last LoadAll pass"),
+	)
 	_, _ = meter.RegisterCallback(
 		func(_ context.Context, o metric.Observer) error {
 			o.ObserveInt64(loaded, r.loadedCount.Load())
 			o.ObserveInt64(ready, r.readyCount.Load())
+			o.ObserveInt64(failed, r.failedCount.Load())
 			return nil
 		},
-		loaded, ready,
+		loaded, ready, failed,
 	)
 
 	return r
@@ -102,10 +131,24 @@ func (r *SourceRegistry) LoadSource(ctx context.Context, path string) error {
 
 	r.logger.Info("loading source", "path", path)
 
-	// Reload semantics: if this source is already loaded (e.g. a file-watcher
-	// modify event), unload it first. Otherwise the adapter would return its
-	// cached, pre-modification instance and the change would never take effect.
-	if id := domain.DeriveSourceID(path); r.IsLoaded(id) {
+	// Reload vs collision: a source id is the filename stem, so two different
+	// files can derive the same id (e.g. "foo.gpkg" and "foo.zip").
+	id := domain.DeriveSourceID(path)
+	if existingPath, loaded := r.loadedSourcePath(id); loaded {
+		if existingPath != path {
+			// Different file, same id — reject rather than silently evicting the
+			// already-loaded source. The operator must rename one (ids must be
+			// unique across all source files, regardless of extension).
+			err := fmt.Errorf("%w: %q is already loaded as id %q, refusing %q",
+				domain.ErrSourceIDCollision, existingPath, id, path)
+			r.logger.Error("source id collision", "id", id, "existing", existingPath, "incoming", path)
+			span.RecordError(err)
+			span.SetStatus(output.StatusError, "id collision")
+			return err
+		}
+		// Same file already loaded (e.g. a file-watcher modify event): unload
+		// first so the adapter re-reads it instead of returning its cached,
+		// pre-modification instance.
 		r.logger.Info("reloading source — unloading stale instance first", "id", id)
 		if err := r.UnloadSource(ctx, id); err != nil {
 			r.logger.Warn("failed to unload before reload", "id", id, "error", err)
@@ -400,10 +443,22 @@ func (r *SourceRegistry) LoadAll(ctx context.Context) error {
 		loaded++
 	}
 
+	r.failedCount.Store(int64(failed))
 	span.SetAttributes(
 		output.Int("ortus.sources.loaded", loaded),
 		output.Int("ortus.sources.failed", failed),
 	)
+	// Operator-visible summary (the per-source failures were logged at ERROR
+	// above). A partial load is valid: ortus keeps serving what loaded.
+	if failed > 0 {
+		r.logger.Warn("source load completed with failures — serving the sources that loaded",
+			"loaded", loaded, "failed", failed, "total", len(objects))
+	} else {
+		r.logger.Info("source load complete", "loaded", loaded, "total", len(objects))
+	}
+	// Latch readiness: the initial bring-up pass is done (even if zero or
+	// partially-failed). Subsequent sync activity won't flip readiness off.
+	r.initialLoadDone.Store(true)
 	span.SetStatus(output.StatusOK, "")
 	return nil
 }

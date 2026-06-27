@@ -116,8 +116,11 @@ func newTestServer(_ *mockQueryService, _ *mockSourceRegistry, _ *mockHealthServ
 		logger,
 		"/tmp",
 	)
+	// Mark the initial load complete so /health/ready reports ready (the
+	// readiness latch is only false during initial bring-up).
+	_ = realRegistry.LoadAll(context.Background())
 
-	realHealth := application.NewHealthService(realRegistry, output.NoOpTracer{})
+	realHealth := application.NewHealthService(realRegistry, true, output.NoOpTracer{})
 	realQuery := application.NewQueryService(
 		realRegistry,
 		nil,

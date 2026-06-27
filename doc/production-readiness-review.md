@@ -76,34 +76,35 @@ vs. the PR base fail CI), and **CODEOWNERS** auto-requesting review on the
 
 ## Recommended — Operational hardening
 
-### O1 🟠 Source-id collisions across extensions
-Source ids are filename stems regardless of extension, so `foo.gpkg` and
-`foo.zip` both map to id `foo` — with the new reload semantics they would
-repeatedly evict each other. Recommend: reject id collisions at load with a
-clear error (registry-level), or namespace by kind. Document the "ids must be
-globally unique across all source files" rule.
+### O1 ✅ Source-id collisions across extensions — guarded
+`LoadSource` now rejects a second file that derives an already-loaded id with a
+**different** path (`ErrSourceIDCollision`) instead of silently evicting the
+first; same-path reloads still work. README documents the "ids must be unique
+across all source files" rule.
 
 ### O2 🟠 HTTP rate limiting is configured but not applied
 `config.RateLimitConfig` exists and defaults are set, but no middleware enforces
-it on query endpoints (only `/api/v1/sync` self-rate-limits). Operators may
-believe they're protected. Wire a limiter middleware in `http.NewServer` when
-`server.rate_limit.enabled`, or remove the config to avoid a false sense of safety.
+it on query endpoints (only `/api/v1/sync` self-rate-limits). **Decision: implement
+in-app (opt-in, default off)** — per-IP middleware for the "ortus on a public IP"
+scenario. Pending PR.
 
 ### O3 🟠 SQLite connection-pool defaults untuned
-`geopackage.openDB` never sets `SetMaxOpenConns/SetMaxIdleConns/SetConnMaxLifetime`.
-Under concurrent read load across many packages this can serialize or churn
-connections. Add conservative read-oriented pool limits (load-test first;
-queries are read-only, R-tree build happens once at load).
+`geopackage.openDB` uses `cache=shared` and sets no pool limits / `_busy_timeout`
+/ WAL. **Pending PR** with WAL + busy_timeout + configurable pool limits, to be
+calibrated against a local load-test on the target infra (queries are read-only;
+R-tree build happens once at load).
 
-### O4 🟢 Health readiness is permissive when empty
-`/health/ready` returns ready with **zero** sources loaded ("no_packages"), so a
-freshly-started, data-less instance is added to a load balancer. Make this an
-explicit policy (config flag `ready_when_empty`, default false) for k8s setups.
+### O4 ✅ Health readiness reflects initial bring-up
+`/health/ready` is not-ready only during the initial load pass; afterwards it is
+ready (even with zero sources, "no data today") and does **not** flip back when
+sync adds sources later (keeps serving existing). `/health` exposes per-source
+status. Config: `server.ready_when_empty` (default true).
 
-### O5 🟢 Partial `LoadAll`/`Sync` failures are low-visibility
-One unloadable source is logged at WARN and skipped; a startup with N failed
-sources still reports success. Surface a `loaded/failed` summary metric/log at
-startup and consider a `require_full_load` strict mode.
+### O5 ✅ Partial `LoadAll` failures are visible
+`LoadAll` emits a summary log (INFO, or WARN when any failed) and an
+`ortus.sources.failed` gauge; a partial load stays a success (ortus keeps serving
+what loaded — per design, a missing/failed source is valid and the client
+decides). No strict mode (intentional: the service is generic).
 
 ## Recommended — Test coverage (still thin in critical paths)
 

@@ -27,7 +27,7 @@ func (p *fakeProvider) Open(_ context.Context, path string) (*domain.Source, err
 	base := filepath.Base(path)
 	id := strings.TrimSuffix(base, filepath.Ext(base))
 	return &domain.Source{
-		ID: id, Kind: domain.SourceKindVector, Indexed: true,
+		ID: id, Path: path, Kind: domain.SourceKindVector, Indexed: true,
 		Layers: []domain.Layer{{Name: "l", SRID: 4326, HasIndex: true}},
 	}, nil
 }
