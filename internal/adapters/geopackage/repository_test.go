@@ -78,7 +78,7 @@ func TestGetSpatiaLiteLibraryPaths(t *testing.T) {
 }
 
 func TestNewRepository(t *testing.T) {
-	repo := NewRepository()
+	repo := NewRepository(Options{})
 
 	if repo == nil {
 		t.Fatal("NewRepository() returned nil")

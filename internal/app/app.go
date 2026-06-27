@@ -136,7 +136,13 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*App, er
 	app.Storage = store
 
 	// Initialize GeoPackage (vector) repository
-	app.Repository = geopackage.NewRepository()
+	app.Repository = geopackage.NewRepository(geopackage.Options{
+		CacheMode:     cfg.Query.SQLite.CacheMode,
+		BusyTimeoutMS: cfg.Query.SQLite.BusyTimeoutMS,
+		JournalMode:   cfg.Query.SQLite.JournalMode,
+		MaxOpenConns:  cfg.Query.SQLite.MaxOpenConns,
+		MaxIdleConns:  cfg.Query.SQLite.MaxIdleConns,
+	})
 	app.Repository.SetTracer(app.Tracer)
 
 	// Initialize raster bundle repository. Bundles are unpacked into OS temp

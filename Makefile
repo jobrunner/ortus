@@ -2,7 +2,7 @@
 # Alle Standardaufgaben für Entwicklung und CI/CD
 
 .PHONY: all build build-all install run clean help
-.PHONY: test test-unit test-integration test-coverage test-race test-bench
+.PHONY: test test-unit test-integration test-coverage test-race test-bench load-test
 .PHONY: lint lint-go lint-fix vet
 .PHONY: security-check vuln-check gosec
 .PHONY: fmt format fmt-check
@@ -71,6 +71,15 @@ test-race: ## Tests mit Race Detector
 
 test-bench: ## Benchmarks ausführen
 	$(GO) test -bench=. -benchmem ./...
+
+load-test: ## Lokaler Lasttest auf großen Quellen (setze ORTUS_LOADTEST_GPKG; siehe doc/load-test.md)
+	@if [ -z "$(ORTUS_LOADTEST_GPKG)" ]; then \
+		echo "ORTUS_LOADTEST_GPKG nicht gesetzt — siehe doc/load-test.md"; \
+		echo "Beispiel: make load-test ORTUS_LOADTEST_GPKG=/data/big.gpkg ORTUS_LOADTEST_LAYER=parcels"; \
+		exit 1; \
+	fi
+	$(GO) test -run='^$$' -bench=BenchmarkLoadTest -benchmem -benchtime=$(if $(BENCHTIME),$(BENCHTIME),3s) \
+		$(if $(CPU),-cpu=$(CPU),) -v ./internal/adapters/geopackage/
 
 ## Lint & Analyse Targets
 lint: lint-go ## Führe alle Linter aus (Alias für lint-go)

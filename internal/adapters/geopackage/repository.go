@@ -65,6 +65,18 @@ func getSpatiaLiteLibraryPaths() []string {
 	return paths
 }
 
+// Options tunes how SQLite databases are opened. The zero value is valid and
+// yields safe defaults (private cache, no busy timeout, unlimited connections).
+// The composition root maps config.SQLiteConfig onto this, so the adapter does
+// not import the config package.
+type Options struct {
+	CacheMode     string // "private" (default) | "shared"
+	BusyTimeoutMS int    // 0 = none
+	JournalMode   string // "" = leave file's mode; e.g. "WAL"
+	MaxOpenConns  int    // 0 = unlimited
+	MaxIdleConns  int    // <=0 = database/sql default
+}
+
 // Repository implements the output.SpatialSource port using SpatiaLite.
 // It serves vector GeoPackages.
 type Repository struct {
@@ -72,6 +84,7 @@ type Repository struct {
 	connections map[string]*sql.DB
 	sources     map[string]*domain.Source
 	tracer      output.Tracer
+	opts        Options
 }
 
 // Supports reports whether this adapter can open the given path. The
@@ -87,12 +100,14 @@ func (r *Repository) Prepare(ctx context.Context, sourceID string, layer string)
 	return r.CreateSpatialIndex(ctx, sourceID, layer)
 }
 
-// NewRepository creates a new GeoPackage repository.
-func NewRepository() *Repository {
+// NewRepository creates a new GeoPackage repository with the given SQLite
+// options. Pass Options{} for safe defaults.
+func NewRepository(opts Options) *Repository {
 	return &Repository{
 		connections: make(map[string]*sql.DB),
 		sources:     make(map[string]*domain.Source),
 		tracer:      output.NoOpTracer{},
+		opts:        opts,
 	}
 }
 
@@ -316,7 +331,7 @@ func (r *Repository) CreateSpatialIndex(ctx context.Context, sourceID, layerName
 		`CREATE VIRTUAL TABLE "%s" USING rtree(id, minx, maxx, miny, maxy)`, //#nosec G201 -- table name derived from trusted database
 		indexTable,
 	)
-	if _, err := db.ExecContext(ctx, createQuery); err != nil {
+	if _, err := db.ExecContext(ctx, createQuery); err != nil { //#nosec G701 -- identifier from layer validated via GetLayer, double-quoted; SQLite DDL identifiers cannot be parameterized
 		idxErr := &domain.IndexError{
 			SourceID: sourceID,
 			Layer:    layerName,
@@ -344,10 +359,10 @@ func (r *Repository) CreateSpatialIndex(ctx context.Context, sourceID, layerName
 		layerName, layer.GeometryColumn,
 	) //#nosec G201 -- table/column names from trusted database source
 
-	if _, err := db.ExecContext(ctx, populateQuery); err != nil {
+	if _, err := db.ExecContext(ctx, populateQuery); err != nil { //#nosec G701 -- identifiers from layer validated via GetLayer, double-quoted; SQLite DDL identifiers cannot be parameterized
 		// Clean up the empty R-tree table on failure
 		//nolint:gocritic // sprintfQuotedString: SQL identifiers need double quotes, not Go's %q
-		_, _ = db.ExecContext(ctx, fmt.Sprintf(`DROP TABLE IF EXISTS "%s"`, indexTable))
+		_, _ = db.ExecContext(ctx, fmt.Sprintf(`DROP TABLE IF EXISTS "%s"`, indexTable)) //#nosec G701 -- table name derived from validated layer metadata, double-quoted
 		idxErr := &domain.IndexError{
 			SourceID: sourceID,
 			Layer:    layerName,
@@ -440,13 +455,13 @@ func (r *Repository) HasSpatialIndex(ctx context.Context, sourceID, layerName st
 
 // openDB opens the SQLite database with appropriate settings.
 func (r *Repository) openDB(ctx context.Context, path string) (*sql.DB, error) {
-	// Open in read-write mode to allow spatial index creation
-	// GeoPackage data remains unmodified - only R-tree indexes are added
-	dsn := fmt.Sprintf("file:%s?cache=shared", path)
-	db, err := sql.Open("sqlite3_with_extensions", dsn)
+	// Open read-write so the one-off spatial-index build can run; the GeoPackage
+	// data itself is never modified (only R-tree indexes are added).
+	db, err := sql.Open("sqlite3_with_extensions", r.dsn(path))
 	if err != nil {
 		return nil, err
 	}
+	r.applyPool(db)
 
 	// Test connection
 	if err := db.PingContext(ctx); err != nil {
@@ -455,6 +470,36 @@ func (r *Repository) openDB(ctx context.Context, path string) (*sql.DB, error) {
 	}
 
 	return db, nil
+}
+
+// dsn builds the SQLite DSN from the configured options. Defaults to a private
+// cache (each connection gets its own — allows true concurrent reads, unlike
+// the legacy shared cache).
+func (r *Repository) dsn(path string) string {
+	cache := r.opts.CacheMode
+	if cache == "" {
+		cache = "private"
+	}
+	params := []string{"cache=" + cache}
+	if r.opts.BusyTimeoutMS > 0 {
+		params = append(params, fmt.Sprintf("_busy_timeout=%d", r.opts.BusyTimeoutMS))
+	}
+	if r.opts.JournalMode != "" {
+		params = append(params, "_journal_mode="+r.opts.JournalMode)
+	}
+	return fmt.Sprintf("file:%s?%s", path, strings.Join(params, "&"))
+}
+
+// applyPool applies the configured connection-pool limits. Each SQLite
+// connection is a cgo handle with its own page cache, so MaxOpenConns bounds
+// memory/fd use under concurrent read load.
+func (r *Repository) applyPool(db *sql.DB) {
+	if r.opts.MaxOpenConns > 0 {
+		db.SetMaxOpenConns(r.opts.MaxOpenConns)
+	}
+	if r.opts.MaxIdleConns > 0 {
+		db.SetMaxIdleConns(r.opts.MaxIdleConns)
+	}
 }
 
 // loadSpatiaLite verifies that SpatiaLite extension is loaded.
