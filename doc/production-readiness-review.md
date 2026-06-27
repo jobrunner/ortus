@@ -82,11 +82,13 @@ vs. the PR base fail CI), and **CODEOWNERS** auto-requesting review on the
 first; same-path reloads still work. README documents the "ids must be unique
 across all source files" rule.
 
-### O2 🟠 HTTP rate limiting is configured but not applied
-`config.RateLimitConfig` exists and defaults are set, but no middleware enforces
-it on query endpoints (only `/api/v1/sync` self-rate-limits). **Decision: implement
-in-app (opt-in, default off)** — per-IP middleware for the "ortus on a public IP"
-scenario. Pending PR.
+### O2 ✅ Per-IP HTTP rate limiting (opt-in)
+Implemented in-app (default off): a per-client-IP token-bucket middleware
+(`golang.org/x/time/rate`) on the `/api/v1` surface (health probes excluded).
+Client IP is the direct peer (`RemoteAddr`) unless the peer is within a configured
+`trusted_proxies` CIDR, in which case `X-Forwarded-For` is honored (otherwise
+ignored — un-spoofable for direct public exposure). Idle buckets evicted inline.
+Config: `server.rate_limit.{enabled,rate,burst,trusted_proxies}`.
 
 ### O3 🟠 SQLite connection-pool defaults untuned
 `geopackage.openDB` uses `cache=shared` and sets no pool limits / `_busy_timeout`

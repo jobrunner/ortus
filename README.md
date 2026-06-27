@@ -82,6 +82,10 @@ All configuration options can be set via environment variables with the `ORTUS_`
 | `ORTUS_TLS_ENABLED` | `false` | Enable TLS |
 | `ORTUS_METRICS_ENABLED` | `true` | Enable Prometheus metrics |
 | `ORTUS_SERVER_READY_WHEN_EMPTY` | `true` | Report ready with zero loaded sources (after initial load) |
+| `ORTUS_SERVER_RATE_LIMIT_ENABLED` | `false` | Enable per-IP rate limiting on `/api/v1` |
+| `ORTUS_SERVER_RATE_LIMIT_RATE` | `100` | Sustained requests/second per client IP |
+| `ORTUS_SERVER_RATE_LIMIT_BURST` | `200` | Token-bucket burst per client IP |
+| `ORTUS_SERVER_RATE_LIMIT_TRUSTED_PROXIES` | `[]` | Front-proxy CIDRs allowed to set `X-Forwarded-For` (comma-separated) |
 | `ORTUS_SYNC_ENABLED` | `false` | Enable periodic remote storage sync |
 | `ORTUS_SYNC_INTERVAL` | `1h` | Sync interval (e.g., 30m, 1h, 24h) |
 
@@ -467,6 +471,29 @@ curl -X POST "http://localhost:8080/api/v1/sync"
 The sync operation both adds new packages and removes packages that no longer exist in remote storage. The API endpoint is rate-limited to 2 requests per minute (30 second cooldown). If exceeded, a `429 Too Many Requests` response is returned with a `Retry-After: 30` header.
 
 > **Note:** Sync is only available for remote storage types (s3, azure, http), not for local storage. For local storage, use the hot-reload feature which automatically detects file changes.
+
+## Rate Limiting
+
+Per-client-IP rate limiting is **off by default** — ortus is meant to run "dumb"
+behind whatever your infrastructure provides. Enable it when ortus is exposed
+directly on a public IP without a rate-limiting gateway in front:
+
+```yaml
+server:
+  rate_limit:
+    enabled: true
+    rate: 50          # sustained requests/second per client IP
+    burst: 100        # token-bucket burst per client IP
+    # Only set when a proxy/LB sits in front: its CIDR(s). Then the client IP is
+    # taken from X-Forwarded-For. Left empty (default), the header is ignored and
+    # the direct peer is used — correct (un-spoofable) for direct public exposure.
+    trusted_proxies: []
+```
+
+Notes:
+- Applies to the **`/api/v1`** surface only — `/health*` probes are never throttled.
+- Over-limit requests get **429** with `Retry-After: 1`.
+- Idle per-IP buckets are evicted automatically (bounded memory, no background goroutine).
 
 ## TLS / HTTPS
 
