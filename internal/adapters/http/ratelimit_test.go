@@ -37,9 +37,12 @@ func TestClientIP(t *testing.T) {
 	}{
 		{"remoteaddr default", "1.2.3.4:5678", "", nil, "1.2.3.4"},
 		{"xff ignored without trusted proxy", "1.2.3.4:5678", "9.9.9.9", nil, "1.2.3.4"},
-		{"xff used when peer is trusted", "1.2.3.4:5678", "9.9.9.9", []string{"1.2.3.0/24"}, "9.9.9.9"},
 		{"xff ignored when peer not trusted", "1.2.3.4:5678", "9.9.9.9", []string{"10.0.0.0/8"}, "1.2.3.4"},
-		{"xff list takes left-most", "1.2.3.4:5678", "9.9.9.9, 1.2.3.4", []string{"1.2.3.0/24"}, "9.9.9.9"},
+		{"rightmost-non-trusted is the client", "1.2.3.4:5678", "9.9.9.9, 1.2.3.4", []string{"1.2.3.0/24"}, "9.9.9.9"},
+		// Spoof attempt: client injects a fake left-most entry; the real client
+		// IP is what the trusted proxy appended (right-most non-trusted).
+		{"spoofed left-most ignored", "1.2.3.4:5678", "1.1.1.1, 5.5.5.5", []string{"1.2.3.0/24"}, "5.5.5.5"},
+		{"all-trusted chain falls back to peer", "1.2.3.4:5678", "1.2.3.5", []string{"1.2.3.0/24"}, "1.2.3.4"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -48,7 +51,8 @@ func TestClientIP(t *testing.T) {
 			if tt.xff != "" {
 				r.Header.Set("X-Forwarded-For", tt.xff)
 			}
-			if got := clientIP(r, parseCIDRs(tt.trusted)); got != tt.want {
+			nets, _ := parseCIDRs(tt.trusted)
+			if got := clientIP(r, nets); got != tt.want {
 				t.Errorf("clientIP() = %q, want %q", got, tt.want)
 			}
 		})
@@ -64,18 +68,22 @@ func TestRateLimitMiddleware(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	call := func() int {
+	call := func() *httptest.ResponseRecorder {
 		r := httptest.NewRequest(http.MethodGet, "/api/v1/query", nil)
 		r.RemoteAddr = "5.5.5.5:1111"
 		rr := httptest.NewRecorder()
 		h.ServeHTTP(rr, r)
-		return rr.Code
+		return rr
 	}
 
-	if got := call(); got != http.StatusOK {
-		t.Errorf("first request = %d, want 200", got)
+	if rr := call(); rr.Code != http.StatusOK {
+		t.Errorf("first request = %d, want 200", rr.Code)
 	}
-	if got := call(); got != http.StatusTooManyRequests {
-		t.Errorf("second request = %d, want 429", got)
+	rr := call()
+	if rr.Code != http.StatusTooManyRequests {
+		t.Errorf("second request = %d, want 429", rr.Code)
+	}
+	if ra := rr.Header().Get("Retry-After"); ra == "" {
+		t.Error("429 response should set a Retry-After header")
 	}
 }

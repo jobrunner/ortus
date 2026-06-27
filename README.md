@@ -85,6 +85,7 @@ All configuration options can be set via environment variables with the `ORTUS_`
 | `ORTUS_SERVER_RATE_LIMIT_ENABLED` | `false` | Enable per-IP rate limiting on `/api/v1` |
 | `ORTUS_SERVER_RATE_LIMIT_RATE` | `100` | Sustained requests/second per client IP |
 | `ORTUS_SERVER_RATE_LIMIT_BURST` | `200` | Token-bucket burst per client IP |
+| `ORTUS_SERVER_RATE_LIMIT_TRUSTED_PROXIES` | `[]` | Front-proxy CIDRs allowed to set `X-Forwarded-For` (comma-separated) |
 | `ORTUS_SYNC_ENABLED` | `false` | Enable periodic remote storage sync |
 | `ORTUS_SYNC_INTERVAL` | `1h` | Sync interval (e.g., 30m, 1h, 24h) |
 

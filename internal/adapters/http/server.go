@@ -84,11 +84,23 @@ func NewServer(
 	// Opt-in per-IP rate limiting (off by default). Only the /api/v1 surface is
 	// limited; health/probe endpoints are never throttled.
 	if cfg.RateLimit.Enabled {
-		s.rateLimiter = newIPRateLimiter(cfg.RateLimit.Rate, cfg.RateLimit.Burst)
-		s.trustedProxies = parseCIDRs(cfg.RateLimit.TrustedProxies)
-		logger.Info("rate limiting enabled",
-			"rate", cfg.RateLimit.Rate, "burst", cfg.RateLimit.Burst,
-			"trusted_proxies", len(s.trustedProxies))
+		if cfg.RateLimit.Rate <= 0 {
+			// Fail safe: a non-positive rate would deny all traffic after the
+			// burst. Treat as a misconfiguration and leave limiting OFF.
+			logger.Warn("rate limiting requested but rate <= 0 — leaving it DISABLED",
+				"rate", cfg.RateLimit.Rate)
+		} else {
+			trusted, invalid := parseCIDRs(cfg.RateLimit.TrustedProxies)
+			if len(invalid) > 0 {
+				logger.Warn("ignoring invalid trusted_proxies CIDRs — X-Forwarded-For will not be trusted for these",
+					"invalid", invalid)
+			}
+			s.rateLimiter = newIPRateLimiter(cfg.RateLimit.Rate, cfg.RateLimit.Burst)
+			s.trustedProxies = trusted
+			logger.Info("rate limiting enabled",
+				"rate", cfg.RateLimit.Rate, "burst", cfg.RateLimit.Burst,
+				"trusted_proxies", len(trusted))
+		}
 	}
 
 	s.router = s.setupRoutes()
