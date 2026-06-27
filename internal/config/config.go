@@ -80,8 +80,13 @@ func (c *CORSConfig) Enabled() bool {
 // RateLimitConfig holds rate limiting configuration.
 type RateLimitConfig struct {
 	Enabled bool    `mapstructure:"enabled"`
-	Rate    float64 `mapstructure:"rate"`
-	Burst   int     `mapstructure:"burst"`
+	Rate    float64 `mapstructure:"rate"`  // sustained requests per second per client IP
+	Burst   int     `mapstructure:"burst"` // token-bucket burst per client IP
+	// TrustedProxies are CIDRs of front proxies/load balancers. When the direct
+	// peer is within one, the client IP is taken from X-Forwarded-For; otherwise
+	// the direct peer (RemoteAddr) is used. Empty (default) = never trust
+	// forwarded headers — correct for ortus exposed directly on a public IP.
+	TrustedProxies []string `mapstructure:"trusted_proxies"`
 }
 
 // StorageConfig holds object storage configuration.
@@ -229,6 +234,7 @@ func Defaults() {
 	viper.SetDefault("server.rate_limit.enabled", false)
 	viper.SetDefault("server.rate_limit.rate", 100.0)
 	viper.SetDefault("server.rate_limit.burst", 200)
+	viper.SetDefault("server.rate_limit.trusted_proxies", []string{})
 	viper.SetDefault("server.cors.allowed_origins", []string{})
 	viper.SetDefault("server.frontend_enabled", true)
 	viper.SetDefault("server.ready_when_empty", true)

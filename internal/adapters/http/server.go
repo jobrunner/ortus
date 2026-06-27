@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"time"
 
@@ -33,6 +34,8 @@ type Server struct {
 	tracerProvider trace.TracerProvider // Used by otelmux middleware; may be nil
 	serviceName    string               // Used as otelmux service name; defaults to "ortus"
 	httpMetrics    *httpMetrics         // HTTP-level instruments; nil when metrics disabled
+	rateLimiter    *ipRateLimiter       // per-IP limiter; nil unless server.rate_limit.enabled
+	trustedProxies []*net.IPNet         // proxy CIDRs allowed to set X-Forwarded-For
 }
 
 // ServerOptions wraps optional dependencies the HTTP server can use, such as
@@ -76,6 +79,16 @@ func NewServer(
 		tracerProvider: opts.TracerProvider,
 		serviceName:    serviceName,
 		httpMetrics:    httpM,
+	}
+
+	// Opt-in per-IP rate limiting (off by default). Only the /api/v1 surface is
+	// limited; health/probe endpoints are never throttled.
+	if cfg.RateLimit.Enabled {
+		s.rateLimiter = newIPRateLimiter(cfg.RateLimit.Rate, cfg.RateLimit.Burst)
+		s.trustedProxies = parseCIDRs(cfg.RateLimit.TrustedProxies)
+		logger.Info("rate limiting enabled",
+			"rate", cfg.RateLimit.Rate, "burst", cfg.RateLimit.Burst,
+			"trusted_proxies", len(s.trustedProxies))
 	}
 
 	s.router = s.setupRoutes()
@@ -143,6 +156,11 @@ func (s *Server) setupRoutes() *mux.Router {
 
 	// API v1
 	api := r.PathPrefix("/api/v1").Subrouter()
+
+	// Per-IP rate limiting on the API surface only (never on /health probes).
+	if s.rateLimiter != nil {
+		api.Use(s.rateLimitMiddleware)
+	}
 
 	// Query endpoints
 	api.HandleFunc("/query", s.handleQuery).Methods(http.MethodGet)
