@@ -23,6 +23,10 @@ func safeJoin(base, key string) (string, error) {
 	if key == "" {
 		return "", errors.New("empty storage key")
 	}
+	// Clean the base too: filepath.Join normalizes (e.g. "./data" -> "data"),
+	// so the prefix check must compare against the cleaned base or it would
+	// reject every valid key when basePath is configured as "./data" (default).
+	base = filepath.Clean(base)
 	clean := filepath.Clean(key)
 	if filepath.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, ".."+string(os.PathSeparator)) {
 		return "", fmt.Errorf("illegal key %q escapes storage root", key)

@@ -39,3 +39,19 @@ func TestSafeJoin(t *testing.T) {
 		})
 	}
 }
+
+// An unclean base like the default "./data" must still accept valid keys —
+// filepath.Join normalizes it, so the prefix check has to use the cleaned base.
+func TestSafeJoinUncleanBase(t *testing.T) {
+	got, err := safeJoin("./data", "regions.gpkg")
+	if err != nil {
+		t.Fatalf("safeJoin(./data, regions.gpkg) unexpected error: %v", err)
+	}
+	if want := filepath.Join("data", "regions.gpkg"); got != want {
+		t.Errorf("safeJoin = %q, want %q", got, want)
+	}
+	// Traversal must still be rejected with an unclean base.
+	if _, err := safeJoin("./data", "../escape"); err == nil {
+		t.Error("safeJoin(./data, ../escape) should be rejected")
+	}
+}
