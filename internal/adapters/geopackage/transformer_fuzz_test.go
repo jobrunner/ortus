@@ -1,6 +1,9 @@
 package geopackage
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // FuzzExtractGeometryType feeds arbitrary WKT-ish strings through the geometry
 // type extractor (which runs over text derived from layer data). It must never
@@ -14,8 +17,8 @@ func FuzzExtractGeometryType(f *testing.F) {
 	}
 	f.Fuzz(func(t *testing.T, wkt string) {
 		got := extractGeometryType(wkt) // must not panic
-		if len(got) > len(wkt) {
-			t.Errorf("extractGeometryType(%q) = %q longer than input", wkt, got)
+		if got != "" && !strings.Contains(wkt, got) {
+			t.Errorf("extractGeometryType(%q) = %q not contained in input", wkt, got)
 		}
 	})
 }
