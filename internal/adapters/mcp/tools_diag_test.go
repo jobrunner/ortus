@@ -68,6 +68,11 @@ func callTool(t *testing.T, s *mcp.ClientSession, name string, args map[string]a
 // JSON-encoded structured output) and decodes it into a map.
 func toolJSON(t *testing.T, res *mcp.CallToolResult) map[string]any {
 	t.Helper()
+	// Only success results carry structured output; surface a tool error here
+	// rather than letting it fail later as an opaque JSON-decode error.
+	if res.IsError {
+		t.Fatalf("tool returned IsError; content=%v", res.Content)
+	}
 	var text strings.Builder
 	for _, c := range res.Content {
 		if tc, ok := c.(*mcp.TextContent); ok {
