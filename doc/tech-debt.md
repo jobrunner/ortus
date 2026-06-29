@@ -17,6 +17,7 @@ register of debt we knowingly carry.
 | **Debt markers** | CI + pre-commit + Claude edit-hook / `make debt-guard` | zero `// TODO/FIXME/HACK/XXX` markers in `*.go` | track it here instead |
 | **Storage-filter drift** | CI + pre-commit + Claude edit-hook / `make debt-guard` | no storage backend hardcodes a source extension | route through `domain.IsSupportedSourceFile` |
 | **Coverage floors** | Test job / `make debt-coverage` | per-package statement coverage ≥ `.coverage-floors` (ratchet up) | add tests |
+| **Goroutine leaks** (`goleak`) | Test job (`TestMain` per package) | no goroutine outlives a package's tests — guards against resource leaks in this long-running service | close/stop what you start (`t.Cleanup`) |
 | **deadcode** | advisory `make debt-deadcode` | unreachable funcs (informational) | triage by hand — see below |
 
 `make verify` runs everything except the coverage floors and the deadcode
