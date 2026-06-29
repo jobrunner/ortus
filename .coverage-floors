@@ -8,11 +8,11 @@
 internal/domain                    99
 internal/config                    94
 internal/application               77
-internal/adapters/http             70
+internal/adapters/http             71
 internal/adapters/geopackage       65
 internal/adapters/raster           76
 internal/adapters/telemetry        73
 internal/adapters/watcher          77
 internal/adapters/storage          49
-internal/adapters/mcp              48
+internal/adapters/mcp              70
 TOTAL                              62
