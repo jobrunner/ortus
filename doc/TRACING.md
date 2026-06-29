@@ -68,6 +68,7 @@ Every named operation produces a span; a coverage test in
 | Span name                              | Where                          | Notable attributes                                       |
 |----------------------------------------|--------------------------------|----------------------------------------------------------|
 | `GET /api/v1/query/{sourceId}` (etc.) | `otelmux` middleware           | standard `http.*`                                        |
+| `mcp.tools/call` (etc.)                | `internal/adapters/mcp`        | `mcp.tool.name` (one span per received MCP method)       |
 | `App.Startup` / `App.Shutdown`         | `internal/app`                 | `ortus.{tracing,metrics,sync,watcher}.enabled`           |
 | `App.handleFileEvent`                  | `internal/app`                 | `watcher.{path,operation}`                               |
 | `Watcher.handle`                       | `internal/adapters/watcher`    | `watcher.{path,operation}`                               |
