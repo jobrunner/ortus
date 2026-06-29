@@ -100,7 +100,7 @@ func TestQueryTimeoutIsEnforced(t *testing.T) {
 		t.Fatalf("load: %v", err)
 	}
 	svc := NewQueryService(reg, nil, testMeter(), output.NoOpTracer{}, testLogger(),
-		QueryServiceConfig{DefaultSRID: domain.SRIDWGS84, MaxFeatures: 100, QueryTimeout: 50 * time.Millisecond})
+		QueryServiceConfig{MaxFeatures: 100, QueryTimeout: 50 * time.Millisecond})
 
 	done := make(chan struct{})
 	var elapsed time.Duration

@@ -30,14 +30,12 @@ type QueryService struct {
 	queryCount    metric.Int64Counter
 	queryDuration metric.Float64Histogram
 	logger        *slog.Logger
-	defaultSRID   int
 	maxFeatures   int
 	queryTimeout  time.Duration
 }
 
 // QueryServiceConfig holds configuration for the query service.
 type QueryServiceConfig struct {
-	DefaultSRID  int
 	MaxFeatures  int
 	QueryTimeout time.Duration // per-query deadline; 0 disables
 }
@@ -53,9 +51,6 @@ func NewQueryService(
 	logger *slog.Logger,
 	cfg QueryServiceConfig,
 ) *QueryService {
-	if cfg.DefaultSRID == 0 {
-		cfg.DefaultSRID = domain.SRIDWGS84
-	}
 	if cfg.MaxFeatures == 0 {
 		cfg.MaxFeatures = 1000
 	}
@@ -83,7 +78,6 @@ func NewQueryService(
 		queryCount:    queryCount,
 		queryDuration: queryDuration,
 		logger:        logger,
-		defaultSRID:   cfg.DefaultSRID,
 		maxFeatures:   cfg.MaxFeatures,
 		queryTimeout:  cfg.QueryTimeout,
 	}

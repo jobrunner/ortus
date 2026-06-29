@@ -26,7 +26,6 @@ func newTestQueryService(registry *SourceRegistry) *QueryService {
 		output.NoOpTracer{},
 		logger,
 		QueryServiceConfig{
-			DefaultSRID: domain.SRIDWGS84,
 			MaxFeatures: 100,
 		},
 	)
@@ -45,9 +44,6 @@ func TestQueryServiceDefaultConfig(t *testing.T) {
 		QueryServiceConfig{}, // Empty config
 	)
 
-	if svc.defaultSRID != domain.SRIDWGS84 {
-		t.Errorf("defaultSRID = %d, want %d", svc.defaultSRID, domain.SRIDWGS84)
-	}
 	if svc.maxFeatures != 1000 {
 		t.Errorf("maxFeatures = %d, want 1000", svc.maxFeatures)
 	}

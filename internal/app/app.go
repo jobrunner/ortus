@@ -175,7 +175,6 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*App, er
 		app.Tracer,
 		logger,
 		application.QueryServiceConfig{
-			DefaultSRID:  cfg.Query.DefaultSRID,
 			MaxFeatures:  cfg.Query.MaxFeatures,
 			QueryTimeout: cfg.Query.Timeout,
 		},

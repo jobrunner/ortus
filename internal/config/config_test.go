@@ -37,7 +37,7 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.Storage.Type != StorageTypeLocal || cfg.Storage.LocalPath != "./data" {
 		t.Errorf("storage defaults = %+v", cfg.Storage)
 	}
-	if cfg.Query.DefaultSRID != 4326 || cfg.Query.MaxFeatures != 1000 {
+	if cfg.Query.MaxFeatures != 1000 {
 		t.Errorf("query defaults = %+v", cfg.Query)
 	}
 	if !cfg.Metrics.Enabled || cfg.Metrics.Port != 9090 {
