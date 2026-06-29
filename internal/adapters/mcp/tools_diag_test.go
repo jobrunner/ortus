@@ -164,6 +164,24 @@ func TestMCPEntrySpan(t *testing.T) {
 	if len(traces) == 0 {
 		t.Fatal("expected an MCP entry span (mcp.tools/call) in the buffer; middleware did not record one")
 	}
+
+	tr := traces[0]
+	if tr.RootName != "mcp.tools/call" {
+		t.Errorf("root span name = %q, want %q", tr.RootName, "mcp.tools/call")
+	}
+	// The entry span must tag the call with the tool name.
+	var found bool
+	for _, sp := range tr.Spans {
+		if sp.Name == "mcp.tools/call" {
+			found = true
+			if got := sp.Attributes["mcp.tool.name"]; got != "health" {
+				t.Errorf("mcp.tool.name = %v, want \"health\"", got)
+			}
+		}
+	}
+	if !found {
+		t.Error("no span named mcp.tools/call found in the captured trace")
+	}
 }
 
 func TestDiagTools_TracingDisabled(t *testing.T) {
