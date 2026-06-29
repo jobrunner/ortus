@@ -68,9 +68,37 @@ func (a *App) meterProvider() metric.MeterProvider {
 	return a.Metrics.MeterProvider()
 }
 
+// initTracing builds the telemetry provider + tracer from config. When tracing
+// is disabled it returns (nil, NoOp, nil) so the caller never has to branch.
+func initTracing(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*telemetry.Provider, output.Tracer, error) {
+	if !cfg.Tracing.Enabled {
+		return nil, output.NoOpTracer{}, nil
+	}
+	tp, err := telemetry.NewProvider(ctx, telemetry.ProviderOptions{
+		ServiceName: cfg.Tracing.ServiceName,
+		Environment: cfg.Tracing.Environment,
+		Transport:   cfg.Tracing.Transport,
+		Endpoint:    cfg.Tracing.Endpoint,
+		Insecure:    cfg.Tracing.Insecure,
+		Headers:     cfg.Tracing.Headers,
+		SampleRatio: cfg.Tracing.SampleRatio,
+		BufferSize:  cfg.Tracing.BufferSize,
+		ExtraAttrs:  cfg.Tracing.Attributes,
+	}, logger)
+	if err != nil {
+		return nil, nil, fmt.Errorf("initializing tracing: %w", err)
+	}
+	logger.Info("tracing enabled",
+		"service", cfg.Tracing.ServiceName,
+		"sample_ratio", cfg.Tracing.SampleRatio,
+		"buffer_size", cfg.Tracing.BufferSize,
+	)
+	return tp, telemetry.NewTracer(tp.TracerProvider()), nil
+}
+
 // New creates and initializes a new application.
-func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*App, error) {
-	app := &App{
+func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (app *App, retErr error) {
+	app = &App{
 		Config: cfg,
 		Logger: logger,
 		Tracer: output.NoOpTracer{},
@@ -78,29 +106,12 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*App, er
 
 	// Initialize tracing (must come before HTTP/middleware setup so the
 	// TracerProvider is available downstream).
-	if cfg.Tracing.Enabled {
-		tp, err := telemetry.NewProvider(ctx, telemetry.ProviderOptions{
-			ServiceName: cfg.Tracing.ServiceName,
-			Environment: cfg.Tracing.Environment,
-			Transport:   cfg.Tracing.Transport,
-			Endpoint:    cfg.Tracing.Endpoint,
-			Insecure:    cfg.Tracing.Insecure,
-			Headers:     cfg.Tracing.Headers,
-			SampleRatio: cfg.Tracing.SampleRatio,
-			BufferSize:  cfg.Tracing.BufferSize,
-			ExtraAttrs:  cfg.Tracing.Attributes,
-		}, logger)
-		if err != nil {
-			return nil, fmt.Errorf("initializing tracing: %w", err)
-		}
-		app.TelemetryProvider = tp
-		app.Tracer = telemetry.NewTracer(tp.TracerProvider())
-		logger.Info("tracing enabled",
-			"service", cfg.Tracing.ServiceName,
-			"sample_ratio", cfg.Tracing.SampleRatio,
-			"buffer_size", cfg.Tracing.BufferSize,
-		)
+	tp, tracer, err := initTracing(ctx, cfg, logger)
+	if err != nil {
+		return nil, err
 	}
+	app.TelemetryProvider = tp // nil when tracing is disabled
+	app.Tracer = tracer        // NoOp when tracing is disabled
 
 	// Initialize metrics provider. Combines a Prometheus reader (for the
 	// existing /metrics scrape endpoint) with an optional OTLP push reader
@@ -168,6 +179,13 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*App, er
 	}
 	transformer.SetTracer(app.Tracer)
 	app.Transformer = transformer
+	// If a later init step (TLS, MCP, …) fails, release the transformer so a
+	// failed New doesn't leak its database/sql opener goroutine.
+	defer func() {
+		if retErr != nil {
+			app.closeTransformer()
+		}
+	}()
 
 	// Initialize query service
 	app.QueryService = application.NewQueryService(
@@ -480,7 +498,8 @@ func (a *App) Shutdown(ctx context.Context) error {
 }
 
 // closeTransformer releases the transformer's in-memory SpatiaLite database,
-// logging (not returning) any error — shutdown is best-effort.
+// logging (not returning) any error — shutdown is best-effort. Clears the
+// pointer so a second call (double shutdown) is a no-op.
 func (a *App) closeTransformer() {
 	if a.Transformer == nil {
 		return
@@ -488,6 +507,7 @@ func (a *App) closeTransformer() {
 	if err := a.Transformer.Close(); err != nil {
 		a.Logger.Error("transformer close error", "error", err)
 	}
+	a.Transformer = nil
 }
 
 // handleFileEvent handles file system events for hot-reload.
