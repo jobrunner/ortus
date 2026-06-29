@@ -838,19 +838,25 @@ type RepositoryTransformer struct {
 	tracer output.Tracer
 }
 
-// NewRepositoryTransformer creates a transformer with an in-memory SpatiaLite database.
-func NewRepositoryTransformer(_ *Repository) *RepositoryTransformer {
+// NewRepositoryTransformer creates a transformer with an in-memory SpatiaLite
+// database. It returns an error if the database can't be opened or the
+// SpatiaLite metadata can't be initialized — otherwise the transformer would
+// look healthy but fail every later ST_Transform.
+func NewRepositoryTransformer(_ *Repository) (*RepositoryTransformer, error) {
 	// Create in-memory database for coordinate transformations
 	db, err := sql.Open("sqlite3_with_extensions", ":memory:")
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("opening in-memory SpatiaLite db for transformer: %w", err)
 	}
 
-	// Initialize SpatiaLite metadata tables WITH full SRID definitions (required for ST_Transform)
-	// InitSpatialMetaDataFull populates spatial_ref_sys with standard EPSG definitions
-	_, _ = db.ExecContext(context.Background(), "SELECT InitSpatialMetaDataFull(1)")
+	// Initialize SpatiaLite metadata tables WITH full SRID definitions (required for ST_Transform).
+	// InitSpatialMetaDataFull populates spatial_ref_sys with standard EPSG definitions.
+	if _, err := db.ExecContext(context.Background(), "SELECT InitSpatialMetaDataFull(1)"); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("initializing SpatiaLite metadata for transformer: %w", err)
+	}
 
-	return &RepositoryTransformer{db: db, tracer: output.NoOpTracer{}}
+	return &RepositoryTransformer{db: db, tracer: output.NoOpTracer{}}, nil
 }
 
 // SetTracer wires a tracer into the repository transformer.

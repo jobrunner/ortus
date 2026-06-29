@@ -123,6 +123,20 @@ func TestHTTPStorageExists(t *testing.T) {
 	}
 }
 
+// A transport error (unreachable host) must surface as an error, not be
+// silently reported as "not found" (tech-debt D2).
+func TestHTTPStorageExistsTransportError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	url := srv.URL
+	srv.Close() // connections now refused → transport error
+
+	s := NewHTTPStorage(HTTPConfig{BaseURL: url})
+	ok, err := s.Exists(context.Background(), "x.gpkg")
+	if err == nil || ok {
+		t.Errorf("Exists(transport error) = %v, %v; want false, non-nil error", ok, err)
+	}
+}
+
 func TestHTTPStorageBasicAuth(t *testing.T) {
 	s := newHTTPFixture(t, "user", "pass")
 	// Correct credentials configured → succeeds.

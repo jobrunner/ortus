@@ -126,12 +126,9 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*App, er
 	}
 
 	// Initialize storage adapter
-	store, err := initStorage(ctx, cfg.Storage)
+	store, err := buildStorage(ctx, cfg, app.Tracer)
 	if err != nil {
-		return nil, fmt.Errorf("initializing storage: %w", err)
-	}
-	if cfg.Tracing.Enabled {
-		store = storage.NewTracedStorage(store, app.Tracer, cfg.Storage.Type)
+		return nil, err
 	}
 	app.Storage = store
 
@@ -164,7 +161,10 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*App, er
 	)
 
 	// Initialize coordinate transformer
-	transformer := geopackage.NewRepositoryTransformer(app.Repository)
+	transformer, err := geopackage.NewRepositoryTransformer(app.Repository)
+	if err != nil {
+		return nil, fmt.Errorf("initializing coordinate transformer: %w", err)
+	}
 	transformer.SetTracer(app.Tracer)
 
 	// Initialize query service
@@ -511,6 +511,22 @@ func (a *App) handleFileEvent(ctx context.Context, event watcher.Event) error {
 	}
 
 	return nil
+}
+
+// buildStorage assembles the object-storage stack: the configured backend,
+// error normalization (so all backends surface *domain.StorageError), and
+// optional tracing. Error wrapping is innermost so tracing and every caller
+// see the typed error.
+func buildStorage(ctx context.Context, cfg *config.Config, tracer output.Tracer) (output.ObjectStorage, error) {
+	store, err := initStorage(ctx, cfg.Storage)
+	if err != nil {
+		return nil, fmt.Errorf("initializing storage: %w", err)
+	}
+	store = storage.NewErrorWrappingStorage(store)
+	if cfg.Tracing.Enabled {
+		store = storage.NewTracedStorage(store, tracer, cfg.Storage.Type)
+	}
+	return store, nil
 }
 
 // initStorage initializes the appropriate storage adapter.

@@ -56,14 +56,23 @@ Fix opportunistically and lower the relevant baseline when you do.
 
 | # | Area | Debt | Priority | Note |
 |---|------|------|----------|------|
-| D1 | storage (s3/azure/local) | Backends return **bare errors** (no `%w`, no `domain.StorageError`), so an object-store failure reaches `handleQueryError` as a generic 500 instead of the 503 path. Only geopackage/http wrap. | **MED** | Wrap in `domain.StorageError`; then the 503 mapping works uniformly. Behaviour change near sync — sequence deliberately. |
-| D2 | storage/http.go `Exists` | A transport error (DNS/timeout/TLS) is reported as `false, nil` — a transient outage looks like a deleted object, so sync may drop a still-present source. | **MED** | Distinguish HTTP 404 from transport errors. S3/Azure `Exists` is more defensible (typed not-found). |
-| D3 | geopackage `NewRepositoryTransformer` | Swallows `sql.Open` and `InitSpatialMetaDataFull` errors and can return a transformer that fails every later `ST_Transform`. | **MED** | Return `(nil, err)`; let the caller log/propagate. |
+| ~~D1~~ | storage (s3/azure/local) | ✅ **Fixed** — backend errors now normalized to `*domain.StorageError` via an `ErrorWrappingStorage` decorator, so storage failures map to 503 uniformly. | — | done |
+| ~~D2~~ | storage/http.go `Exists` | ✅ **Fixed** — distinguishes 404 (→ `false,nil`) from transport errors and unexpected statuses (→ error). | — | done |
+| ~~D3~~ | geopackage `NewRepositoryTransformer` | ✅ **Fixed** — returns `(nil, err)` on open / metadata-init failure; the composition root propagates it. | — | done |
 | D4 | mcp diagnostic tools | `addListTraces`/`addGetTrace`/`addListActiveSpans`/`addTracingStats` are ~7–20% covered — the filter/limit/nil-telemetry branches are untested logic, not wiring. The 48% package figure overstates safety. | **MED** | Test by **calling** the tools (existing tests only assert they're registered). |
 | D5 | http `recoveryMiddleware` | The panic-recovery body is never exercised (33%). If it breaks, a handler panic drops the connection instead of returning 500 — exactly when the net is needed. | **MED** | One test that panics in a handler and asserts 500. |
 | D6 | application/query.go | `defaultSRID` field is assigned from config and asserted in a test but **never read** in production (SRID defaulting happens in the HTTP/MCP layers). Inert plumbing that looks wired. | **LOW** | Either use it or remove field + config key. |
 | D7 | storage/local.go (`#nosec G304`) | The `key`→`basePath` join has no `filepath.Clean`/prefix check (unlike raster's `safeJoin`); the comment overstates safety. Not exploitable today (keys come from a trusted listing). | **LOW** | Reuse a `safeJoin`-style guard. |
 | D8 | tracing strategy | Three strategies for the same concern: geopackage/raster instrument spans inline, storage uses a `TracedStorage` decorator, mcp has none. Divergence risk. | **LOW** | Consider a tracing decorator for geopackage/raster mirroring `TracedStorage`; mcp entry points could record spans. |
+
+### Fixed in the error-handling PR (2026-06)
+
+- **D1** — `storage.ErrorWrappingStorage` decorator wraps all backend errors as
+  `*domain.StorageError` (applied in the composition root, innermost decorator).
+- **D2** — `HTTPStorage.Exists` now surfaces transport errors instead of
+  reporting them as "not found".
+- **D3** — `NewRepositoryTransformer` returns an error instead of a `nil`/broken
+  transformer.
 
 ### Already fixed in the harness PR (2026-06)
 

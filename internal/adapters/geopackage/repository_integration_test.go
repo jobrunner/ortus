@@ -253,9 +253,9 @@ func TestIntegration_QueryErrors(t *testing.T) {
 }
 
 func TestIntegration_Transformer(t *testing.T) {
-	tr := NewRepositoryTransformer(nil)
-	if tr == nil {
-		t.Skip("transformer unavailable")
+	tr, err := NewRepositoryTransformer(nil)
+	if err != nil {
+		t.Skipf("transformer unavailable: %v", err)
 	}
 	ctx := context.Background()
 
