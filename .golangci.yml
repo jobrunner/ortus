@@ -45,6 +45,9 @@ linters:
     - depguard        # Hexagonale Import-Grenzen erzwingen
     - gomodguard_v2   # Modul-Blocklist (Dependency-Bloat verhindern)
 
+    # Schulden-Harness (siehe doc/tech-debt.md)
+    - nolintlint      # //nolint-Direktiven müssen Linter benennen + Grund tragen
+
   settings:
     # Hexagonale Import-Grenzen. Erlaubte Richtung:
     #   domain → (nichts Internes)
@@ -88,6 +91,11 @@ linters:
         # akzeptiert, aber NIE direkt im First-Party-Code importieren.
         - module: go.mongodb.org/mongo-driver
           reason: "Nur transitive Abhängigkeit über gocog (ADR-0013); nicht direkt verwenden."
+
+    nolintlint:
+      require-explanation: true   # every //nolint must say WHY
+      require-specific: true      # ...and name the exact linter(s), never bare //nolint
+      allow-unused: false         # a //nolint that suppresses nothing is itself debt
 
     gocyclo:
       min-complexity: 16

@@ -14,6 +14,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/container"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
+	"github.com/jobrunner/ortus/internal/domain"
 	"github.com/jobrunner/ortus/internal/ports/output"
 )
 
@@ -102,12 +103,14 @@ func (s *AzureStorage) List(ctx context.Context) ([]output.StorageObject, error)
 }
 
 // blobToStorageObject converts an Azure blob to a StorageObject.
-// Returns false if the blob should be skipped (not a .gpkg file).
+// Returns false if the blob should be skipped (not a supported source file).
 func (s *AzureStorage) blobToStorageObject(blob *container.BlobItem) (output.StorageObject, bool) {
 	name := *blob.Name
 
-	// Only include .gpkg files
-	if !strings.HasSuffix(strings.ToLower(name), ".gpkg") {
+	// Only include supported source files (GeoPackage + raster bundles) —
+	// same rule as the local/http backends so raster sources aren't
+	// silently dropped on Azure.
+	if !domain.IsSupportedSourceFile(name) {
 		return output.StorageObject{}, false
 	}
 

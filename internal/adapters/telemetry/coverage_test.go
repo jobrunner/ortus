@@ -60,8 +60,7 @@ func (coverageStorage) Exists(_ context.Context, _ string) (bool, error) { retur
 // MCP server: every named operation in the application MUST produce a span
 // the MCP can later return to Claude. If you add a new traced operation, add
 // it to wantSpans and exercise it from this test.
-//
-//nolint:gocyclo // exhaustive coverage check, naturally branchy
+// (Naturally branchy; gocyclo is already excluded for _test.go files.)
 func TestTracingCoverage_AllPathsProduceSpans(t *testing.T) {
 	wantSpans := []string{
 		// App / startup

@@ -110,6 +110,9 @@ jobs:
           file: ./coverage.out
           fail_ci_if_error: false
 
+      - name: Coverage floors (ratchet)
+        run: ./scripts/coverage-gate.sh coverage.out
+
   # =============================================================================
   # Security Scanning (Go)
   # =============================================================================
@@ -130,10 +133,11 @@ jobs:
           govulncheck ./...
 
   # =============================================================================
-  # Architecture harness — module hygiene gate.
-  # The hexagonal import-boundary rules (depguard) and the module blocklist
-  # (gomodguard) run inside the Lint job (golangci-lint ./...). This job adds the
-  # go.mod/go.sum tidiness gate. Together they are `make arch` locally.
+  # Architecture & debt harness — drift + technical-debt gates.
+  # The hexagonal import-boundary rules (depguard), module blocklist
+  # (gomodguard) and nolintlint run inside the Lint job (golangci-lint ./...).
+  # This job adds the go.mod/go.sum tidiness gate plus the debt ratchet
+  # (suppression budget, debt markers, storage-filter drift). See doc/tech-debt.md.
   # =============================================================================
   architecture:
     name: Architecture
@@ -148,6 +152,9 @@ jobs:
 
       - name: go.mod tidiness
         run: go mod tidy -diff
+
+      - name: Debt ratchet (suppressions, markers, storage filters)
+        run: ./scripts/debt-guard.sh
 
   # =============================================================================
   # Go Build

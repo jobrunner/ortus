@@ -1,0 +1,18 @@
+# Per-package statement-coverage floors — a RATCHET (raise only, never lower
+# without justification). Enforced by scripts/coverage-gate.sh in CI.
+# Packages omitted here are exempt: composition root (internal/app), cmd/ortus,
+# thin SDK wrappers (metrics, tls, s3/azure I/O), and ports constructors.
+# See doc/tech-debt.md for the policy and the rationale per category.
+#
+# package                          floor(%)
+internal/domain                    99
+internal/config                    94
+internal/application               77
+internal/adapters/http             70
+internal/adapters/geopackage       65
+internal/adapters/raster           76
+internal/adapters/telemetry        73
+internal/adapters/watcher          77
+internal/adapters/storage          49
+internal/adapters/mcp              48
+TOTAL                              62
