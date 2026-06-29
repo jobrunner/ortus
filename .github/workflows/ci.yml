@@ -101,6 +101,18 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
 
+      # SpatiaLite is required for the GeoPackage integration tests; without it
+      # they skip and the core query path is left unexercised (and uncovered).
+      # SPATIALITE_LIBRARY_PATH must point at the exact .so: the driver loads
+      # its candidate paths in order and aborts on the first that doesn't exist
+      # (the Alpine path leads the list), so the env var is the reliable way in.
+      - name: Install SpatiaLite
+        run: |
+          sudo apt-get update && sudo apt-get install -y libsqlite3-mod-spatialite
+          lib=$(dpkg -L libsqlite3-mod-spatialite | grep -m1 'mod_spatialite\.so')
+          echo "Found SpatiaLite at: $lib"
+          echo "SPATIALITE_LIBRARY_PATH=$lib" >> "$GITHUB_ENV"
+
       - name: Run tests
         run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
 
@@ -109,6 +121,9 @@ jobs:
         with:
           file: ./coverage.out
           fail_ci_if_error: false
+
+      - name: Coverage floors (ratchet)
+        run: ./scripts/coverage-gate.sh coverage.out
 
   # =============================================================================
   # Security Scanning (Go)
@@ -130,10 +145,11 @@ jobs:
           govulncheck ./...
 
   # =============================================================================
-  # Architecture harness — module hygiene gate.
-  # The hexagonal import-boundary rules (depguard) and the module blocklist
-  # (gomodguard) run inside the Lint job (golangci-lint ./...). This job adds the
-  # go.mod/go.sum tidiness gate. Together they are `make arch` locally.
+  # Architecture & debt harness — drift + technical-debt gates.
+  # The hexagonal import-boundary rules (depguard), module blocklist
+  # (gomodguard) and nolintlint run inside the Lint job (golangci-lint ./...).
+  # This job adds the go.mod/go.sum tidiness gate plus the debt ratchet
+  # (suppression budget, debt markers, storage-filter drift). See doc/tech-debt.md.
   # =============================================================================
   architecture:
     name: Architecture
@@ -148,6 +164,9 @@ jobs:
 
       - name: go.mod tidiness
         run: go mod tidy -diff
+
+      - name: Debt ratchet (suppressions, markers, storage filters)
+        run: ./scripts/debt-guard.sh
 
   # =============================================================================
   # Go Build

@@ -704,13 +704,13 @@ func (r *Repository) executePointQuery(ctx context.Context, db *sql.DB, layer *d
 				SELECT *, AsText(CastAutomagic("%s"))
 				FROM "%s"
 				WHERE ST_Contains(CastAutomagic("%s"), GeomFromText(?, ?))
-			`, layer.GeometryColumn, layer.Name, layer.GeometryColumn) //#nosec G201
+			`, layer.GeometryColumn, layer.Name, layer.GeometryColumn) //#nosec G201 -- identifiers from layer metadata read from the gpkg catalog, double-quoted; SQLite can't parameterize identifiers
 		} else {
 			query = fmt.Sprintf(`
 				SELECT *, AsText(CastAutomagic("%s"))
 				FROM "%s"
 				WHERE MbrContains(CastAutomagic("%s"), GeomFromText(?, ?))
-			`, layer.GeometryColumn, layer.Name, layer.GeometryColumn) //#nosec G201
+			`, layer.GeometryColumn, layer.Name, layer.GeometryColumn) //#nosec G201 -- identifiers from layer metadata read from the gpkg catalog, double-quoted; SQLite can't parameterize identifiers
 		}
 	}
 

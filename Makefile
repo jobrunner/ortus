@@ -7,7 +7,7 @@
 .PHONY: lint lint-go lint-fix vet
 .PHONY: security-check vuln-check gosec
 .PHONY: fmt format fmt-check
-.PHONY: check check-ci verify hooks arch
+.PHONY: check check-ci verify hooks arch debt debt-guard debt-coverage debt-deadcode
 .PHONY: deps deps-update deps-verify
 .PHONY: doc doc-serve
 .PHONY: release release-dry
@@ -157,10 +157,26 @@ check: fmt vet lint test ## Alle Qualitätsprüfungen (vor Commit)
 # (siehe ADR/Memory); der Compiler entscheidet. Gleiche Schritte wie die CI.
 # Bewusst KEIN Aufruf des `build`-Targets (das schreibt ./ortus); stattdessen
 # ein binärloser Compile-Check via `go build ./...`.
-verify: fmt-check vet lint test arch ## Maßgebliche Grün-Prüfung (gofmt-check+vet+compile+test+lint+arch)
+verify: fmt-check vet lint test arch debt-guard ## Maßgebliche Grün-Prüfung (gofmt-check+vet+compile+test+lint+arch+debt)
 	@echo "Compile-Check (go build ./...)…"
 	@$(GO) build ./...
-	@echo "\n✅ verify bestanden — Compile/Test/Lint/Format/Arch grün."
+	@echo "\n✅ verify bestanden — Compile/Test/Lint/Format/Arch/Debt grün."
+
+# Schulden-Harness: hält technische Schuld niedrig per Ratchet (siehe doc/tech-debt.md).
+# `debt-guard` ist schnell (grep-basiert) und in `verify` eingebunden; `debt-coverage`
+# fährt einen eigenen Coverage-Lauf und prüft die Per-Paket-Floors; `debt` bündelt beide.
+debt: debt-guard debt-coverage ## Schulden-Ratchet: Suppression-Budget + Marker + Coverage-Floors
+
+debt-guard: ## Schnelle Schulden-Checks (Suppression-Budget, Debt-Marker, Storage-Filter)
+	@./scripts/debt-guard.sh
+
+debt-coverage: ## Coverage-Floors prüfen (eigener Testlauf)
+	@mkdir -p $(COVERAGE_DIR)
+	@$(GO) test -coverprofile=$(COVERAGE_DIR)/coverage.out -covermode=atomic ./... >/dev/null
+	@./scripts/coverage-gate.sh $(COVERAGE_DIR)/coverage.out
+
+debt-deadcode: ## Advisory: unerreichbarer Code (manuelle Triage — Interface-/Test-Treffer sind False Positives)
+	@$(GO) run golang.org/x/tools/cmd/deadcode@v0.45.0 ./cmd/ortus || true
 
 # Architektur-Fitness: hexagonale Import-Grenzen (depguard), Modul-Blocklist
 # (gomodguard) und go.mod-Hygiene. Eigenständig aufrufbar für einen fokussierten,

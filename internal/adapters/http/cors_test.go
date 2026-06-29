@@ -1,4 +1,4 @@
-package http //nolint:revive // package name conflicts with stdlib but is acceptable in this context
+package http
 
 import (
 	"net/http"

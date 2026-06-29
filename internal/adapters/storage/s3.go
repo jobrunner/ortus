@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/aws/aws-sdk-go-v2/otelaws"
 
+	"github.com/jobrunner/ortus/internal/domain"
 	"github.com/jobrunner/ortus/internal/ports/output"
 )
 
@@ -96,8 +97,10 @@ func (s *S3Storage) List(ctx context.Context) ([]output.StorageObject, error) {
 		for _, obj := range page.Contents {
 			key := aws.ToString(obj.Key)
 
-			// Only include .gpkg files
-			if !strings.HasSuffix(strings.ToLower(key), ".gpkg") {
+			// Only include supported source files (GeoPackage + raster
+			// bundles) — same rule as the local/http backends so raster
+			// sources aren't silently dropped on S3.
+			if !domain.IsSupportedSourceFile(key) {
 				continue
 			}
 

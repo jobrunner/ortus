@@ -1,5 +1,5 @@
 // Package http provides the HTTP server and handlers.
-package http //nolint:revive // package name conflicts with stdlib but is acceptable in this context
+package http
 
 import (
 	"context"

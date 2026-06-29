@@ -1,7 +1,6 @@
 package mcp
 
 import (
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"time"
@@ -178,17 +177,4 @@ func addHealth(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 			Components:    d.Components,
 		}, nil
 	})
-}
-
-// stringifyJSON is a small helper used by the tools when they need to
-// fall back to a TextContent block (e.g. for very large payloads). Not
-// currently used — kept here as it's a frequently-wanted helper.
-//
-//nolint:unused
-func stringifyJSON(v any) string {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return fmt.Sprintf("<marshal error: %v>", err)
-	}
-	return string(b)
 }

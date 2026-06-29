@@ -190,7 +190,9 @@ func (s *HTTPStorage) Exists(ctx context.Context, key string) (bool, error) {
 
 	resp, err := s.client.Do(req)
 	if err != nil {
-		return false, nil //nolint:nilerr // intentionally ignoring error when connection fails
+		// NOTE (tech-debt D2): a transport error is reported as "not found"
+		// here; this should distinguish HTTP 404 from transport failures.
+		return false, nil
 	}
 	defer func() { _ = resp.Body.Close() }()
 
