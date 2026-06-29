@@ -20,6 +20,11 @@ cd "$ROOT"
 BUDGET_FILE=".debt-budget"
 status=0
 
+[ -f "$BUDGET_FILE" ] || {
+  echo "debt-guard: baseline file not found: $BUDGET_FILE (run from repo root)" >&2
+  exit 2
+}
+
 # count <pattern> — number of matching directive lines in first-party *.go.
 # Tolerant of zero matches: grep exits 1 with no hits, which would abort the
 # pipeline under `set -euo pipefail`, so swallow it and still emit a count.
@@ -58,7 +63,10 @@ else
 fi
 
 # 3. Storage-extension guard -------------------------------------------------
-hard=$(grep -rnE '"\.(gpkg|zip)"' --include='*.go' internal/adapters/storage/ \
+# Match both quote styles Go allows for a literal extension: interpreted
+# strings ("...") and raw strings (`...`), so the guard can't be sidestepped
+# by switching quotes.
+hard=$(grep -rnE '["`]\.(gpkg|zip)["`]' --include='*.go' internal/adapters/storage/ \
   | grep -v '_test.go' || true)
 if [ -n "$hard" ]; then
   echo "  ▼ debt-guard: FAIL — storage backend hardcodes a source extension; use domain.IsSupportedSourceFile:" >&2
