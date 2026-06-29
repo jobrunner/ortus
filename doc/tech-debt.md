@@ -59,11 +59,16 @@ Fix opportunistically and lower the relevant baseline when you do.
 | ~~D1~~ | storage (s3/azure/local) | ✅ **Fixed** — backend errors now normalized to `*domain.StorageError` via an `ErrorWrappingStorage` decorator, so storage failures map to 503 uniformly. | — | done |
 | ~~D2~~ | storage/http.go `Exists` | ✅ **Fixed** — distinguishes 404 (→ `false,nil`) from transport errors and unexpected statuses (→ error). | — | done |
 | ~~D3~~ | geopackage `NewRepositoryTransformer` | ✅ **Fixed** — returns `(nil, err)` on open / metadata-init failure; the composition root propagates it. | — | done |
-| D4 | mcp diagnostic tools | `addListTraces`/`addGetTrace`/`addListActiveSpans`/`addTracingStats` are ~7–20% covered — the filter/limit/nil-telemetry branches are untested logic, not wiring. The 48% package figure overstates safety. | **MED** | Test by **calling** the tools (existing tests only assert they're registered). |
-| D5 | http `recoveryMiddleware` | The panic-recovery body is never exercised (33%). If it breaks, a handler panic drops the connection instead of returning 500 — exactly when the net is needed. | **MED** | One test that panics in a handler and asserts 500. |
+| ~~D4~~ | mcp diagnostic tools | ✅ **Fixed** — call-level tests for `list_traces`/`get_trace`/`list_active_spans`/`tracing_stats` (filter/limit/since-parse/nil-telemetry branches). Tools 7–20% → 90–100%; package 49.6% → 72.9%. | — | done |
+| ~~D5~~ | http `recoveryMiddleware` | ✅ **Fixed** — test panics in a handler and asserts 500 (plus a no-panic pass-through). | — | done |
 | D6 | application/query.go | `defaultSRID` field is assigned from config and asserted in a test but **never read** in production (SRID defaulting happens in the HTTP/MCP layers). Inert plumbing that looks wired. | **LOW** | Either use it or remove field + config key. |
 | D7 | storage/local.go (`#nosec G304`) | The `key`→`basePath` join has no `filepath.Clean`/prefix check (unlike raster's `safeJoin`); the comment overstates safety. Not exploitable today (keys come from a trusted listing). | **LOW** | Reuse a `safeJoin`-style guard. |
 | D8 | tracing strategy | Three strategies for the same concern: geopackage/raster instrument spans inline, storage uses a `TracedStorage` decorator, mcp has none. Divergence risk. | **LOW** | Consider a tracing decorator for geopackage/raster mirroring `TracedStorage`; mcp entry points could record spans. |
+
+### Fixed in the coverage PR (2026-06)
+
+- **D4** — call-level tests for the MCP diagnostic tools (mcp floor raised 48 → 70).
+- **D5** — `recoveryMiddleware` panic→500 test (http floor raised 70 → 71).
 
 ### Fixed in the error-handling PR (2026-06)
 
