@@ -3,13 +3,40 @@ package storage
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/jobrunner/ortus/internal/domain"
 	"github.com/jobrunner/ortus/internal/ports/output"
 )
+
+// safeJoin joins a storage key onto base, rejecting keys that would escape the
+// storage root (absolute paths or ".." traversal). Keys come from List (a
+// trusted listing), so this is defense-in-depth; it mirrors the raster
+// adapter's guard, kept package-local because the architecture forbids
+// adapter→adapter imports.
+func safeJoin(base, key string) (string, error) {
+	if key == "" {
+		return "", errors.New("empty storage key")
+	}
+	// Clean the base too: filepath.Join normalizes (e.g. "./data" -> "data"),
+	// so the prefix check must compare against the cleaned base or it would
+	// reject every valid key when basePath is configured as "./data" (default).
+	base = filepath.Clean(base)
+	clean := filepath.Clean(key)
+	if filepath.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, ".."+string(os.PathSeparator)) {
+		return "", fmt.Errorf("illegal key %q escapes storage root", key)
+	}
+	joined := filepath.Join(base, clean)
+	if joined != base && !strings.HasPrefix(joined, base+string(os.PathSeparator)) {
+		return "", fmt.Errorf("illegal key %q escapes storage root", key)
+	}
+	return joined, nil
+}
 
 // LocalStorage implements ObjectStorage for local filesystem.
 type LocalStorage struct {
@@ -62,14 +89,13 @@ func (s *LocalStorage) List(_ context.Context) ([]output.StorageObject, error) {
 
 // Download copies a file to the destination (no-op for local storage).
 func (s *LocalStorage) Download(_ context.Context, key string, dest string) error {
-	srcPath := filepath.Join(s.basePath, key)
-
-	// Normalize paths for comparison to handle ./path vs path differences
-	cleanSrc := filepath.Clean(srcPath)
-	cleanDest := filepath.Clean(dest)
+	srcPath, err := safeJoin(s.basePath, key)
+	if err != nil {
+		return err
+	}
 
 	// If source and dest are the same, nothing to do
-	if cleanSrc == cleanDest {
+	if srcPath == filepath.Clean(dest) {
 		return nil
 	}
 
@@ -79,7 +105,7 @@ func (s *LocalStorage) Download(_ context.Context, key string, dest string) erro
 	}
 
 	// Copy file
-	src, err := os.Open(srcPath) //#nosec G304 -- srcPath is constructed from basePath
+	src, err := os.Open(srcPath) //#nosec G304 -- srcPath validated by safeJoin (cannot escape basePath)
 	if err != nil {
 		return err
 	}
@@ -97,7 +123,11 @@ func (s *LocalStorage) Download(_ context.Context, key string, dest string) erro
 
 // GetReader returns a reader for the given object.
 func (s *LocalStorage) GetReader(_ context.Context, key string) (io.ReadCloser, error) {
-	return os.Open(filepath.Join(s.basePath, key)) //#nosec G304 -- path is constructed from basePath
+	path, err := safeJoin(s.basePath, key)
+	if err != nil {
+		return nil, err
+	}
+	return os.Open(path) //#nosec G304 -- path validated by safeJoin (cannot escape basePath)
 }
 
 // Exists checks if a file exists.

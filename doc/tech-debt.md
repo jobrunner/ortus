@@ -61,9 +61,15 @@ Fix opportunistically and lower the relevant baseline when you do.
 | ~~D3~~ | geopackage `NewRepositoryTransformer` | ✅ **Fixed** — returns `(nil, err)` on open / metadata-init failure; the composition root propagates it. | — | done |
 | ~~D4~~ | mcp diagnostic tools | ✅ **Fixed** — call-level tests for `list_traces`/`get_trace`/`list_active_spans`/`tracing_stats` (filter/limit/since-parse/nil-telemetry branches). Tools 7–20% → 90–100%; package 49.6% → 72.9%. | — | done |
 | ~~D5~~ | http `recoveryMiddleware` | ✅ **Fixed** — test panics in a handler and asserts 500 (plus a no-panic pass-through). | — | done |
-| D6 | application/query.go | `defaultSRID` field is assigned from config and asserted in a test but **never read** in production (SRID defaulting happens in the HTTP/MCP layers). Inert plumbing that looks wired. | **LOW** | Either use it or remove field + config key. |
-| D7 | storage/local.go (`#nosec G304`) | The `key`→`basePath` join has no `filepath.Clean`/prefix check (unlike raster's `safeJoin`); the comment overstates safety. Not exploitable today (keys come from a trusted listing). | **LOW** | Reuse a `safeJoin`-style guard. |
+| ~~D6~~ | application/query.go | ✅ **Fixed** — removed the inert `defaultSRID` end-to-end (struct field, `QueryServiceConfig`, `query.default_srid` config key + viper default, test). SRID defaulting stays at the HTTP/MCP edges. Inert key → no behaviour change. | — | done |
+| ~~D7~~ | storage/local.go | ✅ **Fixed** — added a package-local `safeJoin` (Clean + abs/`..`/prefix checks) used by `Download`/`GetReader`; `#nosec G304` justifications now reference it. | — | done |
 | D8 | tracing strategy | Three strategies for the same concern: geopackage/raster instrument spans inline, storage uses a `TracedStorage` decorator, mcp has none. Divergence risk. | **LOW** | Consider a tracing decorator for geopackage/raster mirroring `TracedStorage`; mcp entry points could record spans. |
+
+### Fixed in the cleanup PR (2026-06)
+
+- **D6** — removed the inert `defaultSRID` plumbing (config key `query.default_srid`,
+  `QueryServiceConfig.DefaultSRID`, the struct field, and the test assertion).
+- **D7** — `storage/local.go` now joins keys via a `safeJoin` traversal guard.
 
 ### Fixed in the coverage PR (2026-06)
 

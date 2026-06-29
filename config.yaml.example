@@ -53,7 +53,6 @@ storage:
     # password: ""
 
 query:
-  default_srid: 4326
   timeout: 30s
   max_features: 1000
 
