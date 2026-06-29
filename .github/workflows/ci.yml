@@ -145,6 +145,25 @@ jobs:
           govulncheck ./...
 
   # =============================================================================
+  # Secret scanning. gitleaks-action@v2 scans the git history of the event's
+  # commit range (the PR commits on a PR, github.event.before..after on push) —
+  # so a secret added and removed within the range is still caught. Config +
+  # allowlist live in .gitleaks.toml. Free for this personal repo (no license).
+  # =============================================================================
+  secret-scan:
+    name: Secret Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # gitleaks needs history to diff the scanned commit range
+
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # =============================================================================
   # Architecture & debt harness — drift + technical-debt gates.
   # The hexagonal import-boundary rules (depguard), module blocklist
   # (gomodguard) and nolintlint run inside the Lint job (golangci-lint ./...).

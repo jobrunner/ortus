@@ -1,0 +1,18 @@
+# gitleaks config for ortus. Starts from the built-in ruleset and allowlists
+# paths that legitimately contain secret-shaped placeholders (docs, the example
+# config, and test fixtures) so they don't produce false positives. Real
+# secrets in real source still fail the CI Secret Scan job.
+title = "ortus gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Docs, example config, and fixture dirs hold placeholder/secret-shaped strings. Test SOURCE files are still scanned — only fixture data dirs are exempt."
+paths = [
+  '''config\.yaml\.example''',
+  '''(^|/)testdata/''',
+  '''README\.md''',
+  '''CHANGELOG\.md''',
+  '''doc/.*\.md''',
+]
