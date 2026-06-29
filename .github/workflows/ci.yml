@@ -145,9 +145,10 @@ jobs:
           govulncheck ./...
 
   # =============================================================================
-  # Secret scanning. gitleaks scans the commit range (PR commits on a PR, the
-  # pushed commits on push) for committed credentials. Config + allowlist live
-  # in .gitleaks.toml. Free for this personal repo (no GITLEAKS_LICENSE needed).
+  # Secret scanning. gitleaks-action@v2 scans the git history of the event's
+  # commit range (the PR commits on a PR, github.event.before..after on push) —
+  # so a secret added and removed within the range is still caught. Config +
+  # allowlist live in .gitleaks.toml. Free for this personal repo (no license).
   # =============================================================================
   secret-scan:
     name: Secret Scan

@@ -8,10 +8,10 @@ title = "ortus gitleaks config"
 useDefault = true
 
 [allowlist]
-description = "Docs, example config, and test fixtures hold placeholder/secret-shaped strings."
+description = "Docs, example config, and fixture dirs hold placeholder/secret-shaped strings. Test SOURCE files are still scanned — only fixture data dirs are exempt."
 paths = [
   '''config\.yaml\.example''',
-  '''.*_test\.go''',
+  '''(^|/)testdata/''',
   '''README\.md''',
   '''CHANGELOG\.md''',
   '''doc/.*\.md''',
