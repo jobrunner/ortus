@@ -190,11 +190,18 @@ func (s *HTTPStorage) Exists(ctx context.Context, key string) (bool, error) {
 
 	resp, err := s.client.Do(req)
 	if err != nil {
-		// NOTE (tech-debt D2): a transport error is reported as "not found"
-		// here; this should distinguish HTTP 404 from transport failures.
-		return false, nil
+		// A transport error (DNS/timeout/TLS) is NOT "object absent" — surface
+		// it so a transient outage isn't mistaken for a deleted source.
+		return false, fmt.Errorf("checking existence of %s: %w", key, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	return resp.StatusCode == http.StatusOK, nil
+	switch resp.StatusCode {
+	case http.StatusOK:
+		return true, nil
+	case http.StatusNotFound:
+		return false, nil
+	default:
+		return false, fmt.Errorf("checking existence of %s: unexpected status %d", key, resp.StatusCode)
+	}
 }
