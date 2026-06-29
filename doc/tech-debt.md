@@ -22,6 +22,8 @@ register of debt we knowingly carry.
 | **Deep fuzz** | weekly `Fuzz` workflow / `make fuzz` | exploratory fuzzing of the same boundaries; off the PR path so a new crash can't flake an unrelated PR | commit the crasher as a regression seed, fix the parser |
 | **Config-example drift** | Test job | every key in `config.yaml.example` maps to a real `Config` field (mapstructure `ErrorUnused`), and the example loads + validates | remove the stale key, or wire it into the struct |
 | **Secret scanning** (`gitleaks`) | Secret Scan job | no committed credentials in the scanned commit range; allowlist in `.gitleaks.toml` | don't commit secrets; allowlist genuine placeholders |
+| **Benchmarks run** | Bench job / `make bench` | hot-path micro-benchmarks compile + execute (no bit-rot) — a hard gate | keep benchmarks building |
+| **Bench regression** (`benchstat`) | Bench job (PR) | benchstat PR-vs-base delta posted to the job summary — **informational** (shared-runner noise precludes a reliable hard threshold) | review the delta; investigate real slowdowns |
 | **deadcode** | advisory `make debt-deadcode` | unreachable funcs (informational) | triage by hand — see below |
 
 `make verify` runs everything except the coverage floors and the deadcode

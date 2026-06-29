@@ -126,6 +126,49 @@ jobs:
         run: ./scripts/coverage-gate.sh coverage.out
 
   # =============================================================================
+  # Benchmarks. Running them is a hard gate (they must compile + execute — no
+  # bit-rot). Timing-regression detection is intentionally NOT a hard gate:
+  # shared CI runners are too noisy for a reliable per-PR threshold. Instead we
+  # post a benchstat PR-vs-base delta (same runner cancels machine variance) to
+  # the job summary for human review. See doc/tech-debt.md.
+  # =============================================================================
+  bench:
+    name: Benchmarks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Install SpatiaLite
+        run: |
+          sudo apt-get update && sudo apt-get install -y libsqlite3-mod-spatialite
+          echo "SPATIALITE_LIBRARY_PATH=$(dpkg -L libsqlite3-mod-spatialite | grep -m1 'mod_spatialite\.so')" >> "$GITHUB_ENV"
+
+      - name: Benchmarks (this branch)
+        run: make bench BENCHCOUNT=6 | tee new.txt
+
+      - name: Benchmarks (base) + benchstat delta
+        if: github.event_name == 'pull_request'
+        run: |
+          go install golang.org/x/perf/cmd/benchstat@latest
+          # new.txt/old.txt are untracked, so they survive the checkouts below.
+          git checkout --quiet "${{ github.event.pull_request.base.sha }}"
+          make bench BENCHCOUNT=6 > old.txt 2>/dev/null || echo "base: no comparable benchmarks" > old.txt
+          git checkout --quiet -
+          {
+            echo '### Benchmark delta (base → PR)'
+            echo '```'
+            benchstat old.txt new.txt 2>&1 || echo "no comparable results (e.g. the PR that first adds these benchmarks)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # =============================================================================
   # Security Scanning (Go)
   # =============================================================================
   security:
