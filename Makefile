@@ -2,7 +2,7 @@
 # Alle Standardaufgaben für Entwicklung und CI/CD
 
 .PHONY: all build build-all install run clean help
-.PHONY: test test-unit test-integration test-coverage test-race test-bench load-test
+.PHONY: test test-unit test-integration test-coverage test-race test-bench load-test fuzz
 .PHONY: load-stack-up load-stack-down load-stack-clean load-serve load-attack
 .PHONY: lint lint-go lint-fix vet
 .PHONY: security-check vuln-check gosec
@@ -76,6 +76,22 @@ test-race: ## Tests mit Race Detector
 
 test-bench: ## Benchmarks ausführen
 	$(GO) test -bench=. -benchmem ./...
+
+# Fuzz targets at the parse boundaries (untrusted input). Seeds run automatically
+# in `make test`/CI; this drives actual fuzzing. Crashers land in the package's
+# testdata/fuzz/ and become permanent regression seeds.
+FUZZ_TARGETS := internal/domain:FuzzDeriveSourceID \
+	internal/adapters/storage:FuzzSafeJoin \
+	internal/adapters/geopackage:FuzzExtractGeometryType \
+	internal/adapters/http:FuzzParseQueryParams
+
+fuzz: ## Fuzz alle Parse-Boundaries (FUZZTIME je Target überschreibbar, default 30s)
+	@set -e; ft=$(if $(FUZZTIME),$(FUZZTIME),30s); \
+	for tgt in $(FUZZ_TARGETS); do \
+		pkg=$${tgt%%:*}; fn=$${tgt##*:}; \
+		echo "==> fuzz $${fn} ($${pkg}) for $${ft}"; \
+		$(GO) test "./$${pkg}/" -run='^$$' -fuzz="^$${fn}$$" -fuzztime=$${ft}; \
+	done
 
 load-test: ## Lokaler Lasttest auf großen Quellen (setze ORTUS_LOADTEST_GPKG; siehe doc/load-test.md)
 	@if [ -z "$(ORTUS_LOADTEST_GPKG)" ]; then \

@@ -1,0 +1,51 @@
+# Weekly deep fuzzing of the parse boundaries. The seed corpora already run on
+# every PR via `go test` in the CI Test job (deterministic regression); this
+# job does the actual exploratory fuzzing, kept off the PR path so a newly
+# discovered crash never flakes an unrelated PR. Crashers are uploaded and
+# should be committed as permanent regression seeds.
+name: Fuzz
+
+on:
+  schedule:
+    - cron: '0 4 * * 1' # Monday 04:00 UTC
+  workflow_dispatch:
+    inputs:
+      fuzztime:
+        description: 'Fuzz time per target (e.g. 3m, 10m)'
+        default: '3m'
+
+env:
+  GO_VERSION: '1.26.4'
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    name: Fuzz parse boundaries
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      # The geopackage package links cgo SpatiaLite; install it so the fuzz
+      # binary compiles (mirrors the CI Test job).
+      - name: Install SpatiaLite
+        run: |
+          sudo apt-get update && sudo apt-get install -y libsqlite3-mod-spatialite
+          echo "SPATIALITE_LIBRARY_PATH=$(dpkg -L libsqlite3-mod-spatialite | grep -m1 'mod_spatialite\.so')" >> "$GITHUB_ENV"
+
+      - name: Fuzz
+        run: make fuzz FUZZTIME=${{ github.event.inputs.fuzztime || '3m' }}
+
+      - name: Upload crashers
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-crashers
+          path: '**/testdata/fuzz/**'
+          if-no-files-found: ignore
