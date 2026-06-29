@@ -20,6 +20,7 @@ register of debt we knowingly carry.
 | **Goroutine leaks** (`goleak`) | Test job (`TestMain` per package) | no goroutine outlives a package's tests — guards against resource leaks in this long-running service | close/stop what you start (`t.Cleanup`) |
 | **Fuzz seeds** | Test job (`go test` runs `Fuzz*` seeds) | parse boundaries (query params, source-id, safeJoin, WKT) don't panic on the known-bad seed inputs | fix the parser; add the input as a seed |
 | **Deep fuzz** | weekly `Fuzz` workflow / `make fuzz` | exploratory fuzzing of the same boundaries; off the PR path so a new crash can't flake an unrelated PR | commit the crasher as a regression seed, fix the parser |
+| **Config-example drift** | Test job | every key in `config.yaml.example` maps to a real `Config` field (mapstructure `ErrorUnused`), and the example loads + validates | remove the stale key, or wire it into the struct |
 | **deadcode** | advisory `make debt-deadcode` | unreachable funcs (informational) | triage by hand — see below |
 
 `make verify` runs everything except the coverage floors and the deadcode
