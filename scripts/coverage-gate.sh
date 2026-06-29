@@ -17,6 +17,9 @@ MODULE="github.com/jobrunner/ortus"
 [ -f "$PROFILE" ] || { echo "coverage-gate: profile not found: $PROFILE" >&2; exit 2; }
 [ -f "$FLOORS" ]  || { echo "coverage-gate: floors file not found: $FLOORS" >&2; exit 2; }
 
+BYPKG="$(mktemp)"
+trap 'rm -f "$BYPKG"' EXIT
+
 # Per-package + global statement coverage from the profile.
 #   line: <module>/<pkg>/<file>.go:s.c,e.c <numStmts> <count>
 awk -v module="$MODULE/" '
@@ -33,7 +36,7 @@ awk -v module="$MODULE/" '
     for (p in tot) printf "%s %d %d\n", p, cov[p], tot[p]
     printf "TOTAL %d %d\n", gcov, gtot
   }
-' "$PROFILE" > /tmp/.cov_by_pkg
+' "$PROFILE" > "$BYPKG"
 
 fail=0
 printf "%-42s %8s %7s\n" "package" "cov" "floor"
@@ -41,7 +44,7 @@ printf -- "------------------------------------------------------------\n"
 while read -r pkg floor; do
   [ -z "$pkg" ] && continue
   case "$pkg" in \#*) continue ;; esac
-  read -r c t <<<"$(awk -v p="$pkg" '$1==p {print $2, $3}' /tmp/.cov_by_pkg)"
+  read -r c t <<<"$(awk -v p="$pkg" '$1==p {print $2, $3}' "$BYPKG")"
   if [ -z "${t:-}" ] || [ "${t:-0}" -eq 0 ]; then
     printf "%-42s %8s %7s  NO DATA\n" "$pkg" "-" "$floor"; fail=1; continue
   fi
@@ -56,7 +59,8 @@ done < "$FLOORS"
 if [ "$fail" -ne 0 ]; then
   echo
   echo "coverage-gate: FAIL — a package dropped below its floor." >&2
-  echo "Add tests, or (only if intentional) lower the floor in .coverage-floors with justification." >&2
+  echo "The fix is to ADD TESTS. Floors are a raise-only ratchet; lowering one" >&2
+  echo "is a deliberate, justified exception that must be called out in the PR." >&2
   exit 1
 fi
 echo

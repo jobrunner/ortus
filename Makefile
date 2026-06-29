@@ -176,7 +176,7 @@ debt-coverage: ## Coverage-Floors prüfen (eigener Testlauf)
 	@./scripts/coverage-gate.sh $(COVERAGE_DIR)/coverage.out
 
 debt-deadcode: ## Advisory: unerreichbarer Code (manuelle Triage — Interface-/Test-Treffer sind False Positives)
-	@$(GO) run golang.org/x/tools/cmd/deadcode@latest ./cmd/ortus || true
+	@$(GO) run golang.org/x/tools/cmd/deadcode@v0.45.0 ./cmd/ortus || true
 
 # Architektur-Fitness: hexagonale Import-Grenzen (depguard), Modul-Blocklist
 # (gomodguard) und go.mod-Hygiene. Eigenständig aufrufbar für einen fokussierten,

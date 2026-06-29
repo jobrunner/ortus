@@ -20,11 +20,18 @@ cd "$ROOT"
 BUDGET_FILE=".debt-budget"
 status=0
 
-go_files() { grep -rIl '' --include='*.go' . 2>/dev/null | grep -v '/\.go/mod/'; }
+# count <pattern> — number of matching directive lines in first-party *.go.
+# Tolerant of zero matches: grep exits 1 with no hits, which would abort the
+# pipeline under `set -euo pipefail`, so swallow it and still emit a count.
+count() {
+  { grep -rn "$1" --include='*.go' . || true; } \
+    | { grep -vc '/\.go/mod/' || true; } | tr -d ' '
+}
 
-# 1. Suppression budget ------------------------------------------------------
-nosec=$(grep -rn '#nosec' --include='*.go' . | grep -v '/\.go/mod/' | wc -l | tr -d ' ')
-nolint=$(grep -rn 'nolint' --include='*.go' . | grep -v '/\.go/mod/' | wc -l | tr -d ' ')
+# 1. Suppression budget — count the actual directive forms (//nolint, #nosec),
+# not the bare substring, so prose can't inflate the number.
+nosec=$(count '#nosec')
+nolint=$(count '//nolint')
 total=$((nosec + nolint))
 baseline=$(grep -vE '^\s*#|^\s*$' "$BUDGET_FILE" | head -1 | tr -d ' ')
 

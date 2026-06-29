@@ -101,6 +101,11 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
 
+      # SpatiaLite is required for the GeoPackage integration tests; without it
+      # they skip and the core query path is left unexercised (and uncovered).
+      - name: Install SpatiaLite
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-mod-spatialite
+
       - name: Run tests
         run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
 
