@@ -13,15 +13,29 @@ register of debt we knowingly carry.
 | **Linters** (24 of them) | Lint job / `make lint` | errcheck, staticcheck, gosec, gocyclo≤16, gocognit≤20, dupl, revive, … | fix the finding |
 | **`nolintlint`** | Lint job | every `//nolint` names the linter **and** carries a reason; no unused directives | write `//nolint:tool // why` |
 | **Import boundaries** | Lint + `make arch` | depguard hexagonal rules, gomodguard blocklist | keep layers clean |
-| **Suppression budget** | Architecture job / `make debt-guard` | total `#nosec` + `//nolint` ≤ `.debt-budget` (ratchet down) | remove one, or justify a bump in the PR |
-| **Debt markers** | Architecture job / `make debt-guard` | zero `// TODO/FIXME/HACK/XXX` markers in `*.go` | track it here instead |
-| **Storage-filter drift** | Architecture job / `make debt-guard` | no storage backend hardcodes a source extension | route through `domain.IsSupportedSourceFile` |
+| **Suppression budget** | CI + pre-commit + Claude edit-hook / `make debt-guard` | total `#nosec` + `//nolint` ≤ `.debt-budget` (ratchet down) | remove one, or justify a bump in the PR |
+| **Debt markers** | CI + pre-commit + Claude edit-hook / `make debt-guard` | zero `// TODO/FIXME/HACK/XXX` markers in `*.go` | track it here instead |
+| **Storage-filter drift** | CI + pre-commit + Claude edit-hook / `make debt-guard` | no storage backend hardcodes a source extension | route through `domain.IsSupportedSourceFile` |
 | **Coverage floors** | Test job / `make debt-coverage` | per-package statement coverage ≥ `.coverage-floors` (ratchet up) | add tests |
 | **deadcode** | advisory `make debt-deadcode` | unreachable funcs (informational) | triage by hand — see below |
 
 `make verify` runs everything except the coverage floors and the deadcode
 advisory (it already runs the test suite; `make debt-coverage` adds a dedicated
 coverage run). `make debt` runs both ratchet scripts together.
+
+### Where the ratchet fires (escalating)
+
+`debt-guard.sh` is grep-fast, so it runs at three points before CI catches it:
+
+1. **Claude edit-hook** (`.claude/hooks/debt-guard.sh`, PostToolUse on Edit/Write)
+   — *advisory*: surfaces a would-be violation to the agent immediately, never
+   blocks the edit.
+2. **git pre-commit** (`.githooks/pre-commit`, install with `make hooks`) —
+   *blocking*: a violation aborts the commit (`--no-verify` to override).
+3. **CI** (Architecture job) — *blocking*: the authoritative gate on every PR.
+
+`coverage-gate.sh` needs a test run, so it stays at CI + `make verify` only
+(too slow for a per-edit hook or pre-commit).
 
 ### Working with the ratchets
 

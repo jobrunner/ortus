@@ -2,9 +2,10 @@
 # ortus pre-commit hook. Fast, non-mutating guard so broken/unformatted states
 # don't get committed. Install with: make hooks
 #
-# Intentionally lightweight (gofmt-check + compile). The full gate is `make
-# verify` / CI; this just catches the two cheapest, most common mistakes before
-# they leave the working tree. Skip in a hurry with: git commit --no-verify
+# Intentionally lightweight (gofmt-check + compile + the grep-fast debt ratchet).
+# The full gate is `make verify` / CI (which adds the coverage floors — those
+# need a test run, too slow here). Catches the cheapest, most common mistakes
+# before they leave the working tree. Skip in a hurry with: git commit --no-verify
 set -euo pipefail
 
 # Only run when Go files are staged. Filter with a git pathspec (portable —
@@ -26,6 +27,14 @@ fi
 echo "pre-commit: go build…"
 if ! go build ./... ; then
 	echo "❌ go build fehlgeschlagen — Commit abgebrochen."
+	exit 1
+fi
+
+# Tech-debt ratchet (grep-fast: suppression budget, debt markers, storage-filter
+# drift). Coverage floors are deliberately left to CI / `make verify`.
+echo "pre-commit: debt-guard (ratchet)…"
+if ! ./scripts/debt-guard.sh ; then
+	echo "❌ debt-guard fehlgeschlagen — Commit abgebrochen (siehe doc/tech-debt.md)."
 	exit 1
 fi
 
