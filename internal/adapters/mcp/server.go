@@ -26,6 +26,7 @@ import (
 
 	"github.com/jobrunner/ortus/internal/domain"
 	"github.com/jobrunner/ortus/internal/ports/input"
+	"github.com/jobrunner/ortus/internal/ports/output"
 )
 
 // Deps is what every MCP server needs to do its job. Like the HTTP adapter,
@@ -38,6 +39,7 @@ type Deps struct {
 	Registry      input.SourceRegistry
 	HealthService input.HealthChecker
 	Version       string
+	Tracer        output.Tracer // nil ⇒ no entry-point spans (tests); app passes a NoOp when tracing is off
 }
 
 // Server bundles the MCP server lifecycle around an http.Server.
@@ -139,6 +141,14 @@ func buildMCPServer(deps Deps, logger *slog.Logger) *mcp.Server {
 		Name:    "ortus",
 		Version: deps.Version,
 	}, nil)
+
+	// Entry-point tracing: one span per received MCP method, tying the tool
+	// call into the same trace as the downstream query/health spans. Registered
+	// only when a tracer is supplied (always so in production — a NoOp when
+	// tracing is disabled).
+	if deps.Tracer != nil {
+		srv.AddReceivingMiddleware(tracingMiddleware(deps.Tracer))
+	}
 
 	registerDiagnosticTools(srv, deps, logger)
 	registerQueryTools(srv, deps, logger)

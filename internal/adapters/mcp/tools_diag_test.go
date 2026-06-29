@@ -42,7 +42,7 @@ func diagDeps(t *testing.T) (mcpAdapter.Deps, output.Tracer) {
 	hs := application.NewHealthService(reg, true, tr)
 
 	return mcpAdapter.Deps{
-		Telemetry: tp.Buffer(), QueryService: qs, Registry: reg, HealthService: hs, Version: "test",
+		Telemetry: tp.Buffer(), QueryService: qs, Registry: reg, HealthService: hs, Version: "test", Tracer: tr,
 	}, tr
 }
 
@@ -145,6 +145,42 @@ func TestDiagTools_ActiveSpansTruncated(t *testing.T) {
 	}
 	if c, _ := toolJSON(t, res)["count"].(float64); c != 1 {
 		t.Errorf("active spans count = %v, want 1 (truncated by limit)", c)
+	}
+}
+
+// TestMCPEntrySpan verifies the receiving middleware records a span per tool
+// call (the D8 gap: the MCP surface previously emitted no spans of its own).
+func TestMCPEntrySpan(t *testing.T) {
+	deps, _ := diagDeps(t) // diagDeps sets deps.Tracer, so the middleware is active
+	session := serveDeps(t, deps)
+
+	// A health call goes through the middleware; its span (and any children)
+	// land in the ring buffer once the call returns.
+	if res := callTool(t, session, "health", nil); res.IsError {
+		t.Fatalf("health errored: %v", res.Content)
+	}
+
+	traces := deps.Telemetry.ListTraces(input.TraceFilter{NameContains: "tools/call", Limit: 10})
+	if len(traces) == 0 {
+		t.Fatal("expected an MCP entry span (mcp.tools/call) in the buffer; middleware did not record one")
+	}
+
+	tr := traces[0]
+	if tr.RootName != "mcp.tools/call" {
+		t.Errorf("root span name = %q, want %q", tr.RootName, "mcp.tools/call")
+	}
+	// The entry span must tag the call with the tool name.
+	var found bool
+	for _, sp := range tr.Spans {
+		if sp.Name == "mcp.tools/call" {
+			found = true
+			if got := sp.Attributes["mcp.tool.name"]; got != "health" {
+				t.Errorf("mcp.tool.name = %v, want \"health\"", got)
+			}
+		}
+	}
+	if !found {
+		t.Error("no span named mcp.tools/call found in the captured trace")
 	}
 }
 

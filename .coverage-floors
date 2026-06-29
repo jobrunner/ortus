@@ -14,5 +14,5 @@ internal/adapters/raster           76
 internal/adapters/telemetry        73
 internal/adapters/watcher          77
 internal/adapters/storage          49
-internal/adapters/mcp              70
+internal/adapters/mcp              72
 TOTAL                              62

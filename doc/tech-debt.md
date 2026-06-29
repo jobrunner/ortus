@@ -63,7 +63,28 @@ Fix opportunistically and lower the relevant baseline when you do.
 | ~~D5~~ | http `recoveryMiddleware` | ✅ **Fixed** — test panics in a handler and asserts 500 (plus a no-panic pass-through). | — | done |
 | ~~D6~~ | application/query.go | ✅ **Fixed** — removed the inert `defaultSRID` end-to-end (struct field, `QueryServiceConfig`, `query.default_srid` config key + viper default, test). SRID defaulting stays at the HTTP/MCP edges. Inert key → no behaviour change. | — | done |
 | ~~D7~~ | storage/local.go | ✅ **Fixed** — added a package-local `safeJoin` (Clean + abs/`..`/prefix checks) used by `Download`/`GetReader`; `#nosec G304` justifications now reference it. | — | done |
-| D8 | tracing strategy | Three strategies for the same concern: geopackage/raster instrument spans inline, storage uses a `TracedStorage` decorator, mcp has none. Divergence risk. | **LOW** | Consider a tracing decorator for geopackage/raster mirroring `TracedStorage`; mcp entry points could record spans. |
+| ~~D8~~ | tracing strategy | ✅ **Resolved** — MCP now records an entry span per received method (`mcp.<method>`, `mcp.tool.name`) via receiving middleware, closing the only adapter with *zero* spans. The remaining "drift" is a **deliberate, documented** policy, not accidental — see note. | — | done |
+
+### Tracing strategy — deliberate, not drift
+
+The three adapters instrument differently **on purpose**, matched to span shape:
+
+- **storage** — a thin `TracedStorage` decorator. Its spans are attribute-light
+  (operation, key, object count), all knowable at the boundary, so a decorator
+  captures everything without touching the backends.
+- **geopackage / raster** — inline instrumentation. Their spans carry rich,
+  method-*internal* attributes (`ortus.rtree.used`, `db.statement`, feature/layer
+  counts, `has_index`) that only exist mid-method. A generic decorator could not
+  capture these — it would *regress* trace quality and the coverage test in
+  `telemetry/coverage_test.go`. So inline is the right altitude here.
+- **mcp** — a receiving-middleware entry span (`mcp.<method>`), since the tool
+  surface has no rich per-method attributes to set; the value is tying the call
+  to its downstream query/health spans in one trace.
+
+### Fixed in the tracing PR (2026-06)
+
+- **D8** — MCP entry-point tracing via `AddReceivingMiddleware`; documented the
+  deliberate per-adapter tracing policy above.
 
 ### Fixed in the cleanup PR (2026-06)
 

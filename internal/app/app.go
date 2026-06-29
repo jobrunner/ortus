@@ -304,6 +304,7 @@ func (a *App) MCPDeps() mcp.Deps {
 		Registry:      a.Registry,
 		HealthService: a.HealthService,
 		Version:       version,
+		Tracer:        a.Tracer,
 	}
 }
 
