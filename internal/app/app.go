@@ -32,6 +32,7 @@ type App struct {
 	Storage           output.ObjectStorage
 	Repository        *geopackage.Repository
 	RasterRepository  *raster.Repository
+	Transformer       *geopackage.RepositoryTransformer
 	Registry          *application.SourceRegistry
 	QueryService      *application.QueryService
 	HealthService     *application.HealthService
@@ -166,6 +167,7 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*App, er
 		return nil, fmt.Errorf("initializing coordinate transformer: %w", err)
 	}
 	transformer.SetTracer(app.Tracer)
+	app.Transformer = transformer
 
 	// Initialize query service
 	app.QueryService = application.NewQueryService(
@@ -456,6 +458,9 @@ func (a *App) Shutdown(ctx context.Context) error {
 		}
 	}
 
+	// Release the transformer's in-memory SpatiaLite database.
+	a.closeTransformer()
+
 	// Shutdown metrics provider so the prometheus exporter unregisters.
 	if a.Metrics != nil {
 		if err := a.Metrics.Shutdown(ctx); err != nil {
@@ -472,6 +477,17 @@ func (a *App) Shutdown(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// closeTransformer releases the transformer's in-memory SpatiaLite database,
+// logging (not returning) any error — shutdown is best-effort.
+func (a *App) closeTransformer() {
+	if a.Transformer == nil {
+		return
+	}
+	if err := a.Transformer.Close(); err != nil {
+		a.Logger.Error("transformer close error", "error", err)
+	}
 }
 
 // handleFileEvent handles file system events for hot-reload.

@@ -257,6 +257,7 @@ func TestIntegration_Transformer(t *testing.T) {
 	if err != nil {
 		t.Skipf("transformer unavailable: %v", err)
 	}
+	t.Cleanup(func() { _ = tr.Close() })
 	ctx := context.Background()
 
 	// Same SRID is an identity no-op.
