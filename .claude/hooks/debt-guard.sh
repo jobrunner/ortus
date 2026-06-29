@@ -8,8 +8,13 @@
 # (Coverage floors are NOT checked here — that needs a test run, too slow for a
 # per-edit hook; it stays in CI / `make verify`.)
 
-# Read (and ignore) the hook JSON on stdin so we don't block the pipe.
-cat >/dev/null 2>&1 || true
+# Only relevant to Go edits — debt-guard inspects first-party *.go (+ .debt-budget).
+# Parse the edited path like format-and-lint.sh and skip non-Go edits.
+INPUT=$(cat)
+FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty' 2>/dev/null)
+if [[ ! "$FILE_PATH" =~ \.go$ ]]; then
+	exit 0
+fi
 
 cd "${CLAUDE_PROJECT_DIR:-.}" || exit 0
 [ -x ./scripts/debt-guard.sh ] || exit 0

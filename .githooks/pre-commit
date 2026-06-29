@@ -8,6 +8,11 @@
 # before they leave the working tree. Skip in a hurry with: git commit --no-verify
 set -euo pipefail
 
+# git may invoke the hook from a subdirectory, but staged paths are
+# repo-root-relative and ./scripts + `go build ./...` assume the root. Move
+# there so the hook is location-independent.
+cd "$(git rev-parse --show-toplevel)" || exit 1
+
 # Only run when Go files are staged. Filter with a git pathspec (portable —
 # no `grep -z`, which BSD/macOS grep lacks) and read NUL-delimited so paths
 # with spaces or newlines survive intact (no word-splitting).
