@@ -91,37 +91,50 @@ internal/
 
 ---
 
-## 4. The GeoPackage contract — `osm-admin-layers-places`
+## 4. The GeoPackage contract — `osm-admin-places.gpkg` (verified against the real file)
 
-This is the "realistic requirements on a GeoPackage". ortus stays generic; the
-gazetteer source carries a small **manifest** (analogous to the raster-bundle
-manifest) so the mapping is explicit and versioned, not hard-coded.
+ortus stays generic; the gazetteer source carries a small **manifest**
+(analogous to the raster-bundle manifest) so the mapping is explicit and
+versioned, not hard-coded.
 
-**Required layers**
+The contract below was **verified against the actual generated file** (2026-06-30,
+3.1 GiB, EPSG:4326, R-tree indexes present on both layers, SpatiaLite 5.1.0):
 
-- **`places`** (Point, SRID 4326): `name` (text), prominence signal, representative point geometry, **R-tree index mandatory**.
-  - Prominence: OSM `place` class (`city|town|village|hamlet|…`) and *optionally* `population` (often sparse in OSM).
-- **`admin_*`** (Polygon, one or more levels): `name`, `admin_level` (OSM convention: 8 = municipality/Gemeinde), geometry.
+- **`places`** (Point, 422,557 features):
+  - `place` — class, **exactly three values**: `village` (400,910 ≈ 95%), `town` (19,787), `city` (1,860).
+  - **No `population` column.** Prominence = the `place` class only.
+  - `name` (99.4% populated — the reliable label field), plus *sparse* localized
+    `name_de`/`name_en`/`name_fr`/`name_el` (`name_de` ~88% empty → use only when
+    present), `country*`, `osm_id`.
+- **`admin_levels`** (MultiPolygon, 364,244 features — **a single layer**, not per-level layers):
+  - `admin_level` — string, OSM levels `2`–`12`. **Level `8` = municipality/Gemeinde**
+    (155,243 polygons, name ~100% complete). Coarser 6/7 and finer 9/10 also present.
+  - `name` (+ localized), `country_iso`, `osm_id`.
+
+> OSM `admin_level` semantics vary by country (the municipality is not always 8),
+> so the manifest maps a **target level**, defaulting to 8, with per-country overrides.
 
 **Gazetteer manifest** (declares which layer/column plays which role):
 
 ```yaml
-# ortus-gazetteer.yaml (shipped alongside / inside the GeoPackage)
+# ortus-gazetteer.yaml (shipped alongside the GeoPackage)
 places:
   layer: places
-  name_column: name
-  rank_column: place          # OSM place class
-  population_column: population # optional
+  name_column: name        # localized name_* used only when present
+  rank_column: place       # village | town | city
+  # no population_column — this dataset has none
 admin:
-  - { layer: admin_8, level: municipality, name_column: name }
-  - { layer: admin_6, level: district,     name_column: name }
+  layer: admin_levels
+  level_column: admin_level
+  name_column: name
+  municipality_level: "8"  # default; per-country overrides allowed
 ```
 
-**Open decision 1 — prominence source (ADR-0017, currently open).** Because the
-data is `osm-admin-layers-places`, **recommended default: rank-based salience**
-(§6) using the OSM `place` class with population as a tiebreaker — robust against
-OSM's sparse `population`. Switch to population-log (§6) only if GeoNames data is
-merged in. *This materially shapes the salience function — confirm before M2.*
+**Open decision 1 — prominence source (ADR-0017) → RESOLVED by the data.** The
+file has **no population at all**, only the 3-class `place` rank. So salience is
+**rank-based** (`city > town > village`) — see §6. The population-log model stays
+implemented as an *alternative* strategy for a future where GeoNames population is
+merged in, but it cannot be the default given this data.
 
 ---
 
@@ -153,28 +166,64 @@ type Salience interface { Rank(p domain.Coordinate, cands []Candidate) []Scored 
 
 ---
 
-## 6. Salience, metrics, label (from spec §6, kept)
+## 6. Salience, metrics, label — good practice for *this* data
 
-- **Default strategy `ranked`**: `PPLC/city > town > village > …` gate + population/distance tiebreak (see Open decision 1).
-- **Alternative `weighted`**: `score = w_pop·log(pop+1) − w_dist·distance_km`; start `w_pop=1.0`, `w_dist=0.35`; **all weights config-injectable**, never hard-coded.
-- **Distance** ellipsoidal (`Distance(g1,g2,1)`); **bearing** via `ST_Azimuth`, convention *reference→point* ("E von Würzburg" = point east of Würzburg); **quantize** to 8/16 points: `idx = round(az/(360/N)) mod N`.
-- **Label** `{round(dist)} km {compass} {name}` → "4 km E Würzburg"; **inside threshold** (e.g. <1 km) → "in/bei {name}", no bearing; **no candidate** → widen radius 50→100→200 km, else fall back to `Locate()`; **tie-break** population → distance → id; **rounding** <10 km to 0.5 km, else 1 km (configurable).
+The data gives only a coarse 3-class rank (`city > town > village`) and **no
+population**. With 95% of points being `village`, a plain nearest-neighbour pick
+is useless ("0.8 km N {nearest hamlet}"), and a continuous population score has
+nothing to anchor it. So the **recommended default is rank-stratified selection
+with class-specific reach radii** — it directly encodes "a city is findable from
+far, a village only when you're basically in it" and is interpretable/tunable:
+
+```
+pick the nearest CITY    within R_city    (start ~60 km), else
+     the nearest TOWN    within R_town    (start ~18 km), else
+     the nearest VILLAGE within R_village (start ~5 km),  else
+     widen the radii / fall back to Locate() (admin municipality)
+```
+
+This resolves the spec's transition cases naturally: city 8 km **beats** village
+1 km (city wins outright); city 80 km **loses** to town 5 km (city outside
+`R_city`, town inside `R_town`). The three radii are the tunable knobs (M5),
+config-injectable, replacing the un-anchorable `w_dist`. Within a class,
+distance decides; remaining ties → name, then `osm_id` (deterministic).
+
+- **`ranked` strategy** (default, above) — uses only `place` + distance. Built first.
+- **`weighted` strategy** (alternative, `score = w_pop·log(pop+1) − w_dist·distance_km`)
+  — kept behind the same `Salience` interface for a future GeoNames-population merge;
+  **not usable on this dataset** (no population). All weights config-injectable.
+- **Distance** ellipsoidal (`Distance(g1,g2,1)`); **bearing** via `ST_Azimuth`,
+  convention *reference→point* ("E von Würzburg" = point east of Würzburg);
+  **quantize** to 8/16 points: `idx = round(az/(360/N)) mod N`.
+- **Label** `{round(dist)} km {compass} {name}` → "4 km E Würzburg", using the
+  native `name` (localized `name_*` only when present). **Inside threshold**
+  (e.g. <1 km) → "in/bei {name}", no bearing. **Rounding** <10 km to 0.5 km,
+  else 1 km (configurable).
 
 ---
 
 ## 7. `Bearing()` flow
 
+Because `village` is 95% of points, a single small-`k` KNN would never surface
+the salient city. So the service does **class-stratified nearest queries** — one
+per class, each cheap — and applies the reach rule:
+
 ```
-1. SpatialIndex.QueryKNN(layer="places", p, k=MaxCandidates, maxKM=RadiusKM)
-2. SpatialIndex.DistanceKM(p, cand) for each            → []Candidate
-3. Salience.Rank(p, candidates)                          → []Scored, desc
+1. For class in [city, town, village]:
+     QueryKNN(layer="places", class=class, p, k=1, maxKM=R_class)   → nearest of that class
+2. DistanceKM(p, cand) for the hits                                  → []Candidate
+3. Salience.Rank(p, candidates)  (reach rule: best class within its radius wins)
 4. top-1 = reference
+   ├─ no hit in any radius → widen radii once, else fall back to Locate()
    ├─ DistanceKM < InsideLabelKM → "in/bei {name}" (no bearing)
    └─ else: Azimuth(reference, p) → compass → label
 5. return Fix
 ```
-Steps 1–2 in the spatialite adapter (behind the port), step 3 in salience (pure),
-steps 4–5 in domain (pure). Clean responsibility split along the seam.
+
+Class-stratified queries imply `SpatialIndex.QueryKNN` takes an optional
+attribute filter (e.g. `place = ?`) so each class query stays index-cheap rather
+than pulling a huge `k` of villages. Steps 1–2 live in the spatialite adapter
+(behind the port), step 3 in salience (pure), steps 4–5 in domain (pure).
 
 ---
 
@@ -184,7 +233,7 @@ There is **no existing gazetteer code to move** (confirmed by grep). The generic
 thematic PiP stays as-is.
 
 - **M0 — Seam + skeleton.** `domain` gazetteer types + `ports` (SpatialIndex, Gazetteer) + a `GazetteerService` skeleton, **disabled by default** (no endpoint, no data load). Thematic path untouched. *Gate:* existing tests + depguard + `make verify` green; gazetteer compiled but inert.
-- **M1 — `SpatialIndex` (cgo).** `QueryKNN`/`DistanceKM`/`Azimuth`/`PointInPolygon` on the SpatiaLite adapter; **verify VirtualKNN2** in the deployed SpatiaLite, else R-tree-bbox-prefilter + manual sort fallback (Open decision 3). *Gate:* unit tests against a small fixture GeoPackage.
+- **M1 — `SpatialIndex` (cgo).** `QueryKNN`/`DistanceKM`/`Azimuth`/`PointInPolygon` on the SpatiaLite adapter. `VirtualKNN2` is **confirmed available** (SpatiaLite 5.1.0, see §12.3), so KNN is native — no bbox-prefilter fallback. *Gate:* unit tests against a small fixture GeoPackage.
 - **M2 — Gazetteer data + `Locate()`.** `gazetteerdata` loader + manifest parsing; `Locate()` (municipality via PiP). Prominence source decided (ADR-0017). *Gate:* eval vs gold-set (§10).
 - **M3 — Bearing end-to-end.** `Salience` (`ranked` default) + `Bearing()` + compass + label + edge cases. *Gate:* label snapshot tests.
 - **M4 — API.** http + mcp endpoints, DTOs, config-injected weights/options. *Gate:* integration test.
@@ -228,8 +277,18 @@ The repo's harness (see [Technical debt](technical-debt.md)) applies to the new 
 
 ## 12. Open decisions (confirm at the noted milestone)
 
-1. **Prominence source** (ADR-0017) — *recommended: OSM rank-based*; confirm before M2.
-2. **One GeoPackage** with `places` + `admin_*` layers — *recommended: yes*; confirm at M2.
-3. **VirtualKNN2 availability** vs R-tree fallback — *verify empirically at M1* (a read-only spike against a fixture GeoPackage is cheap).
-4. **>2 GiB distribution** — versioned object-storage URL, loaded as a dedicated artifact (not via generic sync discovery). Confirm at M2.
+1. ~~**Prominence source** (ADR-0017)~~ — **RESOLVED by the data (2026-06):** the
+   `osm-admin-places.gpkg` has no population column, only the 3-class `place` rank
+   (`village`/`town`/`city`). Salience is **rank-based**; the population-log model
+   is an alternative strategy reserved for a future GeoNames merge. See §4, §6.
+2. **One GeoPackage** — confirmed in shape by the real file: a single `places`
+   layer plus a single `admin_levels` layer (not multiple `admin_*` tables;
+   `admin_level` is a column, municipality = `"8"`). Manifest contract in §4 reflects
+   this. *Confirm the artifact is published as one file at M2.*
+3. ~~**VirtualKNN2 availability** vs R-tree fallback~~ — **RESOLVED by a read-only
+   spike (2026-06):** the deployed SpatiaLite is **5.1.0 with `VirtualKNN2`
+   present and working**, and the file already carries R-tree indexes. M1 uses
+   native KNN; the bbox-prefilter fallback is dropped (kept only as a note should a
+   target platform ship an older SpatiaLite).
+4. **>2 GiB distribution** — versioned object-storage URL, loaded as a dedicated artifact (not via generic sync discovery). Confirm at M2. *(The real file is ~3.1 GiB, so this path is mandatory, not hypothetical.)*
 5. **SpatialIndex impl location** — *recommended: extend the existing geopackage adapter* (single cgo owner) vs a new `adapters/spatialite`; decide at M1.
