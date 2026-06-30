@@ -65,6 +65,7 @@ nav:
       - explanation/index.md
       - Architecture: explanation/architecture.md
       - Architecture plan: explanation/architecture-plan.md
+      - Gazetteer & bearing (plan): explanation/gazetteer-plan.md
       - Raster sources: explanation/raster-sources.md
       - Technical debt: explanation/technical-debt.md
       - Production-readiness review: explanation/production-readiness-review.md
