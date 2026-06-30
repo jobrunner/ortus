@@ -24,6 +24,7 @@ register of debt we knowingly carry.
 | **Secret scanning** (`gitleaks`) | Secret Scan job | no committed credentials in the scanned commit range; allowlist in `.gitleaks.toml` | don't commit secrets; allowlist genuine placeholders |
 | **Benchmarks run** | Bench job / `make bench` | hot-path micro-benchmarks compile + execute (no bit-rot) — a hard gate | keep benchmarks building |
 | **Bench regression** (`benchstat`) | Bench job (PR) | benchstat PR-vs-base delta posted to the job summary — **informational** (shared-runner noise precludes a reliable hard threshold) | review the delta; investigate real slowdowns |
+| **Supply chain** (cosign + SLSA + SBOM) | Docker Release | released images are cosign-signed (keyless) and carry SLSA provenance + SPDX SBOM attestations | `cosign verify` / `cosign download sbom` (see release notes) |
 | **deadcode** | advisory `make debt-deadcode` | unreachable funcs (informational) | triage by hand — see below |
 
 `make verify` runs everything except the coverage floors and the deadcode
