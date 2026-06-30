@@ -190,3 +190,28 @@ names (`ortus_queries_total`, `ortus_sources_loaded` …) and labels are kept
 stable; only the underlying instrument library changed. This unlocks pulling
 the same instrumentation through OTLP later if desired, without touching the
 collectors that already scrape `/metrics`.
+
+---
+
+## Metrics
+
+Prometheus metrics are exposed on the metrics port (default `9090`) at
+`/metrics`:
+
+```bash
+curl "http://localhost:9090/metrics"
+```
+
+Metrics are produced via the OpenTelemetry meter API and exported as Prometheus
+scrape format by default. To additionally push to an OTLP collector (e.g. the
+same one tracing uses), enable `metrics.otlp.enabled`; the endpoint falls back
+to `tracing.endpoint` when not set explicitly.
+
+The HTTP request metrics — `ortus_http_requests_total` and
+`ortus_http_request_duration_seconds` — label `path` with the matched
+gorilla/mux route template, so dynamic segments like `{sourceId}` collapse to a
+single bounded label combination. The duration histogram uses seconds-scale
+bucket boundaries so `histogram_quantile()` resolves real p50/p95/p99.
+
+Source gauges: `ortus_sources_loaded`, `ortus_sources_ready`,
+`ortus_sources_failed`.

@@ -41,11 +41,11 @@ linters:
     - unparam       # Ungenutzte Parameter
     - whitespace    # Leerzeichen-Probleme
 
-    # Architektur-Harness (Drift-Schutz, siehe doc/ARCHITECTURE_PLAN.md)
+    # Architektur-Harness (Drift-Schutz, siehe docs/explanation/architecture-plan.md)
     - depguard        # Hexagonale Import-Grenzen erzwingen
     - gomodguard_v2   # Modul-Blocklist (Dependency-Bloat verhindern)
 
-    # Schulden-Harness (siehe doc/tech-debt.md)
+    # Schulden-Harness (siehe docs/explanation/technical-debt.md)
     - nolintlint      # //nolint-Direktiven müssen Linter benennen + Grund tragen
 
   settings:

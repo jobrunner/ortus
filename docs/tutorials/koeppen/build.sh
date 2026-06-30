@@ -75,7 +75,7 @@ fi
 echo ">> writing COG"
 COG="$WORK/koeppen.cog.tif"
 # LZW (not DEFLATE) is mandated for bundle COGs: the Go reader (tingold/gocog,
-# see doc/adr/0013) reads LZW/uncompressed tiles correctly but trips over GDAL's
+# see docs/explanation/decisions/0013) reads LZW/uncompressed tiles correctly but trips over GDAL's
 # DEFLATE tiles. LZW keeps the COG compressed and lossless.
 gdal_translate -of COG \
   -a_srs "$CANONICAL_CRS" \

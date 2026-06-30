@@ -67,3 +67,6 @@ dist/
 settings.local.*
 
 data
+
+# MkDocs build output
+site/

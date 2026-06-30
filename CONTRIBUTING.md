@@ -6,7 +6,7 @@ them run automatically; this tells you how to work with them.
 
 ## Setup
 
-See [`doc/DEVELOPMENT.md`](doc/DEVELOPMENT.md) for the toolchain (Go, CGO,
+See [`docs/how-to/development-setup.md`](docs/how-to/development-setup.md) for the toolchain (Go, CGO,
 SpatiaLite). Then install the git hook once:
 
 ```sh
@@ -35,14 +35,14 @@ before every push.
 ## The harness (what CI enforces)
 
 Full details and the rationale for each gate live in
-[`doc/tech-debt.md`](doc/tech-debt.md). In short, these are **ratchets** — they
+[`docs/explanation/technical-debt.md`](docs/explanation/technical-debt.md). In short, these are **ratchets** — they
 fix the current quality level in place so it can only improve:
 
 | You'll hit it if you… | Gate | Fix |
 | --------------------- | ---- | --- |
 | add an unjustified `//nolint` | `nolintlint` | name the linter + give a reason |
 | add a `#nosec`/`//nolint` beyond the budget | suppression budget (`.debt-budget`) | remove one, or justify a bump in the PR |
-| leave a `// TODO`/`FIXME`/`HACK`/`XXX` | debt-marker check | track it in `doc/tech-debt.md` instead |
+| leave a `// TODO`/`FIXME`/`HACK`/`XXX` | debt-marker check | track it in `docs/explanation/technical-debt.md` instead |
 | import across hexagonal layers | depguard (`make arch`) | respect domain→ports→adapters boundaries |
 | drop a package below its coverage floor | coverage ratchet (`.coverage-floors`) | add tests (floors raise-only) |
 | leak a goroutine in tests | `goleak` | `t.Cleanup` / close what you start |
@@ -64,8 +64,8 @@ The ratchet runs at three escalating points: the Claude edit-hook (advisory),
 | `make licenses` | dependency license compliance |
 | `make debt` | the full debt ratchet (suppressions + markers + coverage floors) |
 
-See [`doc/load-test.md`](doc/load-test.md) for the local load-test + Grafana
-observability stack, and [`doc/ARCHITECTURE.md`](doc/ARCHITECTURE.md) for the
+See [`docs/how-to/run-a-load-test.md`](docs/how-to/run-a-load-test.md) for the local load-test + Grafana
+observability stack, and [`docs/explanation/architecture.md`](docs/explanation/architecture.md) for the
 hexagonal design the import boundaries enforce.
 
 ## Releases & supply chain

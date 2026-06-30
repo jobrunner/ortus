@@ -6,7 +6,7 @@ Akzeptiert
 
 ## Kontext
 
-Der geplante Raster-Adapter ([Implementierungsplan §3.2](../raster-bundle/IMPLEMENTATION_PLAN.md),
+Der geplante Raster-Adapter ([Implementierungsplan §3.2](../raster-sources.md),
 [ADR-0012](0012-source-vocabulary-migration.md)) braucht einen Go-Reader, der für eine
 Koordinate einen Pixelwert aus einem Cloud Optimized GeoTIFF (COG) liest.
 
@@ -51,7 +51,7 @@ fehlerfrei.**
 ## Entscheidung
 
 **`github.com/tingold/gocog` wird adoptiert.** Da die Bundle-Pipeline die COG-Erzeugung
-**selbst kontrolliert** ([raster-bundle](../raster-bundle/)), schreiben wir
+**selbst kontrolliert** ([raster-bundle](../../reference/raster-bundle.md)), schreiben wir
 **`COMPRESS=LZW`** (oder `NONE`) als Pflicht-Kompression für Bundle-COGs vor und umgehen
 den DEFLATE-Bug vollständig (LZW im Spike verifiziert korrekt). `build.sh` wird von
 `DEFLATE` auf `LZW` umgestellt.

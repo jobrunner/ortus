@@ -55,7 +55,7 @@ fi
 markers=$(grep -rnE '//[[:space:]]*(TODO|FIXME|HACK|XXX)([[:space:]:(]|$)' --include='*.go' . \
   | grep -v '/\.go/mod/' || true)
 if [ -n "$markers" ]; then
-  echo "  ▼ debt-guard: FAIL — debt markers found (keep them out of the tree; track in doc/tech-debt.md):" >&2
+  echo "  ▼ debt-guard: FAIL — debt markers found (keep them out of the tree; track in docs/explanation/technical-debt.md):" >&2
   echo "$markers" | sed 's/^/      /' >&2
   status=1
 else

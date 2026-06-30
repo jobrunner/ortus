@@ -136,7 +136,7 @@ type QueryConfig struct {
 
 // SQLiteConfig tunes how the GeoPackage adapter opens its SQLite databases.
 // Defaults are conservative read-oriented values; calibrate with a load test on
-// the target infra (see doc/load-test.md).
+// the target infra (see docs/how-to/run-a-load-test.md).
 type SQLiteConfig struct {
 	// CacheMode is the SQLite cache mode: "private" (default — each connection
 	// has its own cache, allowing true concurrent reads) or "shared" (legacy;

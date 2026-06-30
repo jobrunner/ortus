@@ -130,7 +130,7 @@ jobs:
   # bit-rot). Timing-regression detection is intentionally NOT a hard gate:
   # shared CI runners are too noisy for a reliable per-PR threshold. Instead we
   # post a benchstat PR-vs-base delta (same runner cancels machine variance) to
-  # the job summary for human review. See doc/tech-debt.md.
+  # the job summary for human review. See docs/explanation/technical-debt.md.
   # =============================================================================
   bench:
     name: Benchmarks
@@ -212,6 +212,22 @@ jobs:
           make licenses
 
   # =============================================================================
+  # Docs. Builds the Diátaxis site with `mkdocs build --strict`, which fails on
+  # broken internal links, missing nav entries, or unresolved references.
+  # =============================================================================
+  docs:
+    name: Docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Build docs (strict)
+        run: uvx --with mkdocs-material mkdocs build --strict
+
+  # =============================================================================
   # Secret scanning. gitleaks-action@v2 scans the git history of the event's
   # commit range (the PR commits on a PR, github.event.before..after on push) —
   # so a secret added and removed within the range is still caught. Config +
@@ -235,7 +251,7 @@ jobs:
   # The hexagonal import-boundary rules (depguard), module blocklist
   # (gomodguard) and nolintlint run inside the Lint job (golangci-lint ./...).
   # This job adds the go.mod/go.sum tidiness gate plus the debt ratchet
-  # (suppression budget, debt markers, storage-filter drift). See doc/tech-debt.md.
+  # (suppression budget, debt markers, storage-filter drift). See docs/explanation/technical-debt.md.
   # =============================================================================
   architecture:
     name: Architecture

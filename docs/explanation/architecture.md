@@ -160,7 +160,7 @@ Priorität: CLI > Umgebungsvariablen > .env > Defaults
 
 CLI-Flag für CORS: `--cors=origin1,*.sub.domain.tld`
 
-Siehe [ADR-0007](adr/0007-configuration-management.md) für vollständige Liste.
+Siehe [ADR-0007](decisions/0007-configuration-management.md) für vollständige Liste.
 
 ## Testing
 
@@ -206,21 +206,21 @@ ENTRYPOINT ["/usr/local/bin/ortus"]
 
 ## Weiterführende Dokumentation
 
-- [ARCHITECTURE_PLAN.md](ARCHITECTURE_PLAN.md) - Detaillierter Architekturplan
-- [DEVELOPMENT.md](DEVELOPMENT.md) - Entwicklungsdokumentation
-- [ADRs](adr/) - Architecture Decision Records
+- [ARCHITECTURE_PLAN.md](architecture-plan.md) - Detaillierter Architekturplan
+- [DEVELOPMENT.md](../how-to/development-setup.md) - Entwicklungsdokumentation
+- [ADRs](decisions/index.md) - Architecture Decision Records
 
 ### ADR-Index
 
 | ADR | Titel | Status |
 |-----|-------|--------|
-| [0001](adr/0001-standard-go-project-layout.md) | Standard Go Project Layout | Akzeptiert |
-| [0002](adr/0002-hexagonal-architecture-elements.md) | Hexagonal Architecture | Akzeptiert |
-| [0003](adr/0003-vincenty-as-default-algorithm.md) | Vincenty Algorithmus | Akzeptiert |
-| [0004](adr/0004-interface-based-codec-system.md) | Interface-basiertes Codec-System | Akzeptiert |
-| [0005](adr/0005-geopackage-based-architecture.md) | GeoPackage-basierte Architektur | Akzeptiert |
-| [0006](adr/0006-object-storage-integration.md) | Object Storage Integration | Akzeptiert |
-| [0007](adr/0007-configuration-management.md) | Configuration Management | Akzeptiert |
-| [0008](adr/0008-tls-letsencrypt.md) | TLS und Let's Encrypt | Akzeptiert |
-| [0009](adr/0009-hot-reload-file-watching.md) | Hot-Reload und File-Watching | Akzeptiert |
-| [0011](adr/0011-remote-storage-sync.md) | Remote Storage Sync | Akzeptiert |
+| [0001](decisions/0001-standard-go-project-layout.md) | Standard Go Project Layout | Akzeptiert |
+| [0002](decisions/0002-hexagonal-architecture-elements.md) | Hexagonal Architecture | Akzeptiert |
+| [0003](decisions/0003-vincenty-as-default-algorithm.md) | Vincenty Algorithmus | Akzeptiert |
+| [0004](decisions/0004-interface-based-codec-system.md) | Interface-basiertes Codec-System | Akzeptiert |
+| [0005](decisions/0005-geopackage-based-architecture.md) | GeoPackage-basierte Architektur | Akzeptiert |
+| [0006](decisions/0006-object-storage-integration.md) | Object Storage Integration | Akzeptiert |
+| [0007](decisions/0007-configuration-management.md) | Configuration Management | Akzeptiert |
+| [0008](decisions/0008-tls-certmagic.md) | TLS und Let's Encrypt | Akzeptiert |
+| [0009](decisions/0009-hot-reload-file-watching.md) | Hot-Reload und File-Watching | Akzeptiert |
+| [0011](decisions/0011-remote-storage-sync.md) | Remote Storage Sync | Akzeptiert |
