@@ -25,6 +25,7 @@ register of debt we knowingly carry.
 | **Benchmarks run** | Bench job / `make bench` | hot-path micro-benchmarks compile + execute (no bit-rot) — a hard gate | keep benchmarks building |
 | **Bench regression** (`benchstat`) | Bench job (PR) | benchstat PR-vs-base delta posted to the job summary — **informational** (shared-runner noise precludes a reliable hard threshold) | review the delta; investigate real slowdowns |
 | **Supply chain** (cosign + SLSA + SBOM) | Docker Release | released images are cosign-signed (keyless) and carry SLSA provenance + SPDX SBOM attestations | `cosign verify` / `cosign download sbom` (see release notes) |
+| **Mutation testing** (`gremlins`) | weekly Mutation workflow / `make mutation` | test *effectiveness* on the pure-logic core (domain, application) — **informational** (score trend, not a hard gate; thresholds 0) | strengthen weak tests the report flags |
 | **deadcode** | advisory `make debt-deadcode` | unreachable funcs (informational) | triage by hand — see below |
 
 `make verify` runs everything except the coverage floors and the deadcode
