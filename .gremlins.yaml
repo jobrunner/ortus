@@ -1,0 +1,7 @@
+# gremlins mutation-testing config. The weekly run is INFORMATIONAL: thresholds
+# are 0 so a low mutation score never fails the job — the score is a trend
+# signal for test effectiveness (coverage says a line ran; mutation says a test
+# would have caught a bug in it). Raise the thresholds later to ratchet.
+unleash:
+  threshold-efficacy: 0
+  threshold-mcover: 0

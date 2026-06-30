@@ -1,0 +1,72 @@
+# Weekly mutation testing with gremlins. Coverage tells you a line executed;
+# mutation testing tells you a test would actually CATCH a bug in it. It's
+# expensive (the suite runs per mutant), so it runs weekly on the pure-logic
+# core only and is INFORMATIONAL — the score lands in the job summary + an
+# artifact for trend review; it never blocks (see .gremlins.yaml thresholds).
+name: Mutation Testing
+
+on:
+  schedule:
+    - cron: '0 3 * * 1' # Monday 03:00 UTC
+  workflow_dispatch:
+
+env:
+  GO_VERSION: '1.26.4'
+
+permissions:
+  contents: read
+
+jobs:
+  mutation:
+    name: gremlins (core logic)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      # The module links cgo SpatiaLite; install it so the test binaries build.
+      - name: Install SpatiaLite
+        run: |
+          sudo apt-get update && sudo apt-get install -y libsqlite3-mod-spatialite
+          # `|| true`: with Actions' default `-o pipefail`, a no-match grep would
+          # abort the step before the guard below could print a clear message.
+          lib=$(dpkg -L libsqlite3-mod-spatialite | grep -m1 'mod_spatialite\.so' || true)
+          if [ -z "$lib" ]; then echo "mod_spatialite.so not found" >&2; exit 1; fi
+          echo "SPATIALITE_LIBRARY_PATH=$lib" >> "$GITHUB_ENV"
+
+      - name: Install gremlins
+        run: go install github.com/go-gremlins/gremlins/cmd/gremlins@latest
+
+      # Informational: never fail the job on a low score (continue-on-error +
+      # thresholds 0). Scope is the pure-logic core; expand as runtime allows.
+      - name: Run mutation testing
+        continue-on-error: true
+        run: |
+          set +e
+          for pkg in ./internal/domain ./internal/application; do
+            echo "===== gremlins: $pkg =====" | tee -a mutation.log
+            gremlins unleash "$pkg" 2>&1 | tee -a mutation.log
+          done
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo '### Mutation testing (gremlins) — internal/domain, internal/application'
+            echo '```'
+            grep -iE 'mutation|efficacy|covered|killed|lived|timed out|not covered' mutation.log 2>/dev/null | tail -40 || echo "no summary captured"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutation-report
+          path: mutation.log
+          if-no-files-found: ignore

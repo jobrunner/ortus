@@ -2,7 +2,7 @@
 # Alle Standardaufgaben für Entwicklung und CI/CD
 
 .PHONY: all build build-all install run clean help
-.PHONY: test test-unit test-integration test-coverage test-race test-bench load-test fuzz bench
+.PHONY: test test-unit test-integration test-coverage test-race test-bench load-test fuzz bench mutation
 .PHONY: load-stack-up load-stack-down load-stack-clean load-serve load-attack
 .PHONY: lint lint-go lint-fix vet
 .PHONY: security-check vuln-check gosec
@@ -83,6 +83,9 @@ test-bench: ## Benchmarks ausführen
 BENCH_PKGS := ./internal/domain/ ./internal/adapters/storage/ ./internal/adapters/geopackage/ ./internal/adapters/http/
 bench: ## Hot-path Micro-Benchmarks (BENCHCOUNT/BENCHTIME überschreibbar)
 	@$(GO) test -run='^$$' -bench=. -benchmem $(if $(BENCHCOUNT),-count=$(BENCHCOUNT),) $(if $(BENCHTIME),-benchtime=$(BENCHTIME),) $(BENCH_PKGS)
+
+mutation: ## Mutation-Testing (gremlins) auf der Kernlogik — Testwirksamkeit (go install github.com/go-gremlins/gremlins/cmd/gremlins@latest)
+	gremlins unleash ./internal/domain ./internal/application
 
 # Fuzz targets at the parse boundaries (untrusted input). Seeds run automatically
 # in `make test`/CI; this drives actual fuzzing. Crashers land in the package's
