@@ -97,22 +97,35 @@ ortus stays generic; the gazetteer source carries a small **manifest**
 (analogous to the raster-bundle manifest) so the mapping is explicit and
 versioned, not hard-coded.
 
-The contract below was **verified against the actual generated file** (2026-06-30,
-3.1 GiB, EPSG:4326, R-tree indexes present on both layers, SpatiaLite 5.1.0):
+The base layers below were **verified against the actual generated file** (2026-06-30,
+3.1 GiB, EPSG:4326, R-tree indexes present on both layers, SpatiaLite 5.1.0). The
+**relational columns** (`places.admin_id`, `admin_levels.parent_id`) and the **dropped
+country-name columns** come from an agreed rebuild of the GeoPackage project — see
+`PLAN-places-admin-hierarchy.md` in the `osm-data` repo for the build spec.
 
 - **`places`** (Point, 422,557 features):
   - `place` — class, **exactly three values**: `village` (400,910 ≈ 95%), `town` (19,787), `city` (1,860).
   - **No `population` column.** Prominence = the `place` class only.
   - `name` (99.4% populated — the reliable label field), plus *sparse* localized
-    `name_de`/`name_en`/`name_fr`/`name_el` (`name_de` ~88% empty → use only when
-    present), `country*`, `osm_id`.
+    `name_de`/`name_en`/`name_fr`/`name_el` (`name_de` ~88% empty → use only when present), `osm_id`.
+  - `country_iso` — **kept** as the reliable country anchor (Natural-Earth-derived, 100%).
+  - `admin_id` *(rebuild)* — FK → `admin_levels.fid` of the most-local containing
+    admin unit (same country); **NULL in coverage holes** → fall back to `country_iso`.
+  - The four denormalized country **name** columns (`country`, `country_de/en/fr/el`)
+    are **dropped** — derivable from `country_iso`; ortus localizes downstream.
 - **`admin_levels`** (MultiPolygon, 364,244 features — **a single layer**, not per-level layers):
-  - `admin_level` — string, OSM levels `2`–`12`. **Level `8` = municipality/Gemeinde**
-    (155,243 polygons, name ~100% complete). Coarser 6/7 and finer 9/10 also present.
+  - `admin_level` — string, OSM levels `2`–`12` (or NULL for coverage fills). **Level
+    `8` = municipality/Gemeinde** (155,243 polygons, name ~100% complete) *in DE* —
+    see the semantic note below. Coarser 6/7 and finer 9/10 also present.
   - `name` (+ localized), `country_iso`, `osm_id`.
+  - `parent_id` *(rebuild)* — FK → `admin_levels.fid` of the immediate **broader**
+    enclosing unit (same country); **NULL at the top of the chain** (e.g. countries
+    with no imported L2 polygon). Walked by ortus to resolve the full 2–8 hierarchy.
 
-> OSM `admin_level` semantics vary by country (the municipality is not always 8),
-> so the manifest maps a **target level**, defaulting to 8, with per-country overrides.
+> **Admin-level semantics are not a fixed number.** OSM `admin_level` means different
+> things per country (municipality is 8 in DE but not universally). ortus does **not**
+> hard-code level numbers: it resolves meaning through the **sidecar reference**
+> (below), keyed `(country_iso, admin_level) → equivalent`.
 
 **Gazetteer manifest** (declares which layer/column plays which role):
 
@@ -120,15 +133,33 @@ The contract below was **verified against the actual generated file** (2026-06-3
 # ortus-gazetteer.yaml (shipped alongside the GeoPackage)
 places:
   layer: places
-  name_column: name        # localized name_* used only when present
-  rank_column: place       # village | town | city
+  name_column: name          # localized name_* used only when present
+  rank_column: place         # village | town | city
+  admin_fk: admin_id         # → admin_levels.fid (most-local containing unit)
+  country_column: country_iso
   # no population_column — this dataset has none
 admin:
   layer: admin_levels
   level_column: admin_level
   name_column: name
-  municipality_level: "8"  # default; per-country overrides allowed
+  parent_fk: parent_id       # → admin_levels.fid (broader enclosing unit)
+  country_column: country_iso
+  # admin-level meaning + bearing constraint tier come from the sidecar:
+  level_reference: admin_levels_west_palearctic.yaml
+  bearing_constraint_tier: state   # semantic equivalent, resolved per-country
 ```
+
+**Sidecar reference — `admin_levels_west_palearctic.yaml`** (shipped beside the
+GeoPackage, `version: 1`). Maps `(country_iso, admin_level) → { name, equivalent }`
+with `equivalent ∈ {country, state, region, province, county, district, municipality,
+borough, parish, submunicipality, other}`. ortus uses it for two things:
+
+1. **Locate enrichment** — label each level of the resolved admin chain with its
+   meaning (DE L6 → `county` "Landkreis", L8 → `municipality` "Gemeinde").
+2. **Bearing boundary constraint** — the constraint tier is **semantic** (`state`,
+   the agreed default), resolved per-country, *not* the literal number 4. ortus walks
+   the query point's `parent_id` chain, finds the `state`-tier ancestor via this
+   mapping, and restricts bearing anchors to places sharing it (see §7).
 
 **Open decision 1 — prominence source (ADR-0017) → RESOLVED by the data.** The
 file has **no population at all**, only the 3-class `place` rank. So salience is
@@ -143,26 +174,48 @@ merged in, but it cannot be the default given this data.
 ```go
 // ports/output — the sole cgo-backed primitives ("geo.SpatialDB")
 type SpatialIndex interface {
-    QueryKNN(ctx context.Context, layer string, p domain.Coordinate, k int, maxKM float64) ([]domain.Feature, error)
+    // Filter is an optional attribute predicate (column, values) — used both for the
+    // class query (place IN {city}) and the admin boundary constraint (admin_id IN {…}).
+    QueryKNN(ctx context.Context, layer string, p domain.Coordinate, k int, maxKM float64, f *Filter) ([]domain.Feature, error)
     PointInPolygon(ctx context.Context, layer string, p domain.Coordinate) ([]domain.Feature, error)
+    // ResolveChain walks admin_levels.parent_id from a starting fid up to the top.
+    ResolveChain(ctx context.Context, layer string, fromFID int64) ([]AdminRow, error)
     DistanceKM(a, b domain.Coordinate) (float64, error)          // SpatiaLite Distance(g1,g2,1)
     Azimuth(from, to domain.Coordinate) (float64, error)         // ST_Azimuth, rad→deg, 0=N 90=E
 }
+type Filter struct { Column string; Values []any }              // e.g. {"place", {"city"}}
+type AdminRow struct { FID, ParentFID int64; Level int; Name, CountryISO string }
 
 // domain — pure
-type Place struct { ID, Name, FeatureCode string; Population int64; Geom domain.Coordinate }
+type PlaceClass int                                              // ordered: Village < Town < City
+type Place struct { Name string; Class PlaceClass; AdminID int64; At domain.Coordinate }
+type AdminUnit struct { Level int; Name, Equivalent string }     // Equivalent from the sidecar
+type Locality struct { CountryISO string; Chain []AdminUnit }    // resolved 2–8 hierarchy
 type Fix struct { Reference Place; DistanceKM, Azimuth float64; Compass, Label string }
-type BearingOptions struct { RadiusKM float64; MaxCandidates, CompassPoints int; InsideLabelKM float64 }
+
+// BearingPolicy is DATA, not branches: a reach radius per class + the semantic
+// boundary tier. Adding a class = one row; no code change. (See §6/§7.)
+type BearingPolicy struct {
+    Reach          map[PlaceClass]float64   // km, e.g. {Village:5, Town:18, City:60}
+    ConstraintTier string                   // semantic equivalent, default "state"
+    InsideLabelKM  float64
+    CompassPoints  int                      // 8 or 16
+}
 
 // ports/input
 type Gazetteer interface {
-    Locate(ctx context.Context, p domain.Coordinate) (*Place, error)     // reverse geocode → municipality (PiP)
-    Bearing(ctx context.Context, p domain.Coordinate, opts BearingOptions) (*Fix, error)
+    Locate(ctx context.Context, p domain.Coordinate) (*Locality, error)  // reverse geocode → full admin chain
+    Bearing(ctx context.Context, p domain.Coordinate, pol BearingPolicy) (*Fix, error)
 }
 
 // application/gazetteer/salience — pure, swappable
 type Salience interface { Rank(p domain.Coordinate, cands []Candidate) []Scored }
 ```
+
+The composed HTTP response keeps the three concerns as distinct sections —
+`sources` (generic PiP, untouched), `admin` (the `Locate` chain, each level labelled
+via the sidecar), `bearing` (the `Fix`). Composition happens in the application/HTTP
+layer; the generic PiP engine never learns about the gazetteer.
 
 ---
 
@@ -173,20 +226,24 @@ population**. With 95% of points being `village`, a plain nearest-neighbour pick
 is useless ("0.8 km N {nearest hamlet}"), and a continuous population score has
 nothing to anchor it. So the **recommended default is rank-stratified selection
 with class-specific reach radii** — it directly encodes "a city is findable from
-far, a village only when you're basically in it" and is interpretable/tunable:
+far, a village only when you're basically in it" and is interpretable/tunable.
+
+The selection is **branch-free**: not an `if city … else if town …` cascade but a
+single rule over the `BearingPolicy.Reach` table (§5). A candidate is *eligible* when
+`distance ≤ Reach[class]`; among eligible candidates the **most salient class wins**,
+distance breaks ties:
 
 ```
-pick the nearest CITY    within R_city    (start ~60 km), else
-     the nearest TOWN    within R_town    (start ~18 km), else
-     the nearest VILLAGE within R_village (start ~5 km),  else
-     widen the radii / fall back to Locate() (admin municipality)
+eligible  = { c | DistanceKM(p, c) ≤ Reach[c.Class] }     // Reach is data, not branches
+reference = argmax over eligible by (Class salience, then −distance)
+            (none eligible → widen radii once, else fall back to Locate())
 ```
 
 This resolves the spec's transition cases naturally: city 8 km **beats** village
-1 km (city wins outright); city 80 km **loses** to town 5 km (city outside
-`R_city`, town inside `R_town`). The three radii are the tunable knobs (M5),
-config-injectable, replacing the un-anchorable `w_dist`. Within a class,
-distance decides; remaining ties → name, then `osm_id` (deterministic).
+1 km (city more salient, both eligible); city 80 km **loses** to town 5 km (city not
+eligible, town is). Adding a 4th class (`hamlet`) = one row in `Reach`, no code
+change. The radii are the tunable knobs (M5), config-injectable, replacing the
+un-anchorable `w_dist`. Remaining ties → name, then `osm_id` (deterministic).
 
 - **`ranked` strategy** (default, above) — uses only `place` + distance. Built first.
 - **`weighted` strategy** (alternative, `score = w_pop·log(pop+1) − w_dist·distance_km`)
@@ -206,24 +263,30 @@ distance decides; remaining ties → name, then `osm_id` (deterministic).
 
 Because `village` is 95% of points, a single small-`k` KNN would never surface
 the salient city. So the service does **class-stratified nearest queries** — one
-per class, each cheap — and applies the reach rule:
+per class, each cheap — constrained to the same administrative tier, then applies
+the reach rule:
 
 ```
+0. Locate(p): PointInPolygon → most-local admin fid → ResolveChain (parent_id walk)
+   → resolve the ConstraintTier ancestor (default "state") via the sidecar mapping
+   → allowed = { admin_id … } under that ancestor   (∅ ⇒ skip the constraint, e.g. coverage hole)
 1. For class in [city, town, village]:
-     QueryKNN(layer="places", class=class, p, k=1, maxKM=R_class)   → nearest of that class
-2. DistanceKM(p, cand) for the hits                                  → []Candidate
-3. Salience.Rank(p, candidates)  (reach rule: best class within its radius wins)
+     QueryKNN("places", p, k=1, maxKM=Reach[class],
+              filter = place=class  AND  admin_id IN allowed)   → nearest eligible of that class
+2. DistanceKM(p, cand) for the hits                              → []Candidate
+3. Salience.Rank(p, candidates)  (branch-free eligibility + most-salient, §6)
 4. top-1 = reference
-   ├─ no hit in any radius → widen radii once, else fall back to Locate()
+   ├─ no eligible hit → widen radii once, else fall back to Locate()
    ├─ DistanceKM < InsideLabelKM → "in/bei {name}" (no bearing)
    └─ else: Azimuth(reference, p) → compass → label
 5. return Fix
 ```
 
-Class-stratified queries imply `SpatialIndex.QueryKNN` takes an optional
-attribute filter (e.g. `place = ?`) so each class query stays index-cheap rather
-than pulling a huge `k` of villages. Steps 1–2 live in the spatialite adapter
-(behind the port), step 3 in salience (pure), steps 4–5 in domain (pure).
+The boundary constraint is a **relational attribute filter**, not a runtime spatial
+join: step 0 resolves the allowed `admin_id` set from the `parent_id` chain + sidecar
+tier, and passes it to `QueryKNN` alongside the class predicate. Both fold into the
+one `Filter` (§5). Step 0 + 1–2 live in the spatialite adapter (behind the port),
+step 3 in salience (pure), steps 4–5 in domain (pure).
 
 ---
 
@@ -292,3 +355,14 @@ The repo's harness (see [Technical debt](technical-debt.md)) applies to the new 
    target platform ship an older SpatiaLite).
 4. **>2 GiB distribution** — versioned object-storage URL, loaded as a dedicated artifact (not via generic sync discovery). Confirm at M2. *(The real file is ~3.1 GiB, so this path is mandatory, not hypothetical.)*
 5. **SpatialIndex impl location** — *recommended: extend the existing geopackage adapter* (single cgo owner) vs a new `adapters/spatialite`; decide at M1.
+6. **Relational rebuild dependency** — the §4 contract assumes the GeoPackage carries
+   `places.admin_id` + `admin_levels.parent_id` and has dropped the four country-name
+   columns. This is an **agreed rebuild of the `osm-data` project** (spec:
+   `PLAN-places-admin-hierarchy.md` there). Until that ships, M1–M2 run against a
+   fixture; the boundary constraint (§7 step 0) is **inert without `parent_id`** —
+   the service must degrade to unconstrained class queries when the columns are
+   absent. Confirm the rebuilt artifact before M3 (Bearing endpoint).
+7. **Boundary constraint tier** — default **`state`** (per the agreed answer: anchors
+   stay within the Bundesland/first-order subdivision), resolved per-country via the
+   sidecar `equivalent`. Single `BearingPolicy.ConstraintTier` knob; revisit against
+   the gold-set if it excludes good cross-border anchors (e.g. Aschaffenburg).
