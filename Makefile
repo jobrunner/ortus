@@ -2,7 +2,7 @@
 # Alle Standardaufgaben für Entwicklung und CI/CD
 
 .PHONY: all build build-all install run clean help
-.PHONY: test test-unit test-integration test-coverage test-race test-bench load-test fuzz
+.PHONY: test test-unit test-integration test-coverage test-race test-bench load-test fuzz bench
 .PHONY: load-stack-up load-stack-down load-stack-clean load-serve load-attack
 .PHONY: lint lint-go lint-fix vet
 .PHONY: security-check vuln-check gosec
@@ -76,6 +76,13 @@ test-race: ## Tests mit Race Detector
 
 test-bench: ## Benchmarks ausführen
 	$(GO) test -bench=. -benchmem ./...
+
+# Hot-path micro-benchmarks that run anywhere (no external data, unlike the
+# env-gated load-test benchmarks). Used by the CI Bench job for PR-vs-base
+# comparison. Override BENCHCOUNT / BENCHTIME for statistical runs.
+BENCH_PKGS := ./internal/domain/ ./internal/adapters/storage/ ./internal/adapters/geopackage/ ./internal/adapters/http/
+bench: ## Hot-path Micro-Benchmarks (BENCHCOUNT/BENCHTIME überschreibbar)
+	@$(GO) test -run='^$$' -bench=. -benchmem $(if $(BENCHCOUNT),-count=$(BENCHCOUNT),) $(if $(BENCHTIME),-benchtime=$(BENCHTIME),) $(BENCH_PKGS)
 
 # Fuzz targets at the parse boundaries (untrusted input). Seeds run automatically
 # in `make test`/CI; this drives actual fuzzing. Crashers land in the package's
