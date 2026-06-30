@@ -191,6 +191,27 @@ jobs:
           govulncheck ./...
 
   # =============================================================================
+  # License compliance. Fails if a shipped (cmd/ortus) dependency carries a
+  # license outside the permissive allowlist — same spirit as gomodguard, but
+  # for licenses. First-party packages are ignored (the repo isn't classified).
+  # =============================================================================
+  licenses:
+    name: License Compliance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Check dependency licenses
+        run: |
+          go install github.com/google/go-licenses@latest
+          make licenses
+
+  # =============================================================================
   # Secret scanning. gitleaks-action@v2 scans the git history of the event's
   # commit range (the PR commits on a PR, github.event.before..after on push) —
   # so a secret added and removed within the range is still caught. Config +

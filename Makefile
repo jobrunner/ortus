@@ -5,7 +5,7 @@
 .PHONY: test test-unit test-integration test-coverage test-race test-bench load-test fuzz bench mutation
 .PHONY: load-stack-up load-stack-down load-stack-clean load-serve load-attack
 .PHONY: lint lint-go lint-fix vet
-.PHONY: security-check vuln-check gosec
+.PHONY: security-check vuln-check gosec licenses
 .PHONY: fmt format fmt-check
 .PHONY: check check-ci verify hooks arch debt debt-guard debt-coverage debt-deadcode
 .PHONY: deps deps-update deps-verify
@@ -160,6 +160,12 @@ vuln-check: ## Prüfe auf bekannte Vulnerabilities
 
 gosec: ## Security Scanner (via golangci-lint)
 	$(GOLINT) run --enable-only gosec ./...
+
+# Allowed dependency licenses (permissive only). First-party packages are
+# ignored (the repo itself isn't classified by go-licenses).
+ALLOWED_LICENSES := Apache-2.0,MIT,BSD-3-Clause,BSD-2-Clause,ISC,CC0-1.0,MPL-2.0
+licenses: ## Lizenz-Compliance der Abhängigkeiten (go install github.com/google/go-licenses@latest)
+	go-licenses check ./cmd/$(BINARY_NAME) --allowed_licenses=$(ALLOWED_LICENSES) --ignore $(MODULE)
 
 ## Format Targets
 fmt: ## Formatiere Go Code
