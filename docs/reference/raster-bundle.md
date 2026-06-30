@@ -127,9 +127,9 @@ raw GeoTIFF(s) + legend.txt (named anything, any CRS)
   → zip
 ```
 
-See [`examples/koeppen/TUTORIAL.md`](./examples/koeppen/TUTORIAL.md) for a complete,
+See [`examples/koeppen/TUTORIAL.md`](../tutorials/koeppen/index.md) for a complete,
 verified end-to-end walkthrough — building the Köppen-Geiger 1 km bundle from the
-published source and serving it from ortus — plus [`build.sh`](./examples/koeppen/build.sh)
+published source and serving it from ortus — plus [`build.sh`](../tutorials/koeppen/build.sh)
 as the one-shot pipeline.
 
 ## What COG does and does not give you
@@ -141,6 +141,6 @@ what value `7` means, how many files a dataset has, or licensing. That is exactl
 bundle manifest adds on top.
 
 **Compression: use `LZW`.** Bundle COGs must be written with `COMPRESS=LZW` (or none).
-The Go reader ortus uses (`tingold/gocog`, see [ADR-0013](../adr/0013-cog-reader-library.md))
+The Go reader ortus uses (`tingold/gocog`, see [ADR-0013](../explanation/decisions/0013-cog-reader-library.md))
 reads LZW/uncompressed tiles correctly but currently fails on GDAL's `DEFLATE` tiles. LZW
 stays lossless and compressed.

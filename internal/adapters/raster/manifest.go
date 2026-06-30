@@ -1,6 +1,6 @@
 // Package raster implements the output.SpatialSource port for raster bundles:
 // a ZIP containing a manifest (ortus-raster.yaml), one or more Cloud Optimized
-// GeoTIFFs, and an integer-value -> attribute mapping. See doc/raster-bundle/.
+// GeoTIFFs, and an integer-value -> attribute mapping. See docs/reference/raster-bundle.md.
 package raster
 
 import (

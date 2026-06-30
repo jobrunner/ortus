@@ -4,7 +4,7 @@
 > *geplante* Architektur vor der Umsetzung. Einzelne Code-Snippets und Bezeichner
 > (z. B. `domain.GeoPackage`, `GeoPackagePort`, Datei `ports/input/geopackage.go`)
 > spiegeln den frühen Entwurf wider und weichen vom umgesetzten Stand ab. Maßgeblich
-> für den aktuellen Stand sind der Code, die ADRs (insb. [ADR-0012](adr/0012-source-vocabulary-migration.md):
+> für den aktuellen Stand sind der Code, die ADRs (insb. [ADR-0012](decisions/0012-source-vocabulary-migration.md):
 > `Package`→`Source`) und die OpenAPI-Spezifikation. Die REST-Routen/JSON-Felder oben
 > wurden auf die `source`-Sprache aktualisiert; die tiefer liegenden Schnittstellen-
 > Snippets sind bewusst als Zeitdokument belassen.

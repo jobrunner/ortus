@@ -64,7 +64,7 @@ authenticated REST API.
 ### Diagnostic tools
 
 These read from the in-memory tracing ring buffer (see
-[doc/TRACING.md](TRACING.md)) plus the health service. They give an AI
+[Observability](observability.md)) plus the health service. They give an AI
 agent the data it needs to debug ortus from inside a conversation.
 
 | Tool | What it returns |

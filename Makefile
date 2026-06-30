@@ -9,7 +9,7 @@
 .PHONY: fmt format fmt-check
 .PHONY: check check-ci verify hooks arch debt debt-guard debt-coverage debt-deadcode
 .PHONY: deps deps-update deps-verify
-.PHONY: doc doc-serve
+.PHONY: doc doc-serve docs docs-serve
 .PHONY: release release-dry
 .PHONY: ci-local ci-lint ci-test ci-build ci-dry ci-amd64 ci-check
 
@@ -260,6 +260,15 @@ doc: ## Generiere Dokumentation
 doc-serve: ## Starte lokalen Dokumentationsserver
 	@echo "Dokumentation unter http://localhost:6060/pkg/$(MODULE)/"
 	godoc -http=:6060
+
+# Diátaxis docs site (MkDocs Material). Python is kept out of the Go dev env via
+# uvx (install `uv` from https://docs.astral.sh/uv/). `--strict` fails on broken
+# links / nav so `make docs` doubles as the docs check.
+MKDOCS := uvx --with mkdocs-material mkdocs
+docs: ## Doku strict bauen (MkDocs Material via uvx) — failt bei kaputten Links/Nav
+	$(MKDOCS) build --strict
+docs-serve: ## Doku lokal mit Live-Reload servieren (http://localhost:8000)
+	$(MKDOCS) serve
 
 ## Release
 release-dry: ## Teste Release (dry-run)

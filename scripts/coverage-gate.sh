@@ -5,7 +5,7 @@
 # Computes per-package statement coverage from a Go coverprofile and fails if
 # any package listed in .coverage-floors is below its floor. Packages not
 # listed are exempt (composition root, cmd, thin SDK wrappers — see
-# doc/tech-debt.md). The floors are a RATCHET: they may only ever be raised.
+# docs/explanation/technical-debt.md). The floors are a RATCHET: they may only ever be raised.
 #
 # Usage: scripts/coverage-gate.sh [coverprofile]   (default: coverage.out)
 set -euo pipefail

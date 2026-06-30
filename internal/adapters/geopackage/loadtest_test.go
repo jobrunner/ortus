@@ -18,7 +18,7 @@ import (
 // at a GeoPackage on disk. The file is intentionally NOT part of the repo —
 // supply your own large .gpkg (big enough to stress the system) to measure
 // query throughput and the effect of the query.sqlite.* tuning knobs under
-// concurrency. See doc/load-test.md and `make load-test`.
+// concurrency. See docs/how-to/run-a-load-test.md and `make load-test`.
 //
 // Example:
 //

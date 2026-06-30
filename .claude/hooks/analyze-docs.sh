@@ -60,18 +60,18 @@ if [[ "$FILENAME" == "config.go" ]] || [[ "$FILENAME" =~ config.*\.go$ ]]; then
     add_suggestion "Config structure changed - update config.yaml.example and environment variable documentation"
     add_doc "config.yaml.example"
     add_doc "README.md (Configuration section)"
-    add_doc "doc/adr/0007-configuration-management.md"
+    add_doc "docs/explanation/decisions/0007-configuration-management.md"
 fi
 
 if [[ "$FILENAME" == "Makefile" ]]; then
     add_suggestion "Makefile changed - verify make targets in documentation"
-    add_doc "doc/DEVELOPMENT.md (Make targets)"
+    add_doc "docs/how-to/development-setup.md (Make targets)"
     add_doc "README.md (Installation section)"
 fi
 
 if [[ "$FILENAME" == "flake.nix" ]]; then
     add_suggestion "Nix flake changed - update development setup instructions"
-    add_doc "doc/DEVELOPMENT.md (Nix setup)"
+    add_doc "docs/how-to/development-setup.md (Nix setup)"
 fi
 
 if [[ "$FILENAME" == "Dockerfile" ]] || [[ "$FILENAME" == "docker-compose.yaml" ]]; then
@@ -81,7 +81,7 @@ fi
 
 if [[ "$FILENAME" == ".goreleaser.yml" ]]; then
     add_suggestion "Release configuration changed - verify release documentation"
-    add_doc "doc/DEVELOPMENT.md (Release process)"
+    add_doc "docs/how-to/development-setup.md (Release process)"
 fi
 
 # === Main Application ===
@@ -100,7 +100,7 @@ fi
 
 if [[ "$FILE_PATH" =~ adapters/http/server\.go$ ]]; then
     add_suggestion "HTTP server changed - check middleware and routing documentation"
-    add_doc "doc/ARCHITECTURE.md"
+    add_doc "docs/explanation/architecture.md"
 fi
 
 if [[ "$FILE_PATH" =~ adapters/http/cors\.go$ ]]; then
@@ -112,7 +112,7 @@ fi
 # === Domain Layer ===
 if [[ "$DIRNAME" =~ internal/domain ]]; then
     add_suggestion "Domain model changed - review architecture documentation for consistency"
-    add_doc "doc/ARCHITECTURE.md (Domain section)"
+    add_doc "docs/explanation/architecture.md (Domain section)"
 fi
 
 # === Storage Adapters ===
@@ -126,20 +126,20 @@ fi
 if [[ "$FILE_PATH" =~ certmagic|tls ]]; then
     add_suggestion "TLS/security code changed - update TLS configuration documentation"
     add_doc "README.md (TLS section)"
-    add_doc "doc/adr/0008-tls-certmagic.md"
+    add_doc "docs/explanation/decisions/0008-tls-certmagic.md"
 fi
 
 # === Ports/Interfaces ===
 if [[ "$DIRNAME" =~ internal/ports ]]; then
     add_suggestion "Port interface changed - this may affect architecture documentation"
-    add_doc "doc/ARCHITECTURE.md (Ports section)"
+    add_doc "docs/explanation/architecture.md (Ports section)"
 fi
 
 # === New Go files (potential new features) ===
 if [[ "$TOOL_NAME" == "Write" ]] && [[ "$FILE_PATH" =~ \.go$ ]]; then
     if [[ "$DIRNAME" =~ internal/(adapters|application|domain|ports) ]]; then
         add_suggestion "New Go file created - consider if architecture documentation needs updating"
-        add_doc "doc/ARCHITECTURE.md"
+        add_doc "docs/explanation/architecture.md"
     fi
 fi
 

@@ -1,0 +1,85 @@
+site_name: ortus
+site_description: Point queries on GeoPackage and raster sources, via SpatiaLite.
+repo_url: https://github.com/jobrunner/ortus
+repo_name: jobrunner/ortus
+docs_dir: docs
+edit_uri: edit/master/docs/
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - content.action.edit
+  palette:
+    - scheme: default
+      toggle: { icon: material/weather-night, name: Switch to dark mode }
+    - scheme: slate
+      toggle: { icon: material/weather-sunny, name: Switch to light mode }
+
+# Fail the build on broken internal links, missing nav entries, bad anchors, or
+# unresolved/absolute links — under `--strict` these warnings become errors,
+# which is what makes the docs gate real. (Keys must sit under nav/links.)
+validation:
+  nav:
+    omitted_files: warn
+    not_found: warn
+  links:
+    not_found: warn
+    anchors: warn
+    absolute_links: warn
+    unrecognized_links: warn
+
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.superfences
+
+nav:
+  - Home: index.md
+  - Tutorials:
+      - tutorials/index.md
+      - Getting started: tutorials/getting-started.md
+      - Köppen-Geiger raster bundle: tutorials/koeppen/index.md
+  - How-to guides:
+      - how-to/index.md
+      - Development setup: how-to/development-setup.md
+      - Run with Docker: how-to/run-with-docker.md
+      - Load from object storage: how-to/configure-storage.md
+      - Sync from remote storage: how-to/sync-remote-storage.md
+      - Enable TLS / HTTPS: how-to/enable-tls.md
+      - Configure rate limiting: how-to/configure-rate-limiting.md
+      - Run a load test: how-to/run-a-load-test.md
+  - Reference:
+      - reference/index.md
+      - Configuration: reference/configuration.md
+      - HTTP API: reference/http-api.md
+      - MCP tools: reference/mcp.md
+      - Observability: reference/observability.md
+      - Raster bundles: reference/raster-bundle.md
+  - Explanation:
+      - explanation/index.md
+      - Architecture: explanation/architecture.md
+      - Architecture plan: explanation/architecture-plan.md
+      - Raster sources: explanation/raster-sources.md
+      - Technical debt: explanation/technical-debt.md
+      - Production-readiness review: explanation/production-readiness-review.md
+      - Decisions (ADRs):
+          - explanation/decisions/index.md
+          - ADR-0001 Project layout: explanation/decisions/0001-standard-go-project-layout.md
+          - ADR-0002 Hexagonal elements: explanation/decisions/0002-hexagonal-architecture-elements.md
+          - ADR-0003 Vincenty default: explanation/decisions/0003-vincenty-as-default-algorithm.md
+          - ADR-0004 Codec system: explanation/decisions/0004-interface-based-codec-system.md
+          - ADR-0005 GeoPackage architecture: explanation/decisions/0005-geopackage-based-architecture.md
+          - ADR-0006 Object storage: explanation/decisions/0006-object-storage-integration.md
+          - ADR-0007 Configuration: explanation/decisions/0007-configuration-management.md
+          - ADR-0008 TLS / CertMagic: explanation/decisions/0008-tls-certmagic.md
+          - ADR-0009 Hot-reload: explanation/decisions/0009-hot-reload-file-watching.md
+          - ADR-0010 HTTP router: explanation/decisions/0010-http-router-gorilla-mux.md
+          - ADR-0011 Remote storage sync: explanation/decisions/0011-remote-storage-sync.md
+          - ADR-0012 Source vocabulary: explanation/decisions/0012-source-vocabulary-migration.md
+          - ADR-0013 COG reader: explanation/decisions/0013-cog-reader-library.md

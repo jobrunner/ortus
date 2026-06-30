@@ -98,7 +98,7 @@ baseline, and write those values into `query.sqlite.*`.
 The microbenchmark above isolates the SQLite read path. To load-test the **full
 stack** — HTTP routing, query service, coordinate transform, repository — and
 watch **metrics, traces and logs together in one Grafana**, use the local
-observability stack under [`deploy/loadtest/`](../deploy/loadtest/). It runs the
+observability stack under [`deploy/loadtest/`](https://github.com/jobrunner/ortus/tree/master/deploy/loadtest). It runs the
 backends in Docker while **ortus itself runs natively** (real arm64, native CGO
 SpatiaLite, no container memory cap, no x86 emulation), and drives load with
 [Vegeta](https://github.com/tsenart/vegeta).

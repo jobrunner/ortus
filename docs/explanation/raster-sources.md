@@ -10,7 +10,7 @@ This plan is grounded in the current code (file:line references are to `master`)
 
 1. **Domain model:** rename `domain.GeoPackage` → `domain.Source` with a `Kind` (§2.2).
 2. **COG library:** spike done → **`tingold/gocog`** adopted; bundle COGs must use
-   **`COMPRESS=LZW`** (gocog's DEFLATE decoder is broken). See [ADR-0013](../adr/0013-cog-reader-library.md).
+   **`COMPRESS=LZW`** (gocog's DEFLATE decoder is broken). See [ADR-0013](decisions/0013-cog-reader-library.md).
 3. **Runtime validation:** embed the JSON Schema (`go:embed`) and validate (§3.1, §5.3).
 4. **Sequencing:** start with the behavior-preserving refactor PR (§7 step 2); the COG
    spike runs independently.
@@ -149,7 +149,7 @@ raster for free.
 - `Open(path)`:
   1. Open the ZIP; locate `ortus-raster.yaml` at root.
   2. Parse YAML → generic map → **validate against the embedded JSON Schema**
-     (`go:embed doc/raster-bundle/ortus-raster.schema.json`, validated with
+     (`go:embed docs/reference/ortus-raster.schema.json`, validated with
      `santhosh-tekuri/jsonschema`). Single source of truth shared with the pipeline.
   3. Enforce ingest invariants beyond the schema: filename stem == manifest `id`;
      unique layer ids; every referenced COG exists, opens, is in `crs`, has `band`;
@@ -171,7 +171,7 @@ pure-Go keeps the raster path isolated): `github.com/gden173/geotiff`,
 `github.com/tingold/gocog`, `github.com/google/tiff`. Acceptance criteria for the spike:
 random single-pixel/tile read without loading the whole image, `uint8`+`int16`+`float32`
 bands, internal-tiling aware, maintained. **Task:** 1–2 day spike benchmarking these
-against a real Köppen COG; pick one, record the decision in `doc/adr/`.
+against a real Köppen COG; pick one, record the decision in `docs/explanation/decisions/`.
 
 ### 3.3 CRS / reprojection
 

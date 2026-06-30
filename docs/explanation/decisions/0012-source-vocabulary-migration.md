@@ -9,7 +9,7 @@ Akzeptiert — vollständig umgesetzt (Stufe A+B in #49, Stufe C in #50).
 Mit der Generalisierung des Domänenmodells (`domain.GeoPackage` → `domain.Source`
 mit `Kind` vector|raster) und dem neuen `SpatialSource`-Port kann ortus künftig
 nicht nur GeoPackages, sondern auch Raster-Bundles als Datenquellen einbinden
-(siehe [Raster Bundle Spec](../raster-bundle/README.md)).
+(siehe [Raster Bundle Spec](../../reference/raster-bundle.md)).
 
 Das Domänenmodell ist umbenannt, **die übrige Codebasis spricht aber weiterhin
 GeoPackage-zentrisch von „Package"**:

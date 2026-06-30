@@ -211,7 +211,7 @@ func TestHealthTool(t *testing.T) {
 }
 
 // TestListSourcesTool round-trips list_sources and asserts the
-// response shape matches what doc/MCP.md promises.
+// response shape matches what docs/reference/mcp.md promises.
 func TestListSourcesTool(t *testing.T) {
 	session := connectClient(t, startTestServer(t, ""))
 	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "list_sources"})

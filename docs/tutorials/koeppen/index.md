@@ -10,7 +10,7 @@ results at the end are the actual responses.
 > **Scope note.** ortus only *consumes* bundles — it is not a bundle factory.
 > Building bundles belongs in a per-dataset pipeline (this folder is the
 > reference). Do **not** commit downloaded source data or built artifacts into
-> the ortus repo; keep them in a scratch dir (see [.gitignore](.gitignore)).
+> the ortus repo; keep them in a scratch dir (see `.gitignore`).
 
 ## Prerequisites
 
@@ -83,7 +83,7 @@ gdal_translate -of COG \
 Why these flags:
 
 - **`-co COMPRESS=LZW`** — **mandatory.** ortus's COG reader (`tingold/gocog`,
-  [ADR-0013](../../../adr/0013-cog-reader-library.md)) reads LZW and uncompressed
+  [ADR-0013](../../explanation/decisions/0013-cog-reader-library.md)) reads LZW and uncompressed
   tiles correctly but **fails on GDAL's DEFLATE tiles**. LZW stays lossless and
   compressed (here 14 MB).
 - **`-a_srs EPSG:4326`** — stamps the explicit EPSG code the source lacked. For a

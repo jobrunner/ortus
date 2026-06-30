@@ -7,15 +7,15 @@ import (
 )
 
 // TestEmbeddedSchemaMatchesCanonical guards against drift between the schema
-// embedded in this package and the canonical one under doc/raster-bundle/ that
+// embedded in this package and the canonical one under docs/reference/ that
 // the build pipeline validates against.
 func TestEmbeddedSchemaMatchesCanonical(t *testing.T) {
-	canonical, err := os.ReadFile("../../../doc/raster-bundle/ortus-raster.schema.json")
+	canonical, err := os.ReadFile("../../../docs/reference/ortus-raster.schema.json")
 	if err != nil {
 		t.Fatalf("read canonical schema: %v", err)
 	}
 	if !bytes.Equal(bytes.TrimSpace(canonical), bytes.TrimSpace(schemaJSON)) {
-		t.Error("embedded schema differs from doc/raster-bundle/ortus-raster.schema.json — copy the canonical schema into the package")
+		t.Error("embedded schema differs from docs/reference/ortus-raster.schema.json — copy the canonical schema into the package")
 	}
 }
 
