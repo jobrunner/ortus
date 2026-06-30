@@ -286,8 +286,10 @@ jobs:
 
             ## Supply chain
 
-            Images are signed (cosign keyless) and carry an SLSA provenance and
-            SPDX SBOM attestation.
+            Both images (Alpine and `-ubuntu`) are signed (cosign keyless) and
+            carry SLSA provenance + SPDX SBOM attestations. The commands below
+            use the default Alpine tag; substitute the `-ubuntu` tag to verify
+            that image the same way.
 
             ```bash
             IMG=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.version.outputs.version }}
