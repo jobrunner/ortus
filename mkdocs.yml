@@ -18,15 +18,18 @@ theme:
     - scheme: slate
       toggle: { icon: material/weather-sunny, name: Switch to light mode }
 
-# Fail the build on broken internal links, missing nav entries, or absolute
-# links that can't be resolved — this is what makes `mkdocs build --strict` a
-# real docs gate.
+# Fail the build on broken internal links, missing nav entries, bad anchors, or
+# unresolved/absolute links — under `--strict` these warnings become errors,
+# which is what makes the docs gate real. (Keys must sit under nav/links.)
 validation:
-  omitted_files: warn
-  absolute_links: warn
-  unrecognized_links: warn
   nav:
     omitted_files: warn
+    not_found: warn
+  links:
+    not_found: warn
+    anchors: warn
+    absolute_links: warn
+    unrecognized_links: warn
 
 markdown_extensions:
   - admonition
