@@ -42,13 +42,13 @@ fix the current quality level in place so it can only improve:
 | --------------------- | ---- | --- |
 | add an unjustified `//nolint` | `nolintlint` | name the linter + give a reason |
 | add a `#nosec`/`//nolint` beyond the budget | suppression budget (`.debt-budget`) | remove one, or justify a bump in the PR |
-| leave a `// TODO`/`FIXME`/`HACK` | debt-marker check | track it in `doc/tech-debt.md` instead |
+| leave a `// TODO`/`FIXME`/`HACK`/`XXX` | debt-marker check | track it in `doc/tech-debt.md` instead |
 | import across hexagonal layers | depguard (`make arch`) | respect domain→ports→adapters boundaries |
 | drop a package below its coverage floor | coverage ratchet (`.coverage-floors`) | add tests (floors raise-only) |
 | leak a goroutine in tests | `goleak` | `t.Cleanup` / close what you start |
 | commit a secret | `gitleaks` | don't; allowlist genuine placeholders in `.gitleaks.toml` |
 | add a non-permissive dependency | `go-licenses` (`make licenses`) | swap it, or extend the allowlist if acceptable |
-| drift `config.yaml.example` from the struct | config-drift test | remove the stale key or wire it in |
+| drift `config.yaml.example` from the struct | config-example drift test (`TestConfigExampleNoDrift`) | remove the stale key or wire it in |
 | hardcode a source extension in a storage backend | storage-filter guard | use `domain.IsSupportedSourceFile` |
 
 The ratchet runs at three escalating points: the Claude edit-hook (advisory),
