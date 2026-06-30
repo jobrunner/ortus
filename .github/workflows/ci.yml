@@ -148,7 +148,10 @@ jobs:
       - name: Install SpatiaLite
         run: |
           sudo apt-get update && sudo apt-get install -y libsqlite3-mod-spatialite
-          echo "SPATIALITE_LIBRARY_PATH=$(dpkg -L libsqlite3-mod-spatialite | grep -m1 'mod_spatialite\.so')" >> "$GITHUB_ENV"
+          lib=$(dpkg -L libsqlite3-mod-spatialite | grep -m1 'mod_spatialite\.so')
+          if [ -z "$lib" ]; then echo "mod_spatialite.so not found after install" >&2; exit 1; fi
+          echo "Found SpatiaLite at: $lib"
+          echo "SPATIALITE_LIBRARY_PATH=$lib" >> "$GITHUB_ENV"
 
       - name: Benchmarks (this branch)
         run: make bench BENCHCOUNT=6 | tee new.txt
