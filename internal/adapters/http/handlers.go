@@ -42,7 +42,18 @@ func (s *Server) handleQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.writeJSON(w, http.StatusOK, s.formatQueryResponse(response))
+	out := s.formatQueryResponse(response)
+	// Opt-in gazetteer enrichment (with-gazetteer=1, default off). Best-effort:
+	// a gazetteer failure is logged and omitted so it never breaks the core
+	// query result. Assumes WGS84 input — the gazetteer dataset is EPSG:4326.
+	if s.gazetteer != nil && isTruthy(r.URL.Query().Get("with-gazetteer")) {
+		if g, gerr := s.gazetteerSections(r.Context(), req.Coordinate); gerr != nil {
+			s.logger.Warn("gazetteer enrichment failed", "error", gerr)
+		} else {
+			out["gazetteer"] = g
+		}
+	}
+	s.writeJSON(w, http.StatusOK, out)
 }
 
 // handleQuerySource handles point queries for a specific source.

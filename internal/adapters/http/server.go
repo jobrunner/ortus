@@ -28,6 +28,7 @@ type Server struct {
 	registry       input.SourceRegistry
 	health         input.HealthChecker
 	syncService    input.Syncer
+	gazetteer      input.Gazetteer // nil ⇒ gazetteer feature disabled (no route, no /query enrichment)
 	logger         *slog.Logger
 	config         config.ServerConfig
 	withGeometry   bool                 // Include geometry in query results
@@ -45,6 +46,7 @@ type ServerOptions struct {
 	TracerProvider trace.TracerProvider
 	MeterProvider  metric.MeterProvider
 	ServiceName    string
+	Gazetteer      input.Gazetteer // optional; enables the /gazetteer route and the with-gazetteer flag
 }
 
 // NewServer creates a new HTTP server.
@@ -73,6 +75,7 @@ func NewServer(
 		registry:       registry,
 		health:         health,
 		syncService:    syncService,
+		gazetteer:      opts.Gazetteer,
 		logger:         logger,
 		config:         cfg,
 		withGeometry:   withGeometry,
@@ -177,6 +180,11 @@ func (s *Server) setupRoutes() *mux.Router {
 	// Query endpoints
 	api.HandleFunc("/query", s.handleQuery).Methods(http.MethodGet)
 	api.HandleFunc("/query/{sourceId}", s.handleQuerySource).Methods(http.MethodGet)
+
+	// Gazetteer endpoint (reverse geocode + bearing) — only when the feature is wired.
+	if s.gazetteer != nil {
+		api.HandleFunc("/gazetteer", s.handleGazetteer).Methods(http.MethodGet)
+	}
 
 	// Source management endpoints
 	api.HandleFunc("/sources", s.handleListSources).Methods(http.MethodGet)
