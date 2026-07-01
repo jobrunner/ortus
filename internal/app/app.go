@@ -342,11 +342,18 @@ func (a *App) MCPDeps() mcp.Deps {
 	if version == "" {
 		version = "dev"
 	}
+	// Typed-nil guard: keep the interface nil when the gazetteer is disabled so
+	// the tool is not registered.
+	var gaz input.Gazetteer
+	if a.Gazetteer != nil {
+		gaz = a.Gazetteer
+	}
 	return mcp.Deps{
 		Telemetry:     tq,
 		QueryService:  a.QueryService,
 		Registry:      a.Registry,
 		HealthService: a.HealthService,
+		Gazetteer:     gaz,
 		Version:       version,
 		Tracer:        a.Tracer,
 	}
