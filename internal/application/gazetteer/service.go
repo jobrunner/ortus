@@ -58,22 +58,27 @@ type noopLevelResolver struct{}
 
 func (noopLevelResolver) Resolve(string, int) (string, bool) { return "", false }
 
-// Service is the GazetteerService. M2 implements Locate; Bearing lands in M3.
+// Service is the GazetteerService: reverse geocoding (Locate) and bearing.
 type Service struct {
 	index    output.SpatialIndex
 	manifest Manifest
 	levels   LevelResolver
+	salience SalienceStrategy
 	enabled  bool
 }
 
 // NewService creates a gazetteer service. It is inert unless enabled is true and
 // a spatial index is supplied; an inert service returns ErrDisabled from its
-// query methods. A nil LevelResolver leaves admin levels unenriched.
-func NewService(index output.SpatialIndex, manifest Manifest, levels LevelResolver, enabled bool) *Service {
+// query methods. A nil LevelResolver leaves admin levels unenriched; a nil
+// Strategy uses the rank-based default.
+func NewService(index output.SpatialIndex, manifest Manifest, levels LevelResolver, strategy SalienceStrategy, enabled bool) *Service {
 	if levels == nil {
 		levels = noopLevelResolver{}
 	}
-	return &Service{index: index, manifest: manifest, levels: levels, enabled: enabled}
+	if strategy == nil {
+		strategy = RankedSalience{}
+	}
+	return &Service{index: index, manifest: manifest, levels: levels, salience: strategy, enabled: enabled}
 }
 
 // Locate reverse-geocodes a coordinate to its administrative hierarchy. It uses a
@@ -118,14 +123,6 @@ func (s *Service) Locate(ctx context.Context, p domain.Coordinate) (*domain.Loca
 	sort.SliceStable(chain, func(i, j int) bool { return chain[i].Level > chain[j].Level })
 
 	return &domain.Locality{CountryISO: countryISO, Chain: chain}, nil
-}
-
-// Bearing returns the most salient nearby place as a bearing fix. Implemented in M3.
-func (s *Service) Bearing(_ context.Context, _ domain.Coordinate, _ domain.BearingPolicy) (*domain.Fix, error) {
-	if err := s.ready(); err != nil {
-		return nil, err
-	}
-	return nil, fmt.Errorf("gazetteer Bearing: %w", domain.ErrUnsupported)
 }
 
 // ready reports whether the service has been enabled and wired with a spatial

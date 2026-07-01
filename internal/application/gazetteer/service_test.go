@@ -3,30 +3,55 @@ package gazetteer
 import (
 	"context"
 	"errors"
+	"math"
 	"testing"
 
 	"github.com/jobrunner/ortus/internal/domain"
 	"github.com/jobrunner/ortus/internal/ports/output"
 )
 
-// fakeIndex is a configurable SpatialIndex for service tests: PointInPolygon
-// returns canned features; the other methods are inert (M3 exercises them).
+// fakeIndex is a configurable SpatialIndex for service tests: PointInPolygon and
+// QueryKNN return canned features (KNN keyed by the place-class filter value),
+// ResolveChain returns a canned chain per starting fid, and Distance/Azimuth are
+// computed with an equirectangular approximation so they track the fed coords.
 type fakeIndex struct {
 	pip    []domain.Feature
 	pipErr error
+	knn    map[string][]domain.Feature
+	knnErr error
+	chains map[int64][]output.AdminRow
 }
 
-func (f fakeIndex) QueryKNN(context.Context, string, domain.Coordinate, int, float64, *output.Filter) ([]domain.Feature, error) {
-	return nil, nil
+func (f fakeIndex) QueryKNN(_ context.Context, _ string, _ domain.Coordinate, _ int, _ float64, filter *output.Filter) ([]domain.Feature, error) {
+	if f.knnErr != nil {
+		return nil, f.knnErr
+	}
+	if filter == nil || len(filter.Values) == 0 {
+		return nil, nil
+	}
+	key, _ := filter.Values[0].(string)
+	return f.knn[key], nil
 }
 func (f fakeIndex) PointInPolygon(context.Context, string, domain.Coordinate) ([]domain.Feature, error) {
 	return f.pip, f.pipErr
 }
-func (f fakeIndex) ResolveChain(context.Context, string, int64) ([]output.AdminRow, error) {
-	return nil, nil
+func (f fakeIndex) ResolveChain(_ context.Context, _ string, fromFID int64) ([]output.AdminRow, error) {
+	return f.chains[fromFID], nil
 }
-func (f fakeIndex) DistanceKM(domain.Coordinate, domain.Coordinate) (float64, error) { return 0, nil }
-func (f fakeIndex) Azimuth(domain.Coordinate, domain.Coordinate) (float64, error)    { return 0, nil }
+func (f fakeIndex) DistanceKM(a, b domain.Coordinate) (float64, error) {
+	dx := (b.X - a.X) * 111.32 * math.Cos(a.Y*math.Pi/180)
+	dy := (b.Y - a.Y) * 111.32
+	return math.Hypot(dx, dy), nil
+}
+func (f fakeIndex) Azimuth(from, to domain.Coordinate) (float64, error) {
+	dx := (to.X - from.X) * math.Cos(from.Y*math.Pi/180)
+	dy := to.Y - from.Y
+	deg := math.Atan2(dx, dy) * 180 / math.Pi
+	if deg < 0 {
+		deg += 360
+	}
+	return deg, nil
+}
 
 // testManifest matches the fixture/real column names.
 func testManifest() Manifest {
@@ -56,29 +81,21 @@ func TestServiceInert(t *testing.T) {
 	ctx := context.Background()
 	p := domain.NewWGS84Coordinate(9.93, 49.79)
 
-	cases := []struct {
-		name    string
-		svc     *Service
-		wantErr error
-	}{
-		{"disabled", NewService(fakeIndex{}, testManifest(), nil, false), ErrDisabled},
-		{"enabled without index", NewService(nil, testManifest(), nil, true), ErrDisabled},
-		{"enabled with index", NewService(fakeIndex{}, testManifest(), nil, true), domain.ErrUnsupported},
+	// A service that is disabled, or enabled but not wired with an index, is inert:
+	// both query methods return ErrDisabled without touching any dependency.
+	cases := map[string]*Service{
+		"disabled":              NewService(fakeIndex{}, testManifest(), nil, nil, false),
+		"enabled without index": NewService(nil, testManifest(), nil, nil, true),
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			// Bearing is not implemented until M3.
-			if _, err := tc.svc.Bearing(ctx, p, domain.DefaultBearingPolicy()); !errors.Is(err, tc.wantErr) {
-				t.Errorf("Bearing err = %v, want %v", err, tc.wantErr)
+	for name, svc := range cases {
+		t.Run(name, func(t *testing.T) {
+			if _, err := svc.Locate(ctx, p); !errors.Is(err, ErrDisabled) {
+				t.Errorf("Locate err = %v, want ErrDisabled", err)
+			}
+			if _, err := svc.Bearing(ctx, p, domain.DefaultBearingPolicy()); !errors.Is(err, ErrDisabled) {
+				t.Errorf("Bearing err = %v, want ErrDisabled", err)
 			}
 		})
-	}
-}
-
-func TestLocateDisabled(t *testing.T) {
-	svc := NewService(fakeIndex{}, testManifest(), nil, false)
-	if _, err := svc.Locate(context.Background(), domain.NewWGS84Coordinate(10, 50)); !errors.Is(err, ErrDisabled) {
-		t.Errorf("Locate on disabled = %v, want ErrDisabled", err)
 	}
 }
 
@@ -96,7 +113,7 @@ func TestLocateBuildsEnrichedChain(t *testing.T) {
 		[2]any{"DE", 4}: "state",
 		[2]any{"DE", 8}: "municipality",
 	}
-	svc := NewService(idx, testManifest(), resolver, true)
+	svc := NewService(idx, testManifest(), resolver, nil, true)
 
 	loc, err := svc.Locate(context.Background(), domain.NewWGS84Coordinate(9.93, 49.79))
 	if err != nil {
@@ -121,7 +138,7 @@ func TestLocateBuildsEnrichedChain(t *testing.T) {
 }
 
 func TestLocateNoCoverage(t *testing.T) {
-	svc := NewService(fakeIndex{pip: nil}, testManifest(), nil, true)
+	svc := NewService(fakeIndex{pip: nil}, testManifest(), nil, nil, true)
 	if _, err := svc.Locate(context.Background(), domain.NewWGS84Coordinate(0, 0)); !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("Locate with no coverage = %v, want ErrNotFound", err)
 	}
@@ -129,7 +146,7 @@ func TestLocateNoCoverage(t *testing.T) {
 
 func TestLocatePropagatesIndexError(t *testing.T) {
 	sentinel := errors.New("db down")
-	svc := NewService(fakeIndex{pipErr: sentinel}, testManifest(), nil, true)
+	svc := NewService(fakeIndex{pipErr: sentinel}, testManifest(), nil, nil, true)
 	if _, err := svc.Locate(context.Background(), domain.NewWGS84Coordinate(10, 50)); !errors.Is(err, sentinel) {
 		t.Errorf("Locate err = %v, want wrapped sentinel", err)
 	}
@@ -137,7 +154,7 @@ func TestLocatePropagatesIndexError(t *testing.T) {
 
 func TestLocateWithoutResolverLeavesEquivalentEmpty(t *testing.T) {
 	idx := fakeIndex{pip: []domain.Feature{adminFeature("8", "Würzburg")}}
-	svc := NewService(idx, testManifest(), nil, true) // nil resolver → noop
+	svc := NewService(idx, testManifest(), nil, nil, true) // nil resolver → noop
 	loc, err := svc.Locate(context.Background(), domain.NewWGS84Coordinate(9.93, 49.79))
 	if err != nil {
 		t.Fatalf("Locate: %v", err)
