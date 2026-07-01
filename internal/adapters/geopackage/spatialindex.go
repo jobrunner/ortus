@@ -78,6 +78,25 @@ func (g *GazetteerIndex) Close() error {
 	return g.db.Close()
 }
 
+// VerifySRID checks that ellipsoidal Distance(g1,g2,1) resolves the SRID 4326
+// ellipsoid. Without spatial_ref_sys / gpkg_spatial_ref_sys it returns NULL,
+// which would make the KNN radius silently drop every row (bearings return
+// nothing). Returns an error describing the problem so startup can warn loudly.
+func (g *GazetteerIndex) VerifySRID(ctx context.Context) error {
+	var d sql.NullFloat64
+	err := g.db.QueryRowContext(ctx,
+		"SELECT Distance(MakePoint(0, 0, 4326), MakePoint(0, 1, 4326), 1)").Scan(&d)
+	if err != nil {
+		return fmt.Errorf("gazetteer SRID probe: %w", err)
+	}
+	if !d.Valid || d.Float64 <= 0 {
+		return fmt.Errorf("gazetteer: ellipsoidal Distance returned NULL — SRID 4326 " +
+			"not resolvable (spatial_ref_sys/gpkg_spatial_ref_sys missing); the KNN radius " +
+			"would drop all rows and bearings would return nothing")
+	}
+	return nil
+}
+
 // QueryKNN returns up to k nearest features of a layer within maxKM of p, ordered
 // by ellipsoidal distance, optionally restricted by an attribute filter. The
 // R-tree provides a bounding-box pre-filter when present; the exact geodesic

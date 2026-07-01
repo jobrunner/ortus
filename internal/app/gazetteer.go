@@ -53,6 +53,13 @@ func (a *App) buildGazetteer(ctx context.Context) error {
 		return fmt.Errorf("opening gazetteer GeoPackage: %w", err)
 	}
 
+	// Probe the SRID metadata: if ellipsoidal Distance can't resolve EPSG:4326,
+	// the KNN radius silently drops every row. Warn loudly but don't fail — Locate
+	// (point-in-polygon) still works without it.
+	if err := idx.VerifySRID(ctx); err != nil {
+		a.Logger.Warn("gazetteer SRID check failed — bearings may return nothing", "error", err)
+	}
+
 	a.Gazetteer = gazetteer.NewService(idx, manifest, levels, nil, true)
 	a.gazetteerClose = idx.Close
 	a.Logger.Info("gazetteer enabled",

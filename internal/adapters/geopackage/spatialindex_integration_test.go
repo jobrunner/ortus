@@ -276,6 +276,15 @@ func TestGazetteerIndex_FallbackScanNoRtree(t *testing.T) {
 	}
 }
 
+func TestGazetteerIndex_VerifySRID(t *testing.T) {
+	// The fixture initializes SpatiaLite metadata, so SRID 4326 resolves and
+	// ellipsoidal Distance returns a real value.
+	idx := openFixtureIndex(t, true)
+	if err := idx.VerifySRID(context.Background()); err != nil {
+		t.Errorf("VerifySRID on metadata-initialized fixture: %v", err)
+	}
+}
+
 func TestGazetteerIndex_UnknownLayer(t *testing.T) {
 	idx := openFixtureIndex(t, true)
 	if _, err := idx.QueryKNN(context.Background(), "nope", domain.NewWGS84Coordinate(10, 50), 1, 10, nil); err != domain.ErrLayerNotFound {
