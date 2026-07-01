@@ -457,19 +457,7 @@ func (r *Repository) HasSpatialIndex(ctx context.Context, sourceID, layerName st
 func (r *Repository) openDB(ctx context.Context, path string) (*sql.DB, error) {
 	// Open read-write so the one-off spatial-index build can run; the GeoPackage
 	// data itself is never modified (only R-tree indexes are added).
-	db, err := sql.Open("sqlite3_with_extensions", r.dsn(path))
-	if err != nil {
-		return nil, err
-	}
-	r.applyPool(db)
-
-	// Test connection
-	if err := db.PingContext(ctx); err != nil {
-		_ = db.Close()
-		return nil, err
-	}
-
-	return db, nil
+	return openSpatiaLite(ctx, path, r.opts)
 }
 
 // validJournalModes is the set of SQLite journal modes accepted in the DSN.
@@ -497,34 +485,6 @@ func normalizeJournalMode(m string) string {
 		return up
 	}
 	return ""
-}
-
-// dsn builds the SQLite DSN from the configured options. Values are normalized
-// against fixed whitelists before being concatenated, so an invalid or hostile
-// config value cannot break DB open or smuggle extra DSN parameters via '&'.
-// Defaults to a private cache (each connection gets its own — allows true
-// concurrent reads, unlike the legacy shared cache).
-func (r *Repository) dsn(path string) string {
-	params := []string{"cache=" + normalizeCacheMode(r.opts.CacheMode)}
-	if r.opts.BusyTimeoutMS > 0 {
-		params = append(params, fmt.Sprintf("_busy_timeout=%d", r.opts.BusyTimeoutMS))
-	}
-	if jm := normalizeJournalMode(r.opts.JournalMode); jm != "" {
-		params = append(params, "_journal_mode="+jm)
-	}
-	return fmt.Sprintf("file:%s?%s", path, strings.Join(params, "&"))
-}
-
-// applyPool applies the configured connection-pool limits. Each SQLite
-// connection is a cgo handle with its own page cache, so MaxOpenConns bounds
-// memory/fd use under concurrent read load.
-func (r *Repository) applyPool(db *sql.DB) {
-	if r.opts.MaxOpenConns > 0 {
-		db.SetMaxOpenConns(r.opts.MaxOpenConns)
-	}
-	if r.opts.MaxIdleConns > 0 {
-		db.SetMaxIdleConns(r.opts.MaxIdleConns)
-	}
 }
 
 // loadSpatiaLite verifies that SpatiaLite extension is loaded.
@@ -753,7 +713,7 @@ func (r *Repository) executePointQuery(ctx context.Context, db *sql.DB, layer *d
 
 	var features []domain.Feature
 	for rows.Next() {
-		feature, err := r.scanFeature(rows, columns, layer.Name, layer.GeometryColumn)
+		feature, err := scanFeature(rows, columns, layer.Name, layer.GeometryColumn)
 		if err != nil {
 			span.RecordError(err)
 			span.SetStatus(output.StatusError, "scan failed")
@@ -773,7 +733,7 @@ func (r *Repository) executePointQuery(ctx context.Context, db *sql.DB, layer *d
 }
 
 // scanFeature scans a row into a Feature.
-func (r *Repository) scanFeature(rows *sql.Rows, columns []string, layerName, geomColumn string) (domain.Feature, error) {
+func scanFeature(rows *sql.Rows, columns []string, layerName, geomColumn string) (domain.Feature, error) {
 	// Create scan destinations
 	values := make([]interface{}, len(columns))
 	valuePtrs := make([]interface{}, len(columns))
