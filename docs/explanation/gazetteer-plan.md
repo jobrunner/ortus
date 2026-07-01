@@ -127,6 +127,16 @@ country-name columns** come from an agreed rebuild of the GeoPackage project —
 > hard-code level numbers: it resolves meaning through the **sidecar reference**
 > (below), keyed `(country_iso, admin_level) → equivalent`.
 
+> **SRID metadata requirement (found in M1).** Ellipsoidal `Distance(g1,g2,1)` — used
+> for the KNN radius, ordering, and label distance — returns **NULL** unless SpatiaLite
+> can resolve the SRID 4326 ellipsoid from `spatial_ref_sys`/`gpkg_spatial_ref_sys`.
+> A NULL distance silently drops rows from the radius filter, so this is load-bearing,
+> not cosmetic. ogr-built GeoPackages carry `gpkg_spatial_ref_sys`; **M2 must verify
+> against the real file** that `Distance(...,1)` returns a real value, and if not, wire
+> an initialized-metadata path (as the existing `RepositoryTransformer` does for
+> `ST_Transform`). The M1 fixture initializes SpatiaLite metadata explicitly to model
+> what the real file provides.
+
 **Gazetteer manifest** (declares which layer/column plays which role):
 
 ```yaml
@@ -295,9 +305,9 @@ step 3 in salience (pure), steps 4–5 in domain (pure).
 There is **no existing gazetteer code to move** (confirmed by grep). The generic
 thematic PiP stays as-is.
 
-- **M0 — Seam + skeleton.** `domain` gazetteer types + `ports` (SpatialIndex, Gazetteer) + a `GazetteerService` skeleton, **disabled by default** (no endpoint, no data load). Thematic path untouched. *Gate:* existing tests + depguard + `make verify` green; gazetteer compiled but inert.
-- **M1 — `SpatialIndex` (cgo).** `QueryKNN`/`DistanceKM`/`Azimuth`/`PointInPolygon` on the SpatiaLite adapter. `VirtualKNN2` is **confirmed available** (SpatiaLite 5.1.0, see §12.3), so KNN is native — no bbox-prefilter fallback. *Gate:* unit tests against a small fixture GeoPackage.
-- **M2 — Gazetteer data + `Locate()`.** `gazetteerdata` loader + manifest parsing; `Locate()` (municipality via PiP). Prominence source decided (ADR-0017). *Gate:* eval vs gold-set (§10).
+- **M0 — Seam + skeleton. ✅ done.** `domain` gazetteer types (PlaceClass, Place, AdminUnit, Locality, Fix, BearingPolicy, compass/label) + `ports` (`output.SpatialIndex`, `input.Gazetteer`) + a `GazetteerService` skeleton, **inert** until enabled+wired. Thematic path untouched. Landed depguard/lint/debt green; domain 100% covered.
+- **M1 — `SpatialIndex` (cgo). ✅ done.** `QueryKNN` (R-tree bbox + ellipsoidal `Distance` + attribute `Filter`)/`PointInPolygon`/`ResolveChain`/`DistanceKM`/`Azimuth` on the existing `geopackage` adapter (single cgo owner). KNN uses the filtered radius search, **not** VirtualKNN2 (§12.3). *Gate met:* integration tests on a nested places/admin fixture, both R-tree and full-scan paths. See the SRID note in §4.
+- **M2 — Gazetteer data + `Locate()`.** `gazetteerdata` loader + manifest parsing; `Locate()` (municipality via PiP + `ResolveChain`, sidecar-enriched); pure `Salience` strategy. **Verify `Distance(...,1)` against the real file** (§4 SRID note). *Gate:* eval vs gold-set (§10).
 - **M3 — Bearing end-to-end.** `Salience` (`ranked` default) + `Bearing()` + compass + label + edge cases. *Gate:* label snapshot tests.
 - **M4 — API.** http + mcp endpoints, DTOs, config-injected weights/options. *Gate:* integration test.
 - **M5 — Tuning & eval.** Calibrate the `w_dist` steepness / rank thresholds against field scenarios.
@@ -348,11 +358,14 @@ The repo's harness (see [Technical debt](technical-debt.md)) applies to the new 
    layer plus a single `admin_levels` layer (not multiple `admin_*` tables;
    `admin_level` is a column, municipality = `"8"`). Manifest contract in §4 reflects
    this. *Confirm the artifact is published as one file at M2.*
-3. ~~**VirtualKNN2 availability** vs R-tree fallback~~ — **RESOLVED by a read-only
-   spike (2026-06):** the deployed SpatiaLite is **5.1.0 with `VirtualKNN2`
-   present and working**, and the file already carries R-tree indexes. M1 uses
-   native KNN; the bbox-prefilter fallback is dropped (kept only as a note should a
-   target platform ship an older SpatiaLite).
+3. ~~**VirtualKNN2 availability** vs R-tree fallback~~ — **RESOLVED, but the choice
+   flipped during M1 implementation.** `VirtualKNN2` *is* present (SpatiaLite 5.1.0)
+   and the file carries R-tree indexes — but KNN2 **cannot push an attribute
+   predicate** (place-class / admin membership) into the nearest search, and *every*
+   gazetteer query is class- and boundary-constrained. So M1 deliberately uses an
+   **R-tree bbox pre-filter + exact ellipsoidal `Distance` (radius + ORDER BY)**,
+   which supports the filter. This is the right tool here, not a fallback; VirtualKNN2
+   would only fit an unfiltered nearest search.
 4. **>2 GiB distribution** — versioned object-storage URL, loaded as a dedicated artifact (not via generic sync discovery). Confirm at M2. *(The real file is ~3.1 GiB, so this path is mandatory, not hypothetical.)*
 5. **SpatialIndex impl location** — *recommended: extend the existing geopackage adapter* (single cgo owner) vs a new `adapters/spatialite`; decide at M1.
 6. **Relational rebuild dependency** — the §4 contract assumes the GeoPackage carries
