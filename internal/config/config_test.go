@@ -237,6 +237,46 @@ func TestValidateMCP(t *testing.T) {
 	}
 }
 
+func TestValidateGazetteer(t *testing.T) {
+	mk := func() *Config {
+		c := &Config{}
+		c.Server.Port = 8080
+		c.Storage.Type = StorageTypeLocal
+		c.Storage.LocalPath = "./data"
+		return c
+	}
+
+	// Disabled → no path requirements.
+	if err := mk().Validate(); err != nil {
+		t.Fatalf("disabled gazetteer rejected: %v", err)
+	}
+
+	// Enabled but missing geopackage_path must fail.
+	c := mk()
+	c.Gazetteer.Enabled = true
+	c.Gazetteer.ManifestPath = "m.yaml"
+	if err := c.Validate(); err == nil {
+		t.Error("enabled gazetteer without geopackage_path should fail")
+	}
+
+	// Enabled but missing manifest_path must fail.
+	c = mk()
+	c.Gazetteer.Enabled = true
+	c.Gazetteer.GeoPackagePath = "g.gpkg"
+	if err := c.Validate(); err == nil {
+		t.Error("enabled gazetteer without manifest_path should fail")
+	}
+
+	// Enabled with both paths is valid (level reference stays optional).
+	c = mk()
+	c.Gazetteer.Enabled = true
+	c.Gazetteer.GeoPackagePath = "g.gpkg"
+	c.Gazetteer.ManifestPath = "m.yaml"
+	if err := c.Validate(); err != nil {
+		t.Errorf("enabled gazetteer with both paths should pass: %v", err)
+	}
+}
+
 func TestValidateMetricsOTLPAndTracing(t *testing.T) {
 	mk := func() *Config {
 		c := &Config{}
