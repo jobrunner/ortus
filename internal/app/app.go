@@ -20,7 +20,9 @@ import (
 	tlsAdapter "github.com/jobrunner/ortus/internal/adapters/tls"
 	"github.com/jobrunner/ortus/internal/adapters/watcher"
 	"github.com/jobrunner/ortus/internal/application"
+	"github.com/jobrunner/ortus/internal/application/gazetteer"
 	"github.com/jobrunner/ortus/internal/config"
+	"github.com/jobrunner/ortus/internal/domain"
 	"github.com/jobrunner/ortus/internal/ports/input"
 	"github.com/jobrunner/ortus/internal/ports/output"
 )
@@ -45,6 +47,10 @@ type App struct {
 	TelemetryProvider *telemetry.Provider // nil when tracing is disabled
 	Tracer            output.Tracer       // never nil; NoOp when tracing is disabled
 	MCPServer         *mcp.Server         // nil when MCP is disabled
+	Gazetteer         *gazetteer.Service  // nil when the gazetteer feature is disabled
+
+	gazetteerClose  func() error         // releases the gazetteer index connection; nil when disabled
+	gazetteerPolicy domain.BearingPolicy // bearing tuning knobs (config) + constraint tier (manifest)
 }
 
 // tracerProvider returns the underlying OTel TracerProvider for instrumentation
@@ -184,6 +190,7 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (app *App
 	defer func() {
 		if retErr != nil {
 			app.closeTransformer()
+			app.closeGazetteer()
 		}
 	}()
 
@@ -203,6 +210,13 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (app *App
 	// Initialize health service
 	app.HealthService = application.NewHealthService(app.Registry, cfg.Server.ReadyWhenEmpty, app.Tracer)
 
+	// Initialize the optional gazetteer (reverse geocode + bearing). No-op unless
+	// gazetteer.enabled; opens its own dedicated GeoPackage separate from the
+	// generic source pool.
+	if err := app.buildGazetteer(ctx); err != nil {
+		return nil, err
+	}
+
 	// Initialize sync service (only for remote storage)
 	if cfg.Sync.Enabled && cfg.Storage.Type != config.StorageTypeLocal {
 		app.SyncService = application.NewSyncService(
@@ -217,27 +231,9 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (app *App
 		)
 	}
 
-	// Initialize HTTP server. Guard the syncer against the typed-nil trap: a
-	// nil *application.SyncService stuffed into an input.Syncer interface is
-	// NOT == nil, which would defeat the handler's nil check.
-	var syncer input.Syncer
-	if app.SyncService != nil {
-		syncer = app.SyncService
-	}
-	app.HTTPServer = httpAdapter.NewServer(
-		cfg.Server,
-		app.QueryService,
-		app.Registry,
-		app.HealthService,
-		syncer, // nil interface when sync is disabled
-		logger,
-		cfg.Query.WithGeometry,
-		httpAdapter.ServerOptions{
-			TracerProvider: app.tracerProvider(),
-			MeterProvider:  app.meterProvider(),
-			ServiceName:    cfg.Tracing.ServiceName,
-		},
-	)
+	// Initialize HTTP server (typed-nil guards for the optional syncer/gazetteer
+	// live in the helper).
+	app.HTTPServer = app.buildHTTPServer(cfg, logger)
 
 	// Initialize TLS server if enabled
 	if cfg.TLS.Enabled {
@@ -304,6 +300,33 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (app *App
 	return app, nil
 }
 
+// buildHTTPServer constructs the HTTP server, applying the typed-nil guards for
+// the optional syncer and gazetteer: a nil concrete pointer stuffed into an
+// interface is NOT == nil, which would defeat the handlers' nil checks (and
+// spuriously register the gazetteer route on a disabled feature).
+func (a *App) buildHTTPServer(cfg *config.Config, logger *slog.Logger) *httpAdapter.Server {
+	var syncer input.Syncer
+	if a.SyncService != nil {
+		syncer = a.SyncService
+	}
+	return httpAdapter.NewServer(
+		cfg.Server,
+		a.QueryService,
+		a.Registry,
+		a.HealthService,
+		syncer, // nil interface when sync is disabled
+		logger,
+		cfg.Query.WithGeometry,
+		httpAdapter.ServerOptions{
+			TracerProvider: a.tracerProvider(),
+			MeterProvider:  a.meterProvider(),
+			ServiceName:    cfg.Tracing.ServiceName,
+			Gazetteer:      a.gazetteerPort(),
+			BearingPolicy:  a.gazetteerPolicy,
+		},
+	)
+}
+
 // MCPDeps bundles the dependencies the MCP adapter needs. Exported so the
 // stdio-mode subcommand (cmd/ortus) builds the exact same Deps struct via this
 // one definition instead of duplicating the field-by-field wiring.
@@ -323,6 +346,8 @@ func (a *App) MCPDeps() mcp.Deps {
 		QueryService:  a.QueryService,
 		Registry:      a.Registry,
 		HealthService: a.HealthService,
+		Gazetteer:     a.gazetteerPort(),
+		BearingPolicy: a.gazetteerPolicy,
 		Version:       version,
 		Tracer:        a.Tracer,
 	}
@@ -478,6 +503,9 @@ func (a *App) Shutdown(ctx context.Context) error {
 
 	// Release the transformer's in-memory SpatiaLite database.
 	a.closeTransformer()
+
+	// Release the gazetteer index connection.
+	a.closeGazetteer()
 
 	// Shutdown metrics provider so the prometheus exporter unregisters.
 	if a.Metrics != nil {

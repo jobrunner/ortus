@@ -38,6 +38,8 @@ type Deps struct {
 	QueryService  input.QueryService
 	Registry      input.SourceRegistry
 	HealthService input.HealthChecker
+	Gazetteer     input.Gazetteer      // nil ⇒ gazetteer tool not registered
+	BearingPolicy domain.BearingPolicy // bearing tuning; zero value falls back to DefaultBearingPolicy
 	Version       string
 	Tracer        output.Tracer // nil ⇒ no entry-point spans (tests); app passes a NoOp when tracing is off
 }

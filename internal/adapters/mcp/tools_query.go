@@ -17,6 +17,30 @@ func registerQueryTools(srv *mcp.Server, deps Deps, logger *slog.Logger) {
 	addListSources(srv, deps, logger)
 	addGetSource(srv, deps, logger)
 	addGetSourceLayers(srv, deps, logger)
+	if deps.Gazetteer != nil {
+		addGazetteer(srv, deps, logger)
+	}
+}
+
+// selectCoordinate resolves a coordinate from optional lon/lat and x/y pairs.
+// lon/lat wins when both pairs are present; a half-pair (only lon, only x) is an
+// error, not a silent half-query; (0,0) is valid. srid defaults to WGS84.
+func selectCoordinate(lon, lat, x, y *float64, srid int) (coordinate, error) {
+	if srid == 0 {
+		srid = domain.SRIDWGS84
+	}
+	switch {
+	case lon != nil && lat != nil:
+		return coordinate{X: *lon, Y: *lat, SRID: srid}, nil
+	case x != nil && y != nil:
+		return coordinate{X: *x, Y: *y, SRID: srid}, nil
+	case lon != nil || lat != nil:
+		return coordinate{}, fmt.Errorf("both 'lon' and 'lat' must be set")
+	case x != nil || y != nil:
+		return coordinate{}, fmt.Errorf("both 'x' and 'y' must be set")
+	default:
+		return coordinate{}, fmt.Errorf("coordinate required: provide lon/lat or x/y")
+	}
 }
 
 // ---- query_point ----------------------------------------------------------
@@ -52,27 +76,14 @@ func addQueryPoint(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 		// BOTH members of a pair (passing just `lon` without `lat` is a
 		// bug, not a silent half-query) and we treat (0,0) as a valid
 		// input rather than a stand-in for "missing".
-		srid := in.SRID
-		if srid == 0 {
-			srid = domain.SRIDWGS84
-		}
-		var coord coordinate
-		switch {
-		case in.Lon != nil && in.Lat != nil:
-			coord = coordinate{X: *in.Lon, Y: *in.Lat, SRID: srid}
-		case in.X != nil && in.Y != nil:
-			coord = coordinate{X: *in.X, Y: *in.Y, SRID: srid}
-		case in.Lon != nil || in.Lat != nil:
-			return nil, nil, fmt.Errorf("both 'lon' and 'lat' must be set")
-		case in.X != nil || in.Y != nil:
-			return nil, nil, fmt.Errorf("both 'x' and 'y' must be set")
-		default:
-			return nil, nil, fmt.Errorf("coordinate required: provide lon/lat or x/y")
+		coord, err := selectCoordinate(in.Lon, in.Lat, in.X, in.Y, in.SRID)
+		if err != nil {
+			return nil, nil, err
 		}
 
 		req := queryRequest{
 			Coordinate: coord,
-			SourceSRID: srid,
+			SourceSRID: coord.SRID,
 			Properties: in.Properties,
 			SourceID:   in.SourceID,
 		}

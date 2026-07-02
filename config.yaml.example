@@ -107,6 +107,25 @@ mcp:
   port: 9091
   path: "/mcp"
 
+# Gazetteer (reverse geocoding + bearing / "Peilung"). A dedicated places/admin
+# GeoPackage, loaded separately from the generic query source pool. Disabled by
+# default — the feature is inert until enabled with the paths below.
+gazetteer:
+  enabled: false
+  geopackage_path: ""       # path to the places/admin GeoPackage
+  manifest_path: ""         # ortus-gazetteer.yaml (layer/column role mapping)
+  level_reference_path: ""  # optional admin-level sidecar (enriches Locate with tier meaning)
+  # Bearing tuning knobs. Reach = the radius within which a class is an acceptable
+  # anchor; prefer_nearest_km = a town-or-larger anchor within this radius wins
+  # outright (villages excluded). Defaults shown.
+  bearing:
+    reach_village_km: 5
+    reach_town_km: 18
+    reach_city_km: 60
+    prefer_nearest_km: 5
+    inside_label_km: 1
+    compass_points: 8
+
 # OpenTelemetry tracing configuration.
 # When enabled, spans are kept in an in-memory ring buffer (for the MCP server
 # to query directly) and, if endpoint is set, also exported via OTLP.

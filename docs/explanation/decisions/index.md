@@ -17,3 +17,7 @@ Each ADR captures one significant decision, its context, and consequences.
 | [0011](0011-remote-storage-sync.md) | Remote storage synchronization |
 | [0012](0012-source-vocabulary-migration.md) | Source vocabulary migration |
 | [0013](0013-cog-reader-library.md) | COG reader library |
+| [0014](0014-gazetteer-internal-capability.md) | Gazetteer as an internal capability |
+| [0015](0015-salience-rank-stratified-reach.md) | Salience: rank-stratified reach radii |
+| [0016](0016-bearing-convention-compass.md) | Bearing convention, boundary constraint & compass |
+| [0017](0017-prominence-source-rank.md) | Prominence source: OSM rank vs GeoNames |

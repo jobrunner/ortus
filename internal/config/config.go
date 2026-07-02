@@ -27,15 +27,16 @@ const mcpLoopbackHost = "127.0.0.1"
 
 // Config holds all application configuration.
 type Config struct {
-	Server  ServerConfig  `mapstructure:"server"`
-	Storage StorageConfig `mapstructure:"storage"`
-	Query   QueryConfig   `mapstructure:"query"`
-	TLS     TLSConfig     `mapstructure:"tls"`
-	Metrics MetricsConfig `mapstructure:"metrics"`
-	Logging LoggingConfig `mapstructure:"logging"`
-	Sync    SyncConfig    `mapstructure:"sync"`
-	Tracing TracingConfig `mapstructure:"tracing"`
-	MCP     MCPConfig     `mapstructure:"mcp"`
+	Server    ServerConfig    `mapstructure:"server"`
+	Storage   StorageConfig   `mapstructure:"storage"`
+	Query     QueryConfig     `mapstructure:"query"`
+	TLS       TLSConfig       `mapstructure:"tls"`
+	Metrics   MetricsConfig   `mapstructure:"metrics"`
+	Logging   LoggingConfig   `mapstructure:"logging"`
+	Sync      SyncConfig      `mapstructure:"sync"`
+	Tracing   TracingConfig   `mapstructure:"tracing"`
+	MCP       MCPConfig       `mapstructure:"mcp"`
+	Gazetteer GazetteerConfig `mapstructure:"gazetteer"`
 
 	// Build is populated by main.go from -ldflags at startup; not loaded
 	// from config files. Used for the MCP Implementation.Version field
@@ -225,6 +226,29 @@ type MCPConfig struct {
 	Token string `mapstructure:"-"`
 }
 
+// GazetteerConfig holds the reverse-geocoding / bearing ("Peilung") feature. It
+// is a dedicated, separately-loaded dataset (not part of the generic PiP source
+// pool); disabled by default so the feature is inert until explicitly wired.
+type GazetteerConfig struct {
+	Enabled            bool                   `mapstructure:"enabled"`
+	GeoPackagePath     string                 `mapstructure:"geopackage_path"`      // the places/admin GeoPackage
+	ManifestPath       string                 `mapstructure:"manifest_path"`        // ortus-gazetteer.yaml (layer/column mapping)
+	LevelReferencePath string                 `mapstructure:"level_reference_path"` // admin-level sidecar (optional; enriches Locate)
+	Bearing            GazetteerBearingConfig `mapstructure:"bearing"`
+}
+
+// GazetteerBearingConfig holds the tunable knobs of the bearing selection (the
+// reach radii and the proximity override). The semantic constraint tier lives in
+// the manifest (dataset-bound), not here.
+type GazetteerBearingConfig struct {
+	ReachVillageKM  float64 `mapstructure:"reach_village_km"`
+	ReachTownKM     float64 `mapstructure:"reach_town_km"`
+	ReachCityKM     float64 `mapstructure:"reach_city_km"`
+	PreferNearestKM float64 `mapstructure:"prefer_nearest_km"` // a town-or-larger anchor within this radius wins outright
+	InsideLabelKM   float64 `mapstructure:"inside_label_km"`
+	CompassPoints   int     `mapstructure:"compass_points"` // 8 or 16
+}
+
 // TracingTransport selects the OTLP transport (http/protobuf or grpc).
 const (
 	TracingTransportHTTP = "http"
@@ -315,6 +339,19 @@ func Defaults() {
 	viper.SetDefault("tracing.insecure", true)
 	viper.SetDefault("tracing.sample_ratio", 1.0)
 	viper.SetDefault("tracing.buffer_size", 256)
+
+	// Gazetteer defaults (disabled; inert until paths are configured)
+	viper.SetDefault("gazetteer.enabled", false)
+	viper.SetDefault("gazetteer.geopackage_path", "")
+	viper.SetDefault("gazetteer.manifest_path", "")
+	viper.SetDefault("gazetteer.level_reference_path", "")
+	// Bearing tuning knobs — defaults match domain.DefaultBearingPolicy.
+	viper.SetDefault("gazetteer.bearing.reach_village_km", 5.0)
+	viper.SetDefault("gazetteer.bearing.reach_town_km", 18.0)
+	viper.SetDefault("gazetteer.bearing.reach_city_km", 60.0)
+	viper.SetDefault("gazetteer.bearing.prefer_nearest_km", 5.0)
+	viper.SetDefault("gazetteer.bearing.inside_label_km", 1.0)
+	viper.SetDefault("gazetteer.bearing.compass_points", 8)
 }
 
 // Load loads configuration from environment and config file.
@@ -378,7 +415,27 @@ func (c *Config) Validate() error {
 	if err := c.validateMetricsOTLP(); err != nil {
 		return err
 	}
-	return c.validateMCP()
+	if err := c.validateMCP(); err != nil {
+		return err
+	}
+	return c.validateGazetteer()
+}
+
+// validateGazetteer requires the dataset and manifest paths when the feature is
+// enabled, so a misconfigured gazetteer fails fast at startup rather than
+// silently staying inert. The level reference is optional (Locate still works,
+// just without semantic enrichment).
+func (c *Config) validateGazetteer() error {
+	if !c.Gazetteer.Enabled {
+		return nil
+	}
+	if c.Gazetteer.GeoPackagePath == "" {
+		return fmt.Errorf("gazetteer.enabled is true — gazetteer.geopackage_path must be set")
+	}
+	if c.Gazetteer.ManifestPath == "" {
+		return fmt.Errorf("gazetteer.enabled is true — gazetteer.manifest_path must be set")
+	}
+	return nil
 }
 
 func (c *Config) validateMCP() error {

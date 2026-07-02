@@ -17,7 +17,10 @@ import (
 // compared separately by their own handlers; /sync is operator-only and not
 // part of the documented query contract.
 func TestRoutesMatchOpenAPISpec(t *testing.T) {
-	srv := newTestServer(nil, nil, nil)
+	// Wire a (fake) gazetteer so the conditionally-registered /gazetteer route
+	// exists — it is part of the documented query contract (unlike operator-only
+	// /sync, which is intentionally undocumented).
+	srv := newGazetteerServer(t, fakeGazetteer{})
 
 	// Compare "METHOD path" pairs (not just paths) so a GET→POST drift on the
 	// same path is caught too.

@@ -36,6 +36,8 @@ servers:
 tags:
   - name: Query
     description: Räumliche Punktabfragen auf Datenquellen
+  - name: Gazetteer
+    description: Reverse-Geocoding auf die Verwaltungseinheit und Peilung (bearing)
   - name: Sources
     description: Datenquellen-Verwaltung und -Information
   - name: Health
@@ -60,6 +62,7 @@ paths:
         - $ref: '#/components/parameters/YParam'
         - $ref: '#/components/parameters/SridParam'
         - $ref: '#/components/parameters/PropertiesParam'
+        - $ref: '#/components/parameters/WithGazetteerParam'
       responses:
         '200':
           description: Erfolgreiche Abfrage
@@ -153,6 +156,64 @@ paths:
               example:
                 error: Not Found
                 message: Source not found
+        '500':
+          description: Interner Serverfehler
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /gazetteer:
+    get:
+      tags:
+        - Gazetteer
+      summary: Reverse-Geocoding + Peilung
+      description: |
+        Löst eine Koordinate auf ihre Verwaltungshierarchie (`admin`) auf und berechnet
+        eine Peilung zum salientesten nahen Ort (`bearing`, z. B. "4 km E Würzburg").
+        Jeder Teil ist `null`, wenn es kein Ergebnis gibt — keine Admin-Abdeckung bzw.
+        kein Anker in Reichweite. Nur verfügbar, wenn das Gazetteer-Feature aktiv ist.
+      operationId: gazetteer
+      parameters:
+        - $ref: '#/components/parameters/LonParam'
+        - $ref: '#/components/parameters/LatParam'
+        - $ref: '#/components/parameters/XParam'
+        - $ref: '#/components/parameters/YParam'
+        - $ref: '#/components/parameters/SridParam'
+      responses:
+        '200':
+          description: Erfolgreiche Abfrage
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GazetteerResponse'
+              example:
+                coordinate:
+                  x: 9.93
+                  y: 49.79
+                  srid: 4326
+                admin:
+                  country_iso: DE
+                  hierarchy:
+                    - level: 8
+                      name: Würzburg
+                      equivalent: municipality
+                    - level: 4
+                      name: Bayern
+                      equivalent: state
+                bearing:
+                  reference: Würzburg
+                  class: city
+                  distance_km: 4.0
+                  azimuth: 90.0
+                  compass: E
+                  label: "4 km E Würzburg"
+        '400':
+          description: Ungültige Parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '500':
           description: Interner Serverfehler
           content:
@@ -439,7 +500,74 @@ components:
         type: string
       example: name,population
 
+    WithGazetteerParam:
+      name: with-gazetteer
+      in: query
+      description: |
+        Wenn gesetzt (`1`/`true`/`yes`/`on`), wird die Antwort zusätzlich um einen
+        `gazetteer`-Block (Verwaltungshierarchie + Peilung) angereichert — sofern das
+        Gazetteer-Feature aktiv ist. Standard: aus. Best-effort: ein Gazetteer-Fehler
+        bricht die eigentliche Abfrage nicht ab.
+      schema:
+        type: string
+        enum: ["0", "1", "true", "false", "yes", "no", "on", "off"]
+        default: "0"
+      example: "1"
+
   schemas:
+    GazetteerResponse:
+      type: object
+      description: Reverse-Geocoding- und Peilungs-Ergebnis für eine Koordinate.
+      properties:
+        coordinate:
+          $ref: '#/components/schemas/Coordinate'
+        admin:
+          nullable: true
+          type: object
+          description: Verwaltungshierarchie, die die Koordinate enthält (null ohne Abdeckung).
+          properties:
+            country_iso:
+              type: string
+              description: ISO 3166-1 alpha-2 Ländercode.
+            hierarchy:
+              type: array
+              description: Ebenen, lokalste zuerst.
+              items:
+                type: object
+                properties:
+                  level:
+                    type: integer
+                    description: OSM admin_level.
+                  name:
+                    type: string
+                  equivalent:
+                    type: string
+                    description: Semantische Bedeutung (country | state | … | municipality).
+        bearing:
+          nullable: true
+          type: object
+          description: Peilung zum salientesten nahen Ort (null ohne Anker in Reichweite).
+          properties:
+            reference:
+              type: string
+              description: Name des Anker-Orts.
+            class:
+              type: string
+              description: OSM place-Klasse (village | town | city).
+            distance_km:
+              type: number
+              format: double
+            azimuth:
+              type: number
+              format: double
+              description: Azimut Referenz→Punkt in Grad (0=N, 90=O).
+            compass:
+              type: string
+              description: Quantisierte Himmelsrichtung (z. B. E, NW).
+            label:
+              type: string
+              description: Fertiges Label, z. B. „4 km E Würzburg".
+
     Coordinate:
       type: object
       description: Geografische Koordinate

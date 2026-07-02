@@ -16,6 +16,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/jobrunner/ortus/internal/config"
+	"github.com/jobrunner/ortus/internal/domain"
 	"github.com/jobrunner/ortus/internal/ports/input"
 )
 
@@ -28,6 +29,8 @@ type Server struct {
 	registry       input.SourceRegistry
 	health         input.HealthChecker
 	syncService    input.Syncer
+	gazetteer      input.Gazetteer      // nil ⇒ gazetteer feature disabled (no route, no /query enrichment)
+	bearingPolicy  domain.BearingPolicy // configured bearing tuning; zero ⇒ use DefaultBearingPolicy
 	logger         *slog.Logger
 	config         config.ServerConfig
 	withGeometry   bool                 // Include geometry in query results
@@ -45,6 +48,8 @@ type ServerOptions struct {
 	TracerProvider trace.TracerProvider
 	MeterProvider  metric.MeterProvider
 	ServiceName    string
+	Gazetteer      input.Gazetteer      // optional; enables the /gazetteer route and the with-gazetteer flag
+	BearingPolicy  domain.BearingPolicy // optional bearing tuning; zero value falls back to DefaultBearingPolicy
 }
 
 // NewServer creates a new HTTP server.
@@ -73,6 +78,8 @@ func NewServer(
 		registry:       registry,
 		health:         health,
 		syncService:    syncService,
+		gazetteer:      opts.Gazetteer,
+		bearingPolicy:  opts.BearingPolicy,
 		logger:         logger,
 		config:         cfg,
 		withGeometry:   withGeometry,
@@ -177,6 +184,11 @@ func (s *Server) setupRoutes() *mux.Router {
 	// Query endpoints
 	api.HandleFunc("/query", s.handleQuery).Methods(http.MethodGet)
 	api.HandleFunc("/query/{sourceId}", s.handleQuerySource).Methods(http.MethodGet)
+
+	// Gazetteer endpoint (reverse geocode + bearing) — only when the feature is wired.
+	if s.gazetteer != nil {
+		api.HandleFunc("/gazetteer", s.handleGazetteer).Methods(http.MethodGet)
+	}
 
 	// Source management endpoints
 	api.HandleFunc("/sources", s.handleListSources).Methods(http.MethodGet)

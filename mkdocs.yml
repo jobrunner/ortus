@@ -65,6 +65,7 @@ nav:
       - explanation/index.md
       - Architecture: explanation/architecture.md
       - Architecture plan: explanation/architecture-plan.md
+      - Gazetteer & bearing (plan): explanation/gazetteer-plan.md
       - Raster sources: explanation/raster-sources.md
       - Technical debt: explanation/technical-debt.md
       - Production-readiness review: explanation/production-readiness-review.md
@@ -83,3 +84,7 @@ nav:
           - ADR-0011 Remote storage sync: explanation/decisions/0011-remote-storage-sync.md
           - ADR-0012 Source vocabulary: explanation/decisions/0012-source-vocabulary-migration.md
           - ADR-0013 COG reader: explanation/decisions/0013-cog-reader-library.md
+          - ADR-0014 Gazetteer capability: explanation/decisions/0014-gazetteer-internal-capability.md
+          - ADR-0015 Salience reach radii: explanation/decisions/0015-salience-rank-stratified-reach.md
+          - ADR-0016 Bearing convention: explanation/decisions/0016-bearing-convention-compass.md
+          - ADR-0017 Prominence source: explanation/decisions/0017-prominence-source-rank.md
