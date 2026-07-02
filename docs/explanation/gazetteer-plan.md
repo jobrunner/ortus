@@ -127,15 +127,17 @@ country-name columns** come from an agreed rebuild of the GeoPackage project —
 > hard-code level numbers: it resolves meaning through the **sidecar reference**
 > (below), keyed `(country_iso, admin_level) → equivalent`.
 
-> **SRID metadata requirement (found in M1).** Ellipsoidal `Distance(g1,g2,1)` — used
-> for the KNN radius, ordering, and label distance — returns **NULL** unless SpatiaLite
-> can resolve the SRID 4326 ellipsoid from `spatial_ref_sys`/`gpkg_spatial_ref_sys`.
-> A NULL distance silently drops rows from the radius filter, so this is load-bearing,
-> not cosmetic. ogr-built GeoPackages carry `gpkg_spatial_ref_sys`; **M2 must verify
-> against the real file** that `Distance(...,1)` returns a real value, and if not, wire
-> an initialized-metadata path (as the existing `RepositoryTransformer` does for
-> `ST_Transform`). The M1 fixture initializes SpatiaLite metadata explicitly to model
-> what the real file provides.
+> **SRID metadata (found in M1, resolved in M5).** Ellipsoidal `Distance(g1,g2,1)` —
+> used for the KNN radius, ordering, and label distance — needs SpatiaLite to resolve
+> the SRID 4326 ellipsoid from its **native** `spatial_ref_sys`. A GeoPackage carries
+> only `gpkg_spatial_ref_sys`, so SpatiaLite prints `unknown SRID: 4326` and falls back
+> to the WGS84 ellipsoid — correct for 4326 data (verified: 1° latitude ≈ 110.6 km),
+> but stderr-noisy and fallback-dependent. Two guards: (a) `VerifySRID` probes this at
+> startup and asserts 1° latitude is ~110–111 km, so **both** a NULL (radius drops all
+> rows) **and** a misapplied SRID (silently wrong distance) fail loudly; (b) the data
+> build should ship a native `spatial_ref_sys` (`SELECT InitSpatialMetaData(1)` as a
+> final step — see the osm-data `PLAN-places-admin-hierarchy.md`) to remove the warning
+> and make the metric metadata-backed. The M1 fixture already initializes it.
 
 **Gazetteer manifest** (declares which layer/column plays which role):
 

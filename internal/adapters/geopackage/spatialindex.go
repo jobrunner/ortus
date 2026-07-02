@@ -78,21 +78,35 @@ func (g *GazetteerIndex) Close() error {
 	return g.db.Close()
 }
 
-// VerifySRID checks that ellipsoidal Distance(g1,g2,1) resolves the SRID 4326
-// ellipsoid. Without spatial_ref_sys / gpkg_spatial_ref_sys it returns NULL,
-// which would make the KNN radius silently drop every row (bearings return
-// nothing). Returns an error describing the problem so startup can warn loudly.
+// VerifySRID checks that ellipsoidal Distance(g1,g2,1) both resolves and applies
+// the SRID 4326 ellipsoid, by measuring one degree of latitude at the equator —
+// which is ~110.6 km on WGS84. It catches two distinct failures:
+//
+//   - NULL: SpatiaLite can't resolve the SRID at all (no spatial_ref_sys), so the
+//     KNN radius would silently drop every row and bearings would return nothing.
+//   - Wrong magnitude: the SRID was not truly applied (degree units, a projected
+//     CRS, or a wrong ellipsoid via a fallback), so the bearing metric would be
+//     silently wrong rather than empty.
+//
+// A distant band (100–120 km) tolerates the sphere-vs-ellipsoid and
+// equator-vs-mean variance while rejecting anything nonsensical.
 func (g *GazetteerIndex) VerifySRID(ctx context.Context) error {
+	const wantMinM, wantMaxM = 100_000.0, 120_000.0 // 1° latitude ≈ 110.6–111.2 km
+
 	var d sql.NullFloat64
 	err := g.db.QueryRowContext(ctx,
 		"SELECT Distance(MakePoint(0, 0, 4326), MakePoint(0, 1, 4326), 1)").Scan(&d)
 	if err != nil {
 		return fmt.Errorf("gazetteer SRID probe: %w", err)
 	}
-	if !d.Valid || d.Float64 <= 0 {
-		return fmt.Errorf("gazetteer: ellipsoidal Distance returned NULL — SRID 4326 " +
-			"not resolvable (spatial_ref_sys/gpkg_spatial_ref_sys missing); the KNN radius " +
-			"would drop all rows and bearings would return nothing")
+	if !d.Valid {
+		return fmt.Errorf("gazetteer: ellipsoidal Distance returned NULL — SRID 4326 not " +
+			"resolvable (no spatial_ref_sys); the KNN radius would drop all rows and " +
+			"bearings would return nothing")
+	}
+	if d.Float64 < wantMinM || d.Float64 > wantMaxM {
+		return fmt.Errorf("gazetteer: SRID 4326 not applied correctly — 1° latitude measured "+
+			"as %.0f m, expected ~110–111 km; check the dataset SRID / spatial_ref_sys", d.Float64)
 	}
 	return nil
 }
