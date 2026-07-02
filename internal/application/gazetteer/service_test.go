@@ -152,6 +152,31 @@ func TestLocateBearingRejectNonWGS84(t *testing.T) {
 	}
 }
 
+func adminFeatureISO(level, name, iso string) domain.Feature {
+	f := adminFeature(level, name)
+	f.Properties["country_iso"] = iso
+	return f
+}
+
+func TestLocateCountryFromMostLocalUnit(t *testing.T) {
+	// A coarse polygon carries a different code than the local units (the IL/PS L2
+	// quirk), and is returned first by PiP. The locality country must come from the
+	// most-local unit, deterministically — not from PiP row order.
+	idx := fakeIndex{pip: []domain.Feature{
+		adminFeatureISO("2", "Israel", "PS"), // coarse, different code, listed first
+		adminFeatureISO("8", "Tel Aviv-Yafo", "IL"),
+		adminFeatureISO("4", "Tel Aviv District", "IL"),
+	}}
+	svc := NewService(idx, testManifest(), nil, nil, true)
+	loc, err := svc.Locate(context.Background(), domain.NewWGS84Coordinate(34.78, 32.08))
+	if err != nil {
+		t.Fatalf("Locate: %v", err)
+	}
+	if loc.CountryISO != "IL" {
+		t.Errorf("CountryISO = %q, want IL (most-local unit), not the coarse PS polygon", loc.CountryISO)
+	}
+}
+
 func TestLocateNoCoverage(t *testing.T) {
 	svc := NewService(fakeIndex{pip: nil}, testManifest(), nil, nil, true)
 	if _, err := svc.Locate(context.Background(), domain.NewWGS84Coordinate(0, 0)); !errors.Is(err, domain.ErrNotFound) {

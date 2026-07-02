@@ -1,0 +1,196 @@
+version: 1
+countries:
+    AE:
+        levels:
+            2:
+                equivalent: country
+            4:
+                equivalent: state
+            5:
+                equivalent: region
+            6:
+                equivalent: district
+            7:
+                equivalent: other
+            8:
+                equivalent: municipality
+            10:
+                equivalent: submunicipality
+    CY:
+        levels:
+            2:
+                equivalent: country
+            3:
+                equivalent: other
+            4:
+                equivalent: district
+            5:
+                equivalent: district
+            6:
+                equivalent: municipality
+            7:
+                equivalent: submunicipality
+            8:
+                equivalent: municipality
+            9:
+                equivalent: submunicipality
+            10:
+                equivalent: submunicipality
+    DE:
+        levels:
+            2:
+                equivalent: country
+            4:
+                equivalent: state
+            5:
+                equivalent: region
+            6:
+                equivalent: county
+            7:
+                equivalent: district
+            8:
+                equivalent: municipality
+            9:
+                equivalent: borough
+            10:
+                equivalent: submunicipality
+            11:
+                equivalent: submunicipality
+            12:
+                equivalent: submunicipality
+    FI:
+        levels:
+            2:
+                equivalent: country
+            3:
+                equivalent: region
+            4:
+                equivalent: state
+            7:
+                equivalent: district
+            8:
+                equivalent: municipality
+            9:
+                equivalent: submunicipality
+            10:
+                equivalent: submunicipality
+            11:
+                equivalent: submunicipality
+    GR:
+        levels:
+            2:
+                equivalent: country
+            3:
+                equivalent: other
+            4:
+                equivalent: region
+            5:
+                equivalent: state
+            6:
+                equivalent: province
+            7:
+                equivalent: municipality
+            8:
+                equivalent: submunicipality
+            9:
+                equivalent: submunicipality
+            10:
+                equivalent: submunicipality
+    IL:
+        levels:
+            2:
+                equivalent: country
+            4:
+                equivalent: district
+            5:
+                equivalent: county
+            6:
+                equivalent: region
+            7:
+                equivalent: region
+            8:
+                equivalent: municipality
+            9:
+                equivalent: borough
+            10:
+                equivalent: submunicipality
+            11:
+                equivalent: submunicipality
+    JO:
+        levels:
+            2:
+                equivalent: country
+            4:
+                equivalent: province
+            5:
+                equivalent: district
+            6:
+                equivalent: district
+            7:
+                equivalent: district
+            8:
+                equivalent: municipality
+            9:
+                equivalent: other
+    OM:
+        levels:
+            2:
+                equivalent: country
+            4:
+                equivalent: province
+            6:
+                equivalent: district
+            8:
+                equivalent: municipality
+            10:
+                equivalent: submunicipality
+    PS:
+        levels:
+            2:
+                equivalent: country
+            4:
+                equivalent: district
+            5:
+                equivalent: county
+            6:
+                equivalent: county
+            8:
+                equivalent: municipality
+            9:
+                equivalent: municipality
+            10:
+                equivalent: submunicipality
+    RU:
+        levels:
+            2:
+                equivalent: country
+            3:
+                equivalent: region
+            4:
+                equivalent: state
+            5:
+                equivalent: district
+            6:
+                equivalent: county
+            8:
+                equivalent: municipality
+            9:
+                equivalent: submunicipality
+            10:
+                equivalent: submunicipality
+            11:
+                equivalent: submunicipality
+    SY:
+        levels:
+            2:
+                equivalent: country
+            4:
+                equivalent: state
+            5:
+                equivalent: district
+            6:
+                equivalent: district
+            8:
+                equivalent: municipality
+            10:
+                equivalent: submunicipality
