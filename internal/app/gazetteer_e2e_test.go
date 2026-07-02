@@ -19,10 +19,14 @@ import (
 //	ORTUS_GAZETTEER_MANIFEST=data/gazetteer/ortus-gazetteer.yaml \
 //	ORTUS_GAZETTEER_SIDECAR=data/gazetteer/admin_levels_west_palearctic.yaml \
 //	go test ./internal/app -run TestGazetteerEndToEnd -v
-func TestGazetteerEndToEnd(t *testing.T) {
+//
+// newRealGazetteer builds the gazetteer service against the real dataset, or
+// skips the test when ORTUS_GAZETTEER_GPKG is unset (so CI stays green).
+func newRealGazetteer(t *testing.T) *gazetteer.Service {
+	t.Helper()
 	gpkgPath := os.Getenv("ORTUS_GAZETTEER_GPKG")
 	if gpkgPath == "" {
-		t.Skip("set ORTUS_GAZETTEER_GPKG to run the real-data gazetteer e2e test")
+		t.Skip("set ORTUS_GAZETTEER_GPKG to run the real-data gazetteer test")
 	}
 	manifestPath := envOr("ORTUS_GAZETTEER_MANIFEST", "data/gazetteer/ortus-gazetteer.yaml")
 	sidecarPath := envOr("ORTUS_GAZETTEER_SIDECAR", "data/gazetteer/admin_levels_west_palearctic.yaml")
@@ -36,20 +40,30 @@ func TestGazetteerEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseLevelReference: %v", err)
 	}
-
 	idx, err := geopackage.OpenGazetteerIndex(ctx, gpkgPath, geopackage.Options{})
 	if err != nil {
 		t.Fatalf("OpenGazetteerIndex: %v", err)
 	}
 	t.Cleanup(func() { _ = idx.Close() })
-
-	// The whole bearing metric depends on this: ellipsoidal Distance must resolve
-	// SRID 4326 on the real file.
 	if err := idx.VerifySRID(ctx); err != nil {
 		t.Fatalf("VerifySRID on real file: %v", err)
 	}
+	return gazetteer.NewService(idx, manifest, levels, nil, true)
+}
 
-	svc := gazetteer.NewService(idx, manifest, levels, nil, true)
+// stateOf returns the name of the state-tier unit in a resolved locality, or "".
+func stateOf(loc *domain.Locality) string {
+	for _, u := range loc.Chain {
+		if u.Equivalent == "state" {
+			return u.Name
+		}
+	}
+	return ""
+}
+
+func TestGazetteerEndToEnd(t *testing.T) {
+	ctx := context.Background()
+	svc := newRealGazetteer(t)
 
 	// Locate: Würzburg city center → an admin chain reaching the state tier.
 	wuerzburg := domain.NewWGS84Coordinate(9.9294, 49.7913)
@@ -123,4 +137,84 @@ func mustRead(t *testing.T, path string) []byte {
 		t.Fatalf("read %s: %v", path, err)
 	}
 	return data
+}
+
+// TestGazetteerStateBorder exercises the state boundary constraint on real field
+// coordinates straddling the Bavaria / Baden-Württemberg border along the Main
+// (Kreuzwertheim BY vs Wertheim BW). It asserts that each point reverse-geocodes
+// to the correct state, and that the chosen bearing anchor stays within that same
+// state — even where the neighboring town across the river is geometrically
+// closer. Opt-in (same env gating as TestGazetteerEndToEnd).
+func TestGazetteerStateBorder(t *testing.T) {
+	ctx := context.Background()
+	svc := newRealGazetteer(t)
+
+	type pt struct {
+		group    string
+		lat, lon float64
+	}
+	const (
+		by = "Bayern"
+		bw = "Baden-Württemberg"
+	)
+	cases := map[string][]pt{
+		by: {
+			{"Kreuzwertheim/Am Wasser", 49.763074, 9.519156},
+			{"Kreuzwertheim/Am Wasser", 49.761402, 9.523088},
+			{"Kreuzwertheim/Am Wasser", 49.761567, 9.524038},
+			{"Kreuzwertheim/Am Wasser", 49.761646, 9.525050},
+			{"Kreuzwertheim/Waldstück", 49.765911, 9.527868},
+			{"Kreuzwertheim/Waldstück", 49.766437, 9.526784},
+			{"Kreuzwertheim/Waldstück", 49.767391, 9.528226},
+		},
+		bw: {
+			{"Wertheim/Nah am Wasser", 49.760679, 9.517655},
+			{"Wertheim/Nah am Wasser", 49.760348, 9.522176},
+			{"Wertheim/Nah am Wasser", 49.760412, 9.521955},
+			{"Wertheim/Nah am Wasser", 49.760284, 9.523162},
+			{"Wertheim/Nah am Wasser", 49.760363, 9.523871},
+			{"Wertheim/Nah am Wasser", 49.759922, 9.523486},
+			{"Wertheim/Im Wald", 49.756422, 9.523618},
+			{"Wertheim/Im Wald", 49.756928, 9.524287},
+			{"Wertheim/Im Wald", 49.756212, 9.524243},
+			{"Wertheim/Im Wald", 49.756588, 9.521765},
+		},
+	}
+
+	for wantState, pts := range cases {
+		for _, p := range pts {
+			coord := domain.NewWGS84Coordinate(p.lon, p.lat)
+
+			loc, err := svc.Locate(ctx, coord)
+			if err != nil {
+				t.Errorf("%s (%.6f,%.6f): Locate: %v", p.group, p.lat, p.lon, err)
+				continue
+			}
+			gotState := stateOf(loc)
+
+			fix, err := svc.Bearing(ctx, coord, domain.DefaultBearingPolicy())
+			if err != nil {
+				t.Errorf("%s (%.6f,%.6f): Bearing: %v", p.group, p.lat, p.lon, err)
+				continue
+			}
+
+			// The anchor must sit in the same state as the query point.
+			refLoc, err := svc.Locate(ctx, fix.Reference.At)
+			anchorState := ""
+			if err == nil {
+				anchorState = stateOf(refLoc)
+			}
+
+			t.Logf("%-24s (%.5f,%.5f) state=%-18s → %-28s [anchor state=%s]",
+				p.group, p.lat, p.lon, gotState, fix.Label, anchorState)
+
+			if gotState != wantState {
+				t.Errorf("%s (%.6f,%.6f): point state = %q, want %q", p.group, p.lat, p.lon, gotState, wantState)
+			}
+			if anchorState != wantState {
+				t.Errorf("%s (%.6f,%.6f): anchor %q is in state %q, want %q (boundary constraint breached)",
+					p.group, p.lat, p.lon, fix.Reference.Name, anchorState, wantState)
+			}
+		}
+	}
 }
