@@ -128,8 +128,14 @@ func (s *Service) Locate(ctx context.Context, p domain.Coordinate) (*domain.Loca
 			Equivalent: equivalent,
 		})
 	}
-	// Most-local first (highest admin_level → country last).
-	sort.SliceStable(chain, func(i, j int) bool { return chain[i].Level > chain[j].Level })
+	// Most-local first (highest admin_level → country last), with a Name tie-break
+	// so equal-level units order deterministically rather than by PiP row order.
+	sort.SliceStable(chain, func(i, j int) bool {
+		if chain[i].Level != chain[j].Level {
+			return chain[i].Level > chain[j].Level
+		}
+		return chain[i].Name < chain[j].Name
+	})
 
 	return &domain.Locality{CountryISO: countryISO, Chain: chain}, nil
 }

@@ -18,9 +18,10 @@ import (
 // golden snapshot — proving multi-script names and the boundary constraint on
 // real data without shipping the 3 GiB dataset.
 //
-// Regenerate after a dataset change:
+// Regenerate after a dataset change (the generator is //go:build ignore, so run
+// it by file path, not by package):
 //
-//	go run ./cmd/gazetteer-fixture -simplify 0.002
+//	go run cmd/gazetteer-fixture/main.go -simplify 0.002
 type fixtureChainLevel struct {
 	Level      int    `json:"level"`
 	Equivalent string `json:"equivalent"`

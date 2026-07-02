@@ -1,601 +1,196 @@
 version: 1
-equivalent_levels:
-    borough:
-        description: Sub-municipal borough / urban district
-    country:
-        description: Sovereign state (admin_level 2)
-    county:
-        description: County or district tier
-    district:
-        description: District / subdistrict
-    municipality:
-        description: Municipality / commune (basic local government unit)
-    other:
-        description: Does not map to a standard tier (see notes)
-    parish:
-        description: Civil parish
-    province:
-        description: Province / department tier
-    region:
-        description: Administrative region / mid-tier grouping (e.g. Regierungsbezirk, NUTS region)
-    state:
-        description: First-order subdivision (Land, oblast, comunidad autónoma, ...)
-    submunicipality:
-        description: Other sub-municipal unit (quarter, ward, locality)
 countries:
     AE:
-        name: "United Arab Emirates"
-        partial_coverage: false
         levels:
             2:
-                name: "United Arab Emirates"
                 equivalent: country
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (unitedarab:value, marked 'proposed'); OSM data (AE L2; 1 feature: الإمارات العربية المتحدة)"
             4:
-                name: "Emirates (إمارة)"
                 equivalent: state
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (unitedarab:n4 = 'Emirates (إمارة)'); OSM data (AE L4; 8 features e.g. أبو ظبي, دبي, الشارقة, إمارة عجمان, رأس الخيمة, الفجيرة, أم القيوين, محافظة البريمي)"
             5:
-                name: "Capital Abu Dhabi (أبو ظبي)"
                 equivalent: region
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (unitedarab:n5 = 'Capital Abu Dhabi (أبو ظبي)'); OSM data (AE L5; 1 feature: أبو ظبي)"
             6:
-                name: "Region / District (منطقة, ولاية)"
                 equivalent: district
-                present_in_data: true
-                source: "OSM data (AE L6; 5 features e.g. منطقة الظفرة, العين, ولاية مدحاء, ولاية بخا) — wiki marks n6 as n/a, so name derived from data"
             7:
-                name: "Locality / Sub-district (in use, fixme)"
                 equivalent: other
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (unitedarab:n7 = 'in use, fixme'); OSM data (AE L7; 5 features e.g. حفير, سيح الدحل, Al O'shoosh, Saih Shua'Alah, Al Fagaa')"
             8:
-                name: "Municipalities"
                 equivalent: municipality
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (unitedarab:n8 = 'Municipalities'); OSM data (AE L8; 372 features e.g. خورفكان, Kalba كلباء, الحمرية)"
             10:
-                name: "Suburbs / Quarters / Villages"
                 equivalent: submunicipality
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (unitedarab:n10 = 'Suburbs / Quarters / Villages ?', marked uncertain with '?'); OSM data (AE L10; 130 features e.g. جميرا, Rosa Village, رقة)"
-        notes:
-            - "Wiki value (L2) is the proposed national tagging scheme, marked '(proposed)'; the scheme is nonetheless reflected in data."
-            - "Wiki defines L4, L5, L7, L8, L10 (and L2 via value); L3, L6, L9, L11 are marked n/a in the wiki."
-            - "Divergence: L6 has 5 features in data (منطقة/region and ولاية/wilayah, including the Omani exclaves Madha/Bukha) despite being n/a in the wiki; name and classification derived from data + national scheme."
-            - "L7 wiki value is the literal status note 'in use, fixme' rather than a named entity; mapped to 'other' as no clean semantic category applies."
-            - "L10 wiki value carries a trailing '?' indicating the scheme author was uncertain about this level."
-            - "partial_coverage=false: UAE lies entirely within the dataset region (Middle East extract), so coverage is not geographically truncated."
-            - "All data levels (2,4,5,6,7,8,10) are represented; all wiki-defined non-n/a levels are represented."
     CY:
-        name: "Cyprus"
-        partial_coverage: true
         levels:
             2:
-                name: "Cyprus / Κύπρος / Kıbrıs"
                 equivalent: country
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (cyprus:value, country header); OSM data (CY L2: \"Κύπρος - Kıbrıs\", \"Akrotiri and Dhekelia\")"
             3:
-                name: "De facto partitions (Republic of Cyprus / TRNC / UN buffer zone)"
                 equivalent: other
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (cyprus:n3); OSM data (CY L3: \"Kuzey Kıbrıs\", \"Κύπρος\")"
             4:
-                name: "The 6 de jure Districts"
                 equivalent: district
-                present_in_data: false
-                source: "OSM Wiki Template:Admin level (cyprus:n4)"
             5:
-                name: "Districts of RoC and TRNC (5 + 6, LAU 1)"
                 equivalent: district
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (cyprus:n5); OSM data (CY L5: \"Επαρχία Λάρνακας\", \"Επαρχία Λεμεσού\", \"Girne ilçesi\")"
             6:
-                name: "Municipalities & Community Clusters (LAU 2)"
                 equivalent: municipality
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (cyprus:n6); OSM data (CY L6: \"Δήμος Πάφου\", \"Δήμος Λευκωσίας\", \"Δήμος Λακατάμειας\")"
             7:
-                name: "Municipal Quarters"
                 equivalent: submunicipality
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (cyprus:n7); OSM data (CY L7: \"Άγιος Δομέτιος\", \"Έγκωμη\", \"İplik Pazarı Mahallesi\")"
             8:
-                name: "Communities"
                 equivalent: municipality
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (cyprus:n8); OSM data (CY L8: \"Δήμος Λάρνακας\", \"Γεροσκήπου\", \"Λευκωσία\")"
             9:
-                name: "Municipality Districts / Parishes"
                 equivalent: submunicipality
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (cyprus:n9); OSM data (CY L9: \"Αρχάγγελος - Ανθούπολη\", \"Άγιος Μάμας\", \"Αγία Παρασκευή\")"
             10:
-                name: "Settlement"
                 equivalent: submunicipality
-                present_in_data: false
-                source: "OSM Wiki Template:Admin level (cyprus:n10)"
-        notes:
-            - "Disputed/partitioned territory: Cyprus is politically partitioned. Wiki defines admin_level 3 as the 'de facto partitions' between the Republic of Cyprus (RoC), the Turkish Republic of Northern Cyprus (TRNC), and the UN buffer zone. This is not a normal subnational tier, so it is classified as 'other'. Data L3 confirms 2 features ('Kuzey Kıbrıs', 'Κύπρος')."
-            - "admin_level 2 in data includes 'Akrotiri and Dhekelia' (UK Sovereign Base Areas), a British Overseas Territory embedded within the island and tagged at country level alongside Cyprus itself."
-            - "Wiki-defined level ABSENT in data: admin_level 4 (the 6 de jure Districts) has 0 features in the extract. The de jure district tier is not mapped; the operational district tier appears instead at L5 (wiki n5: 5 districts of RoC and 6 districts of TRNC, LAU 1). Level continuity therefore jumps from L3 directly to L5."
-            - "Wiki-defined level ABSENT in data: admin_level 10 (Settlement) has 0 features in the extract."
-            - "Level-2 coverage caveat: per CLAUDE.md the OSM Republic-of-Cyprus admin_level-2 polygon does not import cleanly; the project inserts a synthetic 'ne-cy-fill' coverage feature. The 2 L2 data features here are 'Κύπρος - Kıbrıs' and the Sovereign Base Areas, not a single clean RoC outline."
-            - "Semantic note: both L6 (Municipalities & Community Clusters) and L8 (Communities/Koinotites) belong to Cyprus's two-track local-government system (municipalities/Dimoi vs. communities/Koinotites). Both are independent local-government units rather than sub-divisions, so both are classified 'municipality'; L8 data mixes 'Δήμος' (municipality) and community entries."
-            - "Semantic note: L7 (Municipal Quarters) and L9 (Municipality Districts/Parishes) are both sub-municipal units, classified 'submunicipality'. Wiki labels L9 with 'Parishes' but they function as municipality subdivisions, so 'submunicipality' was chosen over 'parish'. L10 (Settlement) is the lowest tier and likewise classified 'submunicipality'."
-            - "admin_level 11 is explicitly {{n/a}} in the wiki and absent from data; omitted."
-            - "partial_coverage = true: levels 2-9 are densely populated, but the de jure district tier (L4) and Settlement tier (L10) defined in the wiki are entirely absent from the extract, and the L2 country polygon is fragmented/synthetic rather than a clean RoC outline."
     DE:
-        name: "Germany"
-        partial_coverage: false
         levels:
             2:
-                name: "Deutschland"
                 equivalent: country
-                present_in_data: true
-                source: "OSM data (DE L2, 1 feature: Deutschland). Wiki germany row n2 is not explicitly listed (the value/header row only holds the flag icon and border-discussion notes); L2 is the national border by OSM convention."
             4:
-                name: "Bundesland"
                 equivalent: state
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (germany:n4 'federal states border / Bundesland / NUTS 1'); OSM data (DE L4, 16 features; e.g. Mecklenburg-Vorpommern, Schleswig-Holstein, Sachsen)"
             5:
-                name: "Regierungsbezirk"
                 equivalent: region
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (germany:n5 'state-district border / Regierungsbezirk / NUTS 2'); OSM data (DE L5, 19 features; e.g. Unterfranken, Oberfranken, Regierungsbezirk Karlsruhe)"
             6:
-                name: "Landkreis / Kreis / kreisfreie Stadt"
                 equivalent: county
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (germany:n6 'county borders / Landkreis / Kreis / kreisfreie Stadt / NUTS 3'); OSM data (DE L6, 399 features; e.g. Kreis Schleswig-Flensburg, Kreis Steinburg, Flensburg)"
             7:
-                name: "Amt / Samtgemeinde / Verwaltungsgemeinschaft"
                 equivalent: district
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (germany:n7 'amt / Samtgemeinde, Verwaltungsgemeinschaft / LAU 1 (aka NUTS 4)'); OSM data (DE L7, 1205 features; e.g. Zolling (VGem), Samtgemeinde Nordkehdingen, VVG der Gemeinde Ehrenkirchen)"
             8:
-                name: "Stadt / Gemeinde"
                 equivalent: municipality
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (germany:n8 'Towns, Municipalities / City-districts / Stadt, Gemeinde / LAU 2 (aka NUTS 5)'); OSM data (DE L8, 10869 features; e.g. Weyhe, Syke, Stralsund)"
             9:
-                name: "Stadtbezirk / Gemeindeteil mit Selbstverwaltung"
                 equivalent: borough
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (germany:n9 'Parts of a municipality with parish councils / self_government - Stadtbezirk / Gemeindeteil mit Selbstverwaltung'); OSM data (DE L9, 10256 features; e.g. Reinickendorf, Spandau, Mitte)"
             10:
-                name: "Stadtteil / Gemeindeteil ohne Selbstverwaltung / Gemarkung"
                 equivalent: submunicipality
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (germany:n10 'Parts of a municipality without ... - Stadtteil / Gemeindeteil ohne Selbstverwaltung / Gemarkung'); OSM data (DE L10, 9192 features; e.g. Frohnau, Charlottenburg-Nord, Hansaviertel)"
             11:
-                name: "Flur"
                 equivalent: submunicipality
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (germany:n11 'subdivision of Gemarkung - Flur'); OSM data (DE L11, 1568 features; e.g. Erle-Middelich, Beckhausen-Schaffrath, Pfinzweiler)"
             12:
-                name: "Gemarkung-/Flur-Untergliederung (Straße/Block)"
                 equivalent: submunicipality
-                present_in_data: true
-                source: "OSM data (DE L12, 15 features; e.g. Kammerberg, Isolde-Kurz-Straße, Von-Schonebeck-Ring). NOT defined in OSM Wiki (max documented level is n11); name derived from example_names which are sub-Flur fragments / streets / blocks."
-        notes:
-            - "Verified against temp/wiki_levels.tsv (germany rows) and temp/admin_level_inventory.txt (DE rows)."
-            - "Wiki germany:n3 = {{n/a}} (explicitly not applicable) and is absent from the data, so no L3 entry is included."
-            - "Data levels present: 2,4,5,6,7,8,9,10,11,12. Wiki-defined (non-n/a) levels: 4,5,6,7,8,9,10,11. Every wiki-defined level is present in the data, hence partial_coverage=false."
-            - "L12 is present in data (15 features) but is NOT documented in the OSM Wiki (germany table stops at n11); its examples are street/block-level fragments below Flur, classified as submunicipality."
-            - "L2 header row (germany 'value') contains only MediaWiki markup (flag icon, border-discussion links); no explicit n2 name, so the L2 name 'Deutschland' is taken from the data."
     FI:
-        name: "Finland"
-        partial_coverage: false
         levels:
             2:
-                name: "Finland (Suomi)"
                 equivalent: country
-                present_in_data: true
-                source: "OSM data (FI L2; Suomi / Finland); OSM Wiki Template:Admin level (finland:value, country header)"
             3:
-                name: "Main areas (Pääalueet, NUTS 1)"
                 equivalent: region
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (finland:n3, 'Main areas (Pääalueet, NUTS 1): Manner-Suomi'); OSM data (FI L3; Manner-Suomi)"
             4:
-                name: "Regions (Maakunnat, NUTS 3)"
                 equivalent: state
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (finland:n4, 'Regions (Maakunnat, NUTS 3): Uusimaa'); OSM data (FI L4, 18 features; e.g. Uusimaa, Varsinais-Suomi, Pirkanmaa)"
             7:
-                name: "Sub-regions (Seutukunnat, LAU 1)"
                 equivalent: district
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (finland:n7, 'Sub-regions (Seutukunnat, LAU 1): Helsingin seutukunta'); OSM data (FI L7, 67 features; e.g. Helsingin seutukunta, Jyväskylän seutukunta)"
             8:
-                name: "Municipalities (Kunnat / Kaupungit, LAU 2)"
                 equivalent: municipality
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (finland:n8, 'municipalities (Kunnat / Kaupungit, LAU 2): Helsinki'); OSM data (FI L8, 292 features; e.g. Helsinki, Vantaa, Espoo)"
             9:
-                name: "Villages (kylät) / large sub-areas of city districts (kaupunginosien/kunnanosien suuralueet)"
                 equivalent: submunicipality
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (finland:n9, 'villages (kylät), Kaupunginosien/kunnanosien suuralueet (Helsinki; Espoo, Vantaa ...)'); OSM data (FI L9, 231 features; e.g. Lohja, Hämeenlinna)"
             10:
-                name: "City/municipal districts (kaupunginosat / kunnanosat)"
                 equivalent: submunicipality
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (finland:n10, 'City/municipal districts(kaupunginosat/kunnanosat): Kulosaari'); OSM data (FI L10, 1764 features; e.g. Kulosaari, Lammi, Rahola)"
             11:
-                name: "Sub-districts / quarters (neighbourhoods)"
                 equivalent: submunicipality
-                present_in_data: true
-                source: "OSM data (FI L11, 217 features; e.g. Hernesaari, Jätkäsaari, Ruoholahti) — derived from example_names; OSM Wiki marks finland:n11 as {{n/a}}"
-        notes:
-            - "Country header in the wiki is flagged as a proposal: '(proposed by User:Boozeman, augmented by User:Skela)' — the Finnish scheme is a community proposal, not an official OSM-ratified standard. The L2 name 'Finland (Suomi)' is taken from the OSM data value, not from the proposal markup."
-            - "Wiki levels n5 and n6 are explicitly {{n/a|align=left}} (not used) and are absent from the data; omitted from the mapping."
-            - "Wiki n11 is marked {{n/a|align=left}}, but the data DOES contain 217 features at L11 (e.g. Hernesaari, Jätkäsaari, Ruoholahti — Helsinki neighbourhoods/quarters). L11 name derived from example_names and the national sub-municipal scheme since the wiki defines it as undefined."
-            - "Level 3 (Manner-Suomi = Mainland Finland, NUTS 1) is a single grouping feature (count 1); it does not cover the autonomous Åland Islands (Ahvenanmaa), which is the other NUTS 1 main area. Åland's NUTS 1 main area is not present as an L3 feature in the extract."
-            - "L4 Regions (Maakunnat) are the de facto first-order administrative subdivision and are classified as 'state'; L3 (NUTS 1 main areas) is a higher statistical grouping classified as 'region'."
-            - "L9 has a dual meaning in the wiki: rural villages (kylät) AND large sub-areas of city districts in the biggest cities (Helsinki, Espoo, Vantaa); both map to sub-municipal units. Data example names (Lohja, Hämeenlinna) reflect this mixed usage."
-            - "L7 Sub-regions (Seutukunnat, LAU 1) are statistical groupings of municipalities; classified as 'district' as the closest semantic fit (no province/county tier exists between region and municipality in the modern Finnish scheme)."
-            - "Extract covers all wiki-defined levels (L2-L4, L7-L10) plus L11 which the wiki leaves undefined; every level is populated in the data, so partial_coverage is false."
     GR:
-        name: "Greece"
-        partial_coverage: false
         levels:
             2:
-                name: "Ελλάς (Greece)"
                 equivalent: country
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (greece:value, country header '(in use)'); OSM data (GR L2; 1 feature: Ελλάς)"
             3:
-                name: "Αυτόνομη Μοναστική Πολιτεία Αγίου Όρους (Autonomous Monastic State of Mount Athos)"
                 equivalent: other
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (greece:n3, Wikipedia link 'αυτόνομης μοναστικής πολιτείας Αγίου Όρους'); OSM data (GR L3; 1 feature: Αυτόνομη Μοναστική Πολιτεία Αγίου Όρους)"
             4:
-                name: "Αποκεντρωμένες διοικήσεις (Decentralized Administrations)"
                 equivalent: region
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (greece:n4, Wikipedia link 'Αποκεντρωμένων διοικήσεων'); OSM data (GR L4; 7 features, e.g. Αποκεντρωμένη Διοίκηση Αττικής)"
             5:
-                name: "Περιφέρειες (Regions, NUTS 2)"
                 equivalent: state
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (greece:n5, 'Περιφερειών' + NUTS 2); OSM data (GR L5; 13 features, e.g. Περιφέρεια Κρήτης)"
             6:
-                name: "Περιφερειακές ενότητες (Regional units, NUTS 3)"
                 equivalent: province
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (greece:n6, 'Περιφερειακών ενοτήτων' + NUTS 3); OSM data (GR L6; 74 features, e.g. Περιφερειακή Ενότητα Λάρισας)"
             7:
-                name: "Δήμοι (Municipalities)"
                 equivalent: municipality
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (greece:n7, 'Δήμων'); OSM data (GR L7; 333 features, e.g. Δήμος Αθηναίων)"
             8:
-                name: "Δημοτικές ενότητες (Municipal units)"
                 equivalent: submunicipality
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (greece:n8, 'Δημοτικών ενοτήτων'); OSM data (GR L8; 465 features, e.g. Δημοτική Ενότητα Βούλας)"
             9:
-                name: "Δημοτικές/Τοπικές κοινότητες (Municipal/local communities, LAU)"
                 equivalent: submunicipality
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (greece:n9, 'Δημοτικών κοινοτήτων' + LAU); OSM data (GR L9; 1408 features, e.g. Κοινότητα Λεπενούς)"
             10:
-                name: "Κοινότητες (Communities / sub-community settlement units)"
                 equivalent: submunicipality
-                present_in_data: true
-                source: "OSM data (GR L10; 554 features, e.g. Κ. Άμπλιανης, Κ. Δομνίστας) — wiki marks n10 as {{n/a}}, so name derived from example_names ('Κ.' = Κοινότητα abbreviation)"
-        notes:
-            - "Wiki defines levels n3-n9 (each as a {{Wikipedia|el|...|<display>}} link); n2 is given via the country header row ('(in use)'); n10 and n11 are explicitly {{n/a}} (undefined)."
-            - "Wiki display text is the genitive-plural form (e.g. 'Αποκεντρωμένων διοικήσεων', 'Περιφερειών', 'Δήμων', 'Δημοτικών ενοτήτων', 'Δημοτικών κοινοτήτων'); names above were normalized to the nominative-plural form used in the data and in standard usage. English glosses retained."
-            - "Level 10 IS present in the data (554 features, e.g. Κ. Άμπλιανης) despite being {{n/a}} in the wiki. Names are abbreviated as 'Κ.' (= Κοινότητα). Classified as submunicipality (sub-community/settlement-level unit); name and equivalent derived from example_names plus the Greek Καλλικράτης scheme, not from the wiki."
-            - "Greek local-government hierarchy under the 2010 Καλλικράτης reform: Decentralized Administrations (L4, state-appointed groupings of regions) > Regions/Περιφέρειες (L5, elected, NUTS 2) > Regional units/Περιφερειακές ενότητες (L6, NUTS 3) > Municipalities/Δήμοι (L7) > Municipal units/Δημοτικές ενότητες (L8, former pre-2010 municipalities) > Municipal/local communities/Κοινότητες (L9, LAU) > communities (L10)."
-            - "Semantic mapping note: L4 (Decentralized Administrations) classified as 'region' (administrative grouping above the elected regions); L5 (Περιφέρειες) classified as 'state' as the principal first-order self-governing subdivision; L6 (regional units) as 'province'. These are by-meaning classifications, not by literal NUTS rank."
-            - "Mount Athos (L3, Αυτόνομη Μοναστική Πολιτεία Αγίου Όρους) is an autonomous monastic polity / self-governing region within Greece — classified 'other' as it does not fit a standard administrative tier. It is both wiki-defined (n3) and present in data (1 feature)."
-            - "Levels 8, 9 and 10 are all sub-municipal community/settlement tiers and were all classified 'submunicipality'; the wiki distinguishes only down to n9 (Δημοτικές κοινότητες, LAU)."
-            - "Coverage looks complete for the country: L2 country polygon present (1 feature) plus all defined sub-levels, so partial_coverage = false."
-            - "n11 ({{n/a}}) is undefined in the wiki and absent from data, so it is omitted."
     IL:
-        name: "Israel"
-        partial_coverage: true
         levels:
             2:
-                name: "Israel / Palestine"
                 equivalent: country
-                present_in_data: false
-                source: "OSM Wiki Template:Admin level (israel:value = country header showing Israel + Palestine flags); admin_level 2 = country by convention. Not present in extract."
             4:
-                name: "מחוז / District (including West Bank and Gaza Strip)"
                 equivalent: district
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (israel:n4 = מחוז / District, incl. West Bank and Gaza Strip); OSM data (IL L4, 7 features; e.g. מחוז הצפון, מחוז ירושלים, מחוז תל אביב, قطاع غزة)"
             5:
-                name: "נפה / Subdistrict (West Bank: Areas A, B, C)"
                 equivalent: county
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (israel:n5 = נפה / Subdistrict; Areas A, B, C of West Bank); OSM data (IL L5, 15 features; e.g. נפת באר שבע, נפת חיפה, נפת עכו, נפת רמת הגולן)"
             6:
-                name: "אזור טבעי / Natural Region (in Palestinian Territory: נפה / Subdistrict)"
                 equivalent: region
-                present_in_data: false
-                source: "OSM Wiki Template:Admin level (israel:n6 = אזור טבעי / Natural Region; in Palestinian Territory: נפה / Subdistrict). Absent from extract."
             7:
-                name: "מטרופולין / Metropolitan area"
                 equivalent: region
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (israel:n7 = מטרופולין / Metropolitan area); OSM data (IL L7, 2 features; e.g. بستان صور, قطمون)"
             8:
-                name: "עיר, מועצה מקומית, מועצה אזורית / City, Local council, Regional council (in Palestinian Territory: Municipality grade 1, 2)"
                 equivalent: municipality
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (israel:n8); OSM data (IL L8, 246 features; e.g. רחובות, אשקלון, מצפה רמון, مجدل شمس, بقعاثا)"
             9:
-                name: "רובע / Borough (under regional council: יישוב / Village; in Palestinian Territory: Municipality grade 3, 4)"
                 equivalent: borough
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (israel:n9); OSM data (IL L9, 17 features; e.g. יפו, רובע קריית חיים - קריית שמואל, أم النصر, البريج, خزاعة)"
             10:
-                name: "שכונה / Neighborhood"
                 equivalent: submunicipality
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (israel:n10 = שכונה / Neighborhood); OSM data (IL L10, 108 features; e.g. חיפה אל עתיקה, הרצליה, נוה שאנן)"
             11:
-                name: "Sub-neighborhood"
                 equivalent: submunicipality
-                present_in_data: true
-                source: "OSM data (IL L11, 3 features; e.g. נאות אברהם, נאות אילן, שכונה דרום). Wiki marks israel:n11 as n/a (undefined); name derived from data as sub-neighborhood units below שכונה (Neighborhood)."
-        notes:
-            - "The wiki entry is a combined Israel/Palestine scheme (the level-2 country header shows both the Israeli and Palestinian flags); several levels carry dual meanings for Israel proper vs. the Palestinian Territories (West Bank/Gaza)."
-            - "Level 2 (country) is defined by convention (admin_level 2 = country) but is NOT present in the extract; no country-level polygon for Israel/Palestine in the data. Contributes to partial_coverage."
-            - "Level 3 is n/a in the wiki and absent in the data, so omitted."
-            - "Level 6 (אזור טבעי / Natural Region; in Palestinian Territory: נפה / Subdistrict) is wiki-defined but ABSENT from the data inventory. Classified 'region' (a natural-geographic grouping tier). Contributes to partial_coverage."
-            - "Level 11 is present in the data (3 features) but is marked n/a (undefined) in the wiki; the name 'Sub-neighborhood' is derived from data + national scheme as units nested below שכונה (Neighborhood). Flagged as uncertain."
-            - "Level 12 is neither defined in the wiki nor present in the data, so omitted."
-            - "partial_coverage = true: the extract lacks the level-2 country polygon and the wiki-defined level-6 Natural Region tier; coverage is mid/lower-tier subdivisions only."
-            - "Multi-meaning levels: n5 (Subdistrict; in West Bank = Areas A, B, C), n6 (Natural Region vs. Subdistrict), n8 (City/Local council/Regional council vs. Palestinian Municipality grade 1-2), n9 (Borough/Village vs. Palestinian Municipality grade 3-4) each encode separate Israeli and Palestinian meanings at one level."
-            - "Disputed/embedded territories appear in the data: Gaza (قطاع غزة at L4), Golan Heights localities (مجدل شمس, بقعاثا, مسعدة, عين قنية at L8; נפת רמת הגולן at L5), and West Bank/Gaza Palestinian localities (أم النصر, البريج, خزاعة at L9) reflecting the combined OSM Israel/Palestine modeling."
-            - "Semantic classification: n4 מחוז (District) -> district; n5 נפה (Subdistrict) -> county (mid sub-district tier); n6 Natural Region -> region; n7 מטרופולין (Metropolitan area) -> region (cross-municipality grouping tier); n8 city/council -> municipality; n9 רובע (Borough) -> borough; n10/n11 -> submunicipality (neighborhood/sub-neighborhood)."
     JO:
-        name: "Jordan"
-        partial_coverage: false
         levels:
             2:
-                name: "Jordan"
                 equivalent: country
-                present_in_data: true
-                source: "OSM data (JO L2, 1 feature; الأردن); wiki header (jordan:value = flag of Jordan)"
             4:
-                name: "Governorate (muhafazah)"
                 equivalent: province
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (jordan:n4 = Governorate); OSM data (JO L4, 12 features; e.g. عمان, إربد, الزرقاء, العقبة)"
             5:
-                name: "District (liwa')"
                 equivalent: district
-                present_in_data: true
-                source: "OSM data (JO L5, 51 features, all لواء/liwa'; e.g. لواء قصبة عمان, لواء ماركا, لواء القويسمة); wiki marks n5 as n/a, so name derived from example_names + national scheme (liwa' = district tier)"
             6:
-                name: "District / Subdistrict (qada'/nahiya)"
                 equivalent: district
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (jordan:n6 = District); OSM data (JO L6, 89 features; e.g. قضاء ماركا, ناحية عمان, Na'oor Sub-District) — example_names mix qada' (district) and nahiya (subdistrict)"
             7:
-                name: "Subdistrict (nahiyah)"
                 equivalent: district
-                present_in_data: false
-                source: "OSM Wiki Template:Admin level (jordan:n7 = Subdistrict); absent from extract (0 features)"
             8:
-                name: "Locality / municipal area"
                 equivalent: municipality
-                present_in_data: true
-                source: "OSM data (JO L8, 1 feature; Sweileh); wiki marks n8 as n/a, so name derived from example_name (a town/locality) — undocumented in wiki"
             9:
-                name: "Subdivision (uncertain)"
                 equivalent: other
-                present_in_data: true
-                source: "OSM data (JO L9, 1 feature; example name B-07-23 is a code, not a named entity); wiki marks n9 as n/a"
-        notes:
-            - "Wiki defines only three subdivision tiers: n4 Governorate, n6 District, n7 Subdistrict; n3, n5, n8, n9, n10, n11 are explicitly n/a."
-            - "Data DIVERGES from the wiki mapping: the wiki places District at n6 and Subdistrict at n7, but the extract has dense features at L5 (51) and L6 (89) and NO L7. Jordan's national scheme is governorate > liwa' (district) > qada'/nahiya (subdistrict). Mappers appear to use L5=liwa' and L6=qada'/nahiya, so the empirical hierarchy is shifted one level up relative to the wiki's documented n6/n7. Treat wiki-vs-data level numbers with care."
-            - "L5 is present in data (51 features, all لواء/liwa') but wiki marks n5 as n/a — undocumented level; name derived from example_names + national scheme."
-            - "L6 example names mix قضاء (qada') and ناحية (nahiya), conflating district and subdistrict tiers; classified as district."
-            - "L7 Subdistrict is wiki-defined but ABSENT in the extract data (0 features)."
-            - "L8 (1 feature: Sweileh, a town near Amman) and L9 (1 feature: B-07-23, a code-like name) are present in data but n/a in wiki — undocumented, low-count, likely stray/experimental mappings rather than a systematic tier. L9 name is a code so its meaning is uncertain (classified 'other')."
-            - "All data levels have full country context (L2 polygon present, 12 governorates present), so coverage is not partial."
-            - "No disputed or embedded territories noted for Jordan in these sources."
     OM:
-        name: "Oman"
-        partial_coverage: false
         levels:
             2:
-                name: "Oman"
                 equivalent: country
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (oman:value, marked 'proposed'); OSM data (OM L2; عمان)"
             4:
-                name: "Governorate (محافظة)"
                 equivalent: province
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (oman:n4 = Governorate / محافظة); OSM data (OM L4; e.g. محافظة مسقط, محافظة ظفار, محافظة الداخلية)"
             6:
-                name: "Provinces (ولاية)"
                 equivalent: district
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (oman:n6 = Provinces / ولاية, i.e. wilayat); OSM data (OM L6; e.g. ولاية السيب, ولاية مطرح, ولاية بركاء)"
             8:
-                name: "Villages/Towns (قرية أو مدينة)"
                 equivalent: municipality
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (oman:n8 = Villages/Towns / قرية أو مدينة); OSM data (OM L8; e.g. قرية الخوض, المعبيلة الجنوبية)"
             10:
-                name: "Blocks/Subdivisions of Villages and Towns (مجمع او تقسيمات قرى/مدن)"
                 equivalent: submunicipality
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (oman:n10 = Blocks/Subdivisons of Villages and Towns / مجمع او تقسيمات قرى/مدن); OSM data (OM L10; e.g. المجمع 353, المجمع 361)"
-        notes:
-            - "All five wiki-defined levels (2,4,6,8,10) are present in the data; odd levels n3/n5/n7/n9/n11 are marked n/a in the wiki and absent from data."
-            - "Wiki marks the L2 country entry as '(proposed)'; in practice it is fully populated in the data."
-            - "L4 governorate (muhafazah) is Oman's first-level subdivision; mapped to 'province' as the closest enum value since 'governorate' is not in the schema."
-            - "L6 wilaya (ولاية) is the second-level subdivision under governorates; mapped to 'district'. The wiki English label 'Provinces' is the source wording but it functions as a district-level unit."
-            - "Corrected draft L6 name from 'Province / Wilayat' to the literal wiki value 'Provinces (ولاية)'; normalized minor spelling in L10."
     PS:
-        name: "Palestinian Territory"
-        partial_coverage: true
         levels:
             2:
-                name: "Palestine"
                 equivalent: country
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (israel:value national header shows '{{Flagicon|Israel}} {{Flagicon|Palestine}}'); OSM data (PS L2; 1 feature, example name 'ישראל')"
             4:
-                name: "District (including West Bank and Gaza Strip)"
                 equivalent: district
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (israel:n4 'District (including West Bank and Gaza Strip)'); OSM data (PS L4; 2 features, e.g. 'الضفة الغربية')"
             5:
-                name: "Subdistrict (Areas A, B, C of West Bank)"
                 equivalent: county
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (israel:n5 'Subdistrict / Areas A, B, C of West Bank'); OSM data (PS L5; 16 features, e.g. 'محافظة غزة','محافظة الخليل')"
             6:
-                name: "Subdistrict"
                 equivalent: county
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (israel:n6 'In Palestinian Territory: Subdistrict' — Israeli meaning is 'Natural Region'); OSM data (PS L6; 5 features, e.g. 'منطقة أ','منطقة ب')"
             8:
-                name: "Municipality (grade 1, 2)"
                 equivalent: municipality
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (israel:n8 'In Palestinian Territory: Muncipality (grade 1, 2)' — Israeli meaning is 'City, Local council, Regional council'); OSM data (PS L8; 35 features, e.g. 'رام الله','البيرة')"
             9:
-                name: "Municipality (grade 3, 4)"
                 equivalent: municipality
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (israel:n9 'In Palestinian Territory: Muncipality (grade 3, 4)' — Israeli meaning is 'Borough / Village'); OSM data (PS L9; 11 features, e.g. 'الزهراء','المغراقة','النصر')"
             10:
-                name: "Neighborhood"
                 equivalent: submunicipality
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (israel:n10 'Neighborhood' — no Palestinian-specific override, shared meaning); OSM data (PS L10; 16 features, e.g. 'الزيتون','المدينة القديمة','الدرج')"
-        notes:
-            - "Palestinian admin levels are documented embedded inside the Israel wiki table (key 'israel'); the country header (israel:value) shows both the Israeli and Palestinian flags. Palestinian-specific meanings were extracted from the 'In Palestinian Territory: ...' / 'Areas A, B, C of West Bank' clauses rather than the Israeli interpretations."
-            - "Multi-meaning / dual-interpretation levels: n6, n8, n9 each define a distinct Palestinian meaning separate from the Israeli one. n6 = 'Natural Region' for Israel but 'Subdistrict' (נפה/Nafa) in Palestinian Territory; n8 = 'City/Local council/Regional council' for Israel but 'Municipality grade 1,2' in Palestinian Territory; n9 = 'Borough/Village' for Israel but 'Municipality grade 3,4' in Palestinian Territory."
-            - "Levels 5 and 6 both map to a Subdistrict (Nafa) tier in the Palestinian scheme, so both carry equivalent 'county' (a tier finer than the L4 'district'). Data confirms both populated: L5 holds muhafazah-style 'محافظة ...' governorate names; L6 holds the Oslo-Accord Areas 'منطقة أ/ب' plus Israeli-controlled C/H1/H2 zones."
-            - "admin_level 2: the inventory shows PS L2 with only 1 feature named 'ישראל' (Israel) — there is no distinct Palestine country polygon in this extract, only the shared/Israeli one. The level-2 boundary for Palestine itself is effectively absent (disputed-territory artifact)."
-            - "Disputed / mixed-control content visible in L6 data: example names include 'منطقة أ' (Area A), 'منطقة ب' (Area B), 'שטח C' (Area C), 'אזור H2' and 'אזור H1' (the Hebron H1/H2 division) — Oslo Accords control zones, not a clean civil hierarchy."
-            - "Wiki-defined level absent from PS data: n7 (Metropolitan area) is defined in the wiki but has no PS features in the inventory. n3 and n11 are {{n/a}} (not used)."
-            - "Data shows mixed Hebrew and Arabic names at several levels (e.g. L8 contains both Israeli 'מועצה אזורית' regional councils and Palestinian 'رام الله/البيرة'), reflecting overlapping Israeli and Palestinian administrative tagging in the same West Bank geography."
-            - "L10 (Neighborhood) has no explicit Palestinian-specific override in the wiki, so the shared 'Neighborhood' meaning is used; data is dominated by Gaza neighborhood names (e.g. 'الزيتون','المدينة القديمة','الدرج')."
-            - "partial_coverage set true: no genuine Palestine-specific level-2 country polygon is present (only the shared Israel polygon), so the country boundary for PS is not independently represented in the extract."
     RU:
-        name: "Russia"
-        partial_coverage: true
         levels:
             2:
-                name: "Russian Federation"
                 equivalent: country
-                present_in_data: false
-                source: "OSM Wiki Template:Admin level (russia:value '{{Flagicon|Russia}} (Russian Federation)')"
             3:
-                name: "Federal districts"
                 equivalent: region
-                present_in_data: false
-                source: "OSM Wiki Template:Admin level (russia:n3 'Federal districts')"
             4:
-                name: "Federal subjects"
                 equivalent: state
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (russia:n4 'Federal subjects'); OSM data (RU L4; e.g. Московская область, Рязанская область, Воронежская область)"
             5:
-                name: "Groups of municipal districts / urban okrugs, administrative okrugs / districts of federal cities"
                 equivalent: district
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (russia:n5); OSM data (RU L5; e.g. Северный административный округ, Колпинский район)"
             6:
-                name: "Municipal districts and okrugs of federal subjects (except federal cities), urban okrugs, including ZATO and urban okrugs with intracity division"
                 equivalent: county
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (russia:n6); OSM data (RU L6; e.g. Сергиево-Посадский городской округ, Дмитровский муниципальный район)"
             8:
-                name: "Urban and rural municipalities, municipal intra-city territories of federal cities, districts of urban okrugs with intracity division"
                 equivalent: municipality
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (russia:n8); OSM data (RU L8; e.g. район Кунцево, Каменногорское городское поселение, Гончаровское сельское поселение)"
             9:
-                name: "Districts and other administrative-territorial units of urban and municipal okrugs"
                 equivalent: submunicipality
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (russia:n9); OSM data (RU L9; e.g. Центральный район, Ленинградский район, Московский район)"
             10:
-                name: "Hamlets / suburbs (under discussion)"
                 equivalent: submunicipality
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (russia:n10, marked 'Under discussion'); OSM data (RU L10; e.g. Кола, Полярные Зори, Донецк)"
             11:
-                name: "Okrug (sub-district of city)"
                 equivalent: submunicipality
-                present_in_data: true
-                source: "OSM data only (RU L11; 3 features: Ленинский округ, Московский округ, Октябрьский округ) — wiki marks n11 as {{n/a}}, name derived from example_names + national okrug scheme"
-        notes:
-            - "Regional extract: only the European part of Russia is included, so this is a partial sliver of the country. partial_coverage=true."
-            - "admin_level 2 (country polygon 'Russian Federation') is defined in the wiki header but ABSENT from the data inventory — the full national boundary is not present in the extract."
-            - "admin_level 3 (Federal districts) is wiki-defined but ABSENT from the data."
-            - "admin_level 7 is explicitly n/a in the wiki (n7 = rowspan=2 {{n/a}}) and absent from data — undefined/unused."
-            - "admin_level 10 is wiki-tagged as provisional: '(Under discussion: all hamlets / suburbs or only suburbs with local government offices)'. Present in data nonetheless (3585 features); the wiki gives no formal name, so the name is derived from the under-discussion description."
-            - "admin_level 11 is present in data (3 features: Ленинский округ, Московский округ, Октябрьский округ) but the wiki marks n11 as {{n/a}}. Name derived from example_names and the national okrug scheme; flagged as data-only."
-            - "L5 name follows the wiki ordering verbatim (groups of municipal districts / urban okrugs first, then administrative okrugs / districts of federal cities); the draft had reordered these."
-            - "L9 example_names contain non-Russian (Estonian/Setomaa) entries: 'Marinova küla', 'Saatse küla', 'Perdaku küla', 'Lutepä...' — likely border-zone features near the Russia/Estonia frontier (Saatse Boot / Setomaa area); possible cross-border or misattributed features worth noting."
-            - "L10 example_names include 'Донецк' and various СНТ (садовое некоммерческое товарищество, dacha/garden cooperatives) and 'сельский административный...' entries — heterogeneous level mixing small towns, suburbs and informal settlements, consistent with the wiki's 'under discussion' status."
-            - "Levels 5/6 cover the two-tier Russian system (administrative-territorial vs municipal): n5 mixes federal-city administrative okrugs with groupings of municipal districts; n6 covers municipal/urban okrugs incl. ZATO. Semantic equivalents (district/county) are approximate given this dual hierarchy."
-            - "Disputed/embedded territories: Russia's claims (e.g. Crimea) and border zones are not separately distinguished in this extract; only standard admin levels appear."
     SY:
-        name: "Syria"
-        partial_coverage: true
         levels:
             2:
-                name: "Syria"
                 equivalent: country
-                present_in_data: false
-                source: "OSM Wiki Template:Admin level (syria:value header '''{{Flagicon|Syria}}''' implies a level-2 country polygon); not present in our extract"
             4:
-                name: "Governorates (muhafazah / محافظة)"
                 equivalent: state
-                present_in_data: false
-                source: "OSM Wiki Template:Admin level (syria:n4)"
             5:
-                name: "Districts (mintaqah / منطقة)"
                 equivalent: district
-                present_in_data: false
-                source: "OSM Wiki Template:Admin level (syria:n5)"
             6:
-                name: "Subdistricts (nahiya / ناحية)"
                 equivalent: district
-                present_in_data: true
-                source: "OSM Wiki Template:Admin level (syria:n6); OSM data (SY L6, 16 features; e.g. ناحية كسب, ناحية الجانودية, ناحية سلقين, ناحية كفر تخاريم, ناحية قورقانيا, ناحية مركز حارم, ناحية معبطلي)"
             8:
-                name: "Cities, towns and villages of subdistrict / Damascus municipalities (baladiyah / بلدية)"
                 equivalent: municipality
-                present_in_data: false
-                source: "OSM Wiki Template:Admin level (syria:n8)"
             10:
-                name: "Damascus neighborhoods (hayy / الحي)"
                 equivalent: submunicipality
-                present_in_data: false
-                source: "OSM Wiki Template:Admin level (syria:n10)"
-        notes:
-            - "Verified against both sources. Wiki value header is '''{{Flagicon|Syria}}''' (flag markup only, no usable string) — the implied level-2 country name is given as 'Syria'."
-            - "Extract is a known regional sliver: only admin_level 6 is present (16 features), all 'ناحية' (nahiya / subdistrict). partial_coverage = true."
-            - "No level-2 country polygon, nor levels 4, 5, 8, 10 present in the extract, although all are wiki-defined. The single present level (6) sits mid-hierarchy."
-            - "Wiki marks n3, n7, n9, n11 as {{n/a}} — not used in the Syrian scheme; omitted from the mapping."
-            - "Hierarchy per wiki: L4 Governorates (muhafazah) > L5 Districts (mintaqah) > L6 Subdistricts (nahiya) > L8 baladiyah > L10 Damascus neighborhoods (hayy)."
-            - "Equivalent classification: L4 governorate = first-order subdivision -> 'state'; L5 mintaqah = district. L6 nahiya is a sub-district one tier below mintaqah; the enum has no 'subdistrict' value, so both L5 and L6 map to 'district' (closest available term). This is a deliberate collision, not a misclassification — nahiya is an administrative sub-district (grouping villages), not a municipality."
-            - "Level 8 combines two meanings in the wiki ('Cities, towns and villages of Subdistrict' separated by <hr /> from 'Damascus Municipalities / baladiyah') — a multi-meaning level; classified as 'municipality'."
-            - "Level 10 (Damascus neighborhoods / hayy) is a sub-municipal unit specific to Damascus -> 'submunicipality'."
-            - "The 16 nahiya example names (Kasab, Janudiyah, Salqin, Kafr Takharim, Qurqaniya, Markaz Harim, Maabatli, ...) are in the northwest (Idlib/Latakia/Aleppo area), consistent with a partial north/northwest Syria extract within the regional PBF, not full national coverage."
-            - "No data-only levels undocumented in the wiki; the one present level (6) is wiki-defined."

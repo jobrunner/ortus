@@ -164,28 +164,48 @@ func fixtureCountries(ctx context.Context, fixture string) (map[string]bool, err
 	return keep, nil
 }
 
-// trimSidecar keeps only the selected countries (plus version + equivalent_levels).
+// trimSidecar writes a minimal sidecar: only the selected countries and only the
+// (level → equivalent) mapping ortus actually consumes. This drops the verbose
+// name/source/notes provenance (and its upstream typos) and shrinks the fixture.
 func trimSidecar(full, out string, keep map[string]bool) error {
 	data, err := os.ReadFile(full)
 	if err != nil {
 		return err
 	}
 	var doc struct {
-		Version          int                  `yaml:"version"`
-		EquivalentLevels map[string]any       `yaml:"equivalent_levels"`
-		Countries        map[string]yaml.Node `yaml:"countries"`
+		Version   int `yaml:"version"`
+		Countries map[string]struct {
+			Levels map[int]struct {
+				Equivalent string `yaml:"equivalent"`
+			} `yaml:"levels"`
+		} `yaml:"countries"`
 	}
 	if err := yaml.Unmarshal(data, &doc); err != nil {
 		return err
 	}
-	trimmed := map[string]yaml.Node{}
-	for iso, node := range doc.Countries {
-		if keep[iso] {
-			trimmed[iso] = node
-		}
+	type lvl struct {
+		Equivalent string `yaml:"equivalent"`
 	}
-	doc.Countries = trimmed
-	y, err := yaml.Marshal(doc)
+	type ctry struct {
+		Levels map[int]lvl `yaml:"levels"`
+	}
+	minimal := struct {
+		Version   int             `yaml:"version"`
+		Countries map[string]ctry `yaml:"countries"`
+	}{Version: doc.Version, Countries: map[string]ctry{}}
+	for iso, c := range doc.Countries {
+		if !keep[iso] {
+			continue
+		}
+		levels := map[int]lvl{}
+		for n, l := range c.Levels {
+			if l.Equivalent != "" {
+				levels[n] = lvl{Equivalent: l.Equivalent}
+			}
+		}
+		minimal.Countries[iso] = ctry{Levels: levels}
+	}
+	y, err := yaml.Marshal(minimal)
 	if err != nil {
 		return err
 	}
