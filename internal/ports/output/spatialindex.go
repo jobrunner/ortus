@@ -27,11 +27,11 @@ type SpatialIndex interface {
 	ResolveChain(ctx context.Context, layer string, fromFID int64, cols AdminColumns) ([]AdminRow, error)
 
 	// DistanceKM returns the ellipsoidal distance between two coordinates in km.
-	DistanceKM(a, b domain.Coordinate) (float64, error)
+	DistanceKM(ctx context.Context, a, b domain.Coordinate) (float64, error)
 
 	// Azimuth returns the initial bearing from one coordinate to another in
 	// degrees (0=N, 90=E, clockwise).
-	Azimuth(from, to domain.Coordinate) (float64, error)
+	Azimuth(ctx context.Context, from, to domain.Coordinate) (float64, error)
 }
 
 // Filter is an optional attribute predicate for QueryKNN: Column IN Values.

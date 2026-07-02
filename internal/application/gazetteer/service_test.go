@@ -15,11 +15,12 @@ import (
 // ResolveChain returns a canned chain per starting fid, and Distance/Azimuth are
 // computed with an equirectangular approximation so they track the fed coords.
 type fakeIndex struct {
-	pip    []domain.Feature
-	pipErr error
-	knn    map[string][]domain.Feature
-	knnErr error
-	chains map[int64][]output.AdminRow
+	pip      []domain.Feature
+	pipErr   error
+	knn      map[string][]domain.Feature
+	knnErr   error
+	chains   map[int64][]output.AdminRow
+	chainErr error
 }
 
 func (f fakeIndex) QueryKNN(_ context.Context, _ string, _ domain.Coordinate, _ int, _ float64, filter *output.Filter) ([]domain.Feature, error) {
@@ -36,14 +37,17 @@ func (f fakeIndex) PointInPolygon(context.Context, string, domain.Coordinate) ([
 	return f.pip, f.pipErr
 }
 func (f fakeIndex) ResolveChain(_ context.Context, _ string, fromFID int64, _ output.AdminColumns) ([]output.AdminRow, error) {
+	if f.chainErr != nil {
+		return nil, f.chainErr
+	}
 	return f.chains[fromFID], nil
 }
-func (f fakeIndex) DistanceKM(a, b domain.Coordinate) (float64, error) {
+func (f fakeIndex) DistanceKM(_ context.Context, a, b domain.Coordinate) (float64, error) {
 	dx := (b.X - a.X) * 111.32 * math.Cos(a.Y*math.Pi/180)
 	dy := (b.Y - a.Y) * 111.32
 	return math.Hypot(dx, dy), nil
 }
-func (f fakeIndex) Azimuth(from, to domain.Coordinate) (float64, error) {
+func (f fakeIndex) Azimuth(_ context.Context, from, to domain.Coordinate) (float64, error) {
 	dx := (to.X - from.X) * math.Cos(from.Y*math.Pi/180)
 	dy := to.Y - from.Y
 	deg := math.Atan2(dx, dy) * 180 / math.Pi

@@ -133,6 +133,33 @@ func TestBearingBoundaryConstraint(t *testing.T) {
 	}
 }
 
+func TestBearingConstraintAncestorErrorPropagates(t *testing.T) {
+	// A PointInPolygon failure while resolving the constraint tier must surface,
+	// not silently disable the boundary constraint.
+	sentinel := errors.New("pip failed")
+	resolver := mapResolver{[2]any{"DE", 4}: "state"}
+	svc := NewService(fakeIndex{pipErr: sentinel}, testManifest(), resolver, nil, true)
+	if _, err := svc.Bearing(context.Background(), domain.NewWGS84Coordinate(10, 50), domain.DefaultBearingPolicy()); !errors.Is(err, sentinel) {
+		t.Errorf("Bearing err = %v, want wrapped sentinel", err)
+	}
+}
+
+func TestBearingSameTierErrorPropagates(t *testing.T) {
+	// A ResolveChain failure while checking a candidate's tier must surface, not
+	// silently exclude the candidate (which would mask the failure as ErrNotFound).
+	sentinel := errors.New("resolvechain failed")
+	idx := fakeIndex{
+		pip:      []domain.Feature{adminFeatureID(20, "4", "Bayern")}, // query state resolves
+		knn:      map[string][]domain.Feature{"city": {placeFeature("city", "X", 9, 10.1)}},
+		chainErr: sentinel,
+	}
+	resolver := mapResolver{[2]any{"DE", 4}: "state"}
+	svc := NewService(idx, testManifest(), resolver, nil, true)
+	if _, err := svc.Bearing(context.Background(), domain.NewWGS84Coordinate(10, 50), domain.DefaultBearingPolicy()); !errors.Is(err, sentinel) {
+		t.Errorf("Bearing err = %v, want wrapped sentinel", err)
+	}
+}
+
 func TestBearingIndexErrorPropagates(t *testing.T) {
 	sentinel := errors.New("knn failed")
 	svc := NewService(fakeIndex{knnErr: sentinel}, testManifest(), nil, nil, true)

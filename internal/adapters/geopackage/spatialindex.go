@@ -203,9 +203,9 @@ func (g *GazetteerIndex) ResolveChain(ctx context.Context, layer string, fromFID
 
 // DistanceKM returns the ellipsoidal distance between two coordinates in km,
 // using SpatiaLite's Distance(g1, g2, 1) so it matches the KNN ordering metric.
-func (g *GazetteerIndex) DistanceKM(a, b domain.Coordinate) (float64, error) {
+func (g *GazetteerIndex) DistanceKM(ctx context.Context, a, b domain.Coordinate) (float64, error) {
 	var meters float64
-	err := g.db.QueryRowContext(context.Background(),
+	err := g.db.QueryRowContext(ctx,
 		"SELECT Distance(MakePoint(?, ?, 4326), MakePoint(?, ?, 4326), 1)",
 		a.X, a.Y, b.X, b.Y).Scan(&meters)
 	if err != nil {
@@ -216,9 +216,9 @@ func (g *GazetteerIndex) DistanceKM(a, b domain.Coordinate) (float64, error) {
 
 // Azimuth returns the initial bearing from one coordinate to another in degrees
 // (0=N, 90=E, clockwise), via SpatiaLite's ST_Azimuth (which returns radians).
-func (g *GazetteerIndex) Azimuth(from, to domain.Coordinate) (float64, error) {
+func (g *GazetteerIndex) Azimuth(ctx context.Context, from, to domain.Coordinate) (float64, error) {
 	var rad float64
-	err := g.db.QueryRowContext(context.Background(),
+	err := g.db.QueryRowContext(ctx,
 		"SELECT ST_Azimuth(MakePoint(?, ?, 4326), MakePoint(?, ?, 4326))",
 		from.X, from.Y, to.X, to.Y).Scan(&rad)
 	if err != nil {

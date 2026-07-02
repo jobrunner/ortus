@@ -238,7 +238,7 @@ func TestGazetteerIndex_DistanceAndAzimuth(t *testing.T) {
 	metropolis := domain.NewWGS84Coordinate(10.0, 50.0)
 	townsville := domain.NewWGS84Coordinate(10.1, 50.0)
 
-	km, err := idx.DistanceKM(metropolis, townsville)
+	km, err := idx.DistanceKM(context.Background(), metropolis, townsville)
 	if err != nil {
 		t.Fatalf("DistanceKM: %v", err)
 	}
@@ -246,7 +246,7 @@ func TestGazetteerIndex_DistanceAndAzimuth(t *testing.T) {
 		t.Errorf("DistanceKM = %.3f, want ~7.2 km", km)
 	}
 
-	az, err := idx.Azimuth(metropolis, townsville)
+	az, err := idx.Azimuth(context.Background(), metropolis, townsville)
 	if err != nil {
 		t.Fatalf("Azimuth: %v", err)
 	}
