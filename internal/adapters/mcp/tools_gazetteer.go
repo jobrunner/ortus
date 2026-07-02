@@ -79,7 +79,11 @@ func addGazetteer(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 			return nil, gazetteerOut{}, err
 		}
 
-		fix, err := deps.Gazetteer.Bearing(ctx, coord, domain.DefaultBearingPolicy())
+		pol := deps.BearingPolicy
+		if pol.Reach == nil {
+			pol = domain.DefaultBearingPolicy()
+		}
+		fix, err := deps.Gazetteer.Bearing(ctx, coord, pol)
 		switch {
 		case err == nil:
 			out.Bearing = &bearingOut{

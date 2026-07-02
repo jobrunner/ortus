@@ -26,12 +26,41 @@ type SalienceStrategy interface {
 // table — adding a class is a policy entry, not a code path.
 type RankedSalience struct{}
 
-// Select implements SalienceStrategy.
-func (RankedSalience) Select(cands []Candidate, pol domain.BearingPolicy) (best Candidate, ok bool) {
+// Select implements SalienceStrategy. It first applies the proximity override —
+// if a town-or-larger anchor is within PreferNearestKM, the nearest such wins
+// outright (you are essentially at it, so name it; villages are excluded so an
+// obscure hamlet never becomes the anchor). Otherwise the most salient eligible
+// class wins.
+func (RankedSalience) Select(cands []Candidate, pol domain.BearingPolicy) (Candidate, bool) {
+	if c, ok := nearestProminent(cands, pol); ok {
+		return c, true
+	}
+	return mostSalient(cands, pol)
+}
+
+// nearestProminent returns the nearest town-or-larger, eligible candidate within
+// PreferNearestKM. ok is false when the override is off or nothing qualifies.
+func nearestProminent(cands []Candidate, pol domain.BearingPolicy) (best Candidate, ok bool) {
+	if pol.PreferNearestKM <= 0 {
+		return Candidate{}, false
+	}
 	for _, c := range cands {
-		reach := pol.ReachKM(c.Place.Class)
-		if reach <= 0 || c.DistanceKM > reach {
-			continue // class has no reach, or candidate is out of range
+		if c.Place.Class < domain.ClassTown || !eligible(c, pol) || c.DistanceKM > pol.PreferNearestKM {
+			continue
+		}
+		if !ok || nearer(c, best) {
+			best, ok = c, true
+		}
+	}
+	return best, ok
+}
+
+// mostSalient returns the most salient eligible candidate (class first, then
+// nearer, then name).
+func mostSalient(cands []Candidate, pol domain.BearingPolicy) (best Candidate, ok bool) {
+	for _, c := range cands {
+		if !eligible(c, pol) {
+			continue
 		}
 		if !ok || moreSalient(c, best) {
 			best, ok = c, true
@@ -40,17 +69,27 @@ func (RankedSalience) Select(cands []Candidate, pol domain.BearingPolicy) (best 
 	return best, ok
 }
 
+// eligible reports whether a candidate is within its class reach.
+func eligible(c Candidate, pol domain.BearingPolicy) bool {
+	reach := pol.ReachKM(c.Place.Class)
+	return reach > 0 && c.DistanceKM <= reach
+}
+
+// nearer breaks ties by distance, then name (deterministic).
+func nearer(a, b Candidate) bool {
+	if a.DistanceKM != b.DistanceKM {
+		return a.DistanceKM < b.DistanceKM
+	}
+	return a.Place.Name < b.Place.Name
+}
+
 // moreSalient reports whether a should beat b: more salient class first, then
 // nearer, then the smaller name (deterministic final tie-break).
 func moreSalient(a, b Candidate) bool {
-	switch {
-	case a.Place.Class != b.Place.Class:
+	if a.Place.Class != b.Place.Class {
 		return a.Place.Class > b.Place.Class
-	case a.DistanceKM != b.DistanceKM:
-		return a.DistanceKM < b.DistanceKM
-	default:
-		return a.Place.Name < b.Place.Name
 	}
+	return nearer(a, b)
 }
 
 // Compile-time assertion that RankedSalience satisfies the strategy interface.

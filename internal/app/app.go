@@ -22,6 +22,7 @@ import (
 	"github.com/jobrunner/ortus/internal/application"
 	"github.com/jobrunner/ortus/internal/application/gazetteer"
 	"github.com/jobrunner/ortus/internal/config"
+	"github.com/jobrunner/ortus/internal/domain"
 	"github.com/jobrunner/ortus/internal/ports/input"
 	"github.com/jobrunner/ortus/internal/ports/output"
 )
@@ -48,7 +49,8 @@ type App struct {
 	MCPServer         *mcp.Server         // nil when MCP is disabled
 	Gazetteer         *gazetteer.Service  // nil when the gazetteer feature is disabled
 
-	gazetteerClose func() error // releases the gazetteer index connection; nil when disabled
+	gazetteerClose  func() error         // releases the gazetteer index connection; nil when disabled
+	gazetteerPolicy domain.BearingPolicy // bearing tuning knobs (config) + constraint tier (manifest)
 }
 
 // tracerProvider returns the underlying OTel TracerProvider for instrumentation
@@ -324,6 +326,7 @@ func (a *App) buildHTTPServer(cfg *config.Config, logger *slog.Logger) *httpAdap
 			MeterProvider:  a.meterProvider(),
 			ServiceName:    cfg.Tracing.ServiceName,
 			Gazetteer:      gaz,
+			BearingPolicy:  a.gazetteerPolicy,
 		},
 	)
 }
@@ -354,6 +357,7 @@ func (a *App) MCPDeps() mcp.Deps {
 		Registry:      a.Registry,
 		HealthService: a.HealthService,
 		Gazetteer:     gaz,
+		BearingPolicy: a.gazetteerPolicy,
 		Version:       version,
 		Tracer:        a.Tracer,
 	}

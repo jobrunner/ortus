@@ -87,10 +87,11 @@ type Fix struct {
 // branches: Reach maps each class to the radius within which it is an acceptable
 // anchor, so adding a class is a map entry rather than a new code path.
 type BearingPolicy struct {
-	Reach          map[PlaceClass]float64 // km per class
-	ConstraintTier string                 // semantic admin tier anchors must share (e.g. "state")
-	InsideLabelKM  float64                // below this, label as "in/bei {name}" without a bearing
-	CompassPoints  int                    // 8 or 16
+	Reach           map[PlaceClass]float64 // km per class
+	PreferNearestKM float64                // a town-or-larger anchor within this radius wins outright (0 = off)
+	ConstraintTier  string                 // semantic admin tier anchors must share (e.g. "state")
+	InsideLabelKM   float64                // below this, label as "in/bei {name}" without a bearing
+	CompassPoints   int                    // 8 or 16
 }
 
 // DefaultBearingPolicy returns the recommended defaults for the osm-admin-places
@@ -103,9 +104,10 @@ func DefaultBearingPolicy() BearingPolicy {
 			ClassTown:    18,
 			ClassCity:    60,
 		},
-		ConstraintTier: "state",
-		InsideLabelKM:  1.0,
-		CompassPoints:  8,
+		PreferNearestKM: 5.0,
+		ConstraintTier:  "state",
+		InsideLabelKM:   1.0,
+		CompassPoints:   8,
 	}
 }
 

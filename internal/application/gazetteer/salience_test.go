@@ -21,13 +21,15 @@ func TestRankedSalienceSelect(t *testing.T) {
 	}{
 		{name: "empty", cands: nil, wantOK: false},
 		{
-			name:     "city outranks nearer town and village",
-			cands:    []Candidate{cand(domain.ClassVillage, "V", 1), cand(domain.ClassCity, "C", 8), cand(domain.ClassTown, "T", 3)},
+			// Beyond the proximity override (town at 8 km > 5 km), pure salience
+			// applies: the city outranks town and village.
+			name:     "city outranks town and village beyond override",
+			cands:    []Candidate{cand(domain.ClassVillage, "V", 1), cand(domain.ClassCity, "C", 8), cand(domain.ClassTown, "T", 8)},
 			wantName: "C", wantOK: true,
 		},
 		{
 			name:     "city out of reach loses to eligible town",
-			cands:    []Candidate{cand(domain.ClassCity, "C", 80), cand(domain.ClassTown, "T", 5)},
+			cands:    []Candidate{cand(domain.ClassCity, "C", 80), cand(domain.ClassTown, "T", 10)},
 			wantName: "T", wantOK: true,
 		},
 		{
@@ -49,6 +51,24 @@ func TestRankedSalienceSelect(t *testing.T) {
 			name:   "unknown class (no reach) is never eligible",
 			cands:  []Candidate{cand(domain.ClassUnknown, "U", 0.1)},
 			wantOK: false,
+		},
+		{
+			// Proximity override: a nearby town beats a far (more salient) city.
+			name:     "near town beats far city (override)",
+			cands:    []Candidate{cand(domain.ClassCity, "FarCity", 23), cand(domain.ClassTown, "NearTown", 2)},
+			wantName: "NearTown", wantOK: true,
+		},
+		{
+			// Override excludes villages — a nearby village does NOT beat a far city.
+			name:     "near village does not trigger override",
+			cands:    []Candidate{cand(domain.ClassCity, "City", 16), cand(domain.ClassVillage, "Hamlet", 1)},
+			wantName: "City", wantOK: true,
+		},
+		{
+			// Both town and city inside the override radius → nearest wins.
+			name:     "override picks nearest prominent",
+			cands:    []Candidate{cand(domain.ClassCity, "City", 4), cand(domain.ClassTown, "Town", 2)},
+			wantName: "Town", wantOK: true,
 		},
 	}
 	for _, tc := range cases {

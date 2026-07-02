@@ -55,7 +55,7 @@ func (s *Server) gazetteerSections(ctx context.Context, coord domain.Coordinate)
 		return nil, err
 	}
 
-	fix, err := s.gazetteer.Bearing(ctx, coord, domain.DefaultBearingPolicy())
+	fix, err := s.gazetteer.Bearing(ctx, coord, s.effectiveBearingPolicy())
 	switch {
 	case err == nil:
 		out["bearing"] = formatFix(fix)
@@ -65,6 +65,15 @@ func (s *Server) gazetteerSections(ctx context.Context, coord domain.Coordinate)
 		return nil, err
 	}
 	return out, nil
+}
+
+// effectiveBearingPolicy returns the configured bearing policy, or the built-in
+// defaults when none was wired (zero value has a nil Reach map).
+func (s *Server) effectiveBearingPolicy() domain.BearingPolicy {
+	if s.bearingPolicy.Reach != nil {
+		return s.bearingPolicy
+	}
+	return domain.DefaultBearingPolicy()
 }
 
 // formatLocality renders a resolved admin hierarchy for JSON output.

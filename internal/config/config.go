@@ -230,10 +230,23 @@ type MCPConfig struct {
 // is a dedicated, separately-loaded dataset (not part of the generic PiP source
 // pool); disabled by default so the feature is inert until explicitly wired.
 type GazetteerConfig struct {
-	Enabled            bool   `mapstructure:"enabled"`
-	GeoPackagePath     string `mapstructure:"geopackage_path"`      // the places/admin GeoPackage
-	ManifestPath       string `mapstructure:"manifest_path"`        // ortus-gazetteer.yaml (layer/column mapping)
-	LevelReferencePath string `mapstructure:"level_reference_path"` // admin-level sidecar (optional; enriches Locate)
+	Enabled            bool                   `mapstructure:"enabled"`
+	GeoPackagePath     string                 `mapstructure:"geopackage_path"`      // the places/admin GeoPackage
+	ManifestPath       string                 `mapstructure:"manifest_path"`        // ortus-gazetteer.yaml (layer/column mapping)
+	LevelReferencePath string                 `mapstructure:"level_reference_path"` // admin-level sidecar (optional; enriches Locate)
+	Bearing            GazetteerBearingConfig `mapstructure:"bearing"`
+}
+
+// GazetteerBearingConfig holds the tunable knobs of the bearing selection (the
+// reach radii and the proximity override). The semantic constraint tier lives in
+// the manifest (dataset-bound), not here.
+type GazetteerBearingConfig struct {
+	ReachVillageKM  float64 `mapstructure:"reach_village_km"`
+	ReachTownKM     float64 `mapstructure:"reach_town_km"`
+	ReachCityKM     float64 `mapstructure:"reach_city_km"`
+	PreferNearestKM float64 `mapstructure:"prefer_nearest_km"` // a town-or-larger anchor within this radius wins outright
+	InsideLabelKM   float64 `mapstructure:"inside_label_km"`
+	CompassPoints   int     `mapstructure:"compass_points"` // 8 or 16
 }
 
 // TracingTransport selects the OTLP transport (http/protobuf or grpc).
@@ -332,6 +345,13 @@ func Defaults() {
 	viper.SetDefault("gazetteer.geopackage_path", "")
 	viper.SetDefault("gazetteer.manifest_path", "")
 	viper.SetDefault("gazetteer.level_reference_path", "")
+	// Bearing tuning knobs — defaults match domain.DefaultBearingPolicy.
+	viper.SetDefault("gazetteer.bearing.reach_village_km", 5.0)
+	viper.SetDefault("gazetteer.bearing.reach_town_km", 18.0)
+	viper.SetDefault("gazetteer.bearing.reach_city_km", 60.0)
+	viper.SetDefault("gazetteer.bearing.prefer_nearest_km", 5.0)
+	viper.SetDefault("gazetteer.bearing.inside_label_km", 1.0)
+	viper.SetDefault("gazetteer.bearing.compass_points", 8)
 }
 
 // Load loads configuration from environment and config file.

@@ -38,11 +38,12 @@ func noConstraint() domain.BearingPolicy {
 }
 
 func TestBearingClassPrecedence(t *testing.T) {
-	// City, town and village all within reach → the most salient (city) wins.
+	// All within reach but beyond the 5 km proximity override → the most salient
+	// (city) wins outright over town and village.
 	idx := fakeIndex{knn: map[string][]domain.Feature{
 		"city":    {placeFeature("city", "Bigtown", 0, 9.9)},   // ~7.2 km W of query → point is E of it
-		"town":    {placeFeature("town", "Midtown", 0, 10.02)}, // ~1.4 km
-		"village": {placeFeature("village", "Smallville", 0, 10.005)},
+		"town":    {placeFeature("town", "Midtown", 0, 10.09)}, // ~6.4 km (beyond override)
+		"village": {placeFeature("village", "Smallville", 0, 10.06)},
 	}}
 	svc := NewService(idx, testManifest(), nil, nil, true)
 

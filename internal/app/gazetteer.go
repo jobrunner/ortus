@@ -7,6 +7,7 @@ import (
 
 	"github.com/jobrunner/ortus/internal/adapters/geopackage"
 	"github.com/jobrunner/ortus/internal/application/gazetteer"
+	"github.com/jobrunner/ortus/internal/domain"
 )
 
 // buildGazetteer wires the optional gazetteer (reverse geocode + bearing) from
@@ -62,6 +63,20 @@ func (a *App) buildGazetteer(ctx context.Context) error {
 
 	a.Gazetteer = gazetteer.NewService(idx, manifest, levels, nil, true)
 	a.gazetteerClose = idx.Close
+	// Build the bearing policy from the tuning knobs (config) + the constraint
+	// tier (manifest, dataset-bound). Handlers pass this to Bearing().
+	b := cfg.Bearing
+	a.gazetteerPolicy = domain.BearingPolicy{
+		Reach: map[domain.PlaceClass]float64{
+			domain.ClassVillage: b.ReachVillageKM,
+			domain.ClassTown:    b.ReachTownKM,
+			domain.ClassCity:    b.ReachCityKM,
+		},
+		PreferNearestKM: b.PreferNearestKM,
+		ConstraintTier:  manifest.ConstraintTier,
+		InsideLabelKM:   b.InsideLabelKM,
+		CompassPoints:   b.CompassPoints,
+	}
 	a.Logger.Info("gazetteer enabled",
 		"geopackage", cfg.GeoPackagePath,
 		"level_reference", cfg.LevelReferencePath != "",
