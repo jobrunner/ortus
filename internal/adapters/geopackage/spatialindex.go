@@ -128,7 +128,7 @@ func (g *GazetteerIndex) QueryKNN(ctx context.Context, layer string, p domain.Co
 	if k < 1 {
 		k = 1
 	}
-	rtree := fmt.Sprintf("rtree_%s_%s", layer, geom)
+	rtree := rtreeName(layer, geom)
 	query, args := buildKNNQuery(layer, geom, tableExists(ctx, g.db, rtree), p, k, maxKM, f)
 	return g.runFeatureQuery(ctx, layer, geom, query, args...)
 }
@@ -140,7 +140,7 @@ func (g *GazetteerIndex) PointInPolygon(ctx context.Context, layer string, p dom
 	if err != nil {
 		return nil, err
 	}
-	rtree := fmt.Sprintf("rtree_%s_%s", layer, geom)
+	rtree := rtreeName(layer, geom)
 	var b strings.Builder
 	var args []any
 	fmt.Fprintf(&b, `SELECT t.*, AsText(CastAutomagic(t."%s")) FROM "%s" t`, geom, layer)
@@ -260,7 +260,7 @@ func buildKNNQuery(layer, geom string, hasRtree bool, p domain.Coordinate, k int
 	fmt.Fprintf(&b, `SELECT t.*, AsText(CastAutomagic(t."%s")) FROM "%s" t`, geom, layer)
 	if hasRtree {
 		minX, maxX, minY, maxY := knnBBox(p, maxKM)
-		fmt.Fprintf(&b, ` JOIN "rtree_%s_%s" r ON t.rowid = r.id`, layer, geom)
+		fmt.Fprintf(&b, ` JOIN %q r ON t.rowid = r.id`, rtreeName(layer, geom))
 		b.WriteString(` WHERE r.maxx >= ? AND r.minx <= ? AND r.maxy >= ? AND r.miny <= ?`)
 		args = append(args, minX, maxX, minY, maxY)
 	} else {
@@ -305,6 +305,12 @@ func geomColumn(ctx context.Context, db *sql.DB, layer string) (string, error) {
 		return "", err
 	}
 	return col, nil
+}
+
+// rtreeName is the GeoPackage R-tree virtual-table name for a layer's geometry
+// column (ogr's convention: rtree_<layer>_<geom>).
+func rtreeName(layer, geom string) string {
+	return fmt.Sprintf("rtree_%s_%s", layer, geom)
 }
 
 // tableExists reports whether a table (e.g. an R-tree index) is present.

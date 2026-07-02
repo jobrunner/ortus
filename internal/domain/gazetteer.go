@@ -116,3 +116,13 @@ func DefaultBearingPolicy() BearingPolicy {
 func (p BearingPolicy) ReachKM(c PlaceClass) float64 {
 	return p.Reach[c]
 }
+
+// OrDefault returns the policy when it is configured (non-nil Reach), else the
+// built-in DefaultBearingPolicy. It lets adapters accept a zero-value policy and
+// fall back safely without repeating the nil check.
+func (p BearingPolicy) OrDefault() BearingPolicy {
+	if p.Reach != nil {
+		return p
+	}
+	return DefaultBearingPolicy()
+}

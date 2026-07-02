@@ -16,7 +16,6 @@ admin:
   layer: admin_levels
   level_column: admin_level
   name_column: name
-  parent_fk: parent_id
   country_column: country_iso
   bearing_constraint_tier: state
 `
@@ -28,7 +27,7 @@ func TestParseManifest(t *testing.T) {
 	}
 	want := Manifest{
 		PlacesLayer: "places", RankColumn: "place", NameColumn: "name", AdminFKColumn: "admin_id",
-		AdminLayer: "admin_levels", LevelColumn: "admin_level", AdminNameColumn: "name", ParentFKColumn: "parent_id",
+		AdminLayer: "admin_levels", LevelColumn: "admin_level", AdminNameColumn: "name",
 		CountryColumn: "country_iso", ConstraintTier: "state",
 	}
 	if m != want {

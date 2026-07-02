@@ -34,7 +34,6 @@ type Manifest struct {
 	AdminLayer      string // e.g. "admin_levels"
 	LevelColumn     string // e.g. "admin_level"
 	AdminNameColumn string // e.g. "name"
-	ParentFKColumn  string // e.g. "parent_id"
 
 	// shared
 	CountryColumn string // e.g. "country_iso" (present on both layers)

@@ -11,6 +11,7 @@ admin:
   layer: admin_levels
   level_column: admin_level
   name_column: name
-  parent_fk: parent_id      # → admin_levels.fid of the broader enclosing unit
   country_column: country_iso
   bearing_constraint_tier: state   # semantic tier anchors must share (via the sidecar)
+  # Note: the admin layer must also carry a `parent_id` FK (→ the broader enclosing
+  # unit) — the hierarchy walk uses it directly; it is not a configurable column.

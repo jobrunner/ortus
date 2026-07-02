@@ -8,6 +8,7 @@ import (
 	"github.com/jobrunner/ortus/internal/adapters/geopackage"
 	"github.com/jobrunner/ortus/internal/application/gazetteer"
 	"github.com/jobrunner/ortus/internal/domain"
+	"github.com/jobrunner/ortus/internal/ports/input"
 )
 
 // buildGazetteer wires the optional gazetteer (reverse geocode + bearing) from
@@ -82,6 +83,18 @@ func (a *App) buildGazetteer(ctx context.Context) error {
 		"level_reference", cfg.LevelReferencePath != "",
 	)
 	return nil
+}
+
+// gazetteerPort returns the gazetteer as its input port, guarding the typed-nil
+// trap: a nil *gazetteer.Service placed in an input.Gazetteer interface is not
+// == nil, which would defeat the adapters' nil checks (spuriously registering
+// the route/tool on a disabled feature). Returns a genuine nil interface when
+// the feature is off.
+func (a *App) gazetteerPort() input.Gazetteer {
+	if a.Gazetteer == nil {
+		return nil
+	}
+	return a.Gazetteer
 }
 
 // closeGazetteer releases the gazetteer index connection. Best-effort; a second

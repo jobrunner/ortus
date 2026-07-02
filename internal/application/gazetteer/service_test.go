@@ -57,7 +57,7 @@ func (f fakeIndex) Azimuth(from, to domain.Coordinate) (float64, error) {
 func testManifest() Manifest {
 	return Manifest{
 		PlacesLayer: "places", RankColumn: "place", NameColumn: "name", AdminFKColumn: "admin_id",
-		AdminLayer: "admin_levels", LevelColumn: "admin_level", AdminNameColumn: "name", ParentFKColumn: "parent_id",
+		AdminLayer: "admin_levels", LevelColumn: "admin_level", AdminNameColumn: "name",
 		CountryColumn: "country_iso", ConstraintTier: "state",
 	}
 }

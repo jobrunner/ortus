@@ -22,7 +22,6 @@ type manifestYAML struct {
 		Layer          string `yaml:"layer"`
 		LevelColumn    string `yaml:"level_column"`
 		NameColumn     string `yaml:"name_column"`
-		ParentFK       string `yaml:"parent_fk"`
 		CountryColumn  string `yaml:"country_column"`
 		ConstraintTier string `yaml:"bearing_constraint_tier"`
 	} `yaml:"admin"`
@@ -54,7 +53,6 @@ func ParseManifest(data []byte) (Manifest, error) {
 		AdminLayer:      y.Admin.Layer,
 		LevelColumn:     y.Admin.LevelColumn,
 		AdminNameColumn: y.Admin.NameColumn,
-		ParentFKColumn:  y.Admin.ParentFK,
 		CountryColumn:   country,
 		ConstraintTier:  tier,
 	}

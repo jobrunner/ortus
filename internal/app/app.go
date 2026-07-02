@@ -309,10 +309,6 @@ func (a *App) buildHTTPServer(cfg *config.Config, logger *slog.Logger) *httpAdap
 	if a.SyncService != nil {
 		syncer = a.SyncService
 	}
-	var gaz input.Gazetteer
-	if a.Gazetteer != nil {
-		gaz = a.Gazetteer
-	}
 	return httpAdapter.NewServer(
 		cfg.Server,
 		a.QueryService,
@@ -325,7 +321,7 @@ func (a *App) buildHTTPServer(cfg *config.Config, logger *slog.Logger) *httpAdap
 			TracerProvider: a.tracerProvider(),
 			MeterProvider:  a.meterProvider(),
 			ServiceName:    cfg.Tracing.ServiceName,
-			Gazetteer:      gaz,
+			Gazetteer:      a.gazetteerPort(),
 			BearingPolicy:  a.gazetteerPolicy,
 		},
 	)
@@ -345,18 +341,12 @@ func (a *App) MCPDeps() mcp.Deps {
 	if version == "" {
 		version = "dev"
 	}
-	// Typed-nil guard: keep the interface nil when the gazetteer is disabled so
-	// the tool is not registered.
-	var gaz input.Gazetteer
-	if a.Gazetteer != nil {
-		gaz = a.Gazetteer
-	}
 	return mcp.Deps{
 		Telemetry:     tq,
 		QueryService:  a.QueryService,
 		Registry:      a.Registry,
 		HealthService: a.HealthService,
-		Gazetteer:     gaz,
+		Gazetteer:     a.gazetteerPort(),
 		BearingPolicy: a.gazetteerPolicy,
 		Version:       version,
 		Tracer:        a.Tracer,
