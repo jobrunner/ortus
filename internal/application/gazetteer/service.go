@@ -103,19 +103,25 @@ func (s *Service) Locate(ctx context.Context, p domain.Coordinate) (*domain.Loca
 	var (
 		chain      []domain.AdminUnit
 		countryISO string
+		deepest    = -1 // level of the most-local unit whose country_iso is set
 	)
 	for i := range features {
 		f := &features[i]
-		if countryISO == "" {
-			countryISO = f.GetStringProperty(s.manifest.CountryColumn)
-		}
+		iso := f.GetStringProperty(s.manifest.CountryColumn)
 		// admin_level is stored as text ("8"); coverage fills carry a non-numeric
 		// or empty value and are skipped from the ordered hierarchy.
 		level, err := strconv.Atoi(f.GetStringProperty(s.manifest.LevelColumn))
 		if err != nil {
 			continue
 		}
-		equivalent, _ := s.levels.Resolve(countryISO, level)
+		// The locality's country is the most-local unit's — deterministic (not
+		// dependent on PiP row order) and correct where a coarse polygon carries a
+		// different code than the local units (e.g. the IL/PS L2 boundary quirk).
+		if level > deepest && iso != "" {
+			deepest, countryISO = level, iso
+		}
+		// Resolve each level's meaning by its own country+level.
+		equivalent, _ := s.levels.Resolve(iso, level)
 		chain = append(chain, domain.AdminUnit{
 			Level:      level,
 			Name:       f.GetStringProperty(s.manifest.AdminNameColumn),
