@@ -22,6 +22,7 @@ type manifestYAML struct {
 		Layer          string `yaml:"layer"`
 		LevelColumn    string `yaml:"level_column"`
 		NameColumn     string `yaml:"name_column"`
+		ParentFK       string `yaml:"parent_fk"`
 		CountryColumn  string `yaml:"country_column"`
 		ConstraintTier string `yaml:"bearing_constraint_tier"`
 	} `yaml:"admin"`
@@ -53,6 +54,7 @@ func ParseManifest(data []byte) (Manifest, error) {
 		AdminLayer:      y.Admin.Layer,
 		LevelColumn:     y.Admin.LevelColumn,
 		AdminNameColumn: y.Admin.NameColumn,
+		ParentFKColumn:  y.Admin.ParentFK,
 		CountryColumn:   country,
 		ConstraintTier:  tier,
 	}
@@ -71,9 +73,12 @@ func (m Manifest) validate() error {
 		{"places.layer", m.PlacesLayer},
 		{"places.rank_column", m.RankColumn},
 		{"places.name_column", m.NameColumn},
+		{"places.admin_fk", m.AdminFKColumn},
 		{"admin.layer", m.AdminLayer},
 		{"admin.level_column", m.LevelColumn},
 		{"admin.name_column", m.AdminNameColumn},
+		{"admin.parent_fk", m.ParentFKColumn},
+		{"country_column", m.CountryColumn},
 	}
 	var missing []string
 	for _, r := range required {

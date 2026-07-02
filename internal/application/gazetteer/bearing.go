@@ -28,6 +28,9 @@ func (s *Service) Bearing(ctx context.Context, p domain.Coordinate, pol domain.B
 	if err := s.ready(); err != nil {
 		return nil, err
 	}
+	if err := requireWGS84(p); err != nil {
+		return nil, err
+	}
 	ancestor, constrained := s.constraintAncestor(ctx, p, pol.ConstraintTier)
 	cands, err := s.gatherCandidates(ctx, p, pol, ancestor, constrained)
 	if err != nil {
@@ -107,7 +110,12 @@ func (s *Service) sameTier(ctx context.Context, placeAdminID, ancestorFID int64,
 	if placeAdminID == 0 {
 		return false
 	}
-	chain, err := s.index.ResolveChain(ctx, s.manifest.AdminLayer, placeAdminID)
+	chain, err := s.index.ResolveChain(ctx, s.manifest.AdminLayer, placeAdminID, output.AdminColumns{
+		ParentFK: s.manifest.ParentFKColumn,
+		Level:    s.manifest.LevelColumn,
+		Name:     s.manifest.AdminNameColumn,
+		Country:  s.manifest.CountryColumn,
+	})
 	if err != nil {
 		return false
 	}

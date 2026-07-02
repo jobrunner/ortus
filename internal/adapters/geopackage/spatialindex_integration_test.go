@@ -209,7 +209,9 @@ func TestGazetteerIndex_PointInPolygonNested(t *testing.T) {
 
 func TestGazetteerIndex_ResolveChain(t *testing.T) {
 	idx := openFixtureIndex(t, true)
-	chain, err := idx.ResolveChain(context.Background(), "admin_levels", 3)
+	chain, err := idx.ResolveChain(context.Background(), "admin_levels", 3, output.AdminColumns{
+		ParentFK: "parent_id", Level: "admin_level", Name: "name", Country: "country_iso",
+	})
 	if err != nil {
 		t.Fatalf("ResolveChain: %v", err)
 	}

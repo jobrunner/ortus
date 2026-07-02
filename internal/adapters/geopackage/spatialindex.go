@@ -155,20 +155,24 @@ func (g *GazetteerIndex) PointInPolygon(ctx context.Context, layer string, p dom
 	return g.runFeatureQuery(ctx, layer, geom, b.String(), args...)
 }
 
-// ResolveChain walks a layer's parent_id links from a starting feature id up to
+// ResolveChain walks a layer's parent-FK links from a starting feature id up to
 // the top of the hierarchy, returning each unit in order (most-local first). The
+// column names come from cols, so the walk is manifest-driven; the CTE's own
+// aliases stay fixed. fid is the GeoPackage feature id (ogr convention). The
 // depth guard bounds the walk so malformed data (a cycle) cannot loop forever.
-func (g *GazetteerIndex) ResolveChain(ctx context.Context, layer string, fromFID int64) ([]output.AdminRow, error) {
+func (g *GazetteerIndex) ResolveChain(ctx context.Context, layer string, fromFID int64, cols output.AdminColumns) ([]output.AdminRow, error) {
 	var b strings.Builder
+	// %[1]=layer, %[2]=parentFK, %[3]=level, %[4]=name, %[5]=country (all %q-quoted identifiers).
 	fmt.Fprintf(&b, `WITH RECURSIVE chain(fid, parent_id, lvl, name, country_iso, depth) AS (
-		SELECT fid, COALESCE(parent_id, 0), CAST(admin_level AS INTEGER), name, country_iso, 0
-		FROM "%s" WHERE fid = ?
+		SELECT fid, COALESCE(%[2]q, 0), CAST(%[3]q AS INTEGER), %[4]q, %[5]q, 0
+		FROM %[1]q WHERE fid = ?
 		UNION ALL
-		SELECT a.fid, COALESCE(a.parent_id, 0), CAST(a.admin_level AS INTEGER), a.name, a.country_iso, chain.depth + 1
-		FROM "%s" a JOIN chain ON a.fid = chain.parent_id
+		SELECT a.fid, COALESCE(a.%[2]q, 0), CAST(a.%[3]q AS INTEGER), a.%[4]q, a.%[5]q, chain.depth + 1
+		FROM %[1]q a JOIN chain ON a.fid = chain.parent_id
 		WHERE chain.parent_id <> 0 AND chain.depth < 32
 	)
-	SELECT fid, parent_id, lvl, name, country_iso FROM chain ORDER BY depth`, layer, layer)
+	SELECT fid, parent_id, lvl, name, country_iso FROM chain ORDER BY depth`,
+		layer, cols.ParentFK, cols.Level, cols.Name, cols.Country)
 
 	rows, err := g.db.QueryContext(ctx, b.String(), fromFID)
 	if err != nil {

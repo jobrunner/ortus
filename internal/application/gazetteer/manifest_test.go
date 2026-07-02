@@ -16,6 +16,7 @@ admin:
   layer: admin_levels
   level_column: admin_level
   name_column: name
+  parent_fk: parent_id
   country_column: country_iso
   bearing_constraint_tier: state
 `
@@ -27,7 +28,7 @@ func TestParseManifest(t *testing.T) {
 	}
 	want := Manifest{
 		PlacesLayer: "places", RankColumn: "place", NameColumn: "name", AdminFKColumn: "admin_id",
-		AdminLayer: "admin_levels", LevelColumn: "admin_level", AdminNameColumn: "name",
+		AdminLayer: "admin_levels", LevelColumn: "admin_level", AdminNameColumn: "name", ParentFKColumn: "parent_id",
 		CountryColumn: "country_iso", ConstraintTier: "state",
 	}
 	if m != want {
@@ -48,6 +49,18 @@ func TestParseManifestDefaultsTier(t *testing.T) {
 }
 
 func TestParseManifestMissingRequired(t *testing.T) {
+	// Each of these, when removed, must fail validation (the query paths rely on them).
+	for line, want := range map[string]string{
+		"  rank_column: place\n":   "rank_column",
+		"  admin_fk: admin_id\n":   "admin_fk",
+		"  parent_fk: parent_id\n": "parent_fk",
+	} {
+		y := strings.Replace(validManifest, line, "", 1)
+		if _, err := ParseManifest([]byte(y)); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("removing %q: err = %v, want mention of %q", strings.TrimSpace(line), err, want)
+		}
+	}
+
 	y := strings.Replace(validManifest, "  rank_column: place\n", "", 1)
 	_, err := ParseManifest([]byte(y))
 	if err == nil || !strings.Contains(err.Error(), "rank_column") {

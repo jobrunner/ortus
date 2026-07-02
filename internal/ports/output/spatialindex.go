@@ -22,7 +22,9 @@ type SpatialIndex interface {
 
 	// ResolveChain walks a layer's parent_id links from a starting feature id up
 	// to the top of the hierarchy, returning each unit in order (most-local first).
-	ResolveChain(ctx context.Context, layer string, fromFID int64) ([]AdminRow, error)
+	// cols names the columns to walk/select, so the walk stays manifest-driven
+	// rather than assuming fixed column names.
+	ResolveChain(ctx context.Context, layer string, fromFID int64, cols AdminColumns) ([]AdminRow, error)
 
 	// DistanceKM returns the ellipsoidal distance between two coordinates in km.
 	DistanceKM(a, b domain.Coordinate) (float64, error)
@@ -36,6 +38,15 @@ type SpatialIndex interface {
 type Filter struct {
 	Column string
 	Values []any
+}
+
+// AdminColumns names the admin-layer columns ResolveChain walks and selects, so
+// the parent-chain query is driven by the manifest rather than fixed names.
+type AdminColumns struct {
+	ParentFK string // FK to the broader enclosing unit (walked)
+	Level    string // admin level (text, cast to int)
+	Name     string // native unit name
+	Country  string // ISO 3166-1 alpha-2 code
 }
 
 // AdminRow is a raw administrative-unit row from the spatial store, used to build

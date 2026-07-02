@@ -34,6 +34,7 @@ type Manifest struct {
 	AdminLayer      string // e.g. "admin_levels"
 	LevelColumn     string // e.g. "admin_level"
 	AdminNameColumn string // e.g. "name"
+	ParentFKColumn  string // e.g. "parent_id" (walked by ResolveChain)
 
 	// shared
 	CountryColumn string // e.g. "country_iso" (present on both layers)
@@ -88,6 +89,9 @@ func (s *Service) Locate(ctx context.Context, p domain.Coordinate) (*domain.Loca
 	if err := s.ready(); err != nil {
 		return nil, err
 	}
+	if err := requireWGS84(p); err != nil {
+		return nil, err
+	}
 	features, err := s.index.PointInPolygon(ctx, s.manifest.AdminLayer, p)
 	if err != nil {
 		return nil, err
@@ -122,6 +126,18 @@ func (s *Service) Locate(ctx context.Context, p domain.Coordinate) (*domain.Loca
 	sort.SliceStable(chain, func(i, j int) bool { return chain[i].Level > chain[j].Level })
 
 	return &domain.Locality{CountryISO: countryISO, Chain: chain}, nil
+}
+
+// requireWGS84 rejects coordinates that are not WGS84 (EPSG:4326). The gazetteer
+// dataset is 4326 and the service does not reproject, so a non-4326 coordinate
+// would be misread as lon/lat and yield nonsense. SRID 0 is treated as unset
+// (the coordinate constructors default to WGS84).
+func requireWGS84(p domain.Coordinate) error {
+	if p.SRID != 0 && p.SRID != domain.SRIDWGS84 {
+		return fmt.Errorf("gazetteer: coordinate SRID %d unsupported, expected WGS84 (%d): %w",
+			p.SRID, domain.SRIDWGS84, domain.ErrUnsupportedProjection)
+	}
+	return nil
 }
 
 // ready reports whether the service has been enabled and wired with a spatial

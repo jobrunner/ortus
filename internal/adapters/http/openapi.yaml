@@ -37,7 +37,7 @@ tags:
   - name: Query
     description: Räumliche Punktabfragen auf Datenquellen
   - name: Gazetteer
-    description: Reverse-Geocoding auf die Verwaltungseinheit und Peilung („Peilung")
+    description: Reverse-Geocoding auf die Verwaltungseinheit und Peilung (bearing)
   - name: Sources
     description: Datenquellen-Verwaltung und -Information
   - name: Health
@@ -170,7 +170,7 @@ paths:
       summary: Reverse-Geocoding + Peilung
       description: |
         Löst eine Koordinate auf ihre Verwaltungshierarchie (`admin`) auf und berechnet
-        eine Peilung zum salientesten nahen Ort (`bearing`, z. B. „4 km E Würzburg").
+        eine Peilung zum salientesten nahen Ort (`bearing`, z. B. "4 km E Würzburg").
         Jeder Teil ist `null`, wenn es kein Ergebnis gibt — keine Admin-Abdeckung bzw.
         kein Anker in Reichweite. Nur verfügbar, wenn das Gazetteer-Feature aktiv ist.
       operationId: gazetteer

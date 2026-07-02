@@ -35,7 +35,7 @@ func (f fakeIndex) QueryKNN(_ context.Context, _ string, _ domain.Coordinate, _ 
 func (f fakeIndex) PointInPolygon(context.Context, string, domain.Coordinate) ([]domain.Feature, error) {
 	return f.pip, f.pipErr
 }
-func (f fakeIndex) ResolveChain(_ context.Context, _ string, fromFID int64) ([]output.AdminRow, error) {
+func (f fakeIndex) ResolveChain(_ context.Context, _ string, fromFID int64, _ output.AdminColumns) ([]output.AdminRow, error) {
 	return f.chains[fromFID], nil
 }
 func (f fakeIndex) DistanceKM(a, b domain.Coordinate) (float64, error) {
@@ -57,7 +57,7 @@ func (f fakeIndex) Azimuth(from, to domain.Coordinate) (float64, error) {
 func testManifest() Manifest {
 	return Manifest{
 		PlacesLayer: "places", RankColumn: "place", NameColumn: "name", AdminFKColumn: "admin_id",
-		AdminLayer: "admin_levels", LevelColumn: "admin_level", AdminNameColumn: "name",
+		AdminLayer: "admin_levels", LevelColumn: "admin_level", AdminNameColumn: "name", ParentFKColumn: "parent_id",
 		CountryColumn: "country_iso", ConstraintTier: "state",
 	}
 }
@@ -134,6 +134,17 @@ func TestLocateBuildsEnrichedChain(t *testing.T) {
 	}
 	if loc.Chain[0].Name != "Würzburg" {
 		t.Errorf("most-local name = %q, want Würzburg", loc.Chain[0].Name)
+	}
+}
+
+func TestLocateBearingRejectNonWGS84(t *testing.T) {
+	svc := NewService(fakeIndex{}, testManifest(), nil, nil, true)
+	p := domain.NewCoordinate(1_400_000, 6_600_000, domain.SRIDWebMercator) // 3857, not 4326
+	if _, err := svc.Locate(context.Background(), p); !errors.Is(err, domain.ErrUnsupportedProjection) {
+		t.Errorf("Locate non-4326 = %v, want ErrUnsupportedProjection", err)
+	}
+	if _, err := svc.Bearing(context.Background(), p, domain.DefaultBearingPolicy()); !errors.Is(err, domain.ErrUnsupportedProjection) {
+		t.Errorf("Bearing non-4326 = %v, want ErrUnsupportedProjection", err)
 	}
 }
 
