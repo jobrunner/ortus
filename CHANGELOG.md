@@ -5,6 +5,51 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.0](https://github.com/jobrunner/ortus/compare/v0.13.0...v0.14.0) (2026-07-02)
+
+
+### Features
+
+* **gazetteer:** add /gazetteer endpoint + with-gazetteer + wiring (M4 part 2a) ([43381b1](https://github.com/jobrunner/ortus/commit/43381b1d13d919b717af30ea8525ec6a17f649a5))
+* **gazetteer:** add gazetteer seam + inert skeleton (M0) ([6e6dd9e](https://github.com/jobrunner/ortus/commit/6e6dd9e15eaa47a0d13a1d0c09459b5faaf701a5))
+* **gazetteer:** add Locate() + manifest/level-resolver seam (M2) ([b3b53f0](https://github.com/jobrunner/ortus/commit/b3b53f03854b898d31adb31afc2e8300cd26e588))
+* **gazetteer:** add manifest/sidecar parsers + config surface (M4 part 1) ([eb7d0b1](https://github.com/jobrunner/ortus/commit/eb7d0b15e78ef0272fdba4043843da98e1296c5d))
+* **gazetteer:** add MCP gazetteer tool (M4 part 2b) ([fd0f6c0](https://github.com/jobrunner/ortus/commit/fd0f6c0d958c5aa85a0741391bf460a7f7d1fa54))
+* **gazetteer:** add salience strategy + Bearing() end-to-end (M3) ([a58f6b3](https://github.com/jobrunner/ortus/commit/a58f6b35f19f407909b6ad077bedd452aeaed841))
+* **gazetteer:** add SpatialIndex cgo adapter (M1) ([8d79c92](https://github.com/jobrunner/ortus/commit/8d79c9239a2319c7730a48eb7981775ce756fe45))
+* **gazetteer:** add SRID verification probe + plan status (M5) ([c37b259](https://github.com/jobrunner/ortus/commit/c37b259546639c83d0de13d809a243c5b72bf8c8))
+* **gazetteer:** proximity override (5 km) + config-injectable radii ([660e89c](https://github.com/jobrunner/ortus/commit/660e89ce9eb172c32eb9f333578a624d40619a74))
+* **gazetteer:** reverse-geocoding + bearing (Peilung) — M0–M5, disabled by default ([dcd320d](https://github.com/jobrunner/ortus/commit/dcd320d4ed993f918877cc9ac34ff6eb633b7e11))
+* **gazetteer:** strengthen VerifySRID to a magnitude check ([f4335d8](https://github.com/jobrunner/ortus/commit/f4335d8d61e5f8f96da4e080efc3b17a2e306d89))
+* **geopackage:** tunable SQLite options + local load-test harness ([5bf6ef8](https://github.com/jobrunner/ortus/commit/5bf6ef844f0832ab8c5435736d439ceadefc7cfb))
+* **geopackage:** tunable SQLite options + local load-test harness (O3) ([6acbd9f](https://github.com/jobrunner/ortus/commit/6acbd9fc37daaf97f50a6ca4e1a1e7355e9e566b))
+* **http:** opt-in per-IP rate limiting (O2) ([20b6fc0](https://github.com/jobrunner/ortus/commit/20b6fc0b95664d5798c69cdb2ba62361823090a7))
+* **http:** opt-in per-IP rate limiting (O2) ([a0fc537](https://github.com/jobrunner/ortus/commit/a0fc537fb3d74f5a33f8f56c1a9176d3e2bf3133))
+* **loadtest:** observable load-test stack — Grafana single pane (metrics+traces+logs) + Vegeta ([172394f](https://github.com/jobrunner/ortus/commit/172394f8cfcda646d43a9ace35abded30099a120))
+* **loadtest:** observable load-test stack (Grafana/Tempo/Loki/Prometheus + Vegeta) ([53047ab](https://github.com/jobrunner/ortus/commit/53047ab00dfb7cdbfe37fdc4a493d5b1d6274236))
+* **mcp:** entry-point tracing via receiving middleware (D8) ([18d0f13](https://github.com/jobrunner/ortus/commit/18d0f136e5d62e8c427ff006c365a30a5c784ec4))
+* **mcp:** entry-point tracing via receiving middleware (D8) ([3c67415](https://github.com/jobrunner/ortus/commit/3c67415610c5ea4c6b3602d3209b49554f7ba394))
+* **ops:** readiness latch, load-failure visibility, source-id collision guard ([b87e3ab](https://github.com/jobrunner/ortus/commit/b87e3abd4436785cb569d60567264f7238c5b62a))
+* **ops:** readiness latch, load-failure visibility, source-id collision guard (O1/O4/O5) ([dc874fe](https://github.com/jobrunner/ortus/commit/dc874fe4cae2d201b8578022625b432ccde2454d))
+
+
+### Bug Fixes
+
+* **app:** idempotent transformer close + rollback on New error (review) ([515581e](https://github.com/jobrunner/ortus/commit/515581e3414d44a58b2ca161384c2549f05a2a49))
+* **ci:** point SPATIALITE_LIBRARY_PATH at the installed lib in Test job ([2645c50](https://github.com/jobrunner/ortus/commit/2645c5013fc58ea11e451406a387806dd6c59c43))
+* **debt:** harden debt-guard per review (baseline check + backtick literals) ([12ed104](https://github.com/jobrunner/ortus/commit/12ed1045e4d6c2594355f234bf705e497d3ab751))
+* **debt:** location-independent pre-commit + Go-only Claude hook (review) ([93653cd](https://github.com/jobrunner/ortus/commit/93653cd78a4cf85a0feb3bb3c9edc536adb457f9))
+* **debt:** run SpatiaLite in CI for coverage + harden ratchet scripts ([8c1b9c0](https://github.com/jobrunner/ortus/commit/8c1b9c06792ed1379cbb891294be87e514e6ed12))
+* **gazetteer:** address Copilot review — SRID guard, manifest-driven ResolveChain, stricter validation ([60f8e4a](https://github.com/jobrunner/ortus/commit/60f8e4a0cb95ad06adcf10f71d440a752da0a56c))
+* **gazetteer:** harden per Copilot re-review — manifest identifiers, error propagation, ctx ([f7a833e](https://github.com/jobrunner/ortus/commit/f7a833e6942288e39e96c518849e42de5c203475))
+* **geopackage:** harden SQLite DSN build and load-test error handling ([633ad82](https://github.com/jobrunner/ortus/commit/633ad824994ed4ec621648bf51ebac01b2a453ba))
+* **http:** harden rate-limiter per Copilot review ([f3295d3](https://github.com/jobrunner/ortus/commit/f3295d3ad8c2dbf39037fc3f08c02ecb9743294d))
+* **loadtest:** address review + fix prod compose metrics scrape ([861701d](https://github.com/jobrunner/ortus/commit/861701debd7bbbf93bdeb49c804943a5337dabb0))
+* **ops:** harden readiness + collision-guard edge cases (Copilot review) ([d79ecd1](https://github.com/jobrunner/ortus/commit/d79ecd1d6769628a175073cb918726791be32de9))
+* **storage:** clean base in safeJoin + drop stale config example (review) ([1d26567](https://github.com/jobrunner/ortus/commit/1d26567e24d5960138677f0ea11900c44d96e5c1))
+* **storage:** consistent error typing + transport-error + transformer init (D1–D3) ([3fc959e](https://github.com/jobrunner/ortus/commit/3fc959ed6207173c44a2502820906092ef31df50))
+* **storage:** consistent error typing + transport-error + transformer init (D1–D3) ([5bb01a7](https://github.com/jobrunner/ortus/commit/5bb01a7ca097a3185d9d3524142a9ae448def2f4))
+
 ## [0.13.0] - 2026-06-25
 
 ### Changed (BREAKING — public API & MCP vocabulary, ADR-0012 Stage C)
