@@ -65,3 +65,15 @@ func TestBearingPolicyReachKMUnknownClass(t *testing.T) {
 		t.Errorf("ReachKM(unknown) = %v, want 0 (never an anchor)", got)
 	}
 }
+
+func TestBearingPolicyOrDefault(t *testing.T) {
+	// A zero policy (nil Reach) falls back to the defaults.
+	if got := (BearingPolicy{}).OrDefault(); got.ReachKM(ClassCity) != DefaultBearingPolicy().ReachKM(ClassCity) {
+		t.Errorf("zero policy OrDefault did not fall back to defaults: %+v", got)
+	}
+	// A configured policy is returned unchanged.
+	custom := BearingPolicy{Reach: map[PlaceClass]float64{ClassCity: 42}}
+	if got := custom.OrDefault(); got.ReachKM(ClassCity) != 42 {
+		t.Errorf("configured policy OrDefault = %+v, want the policy itself", got)
+	}
+}
