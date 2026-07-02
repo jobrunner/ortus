@@ -1,0 +1,926 @@
+[
+  {
+    "point": {
+      "label": "Cyprus/Nicosia",
+      "region": "CY",
+      "lat": 35.1856,
+      "lon": 33.3823
+    },
+    "country_iso": "CY",
+    "chain": [
+      {
+        "level": 9,
+        "equivalent": "submunicipality",
+        "name": "Καϊμακλί"
+      },
+      {
+        "level": 8,
+        "equivalent": "municipality",
+        "name": "Λευκωσία"
+      },
+      {
+        "level": 6,
+        "equivalent": "municipality",
+        "name": "Δήμος Λευκωσίας"
+      },
+      {
+        "level": 5,
+        "equivalent": "district",
+        "name": "Επαρχία Λευκωσίας"
+      },
+      {
+        "level": 3,
+        "equivalent": "other",
+        "name": "Κύπρος"
+      },
+      {
+        "level": 2,
+        "equivalent": "country",
+        "name": "Κύπρος - Kıbrıs"
+      }
+    ],
+    "bearing": "2 km NE Λευκωσία - Lefkoşa"
+  },
+  {
+    "point": {
+      "label": "Kreuzwertheim",
+      "region": "BY",
+      "lat": 49.76157,
+      "lon": 9.52404
+    },
+    "country_iso": "DE",
+    "chain": [
+      {
+        "level": 10,
+        "equivalent": "submunicipality",
+        "name": "Kreuzwertheim"
+      },
+      {
+        "level": 8,
+        "equivalent": "municipality",
+        "name": "Kreuzwertheim"
+      },
+      {
+        "level": 7,
+        "equivalent": "district",
+        "name": "Verwaltungsgemeinschaft Kreuzwertheim"
+      },
+      {
+        "level": 6,
+        "equivalent": "county",
+        "name": "Landkreis Main-Spessart"
+      },
+      {
+        "level": 5,
+        "equivalent": "region",
+        "name": "Unterfranken"
+      },
+      {
+        "level": 4,
+        "equivalent": "state",
+        "name": "Bayern"
+      },
+      {
+        "level": 2,
+        "equivalent": "country",
+        "name": "Deutschland"
+      }
+    ],
+    "bearing": "30 km W Würzburg"
+  },
+  {
+    "point": {
+      "label": "Wertheim",
+      "region": "BW",
+      "lat": 49.76028,
+      "lon": 9.52316
+    },
+    "country_iso": "DE",
+    "chain": [
+      {
+        "level": 10,
+        "equivalent": "submunicipality",
+        "name": "Wertheim"
+      },
+      {
+        "level": 8,
+        "equivalent": "municipality",
+        "name": "Wertheim"
+      },
+      {
+        "level": 6,
+        "equivalent": "county",
+        "name": "Main-Tauber-Kreis"
+      },
+      {
+        "level": 5,
+        "equivalent": "region",
+        "name": "Regierungsbezirk Stuttgart"
+      },
+      {
+        "level": 4,
+        "equivalent": "state",
+        "name": "Baden-Württemberg"
+      },
+      {
+        "level": 2,
+        "equivalent": "country",
+        "name": "Deutschland"
+      }
+    ],
+    "bearing": "bei Wertheim"
+  },
+  {
+    "point": {
+      "label": "Greece/Thessaloniki",
+      "region": "GR",
+      "lat": 40.6401,
+      "lon": 22.9444
+    },
+    "country_iso": "GR",
+    "chain": [
+      {
+        "level": 9,
+        "equivalent": "submunicipality",
+        "name": "1η Κοινότητα Θεσσαλονίκης"
+      },
+      {
+        "level": 8,
+        "equivalent": "submunicipality",
+        "name": "Δημοτική Ενότητα Θεσαλονίκης"
+      },
+      {
+        "level": 7,
+        "equivalent": "municipality",
+        "name": "Δήμος Θεσσαλονίκης"
+      },
+      {
+        "level": 6,
+        "equivalent": "province",
+        "name": "Μητροπολιτική Ενότητα Θεσσαλονίκης"
+      },
+      {
+        "level": 5,
+        "equivalent": "state",
+        "name": "Περιφέρεια Κεντρικής Μακεδονίας"
+      },
+      {
+        "level": 4,
+        "equivalent": "region",
+        "name": "Αποκεντρωμένη Διοίκηση Μακεδονίας - Θράκης"
+      },
+      {
+        "level": 2,
+        "equivalent": "country",
+        "name": "Ελλάς"
+      }
+    ],
+    "bearing": "bei Θεσσαλονίκη"
+  },
+  {
+    "point": {
+      "label": "Israel/Tel Aviv",
+      "region": "IL",
+      "lat": 32.0853,
+      "lon": 34.7818
+    },
+    "country_iso": "IL",
+    "chain": [
+      {
+        "level": 8,
+        "equivalent": "municipality",
+        "name": "תל־אביב–יפו"
+      },
+      {
+        "level": 5,
+        "equivalent": "county",
+        "name": "נפת תל אביב"
+      },
+      {
+        "level": 4,
+        "equivalent": "district",
+        "name": "מחוז תל אביב"
+      },
+      {
+        "level": 2,
+        "equivalent": "country",
+        "name": "ישראל"
+      }
+    ],
+    "bearing": "bei תל אביב–יפו"
+  },
+  {
+    "point": {
+      "label": "Jordan/Amman",
+      "region": "JO",
+      "lat": 31.9539,
+      "lon": 35.9106
+    },
+    "country_iso": "JO",
+    "chain": [
+      {
+        "level": 6,
+        "equivalent": "district",
+        "name": "ناحية عمان"
+      },
+      {
+        "level": 5,
+        "equivalent": "district",
+        "name": "لواء قصبة عمان"
+      },
+      {
+        "level": 4,
+        "equivalent": "province",
+        "name": "عمان"
+      },
+      {
+        "level": 2,
+        "equivalent": "country",
+        "name": "الأردن"
+      }
+    ],
+    "bearing": "1.5 km W عمان"
+  },
+  {
+    "point": {
+      "label": "Russia/Kaliningrad",
+      "region": "RU",
+      "lat": 54.7104,
+      "lon": 20.4522
+    },
+    "country_iso": "RU",
+    "chain": [
+      {
+        "level": 9,
+        "equivalent": "submunicipality",
+        "name": "Центральный район"
+      },
+      {
+        "level": 6,
+        "equivalent": "county",
+        "name": "городской округ Калининград"
+      },
+      {
+        "level": 4,
+        "equivalent": "state",
+        "name": "Калининградская область"
+      }
+    ],
+    "bearing": "4 km W Калининград"
+  },
+  {
+    "point": {
+      "label": "AE/L8 Kalba كلباء",
+      "region": "AE",
+      "lat": 24.9963181,
+      "lon": 56.33131423928138
+    },
+    "country_iso": "AE",
+    "chain": [
+      {
+        "level": 8,
+        "equivalent": "municipality",
+        "name": "Kalba كلباء"
+      },
+      {
+        "level": 4,
+        "equivalent": "state",
+        "name": "الشارقة"
+      },
+      {
+        "level": 2,
+        "equivalent": "country",
+        "name": "الإمارات العربية المتحدة"
+      }
+    ],
+    "bearing": "6.5 km S كلباء"
+  },
+  {
+    "point": {
+      "label": "AE/L8 خورفكان",
+      "region": "AE",
+      "lat": 25.3417059,
+      "lon": 56.31003462827559
+    },
+    "country_iso": "AE",
+    "chain": [
+      {
+        "level": 8,
+        "equivalent": "municipality",
+        "name": "خورفكان"
+      },
+      {
+        "level": 4,
+        "equivalent": "state",
+        "name": "الشارقة"
+      },
+      {
+        "level": 2,
+        "equivalent": "country",
+        "name": "الإمارات العربية المتحدة"
+      }
+    ],
+    "bearing": "4 km W خورفكان"
+  },
+  {
+    "point": {
+      "label": "AE/L8 السيف",
+      "region": "AE",
+      "lat": 25.381505750000002,
+      "lon": 55.4010062385823
+    },
+    "country_iso": "AE",
+    "chain": [
+      {
+        "level": 8,
+        "equivalent": "municipality",
+        "name": "السيف"
+      },
+      {
+        "level": 8,
+        "equivalent": "municipality",
+        "name": "مدينة الشارقة"
+      },
+      {
+        "level": 4,
+        "equivalent": "state",
+        "name": "الشارقة"
+      },
+      {
+        "level": 2,
+        "equivalent": "country",
+        "name": "الإمارات العربية المتحدة"
+      }
+    ],
+    "bearing": "4.5 km NW الشارقة"
+  },
+  {
+    "point": {
+      "label": "AE/L8 الرميلة",
+      "region": "AE",
+      "lat": 25.40256815,
+      "lon": 55.43273992039476
+    },
+    "country_iso": "AE",
+    "chain": [
+      {
+        "level": 8,
+        "equivalent": "municipality",
+        "name": "الرميلة"
+      },
+      {
+        "level": 4,
+        "equivalent": "state",
+        "name": "إمارة عجمان"
+      },
+      {
+        "level": 2,
+        "equivalent": "country",
+        "name": "الإمارات العربية المتحدة"
+      }
+    ],
+    "bearing": "1.5 km NW عجمان"
+  },
+  {
+    "point": {
+      "label": "AE/L8 النخيل",
+      "region": "AE",
+      "lat": 25.4184641,
+      "lon": 55.441606894057855
+    },
+    "country_iso": "AE",
+    "chain": [
+      {
+        "level": 8,
+        "equivalent": "municipality",
+        "name": "النخيل"
+      },
+      {
+        "level": 4,
+        "equivalent": "state",
+        "name": "إمارة عجمان"
+      },
+      {
+        "level": 2,
+        "equivalent": "country",
+        "name": "الإمارات العربية المتحدة"
+      }
+    ],
+    "bearing": "3 km N عجمان"
+  },
+  {
+    "point": {
+      "label": "GR/L8 Δημοτική Ενότητα Βούλας",
+      "region": "GR",
+      "lat": 37.84794205,
+      "lon": 23.77154181999938
+    },
+    "country_iso": "GR",
+    "chain": [
+      {
+        "level": 9,
+        "equivalent": "submunicipality",
+        "name": "Κοινότητα Βούλας"
+      },
+      {
+        "level": 8,
+        "equivalent": "submunicipality",
+        "name": "Δημοτική Ενότητα Βούλας"
+      },
+      {
+        "level": 7,
+        "equivalent": "municipality",
+        "name": "Δήμος Βάρης - Βούλας - Βουλιαγμένης"
+      },
+      {
+        "level": 6,
+        "equivalent": "province",
+        "name": "Περιφερειακή Ενότητα Ανατολικής Αττικής"
+      },
+      {
+        "level": 5,
+        "equivalent": "state",
+        "name": "Περιφέρεια Αττικής"
+      },
+      {
+        "level": 4,
+        "equivalent": "region",
+        "name": "Αποκεντρωμένη Διοίκηση Αττικής"
+      },
+      {
+        "level": 2,
+        "equivalent": "country",
+        "name": "Ελλάς"
+      }
+    ],
+    "bearing": "15 km S Αθήνα"
+  },
+  {
+    "point": {
+      "label": "GR/L8 Δημοτική Ενότητα Νίκαιας",
+      "region": "GR",
+      "lat": 37.97914705,
+      "lon": 23.635826017808608
+    },
+    "country_iso": "GR",
+    "chain": [
+      {
+        "level": 8,
+        "equivalent": "submunicipality",
+        "name": "Δημοτική Ενότητα Νίκαιας"
+      },
+      {
+        "level": 7,
+        "equivalent": "municipality",
+        "name": "Δήμος Νίκαιας - Αγίου Ιωάννη Ρέντη"
+      },
+      {
+        "level": 6,
+        "equivalent": "province",
+        "name": "Περιφερειακή Ενότητα Πειραιώς"
+      },
+      {
+        "level": 5,
+        "equivalent": "state",
+        "name": "Περιφέρεια Αττικής"
+      },
+      {
+        "level": 4,
+        "equivalent": "region",
+        "name": "Αποκεντρωμένη Διοίκηση Αττικής"
+      },
+      {
+        "level": 2,
+        "equivalent": "country",
+        "name": "Ελλάς"
+      }
+    ],
+    "bearing": "4 km N Πειραιάς"
+  },
+  {
+    "point": {
+      "label": "GR/L8 Δημοτική Ενότητα Νέας Φιλαδέλφειας",
+      "region": "GR",
+      "lat": 38.04492715,
+      "lon": 23.74095837288611
+    },
+    "country_iso": "GR",
+    "chain": [
+      {
+        "level": 8,
+        "equivalent": "submunicipality",
+        "name": "Δημοτική Ενότητα Νέας Φιλαδέλφειας"
+      },
+      {
+        "level": 7,
+        "equivalent": "municipality",
+        "name": "Δήμος Νέας Φιλαδέλφειας - Νέας Χαλκηδόνας"
+      },
+      {
+        "level": 6,
+        "equivalent": "province",
+        "name": "Περιφερειακή Ενότητα Κεντρικού Τομέα Αθηνών"
+      },
+      {
+        "level": 5,
+        "equivalent": "state",
+        "name": "Περιφέρεια Αττικής"
+      },
+      {
+        "level": 4,
+        "equivalent": "region",
+        "name": "Αποκεντρωμένη Διοίκηση Αττικής"
+      },
+      {
+        "level": 2,
+        "equivalent": "country",
+        "name": "Ελλάς"
+      }
+    ],
+    "bearing": "7.5 km N Αθήνα"
+  },
+  {
+    "point": {
+      "label": "GR/L8 Δημοτική Ενότητα Κερατσινίου",
+      "region": "GR",
+      "lat": 37.9706425,
+      "lon": 23.617576818010384
+    },
+    "country_iso": "GR",
+    "chain": [
+      {
+        "level": 8,
+        "equivalent": "submunicipality",
+        "name": "Δημοτική Ενότητα Κερατσινίου"
+      },
+      {
+        "level": 7,
+        "equivalent": "municipality",
+        "name": "Δήμος Κερατσινίου - Δραπετσώνας"
+      },
+      {
+        "level": 6,
+        "equivalent": "province",
+        "name": "Περιφερειακή Ενότητα Πειραιώς"
+      },
+      {
+        "level": 5,
+        "equivalent": "state",
+        "name": "Περιφέρεια Αττικής"
+      },
+      {
+        "level": 4,
+        "equivalent": "region",
+        "name": "Αποκεντρωμένη Διοίκηση Αττικής"
+      },
+      {
+        "level": 2,
+        "equivalent": "country",
+        "name": "Ελλάς"
+      }
+    ],
+    "bearing": "4 km NW Πειραιάς"
+  },
+  {
+    "point": {
+      "label": "GR/L8 Δημοτική Ενότητα Δραπετσώνας",
+      "region": "GR",
+      "lat": 37.94496185,
+      "lon": 23.62511803527261
+    },
+    "country_iso": "GR",
+    "chain": [
+      {
+        "level": 8,
+        "equivalent": "submunicipality",
+        "name": "Δημοτική Ενότητα Δραπετσώνας"
+      },
+      {
+        "level": 7,
+        "equivalent": "municipality",
+        "name": "Δήμος Κερατσινίου - Δραπετσώνας"
+      },
+      {
+        "level": 6,
+        "equivalent": "province",
+        "name": "Περιφερειακή Ενότητα Πειραιώς"
+      },
+      {
+        "level": 5,
+        "equivalent": "state",
+        "name": "Περιφέρεια Αττικής"
+      },
+      {
+        "level": 4,
+        "equivalent": "region",
+        "name": "Αποκεντρωμένη Διοίκηση Αττικής"
+      },
+      {
+        "level": 2,
+        "equivalent": "country",
+        "name": "Ελλάς"
+      }
+    ],
+    "bearing": "2 km W Πειραιάς"
+  },
+  {
+    "point": {
+      "label": "IL/L8 נס ציונה",
+      "region": "IL",
+      "lat": 31.9208636,
+      "lon": 34.79413999283129
+    },
+    "country_iso": "IL",
+    "chain": [
+      {
+        "level": 8,
+        "equivalent": "municipality",
+        "name": "נס ציונה"
+      },
+      {
+        "level": 5,
+        "equivalent": "county",
+        "name": "נפת רחובות"
+      },
+      {
+        "level": 4,
+        "equivalent": "district",
+        "name": "מחוז המרכז"
+      },
+      {
+        "level": 2,
+        "equivalent": "country",
+        "name": "ישראל"
+      }
+    ],
+    "bearing": "1 km SW נס ציונה"
+  },
+  {
+    "point": {
+      "label": "IL/L8 רחובות",
+      "region": "IL",
+      "lat": 31.8930644,
+      "lon": 34.80340932920801
+    },
+    "country_iso": "IL",
+    "chain": [
+      {
+        "level": 8,
+        "equivalent": "municipality",
+        "name": "רחובות"
+      },
+      {
+        "level": 5,
+        "equivalent": "county",
+        "name": "נפת רחובות"
+      },
+      {
+        "level": 4,
+        "equivalent": "district",
+        "name": "מחוז המרכז"
+      },
+      {
+        "level": 2,
+        "equivalent": "country",
+        "name": "ישראל"
+      }
+    ],
+    "bearing": "bei רחובות"
+  },
+  {
+    "point": {
+      "label": "IL/L8 مجدل شمس",
+      "region": "IL",
+      "lat": 33.26888235,
+      "lon": 35.766947986726976
+    },
+    "country_iso": "IL",
+    "chain": [
+      {
+        "level": 8,
+        "equivalent": "municipality",
+        "name": "مجدل شمس"
+      },
+      {
+        "level": 5,
+        "equivalent": "county",
+        "name": "נפת רמת הגולן"
+      },
+      {
+        "level": 4,
+        "equivalent": "district",
+        "name": "מחוז הצפון"
+      },
+      {
+        "level": 2,
+        "equivalent": "country",
+        "name": "ישראל"
+      }
+    ],
+    "bearing": "17 km N القنيطرة"
+  },
+  {
+    "point": {
+      "label": "IL/L8 بقعاثا",
+      "region": "IL",
+      "lat": 33.209661800000006,
+      "lon": 35.78205398094309
+    },
+    "country_iso": "IL",
+    "chain": [
+      {
+        "level": 8,
+        "equivalent": "municipality",
+        "name": "بقعاثا"
+      },
+      {
+        "level": 5,
+        "equivalent": "county",
+        "name": "נפת רמת הגולן"
+      },
+      {
+        "level": 4,
+        "equivalent": "district",
+        "name": "מחוז הצפון"
+      },
+      {
+        "level": 2,
+        "equivalent": "country",
+        "name": "ישראל"
+      }
+    ],
+    "bearing": "10 km N القنيطرة"
+  },
+  {
+    "point": {
+      "label": "IL/L8 مسعدة",
+      "region": "IL",
+      "lat": 33.22989395,
+      "lon": 35.77142796473366
+    },
+    "country_iso": "IL",
+    "chain": [
+      {
+        "level": 8,
+        "equivalent": "municipality",
+        "name": "مسعدة"
+      },
+      {
+        "level": 5,
+        "equivalent": "county",
+        "name": "נפת רמת הגולן"
+      },
+      {
+        "level": 4,
+        "equivalent": "district",
+        "name": "מחוז הצפון"
+      },
+      {
+        "level": 2,
+        "equivalent": "country",
+        "name": "ישראל"
+      }
+    ],
+    "bearing": "13 km N القنيطرة"
+  },
+  {
+    "point": {
+      "label": "RU/L8 район Кунцево",
+      "region": "RU",
+      "lat": 55.7868506,
+      "lon": 37.33953185686481
+    },
+    "country_iso": "RU",
+    "chain": [
+      {
+        "level": 8,
+        "equivalent": "municipality",
+        "name": "район Кунцево"
+      },
+      {
+        "level": 5,
+        "equivalent": "district",
+        "name": "Западный административный округ"
+      },
+      {
+        "level": 4,
+        "equivalent": "state",
+        "name": "Москва"
+      }
+    ],
+    "bearing": "18 km W Москва"
+  },
+  {
+    "point": {
+      "label": "RU/L8 район Крылатское",
+      "region": "RU",
+      "lat": 55.76128705,
+      "lon": 37.42593374522882
+    },
+    "country_iso": "RU",
+    "chain": [
+      {
+        "level": 8,
+        "equivalent": "municipality",
+        "name": "район Крылатское"
+      },
+      {
+        "level": 5,
+        "equivalent": "district",
+        "name": "Западный административный округ"
+      },
+      {
+        "level": 4,
+        "equivalent": "state",
+        "name": "Москва"
+      }
+    ],
+    "bearing": "12 km W Москва"
+  },
+  {
+    "point": {
+      "label": "RU/L8 Каменногорское городское поселение",
+      "region": "RU",
+      "lat": 61.03940785,
+      "lon": 29.343216626388912
+    },
+    "country_iso": "RU",
+    "chain": [
+      {
+        "level": 8,
+        "equivalent": "municipality",
+        "name": "Каменногорское городское поселение"
+      },
+      {
+        "level": 6,
+        "equivalent": "county",
+        "name": "Выборгский район"
+      },
+      {
+        "level": 4,
+        "equivalent": "state",
+        "name": "Ленинградская область"
+      }
+    ],
+    "bearing": "49 km NE Выборг"
+  },
+  {
+    "point": {
+      "label": "RU/L8 Гончаровское сельское поселение",
+      "region": "RU",
+      "lat": 60.68943855,
+      "lon": 29.233238030536896
+    },
+    "country_iso": "RU",
+    "chain": [
+      {
+        "level": 8,
+        "equivalent": "municipality",
+        "name": "Гончаровское сельское поселение"
+      },
+      {
+        "level": 6,
+        "equivalent": "county",
+        "name": "Выборгский район"
+      },
+      {
+        "level": 4,
+        "equivalent": "state",
+        "name": "Ленинградская область"
+      }
+    ],
+    "bearing": "27 km E Выборг"
+  },
+  {
+    "point": {
+      "label": "RU/L8 Выборг",
+      "region": "RU",
+      "lat": 60.732672300000004,
+      "lon": 28.74469092882248
+    },
+    "country_iso": "RU",
+    "chain": [
+      {
+        "level": 9,
+        "equivalent": "submunicipality",
+        "name": "Петровский микрорайон"
+      },
+      {
+        "level": 8,
+        "equivalent": "municipality",
+        "name": "Выборг"
+      },
+      {
+        "level": 6,
+        "equivalent": "county",
+        "name": "Выборгский район"
+      },
+      {
+        "level": 4,
+        "equivalent": "state",
+        "name": "Ленинградская область"
+      }
+    ],
+    "bearing": "2.5 km N Выборг"
+  }
+]
