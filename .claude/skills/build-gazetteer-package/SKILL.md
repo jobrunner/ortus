@@ -15,8 +15,9 @@ description: >-
 The gazetteer dataset is a dedicated GeoPackage (`osm-admin-places.gpkg`) with two
 layers — `places` (POINT settlements) and `admin_levels` (MULTIPOLYGON boundaries) —
 plus three YAML sidecars. It is built from OpenStreetMap + Natural Earth by the
-**canonical build system in the `osm-data` repo** (`/Users/jbrunner/work/projects/geopackages/osm-data`),
-a ~1000-line Makefile plus the Python generators bundled here under `scripts/`.
+**canonical build system in the `osm-data` repo** (clone it separately; set
+`OSM_DATA` to its checkout path), a ~1000-line Makefile plus the Python
+generators bundled here under `scripts/`.
 
 ortus consumes it through `internal/application/gazetteer` (see `ortus-gazetteer.example.yaml`
 and `internal/app/gazetteer.go`). This skill's job is to produce a package that
@@ -65,7 +66,7 @@ without it ellipsoidal `Distance()` fails and every bearing returns nothing.
 The canonical driver is the osm-data Makefile. From that repo:
 
 ```bash
-cd /Users/jbrunner/work/projects/geopackages/osm-data
+cd "$OSM_DATA"        # your osm-data checkout
 
 # Full reproducible rebuild from fresh sources to one coherent vintage:
 bash scripts/rebuild-all.sh          # (bundled here as scripts/rebuild-all.sh)
@@ -116,8 +117,11 @@ the GeoPackage in place (idempotent, guarded by `ADD COLUMN IF NOT EXISTS`):
 - **`build_admin_level_reference.py`** — regenerates `admin_levels_west_palearctic.yaml`
   (the level sidecar) from the GeoPackage + OSM Wiki tiers. Run when admin coverage changes.
 - **`script_census.py`** — QA: counts names by Unicode script. Informational.
-- **`geonames_lookup.py`** — optional one-off: fill missing `country_iso` from GeoNames.
 - **`rebuild-all.sh`** — orchestrates the full sequence at one coherent vintage.
+
+(The osm-data repo also ships `geonames_lookup.py`, an optional pre-normalization
+one-off to fill missing ISO codes; it is not part of the reproducible base flow
+and is left in osm-data rather than bundled here.)
 
 These scripts assume the osm-data Makefile has produced the base GeoPackage; they
 are the *enrichment* half of the pipeline. For the osmium/ogr2ogr assembly half,

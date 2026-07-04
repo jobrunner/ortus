@@ -74,8 +74,11 @@ gdal_translate -of COG -a_srs "$CRS" \
 # --- 3. manifest --------------------------------------------------------------
 echo ">> generating ortus-raster.yaml"
 MANIFEST="$WORK/ortus-raster.yaml"
-gen_args=(--id "$ID" --name "$NAME")
+# Thread the same COG name, CRS and band into the manifest so it matches the
+# bundle we actually produce (not gen_manifest.py's Köppen defaults).
+gen_args=(--id "$ID" --name "$NAME" --cog "$COG_NAME" --crs "$CRS" --band "$BAND")
 [ -n "$DESC" ] && gen_args+=(--description "$DESC")
+[ -n "$NODATA" ] && gen_args+=(--nodata "$NODATA")
 if [ -n "$LEGEND" ] && [ -e "$LEGEND" ]; then
   python3 "$HERE/gen_manifest.py" "$LEGEND" "${gen_args[@]}" > "$MANIFEST"
 else

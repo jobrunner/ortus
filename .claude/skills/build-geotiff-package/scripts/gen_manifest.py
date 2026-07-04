@@ -58,7 +58,7 @@ def build_header(a: argparse.Namespace) -> str:
         "layers:",
         f"  - id: {a.layer_id}",
         f"    file: {a.cog}",
-        "    band: 1",
+        f"    band: {a.band}",
         f"    nodata: {a.nodata}",
         "    sampling: nearest",
         "    mapping:",
@@ -77,6 +77,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--layer-id", default="classification", help="layer id within the bundle")
     p.add_argument("--cog", default="koeppen.cog.tif", help="COG filename inside the bundle")
     p.add_argument("--crs", default="EPSG:4326", help="EPSG:<code> the COG is in")
+    p.add_argument("--band", type=int, default=1, help="1-based band index the mapping applies to")
     p.add_argument("--nodata", type=int, default=0, help="no-class sentinel pixel value")
     p.add_argument("--license", default="CC-BY-4.0")
     p.add_argument("--attribution", default="Beck et al. (2018), Scientific Data 5:180214")

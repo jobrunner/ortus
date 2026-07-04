@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # Full reproducible rebuild of output/osm-admin-places.gpkg from FRESH sources.
 #
+# NOTE: this is a bundled reference copy. It drives the osm-data Makefile
+# (`make`, `make normalize-schema`, …), so it MUST be run from an osm-data
+# checkout (copy it to `$OSM_DATA/scripts/` and run it there). Running it from
+# this skill directory will fail — there is no Makefile here.
+#
 # Pulls every OSM extract at the current "latest" (one consistent vintage),
 # builds the base, adds the extra countries, normalizes the schema, embeds the
 # license metadata, records provenance (timestamps + SHA-256) and runs the QA
