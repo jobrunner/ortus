@@ -115,6 +115,7 @@ gazetteer:
   geopackage_path: ""       # path to the places/admin GeoPackage
   manifest_path: ""         # ortus-gazetteer.yaml (layer/column role mapping)
   level_reference_path: ""  # optional admin-level sidecar (enriches Locate with tier meaning)
+  name_source_manifest_path: ""  # optional name-source manifest (describes romanization/provenance codes in the response-wide sources block)
   # Bearing tuning knobs. Reach = the radius within which a class is an acceptable
   # anchor; prefer_nearest_km = a town-or-larger anchor within this radius wins
   # outright (villages excluded). Defaults shown.

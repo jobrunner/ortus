@@ -69,9 +69,9 @@ func testManifest() Manifest {
 // mapResolver is a simple LevelResolver backed by an (iso,level)→equivalent map.
 type mapResolver map[[2]any]string
 
-func (m mapResolver) Resolve(iso string, level int) (string, bool) {
+func (m mapResolver) Resolve(iso string, level int) (LevelMeaning, bool) {
 	e, ok := m[[2]any{iso, level}]
-	return e, ok
+	return LevelMeaning{Equivalent: e}, ok
 }
 
 func adminFeature(level, name string) domain.Feature {

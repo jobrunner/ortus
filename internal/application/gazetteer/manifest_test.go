@@ -76,14 +76,24 @@ func TestParseManifestInvalidYAML(t *testing.T) {
 
 const validLevelRef = `
 version: 1
+equivalent_levels:
+  country:
+    description: "Sovereign state (admin_level 2)"
+  state:
+    description: "First-order subdivision"
+  municipality:
+    description: "Municipality / commune (basic local government unit)"
 countries:
   DE:
     levels:
       2:
+        name: "Deutschland"
         equivalent: country
       4:
+        name: "Bundesland"
         equivalent: state
       8:
+        name: "Stadt / Gemeinde"
         equivalent: municipality
   AT:
     levels:
@@ -99,25 +109,76 @@ func TestParseLevelReference(t *testing.T) {
 	cases := []struct {
 		iso    string
 		level  int
-		want   string
+		want   LevelMeaning
 		wantOK bool
 	}{
-		{"DE", 4, "state", true},
-		{"DE", 8, "municipality", true},
-		{"AT", 2, "country", true},
-		{"DE", 6, "", false}, // level not defined
-		{"FR", 2, "", false}, // country not present
+		{"DE", 4, LevelMeaning{Equivalent: "state", Description: "First-order subdivision", LocalTerm: "Bundesland"}, true},
+		{"DE", 8, LevelMeaning{Equivalent: "municipality", Description: "Municipality / commune (basic local government unit)", LocalTerm: "Stadt / Gemeinde"}, true},
+		{"AT", 2, LevelMeaning{Equivalent: "country", Description: "Sovereign state (admin_level 2)"}, true},
+		{"DE", 6, LevelMeaning{}, false}, // level not defined
+		{"FR", 2, LevelMeaning{}, false}, // country not present
 	}
 	for _, tc := range cases {
 		got, ok := r.Resolve(tc.iso, tc.level)
 		if got != tc.want || ok != tc.wantOK {
-			t.Errorf("Resolve(%q,%d) = %q,%v; want %q,%v", tc.iso, tc.level, got, ok, tc.want, tc.wantOK)
+			t.Errorf("Resolve(%q,%d) = %+v,%v; want %+v,%v", tc.iso, tc.level, got, ok, tc.want, tc.wantOK)
 		}
+	}
+}
+
+func TestParseNameSources(t *testing.T) {
+	const y = `
+version: 1
+sources:
+  latin-osm:
+    short: "OSM name (already Latin)"
+    long: "Taken verbatim from the OSM name tag."
+    standard: null
+  translit-el-843:
+    short: "Greek ELOT 743"
+    long: "Romanized from Greek using ELOT 743."
+    standard: "ELOT 743 / UN / ISO 843"
+`
+	r, err := ParseNameSources([]byte(y))
+	if err != nil {
+		t.Fatalf("ParseNameSources: %v", err)
+	}
+	ns, ok := r.Resolve("translit-el-843")
+	if !ok || ns.Standard != "ELOT 743 / UN / ISO 843" || ns.Short != "Greek ELOT 743" {
+		t.Errorf("Resolve(translit-el-843) = %+v, ok=%v", ns, ok)
+	}
+	if _, ok := r.Resolve("nope"); ok {
+		t.Error("unknown code should return ok=false")
 	}
 }
 
 func TestParseLevelReferenceInvalidYAML(t *testing.T) {
 	if _, err := ParseLevelReference([]byte("countries: [bad")); err == nil {
 		t.Error("expected error for malformed YAML")
+	}
+}
+
+// TestParseLevelReferenceUndefinedEquivalent asserts a level whose equivalent is
+// not declared in equivalent_levels fails at parse time rather than silently
+// yielding an empty description in every response.
+func TestParseLevelReferenceUndefinedEquivalent(t *testing.T) {
+	const y = `
+version: 1
+equivalent_levels:
+  country:
+    description: "Sovereign state"
+countries:
+  DE:
+    levels:
+      4:
+        name: "Bundesland"
+        equivalent: state
+`
+	_, err := ParseLevelReference([]byte(y))
+	if err == nil {
+		t.Fatal("expected error for equivalent not defined in equivalent_levels")
+	}
+	if !strings.Contains(err.Error(), "state") || !strings.Contains(err.Error(), "equivalent_levels") {
+		t.Errorf("error = %q, want it to name the missing equivalent + equivalent_levels", err)
 	}
 }

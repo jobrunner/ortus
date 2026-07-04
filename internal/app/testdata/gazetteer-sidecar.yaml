@@ -1,196 +1,305 @@
 version: 1
+equivalent_levels:
+    borough:
+        description: Sub-municipal borough / urban district
+    country:
+        description: Sovereign state (admin_level 2)
+    county:
+        description: County or district tier
+    district:
+        description: District / subdistrict
+    municipality:
+        description: Municipality / commune (basic local government unit)
+    other:
+        description: Does not map to a standard tier (see notes)
+    parish:
+        description: Civil parish
+    province:
+        description: Province / department tier
+    region:
+        description: Administrative region / mid-tier grouping (e.g. Regierungsbezirk, NUTS region)
+    state:
+        description: First-order subdivision (Land, oblast, comunidad autónoma, ...)
+    submunicipality:
+        description: Other sub-municipal unit (quarter, ward, locality)
 countries:
     AE:
         levels:
             2:
+                name: United Arab Emirates
                 equivalent: country
             4:
+                name: Emirates (إمارة)
                 equivalent: state
             5:
+                name: Capital Abu Dhabi (أبو ظبي)
                 equivalent: region
             6:
+                name: Region / District (منطقة, ولاية)
                 equivalent: district
             7:
+                name: Locality / Sub-district (in use, fixme)
                 equivalent: other
             8:
+                name: Municipalities
                 equivalent: municipality
             10:
+                name: Suburbs / Quarters / Villages
                 equivalent: submunicipality
     CY:
         levels:
             2:
+                name: Cyprus / Κύπρος / Kıbrıs
                 equivalent: country
             3:
+                name: De facto partitions (Republic of Cyprus / TRNC / UN buffer zone)
                 equivalent: other
             4:
+                name: The 6 de jure Districts
                 equivalent: district
             5:
+                name: Districts of RoC and TRNC (5 + 6, LAU 1)
                 equivalent: district
             6:
+                name: Municipalities & Community Clusters (LAU 2)
                 equivalent: municipality
             7:
+                name: Municipal Quarters
                 equivalent: submunicipality
             8:
+                name: Communities
                 equivalent: municipality
             9:
+                name: Municipality Districts / Parishes
                 equivalent: submunicipality
             10:
+                name: Settlement
                 equivalent: submunicipality
     DE:
         levels:
             2:
+                name: Deutschland
                 equivalent: country
             4:
+                name: Bundesland
                 equivalent: state
             5:
+                name: Regierungsbezirk
                 equivalent: region
             6:
+                name: Landkreis / Kreis / kreisfreie Stadt
                 equivalent: county
             7:
+                name: Amt / Samtgemeinde / Verwaltungsgemeinschaft
                 equivalent: district
             8:
+                name: Stadt / Gemeinde
                 equivalent: municipality
             9:
+                name: Stadtbezirk / Gemeindeteil mit Selbstverwaltung
                 equivalent: borough
             10:
+                name: Stadtteil / Gemeindeteil ohne Selbstverwaltung / Gemarkung
                 equivalent: submunicipality
             11:
+                name: Flur
                 equivalent: submunicipality
             12:
+                name: Gemarkung-/Flur-Untergliederung (Straße/Block)
                 equivalent: submunicipality
     FI:
         levels:
             2:
+                name: Finland (Suomi)
                 equivalent: country
             3:
+                name: Main areas (Pääalueet, NUTS 1)
                 equivalent: region
             4:
+                name: Regions (Maakunnat, NUTS 3)
                 equivalent: state
             7:
+                name: Sub-regions (Seutukunnat, LAU 1)
                 equivalent: district
             8:
+                name: Municipalities (Kunnat / Kaupungit, LAU 2)
                 equivalent: municipality
             9:
+                name: Villages (kylät) / large sub-areas of city districts (kaupunginosien/kunnanosien suuralueet)
                 equivalent: submunicipality
             10:
+                name: City/municipal districts (kaupunginosat / kunnanosat)
                 equivalent: submunicipality
             11:
+                name: Sub-districts / quarters (neighbourhoods)
                 equivalent: submunicipality
     GR:
         levels:
             2:
+                name: Ελλάς (Greece)
                 equivalent: country
             3:
+                name: Αυτόνομη Μοναστική Πολιτεία Αγίου Όρους (Autonomous Monastic State of Mount Athos)
                 equivalent: other
             4:
+                name: Αποκεντρωμένες διοικήσεις (Decentralized Administrations)
                 equivalent: region
             5:
+                name: Περιφέρειες (Regions, NUTS 2)
                 equivalent: state
             6:
+                name: Περιφερειακές ενότητες (Regional units, NUTS 3)
                 equivalent: province
             7:
+                name: Δήμοι (Municipalities)
                 equivalent: municipality
             8:
+                name: Δημοτικές ενότητες (Municipal units)
                 equivalent: submunicipality
             9:
+                name: Δημοτικές/Τοπικές κοινότητες (Municipal/local communities, LAU)
                 equivalent: submunicipality
             10:
+                name: Κοινότητες (Communities / sub-community settlement units)
                 equivalent: submunicipality
     IL:
         levels:
             2:
+                name: Israel / Palestine
                 equivalent: country
             4:
+                name: מחוז / District (including West Bank and Gaza Strip)
                 equivalent: district
             5:
+                name: 'נפה / Subdistrict (West Bank: Areas A, B, C)'
                 equivalent: county
             6:
+                name: 'אזור טבעי / Natural Region (in Palestinian Territory: נפה / Subdistrict)'
                 equivalent: region
             7:
+                name: מטרופולין / Metropolitan area
                 equivalent: region
             8:
+                name: 'עיר, מועצה מקומית, מועצה אזורית / City, Local council, Regional council (in Palestinian Territory: Municipality grade 1, 2)'
                 equivalent: municipality
             9:
+                name: 'רובע / Borough (under regional council: יישוב / Village; in Palestinian Territory: Municipality grade 3, 4)'
                 equivalent: borough
             10:
+                name: שכונה / Neighborhood
                 equivalent: submunicipality
             11:
+                name: Sub-neighborhood
                 equivalent: submunicipality
     JO:
         levels:
             2:
+                name: Jordan
                 equivalent: country
             4:
+                name: Governorate (muhafazah)
                 equivalent: province
             5:
+                name: District (liwa')
                 equivalent: district
             6:
+                name: District / Subdistrict (qada'/nahiya)
                 equivalent: district
             7:
+                name: Subdistrict (nahiyah)
                 equivalent: district
             8:
+                name: Locality / municipal area
                 equivalent: municipality
             9:
+                name: Subdivision (uncertain)
                 equivalent: other
     OM:
         levels:
             2:
+                name: Oman
                 equivalent: country
             4:
+                name: Governorate (محافظة)
                 equivalent: province
             6:
+                name: Provinces (ولاية)
                 equivalent: district
             8:
+                name: Villages/Towns (قرية أو مدينة)
                 equivalent: municipality
             10:
+                name: Blocks/Subdivisions of Villages and Towns (مجمع او تقسيمات قرى/مدن)
                 equivalent: submunicipality
     PS:
         levels:
             2:
+                name: Palestine
                 equivalent: country
             4:
+                name: District (including West Bank and Gaza Strip)
                 equivalent: district
             5:
+                name: Subdistrict (Areas A, B, C of West Bank)
                 equivalent: county
             6:
+                name: Subdistrict
                 equivalent: county
             8:
+                name: Municipality (grade 1, 2)
                 equivalent: municipality
             9:
+                name: Municipality (grade 3, 4)
                 equivalent: municipality
             10:
+                name: Neighborhood
                 equivalent: submunicipality
     RU:
         levels:
             2:
+                name: Russian Federation
                 equivalent: country
             3:
+                name: Federal districts
                 equivalent: region
             4:
+                name: Federal subjects
                 equivalent: state
             5:
+                name: Groups of municipal districts / urban okrugs, administrative okrugs / districts of federal cities
                 equivalent: district
             6:
+                name: Municipal districts and okrugs of federal subjects (except federal cities), urban okrugs, including ZATO and urban okrugs with intracity division
                 equivalent: county
             8:
+                name: Urban and rural municipalities, municipal intra-city territories of federal cities, districts of urban okrugs with intracity division
                 equivalent: municipality
             9:
+                name: Districts and other administrative-territorial units of urban and municipal okrugs
                 equivalent: submunicipality
             10:
+                name: Hamlets / suburbs (under discussion)
                 equivalent: submunicipality
             11:
+                name: Okrug (sub-district of city)
                 equivalent: submunicipality
     SY:
         levels:
             2:
+                name: Syria
                 equivalent: country
             4:
+                name: Governorates (muhafazah / محافظة)
                 equivalent: state
             5:
+                name: Districts (mintaqah / منطقة)
                 equivalent: district
             6:
+                name: Subdistricts (nahiya / ناحية)
                 equivalent: district
             8:
+                name: Cities, towns and villages of subdistrict / Damascus municipalities (baladiyah / بلدية)
                 equivalent: municipality
             10:
+                name: Damascus neighborhoods (hayy / الحي)
                 equivalent: submunicipality

@@ -197,17 +197,32 @@ paths:
                   hierarchy:
                     - level: 8
                       name: Würzburg
+                      name_native: ""          # empty: already-Latin name (identical to name)
+                      name_source: latin-osm
                       equivalent: municipality
+                      local_term: Kreisfreie Stadt
+                      equivalent_description: Local municipal authority (city/town/commune).
                     - level: 4
                       name: Bayern
+                      name_native: ""          # empty: already-Latin name (identical to name)
+                      name_source: latin-osm
                       equivalent: state
+                      local_term: Land
+                      equivalent_description: First-level subdivision (state, region, province).
                 bearing:
                   reference: Würzburg
+                  name_native: ""            # empty: already-Latin name (identical to reference)
+                  name_source: latin-osm
                   class: city
                   distance_km: 4.0
                   azimuth: 90.0
                   compass: E
                   label: "4 km E Würzburg"
+                sources:
+                  - code: latin-osm
+                    short: OSM name (already Latin)
+                    long: Taken verbatim from the OpenStreetMap name tag; already Latin script, no transliteration applied.
+                    standard: ""    # latin-osm has no romanization standard (null in the manifest)
         '400':
           description: Ungültige Parameter
           content:
@@ -540,9 +555,24 @@ components:
                     description: OSM admin_level.
                   name:
                     type: string
+                    description: Name in lateinischer Schrift (immer gesetzt).
+                  name_native:
+                    type: string
+                    description: Name in Originalschrift (leer, wenn identisch mit name).
+                  name_source:
+                    type: string
+                    description: >-
+                      Codierung der Namensherkunft/Romanisierung; im
+                      response-weiten sources-Block beschrieben. Leer, wenn keine.
                   equivalent:
                     type: string
                     description: Semantische Bedeutung (country | state | … | municipality).
+                  local_term:
+                    type: string
+                    description: Landesspezifischer Begriff für diese Ebene (z. B. „Landkreis").
+                  equivalent_description:
+                    type: string
+                    description: Generische Beschreibung des equivalent-Levels.
         bearing:
           nullable: true
           type: object
@@ -550,7 +580,15 @@ components:
           properties:
             reference:
               type: string
-              description: Name des Anker-Orts.
+              description: Name des Anker-Orts (lateinische Schrift).
+            name_native:
+              type: string
+              description: Name des Anker-Orts in Originalschrift (leer, wenn identisch).
+            name_source:
+              type: string
+              description: >-
+                Codierung der Namensherkunft/Romanisierung des Ankers; im
+                response-weiten sources-Block beschrieben. Leer, wenn keine.
             class:
               type: string
               description: OSM place-Klasse (village | town | city).
@@ -567,6 +605,27 @@ components:
             label:
               type: string
               description: Fertiges Label, z. B. „4 km E Würzburg".
+        sources:
+          type: array
+          description: >-
+            Response-weiter Herkunfts-Auszug: jede in admin/bearing vorkommende
+            name_source-Codierung wird hier genau einmal beschrieben (nicht pro
+            Datensatz wiederholt). Leeres Array, wenn keine Codierungen gesetzt sind.
+          items:
+            type: object
+            properties:
+              code:
+                type: string
+                description: Codierung, auf die name_source verweist.
+              short:
+                type: string
+                description: Kurzbezeichnung der Quelle/Codierung.
+              long:
+                type: string
+                description: Ausführliche Beschreibung der Quelle/Codierung.
+              standard:
+                type: string
+                description: Zugrundeliegender Standard bzw. Zitierhinweis.
 
     Coordinate:
       type: object

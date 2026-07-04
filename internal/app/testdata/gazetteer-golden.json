@@ -11,35 +11,64 @@
       {
         "level": 9,
         "equivalent": "submunicipality",
-        "name": "Καϊμακλί"
+        "name": "Kaimakli",
+        "name_native": "Καϊμακλί",
+        "name_source": "translit-el-843",
+        "local_term": "Municipality Districts / Parishes",
+        "equivalent_description": "Other sub-municipal unit (quarter, ward, locality)"
       },
       {
         "level": 8,
         "equivalent": "municipality",
-        "name": "Λευκωσία"
+        "name": "Lefkosia",
+        "name_native": "Λευκωσία",
+        "name_source": "translit-el-843",
+        "local_term": "Communities",
+        "equivalent_description": "Municipality / commune (basic local government unit)"
       },
       {
         "level": 6,
         "equivalent": "municipality",
-        "name": "Δήμος Λευκωσίας"
+        "name": "Dimos Lefkosias",
+        "name_native": "Δήμος Λευκωσίας",
+        "name_source": "translit-el-843",
+        "local_term": "Municipalities \u0026 Community Clusters (LAU 2)",
+        "equivalent_description": "Municipality / commune (basic local government unit)"
       },
       {
         "level": 5,
         "equivalent": "district",
-        "name": "Επαρχία Λευκωσίας"
+        "name": "Eparchia Lefkosias",
+        "name_native": "Επαρχία Λευκωσίας",
+        "name_source": "translit-el-843",
+        "local_term": "Districts of RoC and TRNC (5 + 6, LAU 1)",
+        "equivalent_description": "District / subdistrict"
       },
       {
         "level": 3,
         "equivalent": "other",
-        "name": "Κύπρος"
+        "name": "Kypros",
+        "name_native": "Κύπρος",
+        "name_source": "translit-el-843",
+        "local_term": "De facto partitions (Republic of Cyprus / TRNC / UN buffer zone)",
+        "equivalent_description": "Does not map to a standard tier (see notes)"
       },
       {
         "level": 2,
         "equivalent": "country",
-        "name": "Κύπρος - Kıbrıs"
+        "name": "Kypros - Kıbrıs",
+        "name_native": "Κύπρος - Kıbrıs",
+        "name_source": "translit-el-843",
+        "local_term": "Cyprus / Κύπρος / Kıbrıs",
+        "equivalent_description": "Sovereign state (admin_level 2)"
       }
     ],
-    "bearing": "2 km NE Λευκωσία - Lefkoşa"
+    "bearing": {
+      "label": "2 km NE Lefkosia - Lefkosa",
+      "reference": "Lefkosia - Lefkosa",
+      "name_native": "Λευκωσία - Lefkoşa",
+      "name_source": "translit-el-843"
+    }
   },
   {
     "point": {
@@ -53,40 +82,73 @@
       {
         "level": 10,
         "equivalent": "submunicipality",
-        "name": "Kreuzwertheim"
+        "name": "Kreuzwertheim",
+        "name_native": "",
+        "name_source": "latin-osm",
+        "local_term": "Stadtteil / Gemeindeteil ohne Selbstverwaltung / Gemarkung",
+        "equivalent_description": "Other sub-municipal unit (quarter, ward, locality)"
       },
       {
         "level": 8,
         "equivalent": "municipality",
-        "name": "Kreuzwertheim"
+        "name": "Kreuzwertheim",
+        "name_native": "",
+        "name_source": "latin-osm",
+        "local_term": "Stadt / Gemeinde",
+        "equivalent_description": "Municipality / commune (basic local government unit)"
       },
       {
         "level": 7,
         "equivalent": "district",
-        "name": "Verwaltungsgemeinschaft Kreuzwertheim"
+        "name": "Verwaltungsgemeinschaft Kreuzwertheim",
+        "name_native": "",
+        "name_source": "latin-osm",
+        "local_term": "Amt / Samtgemeinde / Verwaltungsgemeinschaft",
+        "equivalent_description": "District / subdistrict"
       },
       {
         "level": 6,
         "equivalent": "county",
-        "name": "Landkreis Main-Spessart"
+        "name": "Landkreis Main-Spessart",
+        "name_native": "",
+        "name_source": "latin-osm",
+        "local_term": "Landkreis / Kreis / kreisfreie Stadt",
+        "equivalent_description": "County or district tier"
       },
       {
         "level": 5,
         "equivalent": "region",
-        "name": "Unterfranken"
+        "name": "Unterfranken",
+        "name_native": "",
+        "name_source": "latin-osm",
+        "local_term": "Regierungsbezirk",
+        "equivalent_description": "Administrative region / mid-tier grouping (e.g. Regierungsbezirk, NUTS region)"
       },
       {
         "level": 4,
         "equivalent": "state",
-        "name": "Bayern"
+        "name": "Bayern",
+        "name_native": "",
+        "name_source": "latin-osm",
+        "local_term": "Bundesland",
+        "equivalent_description": "First-order subdivision (Land, oblast, comunidad autónoma, ...)"
       },
       {
         "level": 2,
         "equivalent": "country",
-        "name": "Deutschland"
+        "name": "Deutschland",
+        "name_native": "",
+        "name_source": "latin-osm",
+        "local_term": "Deutschland",
+        "equivalent_description": "Sovereign state (admin_level 2)"
       }
     ],
-    "bearing": "30 km W Würzburg"
+    "bearing": {
+      "label": "30 km W Würzburg",
+      "reference": "Würzburg",
+      "name_native": "",
+      "name_source": "latin-osm"
+    }
   },
   {
     "point": {
@@ -100,35 +162,64 @@
       {
         "level": 10,
         "equivalent": "submunicipality",
-        "name": "Wertheim"
+        "name": "Wertheim",
+        "name_native": "",
+        "name_source": "latin-osm",
+        "local_term": "Stadtteil / Gemeindeteil ohne Selbstverwaltung / Gemarkung",
+        "equivalent_description": "Other sub-municipal unit (quarter, ward, locality)"
       },
       {
         "level": 8,
         "equivalent": "municipality",
-        "name": "Wertheim"
+        "name": "Wertheim",
+        "name_native": "",
+        "name_source": "latin-osm",
+        "local_term": "Stadt / Gemeinde",
+        "equivalent_description": "Municipality / commune (basic local government unit)"
       },
       {
         "level": 6,
         "equivalent": "county",
-        "name": "Main-Tauber-Kreis"
+        "name": "Main-Tauber-Kreis",
+        "name_native": "",
+        "name_source": "latin-osm",
+        "local_term": "Landkreis / Kreis / kreisfreie Stadt",
+        "equivalent_description": "County or district tier"
       },
       {
         "level": 5,
         "equivalent": "region",
-        "name": "Regierungsbezirk Stuttgart"
+        "name": "Regierungsbezirk Stuttgart",
+        "name_native": "",
+        "name_source": "latin-osm",
+        "local_term": "Regierungsbezirk",
+        "equivalent_description": "Administrative region / mid-tier grouping (e.g. Regierungsbezirk, NUTS region)"
       },
       {
         "level": 4,
         "equivalent": "state",
-        "name": "Baden-Württemberg"
+        "name": "Baden-Württemberg",
+        "name_native": "",
+        "name_source": "latin-osm",
+        "local_term": "Bundesland",
+        "equivalent_description": "First-order subdivision (Land, oblast, comunidad autónoma, ...)"
       },
       {
         "level": 2,
         "equivalent": "country",
-        "name": "Deutschland"
+        "name": "Deutschland",
+        "name_native": "",
+        "name_source": "latin-osm",
+        "local_term": "Deutschland",
+        "equivalent_description": "Sovereign state (admin_level 2)"
       }
     ],
-    "bearing": "bei Wertheim"
+    "bearing": {
+      "label": "bei Wertheim",
+      "reference": "Wertheim",
+      "name_native": "",
+      "name_source": "latin-osm"
+    }
   },
   {
     "point": {
@@ -142,40 +233,73 @@
       {
         "level": 9,
         "equivalent": "submunicipality",
-        "name": "1η Κοινότητα Θεσσαλονίκης"
+        "name": "1i Koinotita Thessalonikis",
+        "name_native": "1η Κοινότητα Θεσσαλονίκης",
+        "name_source": "translit-el-843",
+        "local_term": "Δημοτικές/Τοπικές κοινότητες (Municipal/local communities, LAU)",
+        "equivalent_description": "Other sub-municipal unit (quarter, ward, locality)"
       },
       {
         "level": 8,
         "equivalent": "submunicipality",
-        "name": "Δημοτική Ενότητα Θεσαλονίκης"
+        "name": "Dimotiki Enotita Thesalonikis",
+        "name_native": "Δημοτική Ενότητα Θεσαλονίκης",
+        "name_source": "translit-el-843",
+        "local_term": "Δημοτικές ενότητες (Municipal units)",
+        "equivalent_description": "Other sub-municipal unit (quarter, ward, locality)"
       },
       {
         "level": 7,
         "equivalent": "municipality",
-        "name": "Δήμος Θεσσαλονίκης"
+        "name": "Dimos Thessalonikis",
+        "name_native": "Δήμος Θεσσαλονίκης",
+        "name_source": "translit-el-843",
+        "local_term": "Δήμοι (Municipalities)",
+        "equivalent_description": "Municipality / commune (basic local government unit)"
       },
       {
         "level": 6,
         "equivalent": "province",
-        "name": "Μητροπολιτική Ενότητα Θεσσαλονίκης"
+        "name": "Mitropolitiki Enotita Thessalonikis",
+        "name_native": "Μητροπολιτική Ενότητα Θεσσαλονίκης",
+        "name_source": "translit-el-843",
+        "local_term": "Περιφερειακές ενότητες (Regional units, NUTS 3)",
+        "equivalent_description": "Province / department tier"
       },
       {
         "level": 5,
         "equivalent": "state",
-        "name": "Περιφέρεια Κεντρικής Μακεδονίας"
+        "name": "Perifereia Kentrikis Makedonias",
+        "name_native": "Περιφέρεια Κεντρικής Μακεδονίας",
+        "name_source": "translit-el-843",
+        "local_term": "Περιφέρειες (Regions, NUTS 2)",
+        "equivalent_description": "First-order subdivision (Land, oblast, comunidad autónoma, ...)"
       },
       {
         "level": 4,
         "equivalent": "region",
-        "name": "Αποκεντρωμένη Διοίκηση Μακεδονίας - Θράκης"
+        "name": "Apokentromeni Dioikisi Makedonias - Thrakis",
+        "name_native": "Αποκεντρωμένη Διοίκηση Μακεδονίας - Θράκης",
+        "name_source": "translit-el-843",
+        "local_term": "Αποκεντρωμένες διοικήσεις (Decentralized Administrations)",
+        "equivalent_description": "Administrative region / mid-tier grouping (e.g. Regierungsbezirk, NUTS region)"
       },
       {
         "level": 2,
         "equivalent": "country",
-        "name": "Ελλάς"
+        "name": "Ellas",
+        "name_native": "Ελλάς",
+        "name_source": "translit-el-843",
+        "local_term": "Ελλάς (Greece)",
+        "equivalent_description": "Sovereign state (admin_level 2)"
       }
     ],
-    "bearing": "bei Θεσσαλονίκη"
+    "bearing": {
+      "label": "bei Thessaloniki",
+      "reference": "Thessaloniki",
+      "name_native": "Θεσσαλονίκη",
+      "name_source": "translit-el-843"
+    }
   },
   {
     "point": {
@@ -189,25 +313,46 @@
       {
         "level": 8,
         "equivalent": "municipality",
-        "name": "תל־אביב–יפו"
+        "name": "Tel-Aviv",
+        "name_native": "תל־אביב–יפו",
+        "name_source": "osm-en",
+        "local_term": "עיר, מועצה מקומית, מועצה אזורית / City, Local council, Regional council (in Palestinian Territory: Municipality grade 1, 2)",
+        "equivalent_description": "Municipality / commune (basic local government unit)"
       },
       {
         "level": 5,
         "equivalent": "county",
-        "name": "נפת תל אביב"
+        "name": "Tel Aviv Subdistrict",
+        "name_native": "נפת תל אביב",
+        "name_source": "osm-en",
+        "local_term": "נפה / Subdistrict (West Bank: Areas A, B, C)",
+        "equivalent_description": "County or district tier"
       },
       {
         "level": 4,
         "equivalent": "district",
-        "name": "מחוז תל אביב"
+        "name": "Tel-Aviv District",
+        "name_native": "מחוז תל אביב",
+        "name_source": "osm-en",
+        "local_term": "מחוז / District (including West Bank and Gaza Strip)",
+        "equivalent_description": "District / subdistrict"
       },
       {
         "level": 2,
         "equivalent": "country",
-        "name": "ישראל"
+        "name": "Israel",
+        "name_native": "ישראל",
+        "name_source": "osm-en",
+        "local_term": "Palestine",
+        "equivalent_description": "Sovereign state (admin_level 2)"
       }
     ],
-    "bearing": "bei תל אביב–יפו"
+    "bearing": {
+      "label": "bei Tel Aviv",
+      "reference": "Tel Aviv",
+      "name_native": "תל אביב–יפו",
+      "name_source": "osm-en"
+    }
   },
   {
     "point": {
@@ -221,25 +366,46 @@
       {
         "level": 6,
         "equivalent": "district",
-        "name": "ناحية عمان"
+        "name": "Amman Sub-District",
+        "name_native": "ناحية عمان",
+        "name_source": "osm-en",
+        "local_term": "District / Subdistrict (qada'/nahiya)",
+        "equivalent_description": "District / subdistrict"
       },
       {
         "level": 5,
         "equivalent": "district",
-        "name": "لواء قصبة عمان"
+        "name": "Amman Qasabah District",
+        "name_native": "لواء قصبة عمان",
+        "name_source": "osm-en",
+        "local_term": "District (liwa')",
+        "equivalent_description": "District / subdistrict"
       },
       {
         "level": 4,
         "equivalent": "province",
-        "name": "عمان"
+        "name": "Amman",
+        "name_native": "عمان",
+        "name_source": "osm-en",
+        "local_term": "Governorate (muhafazah)",
+        "equivalent_description": "Province / department tier"
       },
       {
         "level": 2,
         "equivalent": "country",
-        "name": "الأردن"
+        "name": "Jordan",
+        "name_native": "الأردن",
+        "name_source": "osm-en",
+        "local_term": "Jordan",
+        "equivalent_description": "Sovereign state (admin_level 2)"
       }
     ],
-    "bearing": "1.5 km W عمان"
+    "bearing": {
+      "label": "1.5 km W Amman",
+      "reference": "Amman",
+      "name_native": "عمان",
+      "name_source": "osm-en"
+    }
   },
   {
     "point": {
@@ -253,20 +419,37 @@
       {
         "level": 9,
         "equivalent": "submunicipality",
-        "name": "Центральный район"
+        "name": "Tsentralnyy rayon",
+        "name_native": "Центральный район",
+        "name_source": "translit-ru-bgn",
+        "local_term": "Districts and other administrative-territorial units of urban and municipal okrugs",
+        "equivalent_description": "Other sub-municipal unit (quarter, ward, locality)"
       },
       {
         "level": 6,
         "equivalent": "county",
-        "name": "городской округ Калининград"
+        "name": "gorodskoy okrug Kaliningrad",
+        "name_native": "городской округ Калининград",
+        "name_source": "translit-ru-bgn",
+        "local_term": "Municipal districts and okrugs of federal subjects (except federal cities), urban okrugs, including ZATO and urban okrugs with intracity division",
+        "equivalent_description": "County or district tier"
       },
       {
         "level": 4,
         "equivalent": "state",
-        "name": "Калининградская область"
+        "name": "Kaliningradskaya oblast",
+        "name_native": "Калининградская область",
+        "name_source": "translit-ru-bgn",
+        "local_term": "Federal subjects",
+        "equivalent_description": "First-order subdivision (Land, oblast, comunidad autónoma, ...)"
       }
     ],
-    "bearing": "4 km W Калининград"
+    "bearing": {
+      "label": "4 km W Kaliningrad",
+      "reference": "Kaliningrad",
+      "name_native": "Калининград",
+      "name_source": "translit-ru-bgn"
+    }
   },
   {
     "point": {
@@ -280,24 +463,41 @@
       {
         "level": 8,
         "equivalent": "municipality",
-        "name": "Kalba كلباء"
+        "name": "Kalba كلباء",
+        "name_native": "",
+        "name_source": "latin-osm",
+        "local_term": "Municipalities",
+        "equivalent_description": "Municipality / commune (basic local government unit)"
       },
       {
         "level": 4,
         "equivalent": "state",
-        "name": "الشارقة"
+        "name": "Sharjah Emirate",
+        "name_native": "الشارقة",
+        "name_source": "osm-en",
+        "local_term": "Emirates (إمارة)",
+        "equivalent_description": "First-order subdivision (Land, oblast, comunidad autónoma, ...)"
       },
       {
         "level": 2,
         "equivalent": "country",
-        "name": "الإمارات العربية المتحدة"
+        "name": "United Arab Emirates",
+        "name_native": "الإمارات العربية المتحدة",
+        "name_source": "osm-en",
+        "local_term": "United Arab Emirates",
+        "equivalent_description": "Sovereign state (admin_level 2)"
       }
     ],
-    "bearing": "6.5 km S كلباء"
+    "bearing": {
+      "label": "6.5 km S Kalba",
+      "reference": "Kalba",
+      "name_native": "كلباء",
+      "name_source": "osm-en"
+    }
   },
   {
     "point": {
-      "label": "AE/L8 خورفكان",
+      "label": "AE/L8 Khor Fakkan",
       "region": "AE",
       "lat": 25.3417059,
       "lon": 56.31003462827559
@@ -307,24 +507,41 @@
       {
         "level": 8,
         "equivalent": "municipality",
-        "name": "خورفكان"
+        "name": "Khor Fakkan",
+        "name_native": "خورفكان",
+        "name_source": "osm-en",
+        "local_term": "Municipalities",
+        "equivalent_description": "Municipality / commune (basic local government unit)"
       },
       {
         "level": 4,
         "equivalent": "state",
-        "name": "الشارقة"
+        "name": "Sharjah Emirate",
+        "name_native": "الشارقة",
+        "name_source": "osm-en",
+        "local_term": "Emirates (إمارة)",
+        "equivalent_description": "First-order subdivision (Land, oblast, comunidad autónoma, ...)"
       },
       {
         "level": 2,
         "equivalent": "country",
-        "name": "الإمارات العربية المتحدة"
+        "name": "United Arab Emirates",
+        "name_native": "الإمارات العربية المتحدة",
+        "name_source": "osm-en",
+        "local_term": "United Arab Emirates",
+        "equivalent_description": "Sovereign state (admin_level 2)"
       }
     ],
-    "bearing": "4 km W خورفكان"
+    "bearing": {
+      "label": "4 km W Khor Fakkan",
+      "reference": "Khor Fakkan",
+      "name_native": "خورفكان",
+      "name_source": "osm-en"
+    }
   },
   {
     "point": {
-      "label": "AE/L8 السيف",
+      "label": "AE/L8 Al Seef",
       "region": "AE",
       "lat": 25.381505750000002,
       "lon": 55.4010062385823
@@ -334,29 +551,50 @@
       {
         "level": 8,
         "equivalent": "municipality",
-        "name": "السيف"
+        "name": "Al Seef",
+        "name_native": "السيف",
+        "name_source": "osm-en",
+        "local_term": "Municipalities",
+        "equivalent_description": "Municipality / commune (basic local government unit)"
       },
       {
         "level": 8,
         "equivalent": "municipality",
-        "name": "مدينة الشارقة"
+        "name": "Sharjah",
+        "name_native": "مدينة الشارقة",
+        "name_source": "osm-en",
+        "local_term": "Municipalities",
+        "equivalent_description": "Municipality / commune (basic local government unit)"
       },
       {
         "level": 4,
         "equivalent": "state",
-        "name": "الشارقة"
+        "name": "Sharjah Emirate",
+        "name_native": "الشارقة",
+        "name_source": "osm-en",
+        "local_term": "Emirates (إمارة)",
+        "equivalent_description": "First-order subdivision (Land, oblast, comunidad autónoma, ...)"
       },
       {
         "level": 2,
         "equivalent": "country",
-        "name": "الإمارات العربية المتحدة"
+        "name": "United Arab Emirates",
+        "name_native": "الإمارات العربية المتحدة",
+        "name_source": "osm-en",
+        "local_term": "United Arab Emirates",
+        "equivalent_description": "Sovereign state (admin_level 2)"
       }
     ],
-    "bearing": "4.5 km NW الشارقة"
+    "bearing": {
+      "label": "4.5 km NW Sharjah",
+      "reference": "Sharjah",
+      "name_native": "الشارقة",
+      "name_source": "osm-en"
+    }
   },
   {
     "point": {
-      "label": "AE/L8 الرميلة",
+      "label": "AE/L8 Al Rumailah",
       "region": "AE",
       "lat": 25.40256815,
       "lon": 55.43273992039476
@@ -366,24 +604,41 @@
       {
         "level": 8,
         "equivalent": "municipality",
-        "name": "الرميلة"
+        "name": "Al Rumailah",
+        "name_native": "الرميلة",
+        "name_source": "osm-en",
+        "local_term": "Municipalities",
+        "equivalent_description": "Municipality / commune (basic local government unit)"
       },
       {
         "level": 4,
         "equivalent": "state",
-        "name": "إمارة عجمان"
+        "name": "Ajman Emirate",
+        "name_native": "إمارة عجمان",
+        "name_source": "osm-en",
+        "local_term": "Emirates (إمارة)",
+        "equivalent_description": "First-order subdivision (Land, oblast, comunidad autónoma, ...)"
       },
       {
         "level": 2,
         "equivalent": "country",
-        "name": "الإمارات العربية المتحدة"
+        "name": "United Arab Emirates",
+        "name_native": "الإمارات العربية المتحدة",
+        "name_source": "osm-en",
+        "local_term": "United Arab Emirates",
+        "equivalent_description": "Sovereign state (admin_level 2)"
       }
     ],
-    "bearing": "1.5 km NW عجمان"
+    "bearing": {
+      "label": "1.5 km NW Ajman",
+      "reference": "Ajman",
+      "name_native": "عجمان",
+      "name_source": "osm-en"
+    }
   },
   {
     "point": {
-      "label": "AE/L8 النخيل",
+      "label": "AE/L8 Al Nakhil",
       "region": "AE",
       "lat": 25.4184641,
       "lon": 55.441606894057855
@@ -393,24 +648,41 @@
       {
         "level": 8,
         "equivalent": "municipality",
-        "name": "النخيل"
+        "name": "Al Nakhil",
+        "name_native": "النخيل",
+        "name_source": "osm-en",
+        "local_term": "Municipalities",
+        "equivalent_description": "Municipality / commune (basic local government unit)"
       },
       {
         "level": 4,
         "equivalent": "state",
-        "name": "إمارة عجمان"
+        "name": "Ajman Emirate",
+        "name_native": "إمارة عجمان",
+        "name_source": "osm-en",
+        "local_term": "Emirates (إمارة)",
+        "equivalent_description": "First-order subdivision (Land, oblast, comunidad autónoma, ...)"
       },
       {
         "level": 2,
         "equivalent": "country",
-        "name": "الإمارات العربية المتحدة"
+        "name": "United Arab Emirates",
+        "name_native": "الإمارات العربية المتحدة",
+        "name_source": "osm-en",
+        "local_term": "United Arab Emirates",
+        "equivalent_description": "Sovereign state (admin_level 2)"
       }
     ],
-    "bearing": "3 km N عجمان"
+    "bearing": {
+      "label": "3 km N Ajman",
+      "reference": "Ajman",
+      "name_native": "عجمان",
+      "name_source": "osm-en"
+    }
   },
   {
     "point": {
-      "label": "GR/L8 Δημοτική Ενότητα Βούλας",
+      "label": "GR/L8 Dimotiki Enotita Voulas",
       "region": "GR",
       "lat": 37.84794205,
       "lon": 23.77154181999938
@@ -420,44 +692,77 @@
       {
         "level": 9,
         "equivalent": "submunicipality",
-        "name": "Κοινότητα Βούλας"
+        "name": "Koinotita Voulas",
+        "name_native": "Κοινότητα Βούλας",
+        "name_source": "translit-el-843",
+        "local_term": "Δημοτικές/Τοπικές κοινότητες (Municipal/local communities, LAU)",
+        "equivalent_description": "Other sub-municipal unit (quarter, ward, locality)"
       },
       {
         "level": 8,
         "equivalent": "submunicipality",
-        "name": "Δημοτική Ενότητα Βούλας"
+        "name": "Dimotiki Enotita Voulas",
+        "name_native": "Δημοτική Ενότητα Βούλας",
+        "name_source": "translit-el-843",
+        "local_term": "Δημοτικές ενότητες (Municipal units)",
+        "equivalent_description": "Other sub-municipal unit (quarter, ward, locality)"
       },
       {
         "level": 7,
         "equivalent": "municipality",
-        "name": "Δήμος Βάρης - Βούλας - Βουλιαγμένης"
+        "name": "Dimos Varis - Voulas - Vouliagmenis",
+        "name_native": "Δήμος Βάρης - Βούλας - Βουλιαγμένης",
+        "name_source": "translit-el-843",
+        "local_term": "Δήμοι (Municipalities)",
+        "equivalent_description": "Municipality / commune (basic local government unit)"
       },
       {
         "level": 6,
         "equivalent": "province",
-        "name": "Περιφερειακή Ενότητα Ανατολικής Αττικής"
+        "name": "Perifereiaki Enotita Anatolikis Attikis",
+        "name_native": "Περιφερειακή Ενότητα Ανατολικής Αττικής",
+        "name_source": "translit-el-843",
+        "local_term": "Περιφερειακές ενότητες (Regional units, NUTS 3)",
+        "equivalent_description": "Province / department tier"
       },
       {
         "level": 5,
         "equivalent": "state",
-        "name": "Περιφέρεια Αττικής"
+        "name": "Perifereia Attikis",
+        "name_native": "Περιφέρεια Αττικής",
+        "name_source": "translit-el-843",
+        "local_term": "Περιφέρειες (Regions, NUTS 2)",
+        "equivalent_description": "First-order subdivision (Land, oblast, comunidad autónoma, ...)"
       },
       {
         "level": 4,
         "equivalent": "region",
-        "name": "Αποκεντρωμένη Διοίκηση Αττικής"
+        "name": "Apokentromeni Dioikisi Attikis",
+        "name_native": "Αποκεντρωμένη Διοίκηση Αττικής",
+        "name_source": "translit-el-843",
+        "local_term": "Αποκεντρωμένες διοικήσεις (Decentralized Administrations)",
+        "equivalent_description": "Administrative region / mid-tier grouping (e.g. Regierungsbezirk, NUTS region)"
       },
       {
         "level": 2,
         "equivalent": "country",
-        "name": "Ελλάς"
+        "name": "Ellas",
+        "name_native": "Ελλάς",
+        "name_source": "translit-el-843",
+        "local_term": "Ελλάς (Greece)",
+        "equivalent_description": "Sovereign state (admin_level 2)"
       }
     ],
-    "bearing": "15 km S Αθήνα"
+    "bearing": {
+      "label": "15 km S Athina",
+      "reference": "Athina",
+      "name_native": "Αθήνα",
+      "name_source": "translit-el-843"
+    }
   },
   {
     "point": {
-      "label": "GR/L8 Δημοτική Ενότητα Νίκαιας",
+      "label": "GR/L8 Dimotiki Enotita Nikaias",
       "region": "GR",
       "lat": 37.97914705,
       "lon": 23.635826017808608
@@ -467,39 +772,68 @@
       {
         "level": 8,
         "equivalent": "submunicipality",
-        "name": "Δημοτική Ενότητα Νίκαιας"
+        "name": "Dimotiki Enotita Nikaias",
+        "name_native": "Δημοτική Ενότητα Νίκαιας",
+        "name_source": "translit-el-843",
+        "local_term": "Δημοτικές ενότητες (Municipal units)",
+        "equivalent_description": "Other sub-municipal unit (quarter, ward, locality)"
       },
       {
         "level": 7,
         "equivalent": "municipality",
-        "name": "Δήμος Νίκαιας - Αγίου Ιωάννη Ρέντη"
+        "name": "Dimos Nikaias - Agiou Ioanni Renti",
+        "name_native": "Δήμος Νίκαιας - Αγίου Ιωάννη Ρέντη",
+        "name_source": "translit-el-843",
+        "local_term": "Δήμοι (Municipalities)",
+        "equivalent_description": "Municipality / commune (basic local government unit)"
       },
       {
         "level": 6,
         "equivalent": "province",
-        "name": "Περιφερειακή Ενότητα Πειραιώς"
+        "name": "Perifereiaki Enotita Peiraios",
+        "name_native": "Περιφερειακή Ενότητα Πειραιώς",
+        "name_source": "translit-el-843",
+        "local_term": "Περιφερειακές ενότητες (Regional units, NUTS 3)",
+        "equivalent_description": "Province / department tier"
       },
       {
         "level": 5,
         "equivalent": "state",
-        "name": "Περιφέρεια Αττικής"
+        "name": "Perifereia Attikis",
+        "name_native": "Περιφέρεια Αττικής",
+        "name_source": "translit-el-843",
+        "local_term": "Περιφέρειες (Regions, NUTS 2)",
+        "equivalent_description": "First-order subdivision (Land, oblast, comunidad autónoma, ...)"
       },
       {
         "level": 4,
         "equivalent": "region",
-        "name": "Αποκεντρωμένη Διοίκηση Αττικής"
+        "name": "Apokentromeni Dioikisi Attikis",
+        "name_native": "Αποκεντρωμένη Διοίκηση Αττικής",
+        "name_source": "translit-el-843",
+        "local_term": "Αποκεντρωμένες διοικήσεις (Decentralized Administrations)",
+        "equivalent_description": "Administrative region / mid-tier grouping (e.g. Regierungsbezirk, NUTS region)"
       },
       {
         "level": 2,
         "equivalent": "country",
-        "name": "Ελλάς"
+        "name": "Ellas",
+        "name_native": "Ελλάς",
+        "name_source": "translit-el-843",
+        "local_term": "Ελλάς (Greece)",
+        "equivalent_description": "Sovereign state (admin_level 2)"
       }
     ],
-    "bearing": "4 km N Πειραιάς"
+    "bearing": {
+      "label": "4 km N Peiraias",
+      "reference": "Peiraias",
+      "name_native": "Πειραιάς",
+      "name_source": "translit-el-843"
+    }
   },
   {
     "point": {
-      "label": "GR/L8 Δημοτική Ενότητα Νέας Φιλαδέλφειας",
+      "label": "GR/L8 Dimotiki Enotita Neas Filadelfeias",
       "region": "GR",
       "lat": 38.04492715,
       "lon": 23.74095837288611
@@ -509,39 +843,68 @@
       {
         "level": 8,
         "equivalent": "submunicipality",
-        "name": "Δημοτική Ενότητα Νέας Φιλαδέλφειας"
+        "name": "Dimotiki Enotita Neas Filadelfeias",
+        "name_native": "Δημοτική Ενότητα Νέας Φιλαδέλφειας",
+        "name_source": "translit-el-843",
+        "local_term": "Δημοτικές ενότητες (Municipal units)",
+        "equivalent_description": "Other sub-municipal unit (quarter, ward, locality)"
       },
       {
         "level": 7,
         "equivalent": "municipality",
-        "name": "Δήμος Νέας Φιλαδέλφειας - Νέας Χαλκηδόνας"
+        "name": "Dimos Neas Filadelfeias - Neas Chalkidonas",
+        "name_native": "Δήμος Νέας Φιλαδέλφειας - Νέας Χαλκηδόνας",
+        "name_source": "translit-el-843",
+        "local_term": "Δήμοι (Municipalities)",
+        "equivalent_description": "Municipality / commune (basic local government unit)"
       },
       {
         "level": 6,
         "equivalent": "province",
-        "name": "Περιφερειακή Ενότητα Κεντρικού Τομέα Αθηνών"
+        "name": "Perifereiaki Enotita Kentrikou Tomea Athinon",
+        "name_native": "Περιφερειακή Ενότητα Κεντρικού Τομέα Αθηνών",
+        "name_source": "translit-el-843",
+        "local_term": "Περιφερειακές ενότητες (Regional units, NUTS 3)",
+        "equivalent_description": "Province / department tier"
       },
       {
         "level": 5,
         "equivalent": "state",
-        "name": "Περιφέρεια Αττικής"
+        "name": "Perifereia Attikis",
+        "name_native": "Περιφέρεια Αττικής",
+        "name_source": "translit-el-843",
+        "local_term": "Περιφέρειες (Regions, NUTS 2)",
+        "equivalent_description": "First-order subdivision (Land, oblast, comunidad autónoma, ...)"
       },
       {
         "level": 4,
         "equivalent": "region",
-        "name": "Αποκεντρωμένη Διοίκηση Αττικής"
+        "name": "Apokentromeni Dioikisi Attikis",
+        "name_native": "Αποκεντρωμένη Διοίκηση Αττικής",
+        "name_source": "translit-el-843",
+        "local_term": "Αποκεντρωμένες διοικήσεις (Decentralized Administrations)",
+        "equivalent_description": "Administrative region / mid-tier grouping (e.g. Regierungsbezirk, NUTS region)"
       },
       {
         "level": 2,
         "equivalent": "country",
-        "name": "Ελλάς"
+        "name": "Ellas",
+        "name_native": "Ελλάς",
+        "name_source": "translit-el-843",
+        "local_term": "Ελλάς (Greece)",
+        "equivalent_description": "Sovereign state (admin_level 2)"
       }
     ],
-    "bearing": "7.5 km N Αθήνα"
+    "bearing": {
+      "label": "7.5 km N Athina",
+      "reference": "Athina",
+      "name_native": "Αθήνα",
+      "name_source": "translit-el-843"
+    }
   },
   {
     "point": {
-      "label": "GR/L8 Δημοτική Ενότητα Κερατσινίου",
+      "label": "GR/L8 Dimotiki Enotita Keratsiniou",
       "region": "GR",
       "lat": 37.9706425,
       "lon": 23.617576818010384
@@ -551,39 +914,68 @@
       {
         "level": 8,
         "equivalent": "submunicipality",
-        "name": "Δημοτική Ενότητα Κερατσινίου"
+        "name": "Dimotiki Enotita Keratsiniou",
+        "name_native": "Δημοτική Ενότητα Κερατσινίου",
+        "name_source": "translit-el-843",
+        "local_term": "Δημοτικές ενότητες (Municipal units)",
+        "equivalent_description": "Other sub-municipal unit (quarter, ward, locality)"
       },
       {
         "level": 7,
         "equivalent": "municipality",
-        "name": "Δήμος Κερατσινίου - Δραπετσώνας"
+        "name": "Dimos Keratsiniou - Drapetsonas",
+        "name_native": "Δήμος Κερατσινίου - Δραπετσώνας",
+        "name_source": "translit-el-843",
+        "local_term": "Δήμοι (Municipalities)",
+        "equivalent_description": "Municipality / commune (basic local government unit)"
       },
       {
         "level": 6,
         "equivalent": "province",
-        "name": "Περιφερειακή Ενότητα Πειραιώς"
+        "name": "Perifereiaki Enotita Peiraios",
+        "name_native": "Περιφερειακή Ενότητα Πειραιώς",
+        "name_source": "translit-el-843",
+        "local_term": "Περιφερειακές ενότητες (Regional units, NUTS 3)",
+        "equivalent_description": "Province / department tier"
       },
       {
         "level": 5,
         "equivalent": "state",
-        "name": "Περιφέρεια Αττικής"
+        "name": "Perifereia Attikis",
+        "name_native": "Περιφέρεια Αττικής",
+        "name_source": "translit-el-843",
+        "local_term": "Περιφέρειες (Regions, NUTS 2)",
+        "equivalent_description": "First-order subdivision (Land, oblast, comunidad autónoma, ...)"
       },
       {
         "level": 4,
         "equivalent": "region",
-        "name": "Αποκεντρωμένη Διοίκηση Αττικής"
+        "name": "Apokentromeni Dioikisi Attikis",
+        "name_native": "Αποκεντρωμένη Διοίκηση Αττικής",
+        "name_source": "translit-el-843",
+        "local_term": "Αποκεντρωμένες διοικήσεις (Decentralized Administrations)",
+        "equivalent_description": "Administrative region / mid-tier grouping (e.g. Regierungsbezirk, NUTS region)"
       },
       {
         "level": 2,
         "equivalent": "country",
-        "name": "Ελλάς"
+        "name": "Ellas",
+        "name_native": "Ελλάς",
+        "name_source": "translit-el-843",
+        "local_term": "Ελλάς (Greece)",
+        "equivalent_description": "Sovereign state (admin_level 2)"
       }
     ],
-    "bearing": "4 km NW Πειραιάς"
+    "bearing": {
+      "label": "4 km NW Peiraias",
+      "reference": "Peiraias",
+      "name_native": "Πειραιάς",
+      "name_source": "translit-el-843"
+    }
   },
   {
     "point": {
-      "label": "GR/L8 Δημοτική Ενότητα Δραπετσώνας",
+      "label": "GR/L8 Dimotiki Enotita Drapetsonas",
       "region": "GR",
       "lat": 37.94496185,
       "lon": 23.62511803527261
@@ -593,39 +985,68 @@
       {
         "level": 8,
         "equivalent": "submunicipality",
-        "name": "Δημοτική Ενότητα Δραπετσώνας"
+        "name": "Dimotiki Enotita Drapetsonas",
+        "name_native": "Δημοτική Ενότητα Δραπετσώνας",
+        "name_source": "translit-el-843",
+        "local_term": "Δημοτικές ενότητες (Municipal units)",
+        "equivalent_description": "Other sub-municipal unit (quarter, ward, locality)"
       },
       {
         "level": 7,
         "equivalent": "municipality",
-        "name": "Δήμος Κερατσινίου - Δραπετσώνας"
+        "name": "Dimos Keratsiniou - Drapetsonas",
+        "name_native": "Δήμος Κερατσινίου - Δραπετσώνας",
+        "name_source": "translit-el-843",
+        "local_term": "Δήμοι (Municipalities)",
+        "equivalent_description": "Municipality / commune (basic local government unit)"
       },
       {
         "level": 6,
         "equivalent": "province",
-        "name": "Περιφερειακή Ενότητα Πειραιώς"
+        "name": "Perifereiaki Enotita Peiraios",
+        "name_native": "Περιφερειακή Ενότητα Πειραιώς",
+        "name_source": "translit-el-843",
+        "local_term": "Περιφερειακές ενότητες (Regional units, NUTS 3)",
+        "equivalent_description": "Province / department tier"
       },
       {
         "level": 5,
         "equivalent": "state",
-        "name": "Περιφέρεια Αττικής"
+        "name": "Perifereia Attikis",
+        "name_native": "Περιφέρεια Αττικής",
+        "name_source": "translit-el-843",
+        "local_term": "Περιφέρειες (Regions, NUTS 2)",
+        "equivalent_description": "First-order subdivision (Land, oblast, comunidad autónoma, ...)"
       },
       {
         "level": 4,
         "equivalent": "region",
-        "name": "Αποκεντρωμένη Διοίκηση Αττικής"
+        "name": "Apokentromeni Dioikisi Attikis",
+        "name_native": "Αποκεντρωμένη Διοίκηση Αττικής",
+        "name_source": "translit-el-843",
+        "local_term": "Αποκεντρωμένες διοικήσεις (Decentralized Administrations)",
+        "equivalent_description": "Administrative region / mid-tier grouping (e.g. Regierungsbezirk, NUTS region)"
       },
       {
         "level": 2,
         "equivalent": "country",
-        "name": "Ελλάς"
+        "name": "Ellas",
+        "name_native": "Ελλάς",
+        "name_source": "translit-el-843",
+        "local_term": "Ελλάς (Greece)",
+        "equivalent_description": "Sovereign state (admin_level 2)"
       }
     ],
-    "bearing": "2 km W Πειραιάς"
+    "bearing": {
+      "label": "2 km W Peiraias",
+      "reference": "Peiraias",
+      "name_native": "Πειραιάς",
+      "name_source": "translit-el-843"
+    }
   },
   {
     "point": {
-      "label": "IL/L8 נס ציונה",
+      "label": "IL/L8 Nes Ziona",
       "region": "IL",
       "lat": 31.9208636,
       "lon": 34.79413999283129
@@ -635,29 +1056,50 @@
       {
         "level": 8,
         "equivalent": "municipality",
-        "name": "נס ציונה"
+        "name": "Nes Ziona",
+        "name_native": "נס ציונה",
+        "name_source": "osm-en",
+        "local_term": "עיר, מועצה מקומית, מועצה אזורית / City, Local council, Regional council (in Palestinian Territory: Municipality grade 1, 2)",
+        "equivalent_description": "Municipality / commune (basic local government unit)"
       },
       {
         "level": 5,
         "equivalent": "county",
-        "name": "נפת רחובות"
+        "name": "Rehovot Subdistrict",
+        "name_native": "נפת רחובות",
+        "name_source": "osm-en",
+        "local_term": "נפה / Subdistrict (West Bank: Areas A, B, C)",
+        "equivalent_description": "County or district tier"
       },
       {
         "level": 4,
         "equivalent": "district",
-        "name": "מחוז המרכז"
+        "name": "Center District",
+        "name_native": "מחוז המרכז",
+        "name_source": "osm-en",
+        "local_term": "מחוז / District (including West Bank and Gaza Strip)",
+        "equivalent_description": "District / subdistrict"
       },
       {
         "level": 2,
         "equivalent": "country",
-        "name": "ישראל"
+        "name": "Israel",
+        "name_native": "ישראל",
+        "name_source": "osm-en",
+        "local_term": "Palestine",
+        "equivalent_description": "Sovereign state (admin_level 2)"
       }
     ],
-    "bearing": "1 km SW נס ציונה"
+    "bearing": {
+      "label": "1 km SW Ness Ziona",
+      "reference": "Ness Ziona",
+      "name_native": "נס ציונה",
+      "name_source": "osm-en"
+    }
   },
   {
     "point": {
-      "label": "IL/L8 רחובות",
+      "label": "IL/L8 Rehovot",
       "region": "IL",
       "lat": 31.8930644,
       "lon": 34.80340932920801
@@ -667,29 +1109,50 @@
       {
         "level": 8,
         "equivalent": "municipality",
-        "name": "רחובות"
+        "name": "Rehovot",
+        "name_native": "רחובות",
+        "name_source": "osm-en",
+        "local_term": "עיר, מועצה מקומית, מועצה אזורית / City, Local council, Regional council (in Palestinian Territory: Municipality grade 1, 2)",
+        "equivalent_description": "Municipality / commune (basic local government unit)"
       },
       {
         "level": 5,
         "equivalent": "county",
-        "name": "נפת רחובות"
+        "name": "Rehovot Subdistrict",
+        "name_native": "נפת רחובות",
+        "name_source": "osm-en",
+        "local_term": "נפה / Subdistrict (West Bank: Areas A, B, C)",
+        "equivalent_description": "County or district tier"
       },
       {
         "level": 4,
         "equivalent": "district",
-        "name": "מחוז המרכז"
+        "name": "Center District",
+        "name_native": "מחוז המרכז",
+        "name_source": "osm-en",
+        "local_term": "מחוז / District (including West Bank and Gaza Strip)",
+        "equivalent_description": "District / subdistrict"
       },
       {
         "level": 2,
         "equivalent": "country",
-        "name": "ישראל"
+        "name": "Israel",
+        "name_native": "ישראל",
+        "name_source": "osm-en",
+        "local_term": "Palestine",
+        "equivalent_description": "Sovereign state (admin_level 2)"
       }
     ],
-    "bearing": "bei רחובות"
+    "bearing": {
+      "label": "bei Rehovot",
+      "reference": "Rehovot",
+      "name_native": "רחובות",
+      "name_source": "osm-en"
+    }
   },
   {
     "point": {
-      "label": "IL/L8 مجدل شمس",
+      "label": "IL/L8 Majdal Shams",
       "region": "IL",
       "lat": 33.26888235,
       "lon": 35.766947986726976
@@ -699,29 +1162,50 @@
       {
         "level": 8,
         "equivalent": "municipality",
-        "name": "مجدل شمس"
+        "name": "Majdal Shams",
+        "name_native": "مجدل شمس",
+        "name_source": "osm-en",
+        "local_term": "עיר, מועצה מקומית, מועצה אזורית / City, Local council, Regional council (in Palestinian Territory: Municipality grade 1, 2)",
+        "equivalent_description": "Municipality / commune (basic local government unit)"
       },
       {
         "level": 5,
         "equivalent": "county",
-        "name": "נפת רמת הגולן"
+        "name": "Golan Subdistrict",
+        "name_native": "נפת רמת הגולן",
+        "name_source": "osm-en",
+        "local_term": "נפה / Subdistrict (West Bank: Areas A, B, C)",
+        "equivalent_description": "County or district tier"
       },
       {
         "level": 4,
         "equivalent": "district",
-        "name": "מחוז הצפון"
+        "name": "North District",
+        "name_native": "מחוז הצפון",
+        "name_source": "osm-en",
+        "local_term": "מחוז / District (including West Bank and Gaza Strip)",
+        "equivalent_description": "District / subdistrict"
       },
       {
         "level": 2,
         "equivalent": "country",
-        "name": "ישראל"
+        "name": "Israel",
+        "name_native": "ישראל",
+        "name_source": "osm-en",
+        "local_term": "Palestine",
+        "equivalent_description": "Sovereign state (admin_level 2)"
       }
     ],
-    "bearing": "17 km N القنيطرة"
+    "bearing": {
+      "label": "17 km N Al-Quneitra",
+      "reference": "Al-Quneitra",
+      "name_native": "القنيطرة",
+      "name_source": "osm-en"
+    }
   },
   {
     "point": {
-      "label": "IL/L8 بقعاثا",
+      "label": "IL/L8 Buq'atha",
       "region": "IL",
       "lat": 33.209661800000006,
       "lon": 35.78205398094309
@@ -731,29 +1215,50 @@
       {
         "level": 8,
         "equivalent": "municipality",
-        "name": "بقعاثا"
+        "name": "Buq'atha",
+        "name_native": "بقعاثا",
+        "name_source": "osm-en",
+        "local_term": "עיר, מועצה מקומית, מועצה אזורית / City, Local council, Regional council (in Palestinian Territory: Municipality grade 1, 2)",
+        "equivalent_description": "Municipality / commune (basic local government unit)"
       },
       {
         "level": 5,
         "equivalent": "county",
-        "name": "נפת רמת הגולן"
+        "name": "Golan Subdistrict",
+        "name_native": "נפת רמת הגולן",
+        "name_source": "osm-en",
+        "local_term": "נפה / Subdistrict (West Bank: Areas A, B, C)",
+        "equivalent_description": "County or district tier"
       },
       {
         "level": 4,
         "equivalent": "district",
-        "name": "מחוז הצפון"
+        "name": "North District",
+        "name_native": "מחוז הצפון",
+        "name_source": "osm-en",
+        "local_term": "מחוז / District (including West Bank and Gaza Strip)",
+        "equivalent_description": "District / subdistrict"
       },
       {
         "level": 2,
         "equivalent": "country",
-        "name": "ישראל"
+        "name": "Israel",
+        "name_native": "ישראל",
+        "name_source": "osm-en",
+        "local_term": "Palestine",
+        "equivalent_description": "Sovereign state (admin_level 2)"
       }
     ],
-    "bearing": "10 km N القنيطرة"
+    "bearing": {
+      "label": "10 km N Al-Quneitra",
+      "reference": "Al-Quneitra",
+      "name_native": "القنيطرة",
+      "name_source": "osm-en"
+    }
   },
   {
     "point": {
-      "label": "IL/L8 مسعدة",
+      "label": "IL/L8 Mas'ade",
       "region": "IL",
       "lat": 33.22989395,
       "lon": 35.77142796473366
@@ -763,29 +1268,50 @@
       {
         "level": 8,
         "equivalent": "municipality",
-        "name": "مسعدة"
+        "name": "Mas'ade",
+        "name_native": "مسعدة",
+        "name_source": "osm-en",
+        "local_term": "עיר, מועצה מקומית, מועצה אזורית / City, Local council, Regional council (in Palestinian Territory: Municipality grade 1, 2)",
+        "equivalent_description": "Municipality / commune (basic local government unit)"
       },
       {
         "level": 5,
         "equivalent": "county",
-        "name": "נפת רמת הגולן"
+        "name": "Golan Subdistrict",
+        "name_native": "נפת רמת הגולן",
+        "name_source": "osm-en",
+        "local_term": "נפה / Subdistrict (West Bank: Areas A, B, C)",
+        "equivalent_description": "County or district tier"
       },
       {
         "level": 4,
         "equivalent": "district",
-        "name": "מחוז הצפון"
+        "name": "North District",
+        "name_native": "מחוז הצפון",
+        "name_source": "osm-en",
+        "local_term": "מחוז / District (including West Bank and Gaza Strip)",
+        "equivalent_description": "District / subdistrict"
       },
       {
         "level": 2,
         "equivalent": "country",
-        "name": "ישראל"
+        "name": "Israel",
+        "name_native": "ישראל",
+        "name_source": "osm-en",
+        "local_term": "Palestine",
+        "equivalent_description": "Sovereign state (admin_level 2)"
       }
     ],
-    "bearing": "13 km N القنيطرة"
+    "bearing": {
+      "label": "13 km N Al-Quneitra",
+      "reference": "Al-Quneitra",
+      "name_native": "القنيطرة",
+      "name_source": "osm-en"
+    }
   },
   {
     "point": {
-      "label": "RU/L8 район Кунцево",
+      "label": "RU/L8 rayon Kuntsevo",
       "region": "RU",
       "lat": 55.7868506,
       "lon": 37.33953185686481
@@ -795,24 +1321,41 @@
       {
         "level": 8,
         "equivalent": "municipality",
-        "name": "район Кунцево"
+        "name": "rayon Kuntsevo",
+        "name_native": "район Кунцево",
+        "name_source": "translit-ru-bgn",
+        "local_term": "Urban and rural municipalities, municipal intra-city territories of federal cities, districts of urban okrugs with intracity division",
+        "equivalent_description": "Municipality / commune (basic local government unit)"
       },
       {
         "level": 5,
         "equivalent": "district",
-        "name": "Западный административный округ"
+        "name": "Zapadnyy administrativnyy okrug",
+        "name_native": "Западный административный округ",
+        "name_source": "translit-ru-bgn",
+        "local_term": "Groups of municipal districts / urban okrugs, administrative okrugs / districts of federal cities",
+        "equivalent_description": "District / subdistrict"
       },
       {
         "level": 4,
         "equivalent": "state",
-        "name": "Москва"
+        "name": "Moskva",
+        "name_native": "Москва",
+        "name_source": "translit-ru-bgn",
+        "local_term": "Federal subjects",
+        "equivalent_description": "First-order subdivision (Land, oblast, comunidad autónoma, ...)"
       }
     ],
-    "bearing": "18 km W Москва"
+    "bearing": {
+      "label": "18 km W Moskva",
+      "reference": "Moskva",
+      "name_native": "Москва",
+      "name_source": "translit-ru-bgn"
+    }
   },
   {
     "point": {
-      "label": "RU/L8 район Крылатское",
+      "label": "RU/L8 rayon Krylatskoye",
       "region": "RU",
       "lat": 55.76128705,
       "lon": 37.42593374522882
@@ -822,24 +1365,41 @@
       {
         "level": 8,
         "equivalent": "municipality",
-        "name": "район Крылатское"
+        "name": "rayon Krylatskoye",
+        "name_native": "район Крылатское",
+        "name_source": "translit-ru-bgn",
+        "local_term": "Urban and rural municipalities, municipal intra-city territories of federal cities, districts of urban okrugs with intracity division",
+        "equivalent_description": "Municipality / commune (basic local government unit)"
       },
       {
         "level": 5,
         "equivalent": "district",
-        "name": "Западный административный округ"
+        "name": "Zapadnyy administrativnyy okrug",
+        "name_native": "Западный административный округ",
+        "name_source": "translit-ru-bgn",
+        "local_term": "Groups of municipal districts / urban okrugs, administrative okrugs / districts of federal cities",
+        "equivalent_description": "District / subdistrict"
       },
       {
         "level": 4,
         "equivalent": "state",
-        "name": "Москва"
+        "name": "Moskva",
+        "name_native": "Москва",
+        "name_source": "translit-ru-bgn",
+        "local_term": "Federal subjects",
+        "equivalent_description": "First-order subdivision (Land, oblast, comunidad autónoma, ...)"
       }
     ],
-    "bearing": "12 km W Москва"
+    "bearing": {
+      "label": "12 km W Moskva",
+      "reference": "Moskva",
+      "name_native": "Москва",
+      "name_source": "translit-ru-bgn"
+    }
   },
   {
     "point": {
-      "label": "RU/L8 Каменногорское городское поселение",
+      "label": "RU/L8 Kamennogorskoye gorodskoye poseleniye",
       "region": "RU",
       "lat": 61.03940785,
       "lon": 29.343216626388912
@@ -849,24 +1409,41 @@
       {
         "level": 8,
         "equivalent": "municipality",
-        "name": "Каменногорское городское поселение"
+        "name": "Kamennogorskoye gorodskoye poseleniye",
+        "name_native": "Каменногорское городское поселение",
+        "name_source": "translit-ru-bgn",
+        "local_term": "Urban and rural municipalities, municipal intra-city territories of federal cities, districts of urban okrugs with intracity division",
+        "equivalent_description": "Municipality / commune (basic local government unit)"
       },
       {
         "level": 6,
         "equivalent": "county",
-        "name": "Выборгский район"
+        "name": "Vyborgskiy rayon",
+        "name_native": "Выборгский район",
+        "name_source": "translit-ru-bgn",
+        "local_term": "Municipal districts and okrugs of federal subjects (except federal cities), urban okrugs, including ZATO and urban okrugs with intracity division",
+        "equivalent_description": "County or district tier"
       },
       {
         "level": 4,
         "equivalent": "state",
-        "name": "Ленинградская область"
+        "name": "Leningradskaya oblast",
+        "name_native": "Ленинградская область",
+        "name_source": "translit-ru-bgn",
+        "local_term": "Federal subjects",
+        "equivalent_description": "First-order subdivision (Land, oblast, comunidad autónoma, ...)"
       }
     ],
-    "bearing": "49 km NE Выборг"
+    "bearing": {
+      "label": "49 km NE Vyborg",
+      "reference": "Vyborg",
+      "name_native": "Выборг",
+      "name_source": "translit-ru-bgn"
+    }
   },
   {
     "point": {
-      "label": "RU/L8 Гончаровское сельское поселение",
+      "label": "RU/L8 Goncharovskoye selskoye poseleniye",
       "region": "RU",
       "lat": 60.68943855,
       "lon": 29.233238030536896
@@ -876,24 +1453,41 @@
       {
         "level": 8,
         "equivalent": "municipality",
-        "name": "Гончаровское сельское поселение"
+        "name": "Goncharovskoye selskoye poseleniye",
+        "name_native": "Гончаровское сельское поселение",
+        "name_source": "translit-ru-bgn",
+        "local_term": "Urban and rural municipalities, municipal intra-city territories of federal cities, districts of urban okrugs with intracity division",
+        "equivalent_description": "Municipality / commune (basic local government unit)"
       },
       {
         "level": 6,
         "equivalent": "county",
-        "name": "Выборгский район"
+        "name": "Vyborgskiy rayon",
+        "name_native": "Выборгский район",
+        "name_source": "translit-ru-bgn",
+        "local_term": "Municipal districts and okrugs of federal subjects (except federal cities), urban okrugs, including ZATO and urban okrugs with intracity division",
+        "equivalent_description": "County or district tier"
       },
       {
         "level": 4,
         "equivalent": "state",
-        "name": "Ленинградская область"
+        "name": "Leningradskaya oblast",
+        "name_native": "Ленинградская область",
+        "name_source": "translit-ru-bgn",
+        "local_term": "Federal subjects",
+        "equivalent_description": "First-order subdivision (Land, oblast, comunidad autónoma, ...)"
       }
     ],
-    "bearing": "27 km E Выборг"
+    "bearing": {
+      "label": "27 km E Vyborg",
+      "reference": "Vyborg",
+      "name_native": "Выборг",
+      "name_source": "translit-ru-bgn"
+    }
   },
   {
     "point": {
-      "label": "RU/L8 Выборг",
+      "label": "RU/L8 Vyborg",
       "region": "RU",
       "lat": 60.732672300000004,
       "lon": 28.74469092882248
@@ -903,24 +1497,45 @@
       {
         "level": 9,
         "equivalent": "submunicipality",
-        "name": "Петровский микрорайон"
+        "name": "Petrovskiy mikrorayon",
+        "name_native": "Петровский микрорайон",
+        "name_source": "translit-ru-bgn",
+        "local_term": "Districts and other administrative-territorial units of urban and municipal okrugs",
+        "equivalent_description": "Other sub-municipal unit (quarter, ward, locality)"
       },
       {
         "level": 8,
         "equivalent": "municipality",
-        "name": "Выборг"
+        "name": "Vyborg",
+        "name_native": "Выборг",
+        "name_source": "translit-ru-bgn",
+        "local_term": "Urban and rural municipalities, municipal intra-city territories of federal cities, districts of urban okrugs with intracity division",
+        "equivalent_description": "Municipality / commune (basic local government unit)"
       },
       {
         "level": 6,
         "equivalent": "county",
-        "name": "Выборгский район"
+        "name": "Vyborgskiy rayon",
+        "name_native": "Выборгский район",
+        "name_source": "translit-ru-bgn",
+        "local_term": "Municipal districts and okrugs of federal subjects (except federal cities), urban okrugs, including ZATO and urban okrugs with intracity division",
+        "equivalent_description": "County or district tier"
       },
       {
         "level": 4,
         "equivalent": "state",
-        "name": "Ленинградская область"
+        "name": "Leningradskaya oblast",
+        "name_native": "Ленинградская область",
+        "name_source": "translit-ru-bgn",
+        "local_term": "Federal subjects",
+        "equivalent_description": "First-order subdivision (Land, oblast, comunidad autónoma, ...)"
       }
     ],
-    "bearing": "2.5 km N Выборг"
+    "bearing": {
+      "label": "2.5 km N Vyborg",
+      "reference": "Vyborg",
+      "name_native": "Выборг",
+      "name_source": "translit-ru-bgn"
+    }
   }
 ]

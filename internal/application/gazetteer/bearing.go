@@ -117,7 +117,7 @@ func (s *Service) constraintAncestor(ctx context.Context, p domain.Coordinate, t
 		if atoiErr != nil {
 			continue
 		}
-		if eq, resolved := s.levels.Resolve(f.GetStringProperty(s.manifest.CountryColumn), level); resolved && eq == tier {
+		if m, resolved := s.levels.Resolve(f.GetStringProperty(s.manifest.CountryColumn), level); resolved && m.Equivalent == tier {
 			return f.ID, true, nil
 		}
 	}
@@ -143,7 +143,7 @@ func (s *Service) sameTier(ctx context.Context, placeAdminID, ancestorFID int64,
 		return false, err
 	}
 	for _, r := range chain {
-		if eq, ok := s.levels.Resolve(r.CountryISO, r.Level); ok && eq == tier {
+		if eq, ok := s.levels.Resolve(r.CountryISO, r.Level); ok && eq.Equivalent == tier {
 			return r.FID == ancestorFID, nil
 		}
 	}
@@ -159,10 +159,12 @@ func (s *Service) placeFromFeature(f *domain.Feature) (domain.Place, bool) {
 	}
 	class, _ := domain.ParsePlaceClass(f.GetStringProperty(s.manifest.RankColumn))
 	return domain.Place{
-		Name:    f.GetStringProperty(s.manifest.NameColumn),
-		Class:   class,
-		AdminID: int64(f.GetIntProperty(s.manifest.AdminFKColumn)),
-		At:      coord,
+		Name:       f.GetStringProperty(s.manifest.NameColumn),
+		NameNative: f.GetStringProperty(s.manifest.NameNativeColumn),
+		NameSource: s.resolveNameSource(f.GetStringProperty(s.manifest.NameSourceColumn)),
+		Class:      class,
+		AdminID:    int64(f.GetIntProperty(s.manifest.AdminFKColumn)),
+		At:         coord,
 	}, true
 }
 

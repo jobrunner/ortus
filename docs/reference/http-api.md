@@ -59,6 +59,58 @@ GET /api/v1/query/{sourceId}?lon={longitude}&lat={latitude}
 curl "http://localhost:8080/api/v1/query/districts?lon=13.405&lat=52.52"
 ```
 
+## Gazetteer endpoint
+
+Only registered when the [gazetteer feature](configuration.md) is enabled
+(`gazetteer.enabled: true`); otherwise the route returns `404`.
+
+```text
+GET /api/v1/gazetteer?lon={longitude}&lat={latitude}
+GET /api/v1/gazetteer?x={x}&y={y}&srid={srid}
+```
+
+Reverse-geocode a coordinate to its administrative hierarchy (`admin`) and compute
+a bearing to the most salient nearby place (`bearing`, e.g. "4 km E Würzburg").
+Either part is `null` when it has no result — no admin coverage, or no anchor
+within reach. The dataset is WGS84; a non-4326 `srid` is rejected.
+
+**Response**
+
+```json
+{
+  "coordinate": { "x": 9.93, "y": 49.79, "srid": 4326 },
+  "admin": {
+    "country_iso": "DE",
+    "hierarchy": [
+      { "level": 8, "name": "Würzburg", "name_native": "", "name_source": "latin-osm",
+        "equivalent": "municipality", "local_term": "Kreisfreie Stadt",
+        "equivalent_description": "Local municipal authority (city/town/commune)." }
+    ]
+  },
+  "bearing": {
+    "reference": "Würzburg", "name_native": "", "name_source": "latin-osm",
+    "class": "city", "distance_km": 4.0, "azimuth": 90.0, "compass": "E",
+    "label": "4 km E Würzburg"
+  },
+  "sources": [
+    { "code": "latin-osm", "short": "OSM name (already Latin)",
+      "long": "Taken verbatim from the OpenStreetMap name tag; already Latin script, no transliteration applied.",
+      "standard": "" }
+  ]
+}
+```
+
+Each admin unit and the bearing anchor carry the romanized `name`, the
+original-script `name_native` (empty when the name is already Latin), and a
+`name_source` provenance code. Admin units also carry the country-specific
+`local_term` and the generic `equivalent_description` for their tier. The
+response-wide `sources` block describes each distinct `name_source` code once
+(`code`, `short`, `long`, `standard`) rather than repeating it per record; it is
+`[]` when no codes are present. Enrichment of `sources` requires
+`gazetteer.name_source_manifest_path` to be configured — without it each record
+still carries its raw `name_source` code but the `sources` entries have empty
+descriptions.
+
 ## Source management
 
 ```text

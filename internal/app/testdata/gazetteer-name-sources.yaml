@@ -1,0 +1,108 @@
+# Manifest for the `name_source` column of osm-admin-places.gpkg.
+# Ships beside the GeoPackage; ortus serves `long` (and the citation standard) via its
+# REST API so a consumer stores, per record, exactly how `name` was produced.
+# Codes are a closed vocabulary (enforced by `make verify`). See docs/reference/romanization.md.
+version: 1
+
+sources:
+  latin-osm:
+    short: "OSM name (already Latin)"
+    long: "Taken verbatim from the OpenStreetMap `name` tag, which is already written in Latin script. No transliteration applied."
+    standard: null
+    status: implemented
+
+  osm-en:
+    short: "OSM name:en (curated)"
+    long: "Human-curated English/romanized name from the OpenStreetMap `name:en` tag. Used for scripts where machine transliteration is lossy (Arabic, Hebrew); first step of the Arabic/Hebrew cascade."
+    standard: "OSM name:en"
+    status: implemented
+
+  osm-fr:
+    short: "OSM name:fr (curated)"
+    long: "Human-curated French/romanized name from the OpenStreetMap `name:fr` tag; notably useful in the Maghreb where French is administratively established. Second step of the Arabic cascade (after osm-en)."
+    standard: "OSM name:fr"
+    status: implemented
+
+  osm-latn:
+    short: "OSM name:*-Latn (curated)"
+    long: "Verbatim from an OpenStreetMap script-specific Latin tag such as `name:sr-Latn` or `name:uk-Latn`. (Reserved; requires extracting those tags in the pipeline.)"
+    standard: "OSM name:<lang>-Latn"
+    status: planned
+
+  gns-bgn:
+    short: "NGA GNS (BGN/PCGN)"
+    long: "Romanized name from the U.S. NGA GEOnet Names Server (approved nt='N' Latin-script variant), which applies BGN/PCGN romanization. Public-domain authoritative gazetteer; matched to the OSM native name by country + nearest coordinate. Preferred over geonames in the Arabic/Hebrew cascade because BGN forms keep diacritics."
+    standard: "BGN/PCGN"
+    status: implemented
+
+  geonames:
+    short: "GeoNames (alternate/ASCII)"
+    long: "Romanized Latin `name` (or `asciiname`) from the GeoNames per-country dump (CC BY 4.0), matched to the OSM native name (via its native-script alternatenames) by country + nearest coordinate. Fallback after gns-bgn in the Arabic/Hebrew cascade."
+    standard: "GeoNames"
+    status: implemented
+
+  translit-uk-2010:
+    short: "Ukrainian romanization (2010)"
+    long: "Romanized from Ukrainian Cyrillic using the Ukrainian national system (Cabinet of Ministers of Ukraine Resolution No. 55, 27 Jan 2010; adopted by UNGEGN in 2012). E.g. Київ→Kyiv, Львів→Lviv."
+    standard: "Ukrainian National System 2010 (UNGEGN 2012)"
+    status: implemented
+
+  translit-bg-2009:
+    short: "Bulgarian Streamlined System (2009)"
+    long: "Romanized from Bulgarian Cyrillic using the Streamlined System (Bulgarian Transliteration Law, 2009; adopted by UNGEGN 2012, BGN/PCGN 2013). E.g. София→Sofia, Пловдив→Plovdiv."
+    standard: "Bulgarian Streamlined System 2009 (UNGEGN 2012)"
+    status: implemented
+
+  translit-ru-bgn:
+    short: "Russian BGN/PCGN (1947)"
+    long: "Romanized from Russian Cyrillic using the BGN/PCGN 1947 system (the common cartographic romanization, matching NGA GNS). E.g. Москва→Moskva."
+    standard: "BGN/PCGN 1947 (Russian)"
+    status: implemented
+
+  translit-be-2007:
+    short: "Belarusian national instruction (2007)"
+    long: "Romanized from Belarusian Cyrillic using the Belarusian national instruction on the transliteration of geographical names (2007; UNGEGN-adopted). Uses diacritics (š, č, ž, ŭ). E.g. Мінск→Minsk."
+    standard: "Belarusian National 2007 (UNGEGN)"
+    status: implemented
+
+  translit-sr-latn:
+    short: "Serbian official Latin (Gaj)"
+    long: "Serbian is digraphic; the Cyrillic name is converted 1:1 to the official Serbian Latin alphabet (Gajica), also used for Montenegrin and Bosnian Serb names. Uses diacritics (đ, ž, ć, č, š). E.g. Београд→Beograd."
+    standard: "Serbian official Latin (Gaj)"
+    status: implemented
+
+  translit-mk-nat:
+    short: "Macedonian romanization"
+    long: "Romanized from Macedonian Cyrillic using the national/ISO romanization (diacritics ž, č, š, and gj/kj/dz for ѓ/ќ/ѕ). E.g. Скопје→Skopje."
+    standard: "Macedonian national / ISO 9"
+    status: implemented
+
+  translit-el-843:
+    short: "Greek ELOT 743"
+    long: "Romanized from Greek using ELOT 743 (= UN / ISO 843), with the standard digraph/positional rules (αυ/ευ→av/af·ev/ef, ου→ou, γγ/γκ→ng/gk, μπ→b/mp). Applied to GR and Cypriot Greek names. E.g. Αθήνα→Athina, Θεσσαλονίκη→Thessaloniki."
+    standard: "ELOT 743 / UN / ISO 843"
+    status: implemented
+
+  translit-ka-2002:
+    short: "Georgian national (2002)"
+    long: "Romanized from Georgian (Mkhedruli) using the Georgian national system (2002; UNGEGN-adopted); title-cased since Georgian is unicameral. E.g. თბილისი→Tbilisi, ბათუმი→Batumi."
+    standard: "Georgian National 2002 (UNGEGN)"
+    status: implemented
+
+  translit-hy-bgn:
+    short: "Armenian BGN/PCGN (1981)"
+    long: "Romanized from Armenian (Eastern) using BGN/PCGN 1981 (ե→ye / ո→vo word-initially, ու→u, և→ev). E.g. Երևան→Yerevan, Գյումրի→Gyumri."
+    standard: "BGN/PCGN 1981 (Armenian)"
+    status: implemented
+
+  translit-he-ungegn:
+    short: "Hebrew UNGEGN"
+    long: "Romanized from Hebrew using the UNGEGN system, as a last resort after curated names (Hebrew omits most vowels, so machine transliteration is approximate). Undotted text can't distinguish b/v, k/kh, p/f; final-form letters map like their base form."
+    standard: "UNGEGN (Hebrew)"
+    status: implemented
+
+  translit-ar-bgn:
+    short: "Arabic BGN/PCGN (last resort)"
+    long: "Machine transliteration of Arabic using a BGN/PCGN-style table, used ONLY as a last resort. Arabic omits short vowels, so this is inherently approximate (e.g. القاهرة -> 'Al-Qahrh' not 'Al-Qahirah'); curated sources (osm-en, osm-fr, gns-bgn, geonames) are preferred and a record tagged with this code is a machine guess. Consonantal skeleton + long vowels only; definite article -> 'al-' without sun-letter assimilation."
+    standard: "BGN/PCGN (Arabic), approximate"
+    status: implemented

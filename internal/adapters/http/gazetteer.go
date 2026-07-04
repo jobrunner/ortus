@@ -43,12 +43,13 @@ func (s *Server) handleGazetteer(w http.ResponseWriter, r *http.Request) {
 // endpoint: each batch entry is {id, coordinate, admin, bearing} with a
 // caller-chosen echo id.
 func (s *Server) gazetteerSections(ctx context.Context, coord domain.Coordinate) (map[string]interface{}, error) {
-	out := map[string]interface{}{"admin": nil, "bearing": nil}
+	out := map[string]interface{}{"admin": nil, "bearing": nil, "sources": []interface{}{}}
+	prov := newProvenanceSet()
 
 	loc, err := s.gazetteer.Locate(ctx, coord)
 	switch {
 	case err == nil:
-		out["admin"] = formatLocality(loc)
+		out["admin"] = formatLocality(loc, prov)
 	case errors.Is(err, domain.ErrNotFound):
 		// no admin coverage at this point — leave admin null
 	default:
@@ -58,23 +59,59 @@ func (s *Server) gazetteerSections(ctx context.Context, coord domain.Coordinate)
 	fix, err := s.gazetteer.Bearing(ctx, coord, s.bearingPolicy.OrDefault())
 	switch {
 	case err == nil:
-		out["bearing"] = formatFix(fix)
+		out["bearing"] = formatFix(fix, prov)
 	case errors.Is(err, domain.ErrNotFound):
 		// no salient anchor within reach — leave bearing null
 	default:
 		return nil, err
 	}
+	// Response-wide provenance excerpt: each distinct name_source code that appears
+	// above, described once (not repeated per record).
+	out["sources"] = prov.list()
 	return out, nil
 }
 
-// formatLocality renders a resolved admin hierarchy for JSON output.
-func formatLocality(loc *domain.Locality) map[string]interface{} {
+// provenanceSet collects the distinct name-source provenances seen in a response,
+// so the response-wide "sources" block lists each code once.
+type provenanceSet struct {
+	seen  map[string]bool
+	items []map[string]interface{}
+}
+
+func newProvenanceSet() *provenanceSet { return &provenanceSet{seen: map[string]bool{}} }
+
+// add records a code (once) and returns it for inline use per record.
+func (p *provenanceSet) add(ns domain.NameProvenance) string {
+	if ns.Code == "" || p.seen[ns.Code] {
+		return ns.Code
+	}
+	p.seen[ns.Code] = true
+	p.items = append(p.items, map[string]interface{}{
+		"code": ns.Code, "short": ns.Short, "long": ns.Long, "standard": ns.Standard,
+	})
+	return ns.Code
+}
+
+func (p *provenanceSet) list() []map[string]interface{} {
+	if p.items == nil {
+		return []map[string]interface{}{}
+	}
+	return p.items
+}
+
+// formatLocality renders a resolved admin hierarchy for JSON output, recording
+// each unit's name provenance in prov.
+func formatLocality(loc *domain.Locality, prov *provenanceSet) map[string]interface{} {
 	hierarchy := make([]map[string]interface{}, len(loc.Chain))
 	for i, u := range loc.Chain {
 		hierarchy[i] = map[string]interface{}{
-			"level":      u.Level,
-			"name":       u.Name,
-			"equivalent": u.Equivalent,
+			"level":                  u.Level,
+			"name":                   u.Name,
+			"name_native":            u.NameNative,
+			"name_source":            prov.add(u.NameSource),
+			"equivalent":             u.Equivalent,
+			"local_term":             u.LocalTerm,
+			"equivalent_description": u.EquivalentDesc,
 		}
 	}
 	return map[string]interface{}{
@@ -83,10 +120,13 @@ func formatLocality(loc *domain.Locality) map[string]interface{} {
 	}
 }
 
-// formatFix renders a bearing fix for JSON output.
-func formatFix(fix *domain.Fix) map[string]interface{} {
+// formatFix renders a bearing fix for JSON output, recording the anchor's name
+// provenance in prov.
+func formatFix(fix *domain.Fix, prov *provenanceSet) map[string]interface{} {
 	return map[string]interface{}{
 		"reference":   fix.Reference.Name,
+		"name_native": fix.Reference.NameNative,
+		"name_source": prov.add(fix.Reference.NameSource),
 		"class":       fix.Reference.Class.String(),
 		"distance_km": fix.DistanceKM,
 		"azimuth":     fix.Azimuth,

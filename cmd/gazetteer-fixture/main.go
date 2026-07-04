@@ -15,6 +15,7 @@
 //	  -src data/gazetteer/osm-admin-places.gpkg \
 //	  -manifest data/gazetteer/ortus-gazetteer.yaml \
 //	  -sidecar data/gazetteer/admin_levels_west_palearctic.yaml \
+//	  -name-sources data/gazetteer/name_source_manifest.yaml \
 //	  -out internal/app/testdata
 package main
 
@@ -68,17 +69,18 @@ func main() {
 	src := flag.String("src", "data/gazetteer/osm-admin-places.gpkg", "source GeoPackage")
 	manifestPath := flag.String("manifest", "data/gazetteer/ortus-gazetteer.yaml", "manifest")
 	sidecarPath := flag.String("sidecar", "data/gazetteer/admin_levels_west_palearctic.yaml", "level sidecar")
+	nameSourcePath := flag.String("name-sources", "data/gazetteer/name_source_manifest.yaml", "name-source manifest")
 	out := flag.String("out", "internal/app/testdata", "output dir")
 	simplify := flag.Float64("simplify", 0.0008, "polygon simplify tolerance (degrees)")
 	flag.Parse()
 
-	if err := run(*src, *manifestPath, *sidecarPath, *out, *simplify); err != nil {
+	if err := run(*src, *manifestPath, *sidecarPath, *nameSourcePath, *out, *simplify); err != nil {
 		fmt.Fprintln(os.Stderr, "ERROR:", err)
 		os.Exit(1)
 	}
 }
 
-func run(src, manifestPath, sidecarPath, out string, simplify float64) error {
+func run(src, manifestPath, sidecarPath, nameSourcePath, out string, simplify float64) error {
 	ctx := context.Background()
 	db, err := sql.Open("sqlite3_with_extensions", "file:"+src+"?mode=ro")
 	if err != nil {
@@ -104,12 +106,12 @@ func run(src, manifestPath, sidecarPath, out string, simplify float64) error {
 	}
 
 	// Golden values from the FULL dataset.
-	golden, err := goldenValues(ctx, src, manifestPath, sidecarPath, points)
+	golden, err := goldenValues(ctx, src, manifestPath, sidecarPath, nameSourcePath, points)
 	if err != nil {
 		return fmt.Errorf("golden (source): %w", err)
 	}
 	// Verify the fixture reproduces them.
-	if err := verifyFixture(ctx, fixture, manifestPath, sidecarPath, golden); err != nil {
+	if err := verifyFixture(ctx, fixture, manifestPath, sidecarPath, nameSourcePath, golden); err != nil {
 		return fmt.Errorf("fixture verification failed (simplification changed a result — lower -simplify): %w", err)
 	}
 
@@ -117,13 +119,21 @@ func run(src, manifestPath, sidecarPath, out string, simplify float64) error {
 		return err
 	}
 
-	// Self-contained test inputs: copy the manifest, and trim the sidecar to the
-	// countries actually present in the fixture (the full one is ~274 KB).
+	// Self-contained test inputs: copy the manifest + name-source manifest (both
+	// small), and trim the sidecar to the countries actually present in the fixture
+	// (the full one is ~274 KB).
 	mdata, err := os.ReadFile(manifestPath)
 	if err != nil {
 		return err
 	}
 	if err := os.WriteFile(filepath.Join(out, "gazetteer-manifest.yaml"), mdata, 0o600); err != nil {
+		return err
+	}
+	nsdata, err := os.ReadFile(nameSourcePath)
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(out, "gazetteer-name-sources.yaml"), nsdata, 0o600); err != nil {
 		return err
 	}
 	countries, err := fixtureCountries(ctx, fixture)
@@ -133,7 +143,7 @@ func run(src, manifestPath, sidecarPath, out string, simplify float64) error {
 	if err := trimSidecar(sidecarPath, filepath.Join(out, "gazetteer-sidecar.yaml"), countries); err != nil {
 		return err
 	}
-	fmt.Printf("OK: fixture + golden + manifest + sidecar (%d countries) written and verified\n", len(countries))
+	fmt.Printf("OK: fixture + golden + manifest + name-sources + sidecar (%d countries) written and verified\n", len(countries))
 	return nil
 }
 
@@ -164,18 +174,24 @@ func fixtureCountries(ctx context.Context, fixture string) (map[string]bool, err
 	return keep, nil
 }
 
-// trimSidecar writes a minimal sidecar: only the selected countries and only the
-// (level → equivalent) mapping ortus actually consumes. This drops the verbose
-// name/source/notes provenance (and its upstream typos) and shrinks the fixture.
+// trimSidecar writes a minimal sidecar: the equivalent_levels descriptions plus,
+// for the selected countries, each level's (name, equivalent) — exactly what
+// ortus consumes for tier meaning (equivalent, local_term, equivalent_description).
+// It drops the verbose source/notes/coverage provenance (and its upstream typos)
+// and shrinks the fixture from ~274 KB to a few KB.
 func trimSidecar(full, out string, keep map[string]bool) error {
 	data, err := os.ReadFile(full)
 	if err != nil {
 		return err
 	}
 	var doc struct {
-		Version   int `yaml:"version"`
+		Version          int `yaml:"version"`
+		EquivalentLevels map[string]struct {
+			Description string `yaml:"description"`
+		} `yaml:"equivalent_levels"`
 		Countries map[string]struct {
 			Levels map[int]struct {
+				Name       string `yaml:"name"`
 				Equivalent string `yaml:"equivalent"`
 			} `yaml:"levels"`
 		} `yaml:"countries"`
@@ -183,16 +199,24 @@ func trimSidecar(full, out string, keep map[string]bool) error {
 	if err := yaml.Unmarshal(data, &doc); err != nil {
 		return err
 	}
+	type equiv struct {
+		Description string `yaml:"description"`
+	}
 	type lvl struct {
+		Name       string `yaml:"name"`
 		Equivalent string `yaml:"equivalent"`
 	}
 	type ctry struct {
 		Levels map[int]lvl `yaml:"levels"`
 	}
 	minimal := struct {
-		Version   int             `yaml:"version"`
-		Countries map[string]ctry `yaml:"countries"`
-	}{Version: doc.Version, Countries: map[string]ctry{}}
+		Version          int              `yaml:"version"`
+		EquivalentLevels map[string]equiv `yaml:"equivalent_levels"`
+		Countries        map[string]ctry  `yaml:"countries"`
+	}{Version: doc.Version, EquivalentLevels: map[string]equiv{}, Countries: map[string]ctry{}}
+	for k, e := range doc.EquivalentLevels {
+		minimal.EquivalentLevels[k] = equiv{Description: e.Description}
+	}
 	for iso, c := range doc.Countries {
 		if !keep[iso] {
 			continue
@@ -200,7 +224,7 @@ func trimSidecar(full, out string, keep map[string]bool) error {
 		levels := map[int]lvl{}
 		for n, l := range c.Levels {
 			if l.Equivalent != "" {
-				levels[n] = lvl{Equivalent: l.Equivalent}
+				levels[n] = lvl{Name: l.Name, Equivalent: l.Equivalent}
 			}
 		}
 		minimal.Countries[iso] = ctry{Levels: levels}
@@ -370,19 +394,29 @@ func buildFixture(src, dst string, adminFids, placeFids []int64, simplify float6
 }
 
 type goldenEntry struct {
-	Point   point        `json:"point"`
-	Country string       `json:"country_iso"`
-	Chain   []chainLevel `json:"chain"`
-	Bearing string       `json:"bearing"`
+	Point   point         `json:"point"`
+	Country string        `json:"country_iso"`
+	Chain   []chainLevel  `json:"chain"`
+	Bearing bearingGolden `json:"bearing"`
 }
 type chainLevel struct {
-	Level      int    `json:"level"`
-	Equivalent string `json:"equivalent"`
-	Name       string `json:"name"`
+	Level          int    `json:"level"`
+	Equivalent     string `json:"equivalent"`
+	Name           string `json:"name"`
+	NameNative     string `json:"name_native"`
+	NameSource     string `json:"name_source"`
+	LocalTerm      string `json:"local_term"`
+	EquivalentDesc string `json:"equivalent_description"`
+}
+type bearingGolden struct {
+	Label      string `json:"label"`
+	Reference  string `json:"reference"`
+	NameNative string `json:"name_native"`
+	NameSource string `json:"name_source"`
 }
 
-func goldenValues(ctx context.Context, gpkg, manifestPath, sidecarPath string, points []point) ([]goldenEntry, error) {
-	svc, closeFn, err := openService(ctx, gpkg, manifestPath, sidecarPath)
+func goldenValues(ctx context.Context, gpkg, manifestPath, sidecarPath, nameSourcePath string, points []point) ([]goldenEntry, error) {
+	svc, closeFn, err := openService(ctx, gpkg, manifestPath, sidecarPath, nameSourcePath)
 	if err != nil {
 		return nil, err
 	}
@@ -396,20 +430,33 @@ func goldenValues(ctx context.Context, gpkg, manifestPath, sidecarPath string, p
 		}
 		e := goldenEntry{Point: p, Country: loc.CountryISO}
 		for _, u := range loc.Chain {
-			e.Chain = append(e.Chain, chainLevel{u.Level, u.Equivalent, u.Name})
+			e.Chain = append(e.Chain, chainLevel{
+				Level:          u.Level,
+				Equivalent:     u.Equivalent,
+				Name:           u.Name,
+				NameNative:     u.NameNative,
+				NameSource:     u.NameSource.Code,
+				LocalTerm:      u.LocalTerm,
+				EquivalentDesc: u.EquivalentDesc,
+			})
 		}
 		fix, err := svc.Bearing(ctx, coord, domain.DefaultBearingPolicy())
 		if err != nil {
 			return nil, fmt.Errorf("%s Bearing: %w", p.Label, err)
 		}
-		e.Bearing = fix.Label
+		e.Bearing = bearingGolden{
+			Label:      fix.Label,
+			Reference:  fix.Reference.Name,
+			NameNative: fix.Reference.NameNative,
+			NameSource: fix.Reference.NameSource.Code,
+		}
 		golden = append(golden, e)
 	}
 	return golden, nil
 }
 
-func verifyFixture(ctx context.Context, fixture, manifestPath, sidecarPath string, want []goldenEntry) error {
-	svc, closeFn, err := openService(ctx, fixture, manifestPath, sidecarPath)
+func verifyFixture(ctx context.Context, fixture, manifestPath, sidecarPath, nameSourcePath string, want []goldenEntry) error {
+	svc, closeFn, err := openService(ctx, fixture, manifestPath, sidecarPath, nameSourcePath)
 	if err != nil {
 		return err
 	}
@@ -420,13 +467,17 @@ func verifyFixture(ctx context.Context, fixture, manifestPath, sidecarPath strin
 		if err != nil {
 			return fmt.Errorf("%s Locate: %w", e.Point.Label, err)
 		}
+		// Compare every field the golden carries — not just name/source — so a
+		// simplification that shifts a polygon into a differently-provenanced unit
+		// (changing name_native, local_term or equivalent_description while name is
+		// unchanged) fails here at generation time, not later in CI.
 		got := loc.CountryISO + "|"
 		for _, u := range loc.Chain {
-			got += fmt.Sprintf("%d:%s;", u.Level, u.Name)
+			got += fmt.Sprintf("%d:%s:%s:%s:%s:%s:%s;", u.Level, u.Equivalent, u.Name, u.NameNative, u.NameSource.Code, u.LocalTerm, u.EquivalentDesc)
 		}
 		exp := e.Country + "|"
 		for _, u := range e.Chain {
-			exp += fmt.Sprintf("%d:%s;", u.Level, u.Name)
+			exp += fmt.Sprintf("%d:%s:%s:%s:%s:%s:%s;", u.Level, u.Equivalent, u.Name, u.NameNative, u.NameSource, u.LocalTerm, u.EquivalentDesc)
 		}
 		if got != exp {
 			return fmt.Errorf("%s chain mismatch:\n got %s\nwant %s", e.Point.Label, got, exp)
@@ -435,14 +486,16 @@ func verifyFixture(ctx context.Context, fixture, manifestPath, sidecarPath strin
 		if err != nil {
 			return fmt.Errorf("%s Bearing: %w", e.Point.Label, err)
 		}
-		if fix.Label != e.Bearing {
-			return fmt.Errorf("%s bearing mismatch: got %q want %q", e.Point.Label, fix.Label, e.Bearing)
+		gotFix := fmt.Sprintf("%s|%s|%s|%s", fix.Label, fix.Reference.Name, fix.Reference.NameNative, fix.Reference.NameSource.Code)
+		expFix := fmt.Sprintf("%s|%s|%s|%s", e.Bearing.Label, e.Bearing.Reference, e.Bearing.NameNative, e.Bearing.NameSource)
+		if gotFix != expFix {
+			return fmt.Errorf("%s bearing mismatch: got %q want %q", e.Point.Label, gotFix, expFix)
 		}
 	}
 	return nil
 }
 
-func openService(ctx context.Context, gpkg, manifestPath, sidecarPath string) (*gazetteer.Service, func(), error) {
+func openService(ctx context.Context, gpkg, manifestPath, sidecarPath, nameSourcePath string) (*gazetteer.Service, func(), error) {
 	mdata, err := os.ReadFile(manifestPath)
 	if err != nil {
 		return nil, nil, err
@@ -463,7 +516,19 @@ func openService(ctx context.Context, gpkg, manifestPath, sidecarPath string) (*
 	if err != nil {
 		return nil, nil, err
 	}
-	return gazetteer.NewService(idx, manifest, levels, nil, true), func() { _ = idx.Close() }, nil
+	svc := gazetteer.NewService(idx, manifest, levels, nil, true)
+	if nameSourcePath != "" {
+		nsdata, err := os.ReadFile(nameSourcePath)
+		if err != nil {
+			return nil, nil, err
+		}
+		nameSources, err := gazetteer.ParseNameSources(nsdata)
+		if err != nil {
+			return nil, nil, err
+		}
+		svc.SetNameSources(nameSources)
+	}
+	return svc, func() { _ = idx.Close() }, nil
 }
 
 func writeGolden(path string, golden []goldenEntry) error {

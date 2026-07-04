@@ -44,6 +44,17 @@ func (a *App) buildGazetteer(ctx context.Context) error {
 		}
 	}
 
+	var nameSources gazetteer.NameSourceResolver
+	if cfg.NameSourceManifestPath != "" {
+		nsData, err := os.ReadFile(cfg.NameSourceManifestPath)
+		if err != nil {
+			return fmt.Errorf("reading gazetteer name-source manifest: %w", err)
+		}
+		if nameSources, err = gazetteer.ParseNameSources(nsData); err != nil {
+			return err
+		}
+	}
+
 	idx, err := geopackage.OpenGazetteerIndex(ctx, cfg.GeoPackagePath, geopackage.Options{
 		CacheMode:     a.Config.Query.SQLite.CacheMode,
 		BusyTimeoutMS: a.Config.Query.SQLite.BusyTimeoutMS,
@@ -63,6 +74,9 @@ func (a *App) buildGazetteer(ctx context.Context) error {
 	}
 
 	a.Gazetteer = gazetteer.NewService(idx, manifest, levels, nil, true)
+	if nameSources != nil {
+		a.Gazetteer.SetNameSources(nameSources)
+	}
 	a.gazetteerClose = idx.Close
 	// Build the bearing policy from the tuning knobs (config) + the constraint
 	// tier (manifest, dataset-bound). Handlers pass this to Bearing().
@@ -81,6 +95,7 @@ func (a *App) buildGazetteer(ctx context.Context) error {
 	a.Logger.Info("gazetteer enabled",
 		"geopackage", cfg.GeoPackagePath,
 		"level_reference", cfg.LevelReferencePath != "",
+		"name_sources", cfg.NameSourceManifestPath != "",
 	)
 	return nil
 }
