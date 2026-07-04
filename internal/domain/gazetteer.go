@@ -52,18 +52,37 @@ func ParsePlaceClass(s string) (class PlaceClass, ok bool) {
 
 // Place is a named settlement anchor — a feature of the points layer.
 type Place struct {
-	Name    string
-	Class   PlaceClass
-	AdminID int64 // FK → the admin unit containing the place (0 = unknown)
-	At      Coordinate
+	Name       string         // romanized (always-Latin) display name
+	NameNative string         // original-script name (empty if already Latin)
+	NameSource NameProvenance // how Name was romanized/sourced
+	Class      PlaceClass
+	AdminID    int64 // FK → the admin unit containing the place (0 = unknown)
+	At         Coordinate
 }
 
-// AdminUnit is one level of a resolved administrative hierarchy, already enriched
-// with its semantic meaning (Equivalent) from the admin-level sidecar reference.
+// AdminUnit is one level of a resolved administrative hierarchy, enriched with its
+// semantic meaning from the admin-level sidecar reference.
 type AdminUnit struct {
-	Level      int    // OSM admin_level
-	Name       string // native admin unit name
-	Equivalent string // sidecar meaning: country | state | … | municipality
+	Level      int            // OSM admin_level
+	Name       string         // romanized admin unit name
+	NameNative string         // original-script name (empty if already Latin)
+	NameSource NameProvenance // how Name was romanized/sourced
+	Equivalent string         // sidecar meaning: country | state | … | municipality
+	// LocalTerm is the country-specific term for this level (e.g. "Landkreis"),
+	// and EquivalentDesc the generic description of Equivalent — both from the
+	// sidecar, so a client learns what the level means in that country.
+	LocalTerm      string
+	EquivalentDesc string
+}
+
+// NameProvenance describes how a romanized name was produced, from the name-source
+// manifest that ships beside the dataset (for citation/provenance transparency).
+// Short/Long/Standard are empty when the code is unmapped or no manifest is wired.
+type NameProvenance struct {
+	Code     string // the code stored on the record (e.g. "translit-el-843")
+	Short    string // short label
+	Long     string // full description
+	Standard string // citation standard, if any (e.g. "ELOT 743 / UN / ISO 843")
 }
 
 // Locality is the administrative hierarchy (levels 2–8) containing a coordinate —

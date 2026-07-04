@@ -36,35 +36,65 @@ type Manifest struct {
 	AdminNameColumn string // e.g. "name"
 	ParentFKColumn  string // e.g. "parent_id" (walked by ResolveChain)
 
-	// shared
-	CountryColumn string // e.g. "country_iso" (present on both layers)
+	// shared (same column names on both layers)
+	CountryColumn    string // e.g. "country_iso"
+	NameNativeColumn string // e.g. "name_native" (original-script name)
+	NameSourceColumn string // e.g. "name_source" (romanization/provenance code)
 
 	// bearing
 	ConstraintTier string // semantic tier anchors must share, e.g. "state"
 }
 
-// LevelResolver maps a raw OSM admin level to its semantic meaning, per country,
-// from the sidecar reference (admin_levels_west_palearctic.yaml). It is an
-// injected seam so the service does not depend on the sidecar file format.
+// LevelMeaning is what an (ISO, admin_level) pair means, from the sidecar: the
+// generic Equivalent class, its Description, and the country-specific LocalTerm.
+type LevelMeaning struct {
+	Equivalent  string // country | state | … | municipality
+	Description string // generic description of Equivalent
+	LocalTerm   string // country-specific term (e.g. "Landkreis / Kreis / kreisfreie Stadt")
+}
+
+// LevelResolver maps a raw OSM admin level to its meaning, per country, from the
+// sidecar reference. It is an injected seam so the service does not depend on the
+// sidecar file format.
 type LevelResolver interface {
-	// Resolve returns the semantic equivalent (country|state|…|municipality) for
-	// an (ISO 3166-1 alpha-2, admin_level) pair; ok is false when unmapped.
-	Resolve(countryISO string, level int) (equivalent string, ok bool)
+	// Resolve returns the meaning for an (ISO 3166-1 alpha-2, admin_level) pair;
+	// ok is false when unmapped.
+	Resolve(countryISO string, level int) (m LevelMeaning, ok bool)
 }
 
 // noopLevelResolver leaves every level unenriched. It is the safe default when
 // no sidecar is wired, so Locate still returns the raw hierarchy.
 type noopLevelResolver struct{}
 
-func (noopLevelResolver) Resolve(string, int) (string, bool) { return "", false }
+func (noopLevelResolver) Resolve(string, int) (LevelMeaning, bool) { return LevelMeaning{}, false }
 
 // Service is the GazetteerService: reverse geocoding (Locate) and bearing.
 type Service struct {
-	index    output.SpatialIndex
-	manifest Manifest
-	levels   LevelResolver
-	salience SalienceStrategy
-	enabled  bool
+	index       output.SpatialIndex
+	manifest    Manifest
+	levels      LevelResolver
+	nameSources NameSourceResolver // optional; nil ⇒ names carry only their code
+	salience    SalienceStrategy
+	enabled     bool
+}
+
+// SetNameSources wires the optional name-source resolver so resolved name
+// provenance (short/long/standard) is attached to each name. Without it, names
+// still carry their raw provenance code.
+func (s *Service) SetNameSources(r NameSourceResolver) { s.nameSources = r }
+
+// resolveNameSource turns a raw provenance code into a NameProvenance, enriched
+// from the manifest when one is wired and the code is known.
+func (s *Service) resolveNameSource(code string) domain.NameProvenance {
+	if code == "" {
+		return domain.NameProvenance{}
+	}
+	if s.nameSources != nil {
+		if ns, ok := s.nameSources.Resolve(code); ok {
+			return ns
+		}
+	}
+	return domain.NameProvenance{Code: code}
 }
 
 // NewService creates a gazetteer service. It is inert unless enabled is true and
@@ -121,11 +151,15 @@ func (s *Service) Locate(ctx context.Context, p domain.Coordinate) (*domain.Loca
 			deepest, countryISO = level, iso
 		}
 		// Resolve each level's meaning by its own country+level.
-		equivalent, _ := s.levels.Resolve(iso, level)
+		meaning, _ := s.levels.Resolve(iso, level)
 		chain = append(chain, domain.AdminUnit{
-			Level:      level,
-			Name:       f.GetStringProperty(s.manifest.AdminNameColumn),
-			Equivalent: equivalent,
+			Level:          level,
+			Name:           f.GetStringProperty(s.manifest.AdminNameColumn),
+			NameNative:     f.GetStringProperty(s.manifest.NameNativeColumn),
+			NameSource:     s.resolveNameSource(f.GetStringProperty(s.manifest.NameSourceColumn)),
+			Equivalent:     meaning.Equivalent,
+			LocalTerm:      meaning.LocalTerm,
+			EquivalentDesc: meaning.Description,
 		})
 	}
 	// Most-local first (highest admin_level → country last), with a Name tie-break

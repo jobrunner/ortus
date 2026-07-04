@@ -32,10 +32,13 @@ func startGazetteerServer(t *testing.T) *httptest.Server {
 	deps := buildDeps(t)
 	deps.Gazetteer = fakeGazetteer{
 		loc: &domain.Locality{CountryISO: "DE", Chain: []domain.AdminUnit{
-			{Level: 8, Name: "Würzburg", Equivalent: "municipality"},
+			{Level: 8, Name: "Würzburg", NameNative: "Würzburg", Equivalent: "municipality",
+				LocalTerm: "Kreisfreie Stadt", EquivalentDesc: "Municipality / commune",
+				NameSource: domain.NameProvenance{Code: "latin-osm", Short: "OSM name", Long: "OSM name tag.", Standard: ""}},
 		}},
 		fix: &domain.Fix{
-			Reference:  domain.Place{Name: "Würzburg", Class: domain.ClassCity},
+			Reference: domain.Place{Name: "Würzburg", NameNative: "Würzburg", Class: domain.ClassCity,
+				NameSource: domain.NameProvenance{Code: "latin-osm", Short: "OSM name", Long: "OSM name tag.", Standard: ""}},
 			DistanceKM: 4, Azimuth: 90, Compass: "E", Label: "4 km E Würzburg",
 		},
 	}
@@ -85,10 +88,22 @@ func TestGazetteerTool(t *testing.T) {
 	var out struct {
 		Admin *struct {
 			CountryISO string `json:"country_iso"`
+			Hierarchy  []struct {
+				Name                  string `json:"name"`
+				NameNative            string `json:"name_native"`
+				NameSource            string `json:"name_source"`
+				LocalTerm             string `json:"local_term"`
+				EquivalentDescription string `json:"equivalent_description"`
+			} `json:"hierarchy"`
 		} `json:"admin"`
 		Bearing *struct {
-			Label string `json:"label"`
+			Label      string `json:"label"`
+			NameSource string `json:"name_source"`
 		} `json:"bearing"`
+		Sources []struct {
+			Code  string `json:"code"`
+			Short string `json:"short"`
+		} `json:"sources"`
 	}
 	raw, err := json.Marshal(res.StructuredContent)
 	if err != nil {
@@ -102,5 +117,18 @@ func TestGazetteerTool(t *testing.T) {
 	}
 	if out.Bearing == nil || out.Bearing.Label != "4 km E Würzburg" {
 		t.Errorf("bearing = %+v, want label '4 km E Würzburg'", out.Bearing)
+	}
+	// Provenance: per-record code + native/local terms and the response-wide
+	// sources block (latin-osm appears on both records → listed once).
+	if len(out.Admin.Hierarchy) != 1 || out.Admin.Hierarchy[0].NameSource != "latin-osm" ||
+		out.Admin.Hierarchy[0].LocalTerm != "Kreisfreie Stadt" ||
+		out.Admin.Hierarchy[0].EquivalentDescription != "Municipality / commune" {
+		t.Errorf("hierarchy = %+v, want latin-osm code + local term + equivalent description", out.Admin.Hierarchy)
+	}
+	if out.Bearing.NameSource != "latin-osm" {
+		t.Errorf("bearing name_source = %q, want latin-osm", out.Bearing.NameSource)
+	}
+	if len(out.Sources) != 1 || out.Sources[0].Code != "latin-osm" || out.Sources[0].Short != "OSM name" {
+		t.Errorf("sources = %+v, want single latin-osm entry", out.Sources)
 	}
 }

@@ -95,6 +95,62 @@ func TestGazetteerEndpoint(t *testing.T) {
 	}
 }
 
+func TestGazetteerSourcesBlock(t *testing.T) {
+	// A locality whose two units share one romanization code, plus a bearing
+	// anchor with a different code → the response-wide "sources" block lists each
+	// distinct code once, and every record carries its code + native name.
+	loc := &domain.Locality{CountryISO: "GR", Chain: []domain.AdminUnit{
+		{Level: 7, Name: "Dimos Thessalonikis", NameNative: "Δήμος Θεσσαλονίκης",
+			NameSource: domain.NameProvenance{Code: "translit-el-843", Short: "Greek ELOT 743", Long: "Romanized from Greek using ELOT 743.", Standard: "ELOT 743 / UN / ISO 843"},
+			Equivalent: "municipality", LocalTerm: "Δήμοι", EquivalentDesc: "Municipality / commune"},
+		{Level: 4, Name: "Kentriki Makedonia", NameNative: "Κεντρική Μακεδονία",
+			NameSource: domain.NameProvenance{Code: "translit-el-843", Short: "Greek ELOT 743", Long: "Romanized from Greek using ELOT 743.", Standard: "ELOT 743 / UN / ISO 843"},
+			Equivalent: "region"},
+	}}
+	fix := &domain.Fix{
+		Reference: domain.Place{Name: "Thessaloniki", NameNative: "Θεσσαλονίκη", Class: domain.ClassCity,
+			NameSource: domain.NameProvenance{Code: "latin-osm", Short: "OSM name", Long: "OSM name tag.", Standard: ""}},
+		DistanceKM: 4, Azimuth: 90, Compass: "E", Label: "4 km E Thessaloniki",
+	}
+	srv := newGazetteerServer(t, fakeGazetteer{loc: loc, fix: fix})
+	rec, body := doGET(t, srv, "/api/v1/gazetteer?lon=22.94&lat=40.64")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+
+	// Two distinct codes appear across the two units + the anchor.
+	sources, ok := body["sources"].([]any)
+	if !ok || len(sources) != 2 {
+		t.Fatalf("sources = %v, want 2 distinct entries", body["sources"])
+	}
+	got := map[string]map[string]any{}
+	for _, s := range sources {
+		m := s.(map[string]any)
+		got[m["code"].(string)] = m
+	}
+	if el, ok := got["translit-el-843"]; !ok || el["standard"] != "ELOT 743 / UN / ISO 843" {
+		t.Errorf("sources[translit-el-843] = %v, want standard set", got["translit-el-843"])
+	}
+	if _, ok := got["latin-osm"]; !ok {
+		t.Errorf("sources missing latin-osm; got %v", got)
+	}
+
+	// Per-record inline code + native name.
+	admin := body["admin"].(map[string]any)
+	hierarchy := admin["hierarchy"].([]any)
+	first := hierarchy[0].(map[string]any)
+	if first["name_source"] != "translit-el-843" || first["name_native"] != "Δήμος Θεσσαλονίκης" {
+		t.Errorf("hierarchy[0] = %v, want el code + native name", first)
+	}
+	if first["local_term"] != "Δήμοι" || first["equivalent_description"] != "Municipality / commune" {
+		t.Errorf("hierarchy[0] meaning = %v, want local_term + equivalent_description", first)
+	}
+	bearing := body["bearing"].(map[string]any)
+	if bearing["name_source"] != "latin-osm" || bearing["name_native"] != "Θεσσαλονίκη" {
+		t.Errorf("bearing = %v, want latin-osm code + native name", bearing)
+	}
+}
+
 func TestGazetteerEndpointPartial(t *testing.T) {
 	// No admin coverage (ErrNotFound) but a bearing exists → admin null, bearing set.
 	srv := newGazetteerServer(t, fakeGazetteer{locErr: domain.ErrNotFound, fix: sampleFix()})

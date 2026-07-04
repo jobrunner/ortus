@@ -230,11 +230,12 @@ type MCPConfig struct {
 // is a dedicated, separately-loaded dataset (not part of the generic PiP source
 // pool); disabled by default so the feature is inert until explicitly wired.
 type GazetteerConfig struct {
-	Enabled            bool                   `mapstructure:"enabled"`
-	GeoPackagePath     string                 `mapstructure:"geopackage_path"`      // the places/admin GeoPackage
-	ManifestPath       string                 `mapstructure:"manifest_path"`        // ortus-gazetteer.yaml (layer/column mapping)
-	LevelReferencePath string                 `mapstructure:"level_reference_path"` // admin-level sidecar (optional; enriches Locate)
-	Bearing            GazetteerBearingConfig `mapstructure:"bearing"`
+	Enabled                bool                   `mapstructure:"enabled"`
+	GeoPackagePath         string                 `mapstructure:"geopackage_path"`           // the places/admin GeoPackage
+	ManifestPath           string                 `mapstructure:"manifest_path"`             // ortus-gazetteer.yaml (layer/column mapping)
+	LevelReferencePath     string                 `mapstructure:"level_reference_path"`      // admin-level sidecar (optional; enriches Locate)
+	NameSourceManifestPath string                 `mapstructure:"name_source_manifest_path"` // name-source manifest (optional; name provenance)
+	Bearing                GazetteerBearingConfig `mapstructure:"bearing"`
 }
 
 // GazetteerBearingConfig holds the tunable knobs of the bearing selection (the
@@ -345,6 +346,7 @@ func Defaults() {
 	viper.SetDefault("gazetteer.geopackage_path", "")
 	viper.SetDefault("gazetteer.manifest_path", "")
 	viper.SetDefault("gazetteer.level_reference_path", "")
+	viper.SetDefault("gazetteer.name_source_manifest_path", "")
 	// Bearing tuning knobs — defaults match domain.DefaultBearingPolicy.
 	viper.SetDefault("gazetteer.bearing.reach_village_km", 5.0)
 	viper.SetDefault("gazetteer.bearing.reach_town_km", 18.0)

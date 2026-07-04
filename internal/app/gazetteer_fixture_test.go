@@ -23,9 +23,19 @@ import (
 //
 //	go run cmd/gazetteer-fixture/main.go -simplify 0.002
 type fixtureChainLevel struct {
-	Level      int    `json:"level"`
-	Equivalent string `json:"equivalent"`
-	Name       string `json:"name"`
+	Level          int    `json:"level"`
+	Equivalent     string `json:"equivalent"`
+	Name           string `json:"name"`
+	NameNative     string `json:"name_native"`
+	NameSource     string `json:"name_source"`
+	LocalTerm      string `json:"local_term"`
+	EquivalentDesc string `json:"equivalent_description"`
+}
+type fixtureBearing struct {
+	Label      string `json:"label"`
+	Reference  string `json:"reference"`
+	NameNative string `json:"name_native"`
+	NameSource string `json:"name_source"`
 }
 type fixtureGolden struct {
 	Point struct {
@@ -35,7 +45,7 @@ type fixtureGolden struct {
 	} `json:"point"`
 	Country string              `json:"country_iso"`
 	Chain   []fixtureChainLevel `json:"chain"`
-	Bearing string              `json:"bearing"`
+	Bearing fixtureBearing      `json:"bearing"`
 }
 
 func TestGazetteerFixtureGolden(t *testing.T) {
@@ -49,6 +59,10 @@ func TestGazetteerFixtureGolden(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseLevelReference: %v", err)
 	}
+	nameSources, err := gazetteer.ParseNameSources(mustRead(t, "testdata/gazetteer-name-sources.yaml"))
+	if err != nil {
+		t.Fatalf("ParseNameSources: %v", err)
+	}
 	idx, err := geopackage.OpenGazetteerIndex(ctx, "testdata/gazetteer-fixture.gpkg", geopackage.Options{})
 	if err != nil {
 		t.Fatalf("OpenGazetteerIndex: %v", err)
@@ -58,6 +72,7 @@ func TestGazetteerFixtureGolden(t *testing.T) {
 		t.Fatalf("VerifySRID on fixture: %v", err)
 	}
 	svc := gazetteer.NewService(idx, manifest, levels, nil, true)
+	svc.SetNameSources(nameSources)
 
 	var golden []fixtureGolden
 	if err := json.Unmarshal(mustRead(t, "testdata/gazetteer-golden.json"), &golden); err != nil {
@@ -87,14 +102,28 @@ func TestGazetteerFixtureGolden(t *testing.T) {
 					t.Errorf("chain[%d] = {L%d %s %q}, want {L%d %s %q}",
 						i, u.Level, u.Equivalent, u.Name, w.Level, w.Equivalent, w.Name)
 				}
+				// Provenance + tier meaning: multi-script names, romanization code,
+				// country-specific term and generic equivalent description.
+				if u.NameNative != w.NameNative || u.NameSource.Code != w.NameSource {
+					t.Errorf("chain[%d] provenance = {native %q source %q}, want {native %q source %q}",
+						i, u.NameNative, u.NameSource.Code, w.NameNative, w.NameSource)
+				}
+				if u.LocalTerm != w.LocalTerm || u.EquivalentDesc != w.EquivalentDesc {
+					t.Errorf("chain[%d] meaning = {local %q desc %q}, want {local %q desc %q}",
+						i, u.LocalTerm, u.EquivalentDesc, w.LocalTerm, w.EquivalentDesc)
+				}
 			}
 
 			fix, err := svc.Bearing(ctx, coord, domain.DefaultBearingPolicy())
 			if err != nil {
 				t.Fatalf("Bearing: %v", err)
 			}
-			if fix.Label != want.Bearing {
-				t.Errorf("bearing = %q, want %q", fix.Label, want.Bearing)
+			if fix.Label != want.Bearing.Label {
+				t.Errorf("bearing = %q, want %q", fix.Label, want.Bearing.Label)
+			}
+			if fix.Reference.NameNative != want.Bearing.NameNative || fix.Reference.NameSource.Code != want.Bearing.NameSource {
+				t.Errorf("bearing provenance = {native %q source %q}, want {native %q source %q}",
+					fix.Reference.NameNative, fix.Reference.NameSource.Code, want.Bearing.NameNative, want.Bearing.NameSource)
 			}
 		})
 	}

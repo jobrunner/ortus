@@ -1,16 +1,17 @@
-# ortus gazetteer manifest (example) — maps the places/admin GeoPackage layers
-# and columns to ortus's gazetteer roles. Copy next to your dataset and point
-# gazetteer.manifest_path at it. Verified against osm-admin-places.gpkg.
+# ortus gazetteer manifest — maps the osm-admin-places.gpkg layers/columns to
+# ortus's gazetteer roles. Verified against the rebuilt file (2026-07).
 places:
   layer: places
-  name_column: name
-  rank_column: place        # settlement class: village | town | city
-  admin_fk: admin_id        # → admin_levels.fid of the most-local containing unit
+  name_column: name                 # romanized (always-Latin) display name
+  name_native_column: name_native   # original-script name (same column on both layers)
+  name_source_column: name_source   # romanization/provenance code (same on both layers)
+  rank_column: place                # village | town | city
+  admin_fk: admin_id                # → admin_levels.fid of the most-local containing unit
   country_column: country_iso
 admin:
   layer: admin_levels
   level_column: admin_level
   name_column: name
-  parent_fk: parent_id      # → admin_levels.fid of the broader enclosing unit (walked by ResolveChain)
+  parent_fk: parent_id
   country_column: country_iso
-  bearing_constraint_tier: state   # semantic tier anchors must share (via the sidecar)
+  bearing_constraint_tier: state
