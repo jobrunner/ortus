@@ -197,21 +197,21 @@ paths:
                   hierarchy:
                     - level: 8
                       name: Würzburg
-                      name_native: Würzburg
+                      name_native: ""          # empty: already-Latin name (identical to name)
                       name_source: latin-osm
                       equivalent: municipality
                       local_term: Kreisfreie Stadt
                       equivalent_description: Local municipal authority (city/town/commune).
                     - level: 4
                       name: Bayern
-                      name_native: Bayern
+                      name_native: ""          # empty: already-Latin name (identical to name)
                       name_source: latin-osm
                       equivalent: state
                       local_term: Land
                       equivalent_description: First-level subdivision (state, region, province).
                 bearing:
                   reference: Würzburg
-                  name_native: Würzburg
+                  name_native: ""            # empty: already-Latin name (identical to reference)
                   name_source: latin-osm
                   class: city
                   distance_km: 4.0
@@ -220,9 +220,9 @@ paths:
                   label: "4 km E Würzburg"
                 sources:
                   - code: latin-osm
-                    short: OSM name
-                    long: OpenStreetMap name tag (already in Latin script)
-                    standard: OpenStreetMap
+                    short: OSM name (already Latin)
+                    long: Taken verbatim from the OpenStreetMap name tag; already Latin script, no transliteration applied.
+                    standard: ""    # latin-osm has no romanization standard (null in the manifest)
         '400':
           description: Ungültige Parameter
           content:

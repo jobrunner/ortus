@@ -97,3 +97,38 @@ The `query.sqlite.*` keys tune how each GeoPackage is opened. Defaults favour
 read concurrency (`private` cache) and are safe to leave as-is. To calibrate for
 your data and hardware, see **[Run a load test](../how-to/run-a-load-test.md)** —
 a setting that wins there maps one-to-one onto these keys.
+
+## Gazetteer
+
+The gazetteer (reverse geocoding + bearing / "Peilung") is an optional feature,
+off by default and inert until enabled. It loads a dedicated places/admin
+GeoPackage **separately** from the generic query source pool — it is never a
+point-in-polygon source. It powers `GET /api/v1/gazetteer` and the `gazetteer`
+MCP tool.
+
+```yaml
+gazetteer:
+  enabled: true
+  geopackage_path: /data/gazetteer/osm-admin-places.gpkg      # required when enabled
+  manifest_path: /data/gazetteer/ortus-gazetteer.yaml         # required: maps layer/column roles
+  level_reference_path: /data/gazetteer/admin_levels_west_palearctic.yaml   # optional: per-country tier meaning
+  name_source_manifest_path: /data/gazetteer/name_source_manifest.yaml      # optional: name-source descriptions
+  bearing:
+    reach_village_km: 5
+    reach_town_km: 18
+    reach_city_km: 60
+    prefer_nearest_km: 5
+    inside_label_km: 1
+    compass_points: 8
+```
+
+- `geopackage_path` and `manifest_path` are **required** when `enabled: true`;
+  startup fails fast otherwise.
+- `level_reference_path` (optional) enriches each admin level with its semantic
+  `equivalent`, country-specific `local_term`, and `equivalent_description`.
+  Without it, Locate still returns the raw hierarchy.
+- `name_source_manifest_path` (optional) populates the response-wide `sources`
+  block that describes each name-romanization/provenance code. Without it, each
+  record still carries its raw `name_source` code but the descriptions are empty.
+- The dataset and its sidecars are built by the `build-gazetteer-package` skill
+  (see `.claude/skills/build-gazetteer-package/`).

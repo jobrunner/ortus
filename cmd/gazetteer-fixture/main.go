@@ -467,13 +467,17 @@ func verifyFixture(ctx context.Context, fixture, manifestPath, sidecarPath, name
 		if err != nil {
 			return fmt.Errorf("%s Locate: %w", e.Point.Label, err)
 		}
+		// Compare every field the golden carries — not just name/source — so a
+		// simplification that shifts a polygon into a differently-provenanced unit
+		// (changing name_native, local_term or equivalent_description while name is
+		// unchanged) fails here at generation time, not later in CI.
 		got := loc.CountryISO + "|"
 		for _, u := range loc.Chain {
-			got += fmt.Sprintf("%d:%s:%s;", u.Level, u.Name, u.NameSource.Code)
+			got += fmt.Sprintf("%d:%s:%s:%s:%s:%s:%s;", u.Level, u.Equivalent, u.Name, u.NameNative, u.NameSource.Code, u.LocalTerm, u.EquivalentDesc)
 		}
 		exp := e.Country + "|"
 		for _, u := range e.Chain {
-			exp += fmt.Sprintf("%d:%s:%s;", u.Level, u.Name, u.NameSource)
+			exp += fmt.Sprintf("%d:%s:%s:%s:%s:%s:%s;", u.Level, u.Equivalent, u.Name, u.NameNative, u.NameSource, u.LocalTerm, u.EquivalentDesc)
 		}
 		if got != exp {
 			return fmt.Errorf("%s chain mismatch:\n got %s\nwant %s", e.Point.Label, got, exp)
@@ -482,8 +486,10 @@ func verifyFixture(ctx context.Context, fixture, manifestPath, sidecarPath, name
 		if err != nil {
 			return fmt.Errorf("%s Bearing: %w", e.Point.Label, err)
 		}
-		if fix.Label != e.Bearing.Label {
-			return fmt.Errorf("%s bearing mismatch: got %q want %q", e.Point.Label, fix.Label, e.Bearing.Label)
+		gotFix := fmt.Sprintf("%s|%s|%s|%s", fix.Label, fix.Reference.Name, fix.Reference.NameNative, fix.Reference.NameSource.Code)
+		expFix := fmt.Sprintf("%s|%s|%s|%s", e.Bearing.Label, e.Bearing.Reference, e.Bearing.NameNative, e.Bearing.NameSource)
+		if gotFix != expFix {
+			return fmt.Errorf("%s bearing mismatch: got %q want %q", e.Point.Label, gotFix, expFix)
 		}
 	}
 	return nil

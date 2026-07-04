@@ -143,9 +143,16 @@ func ParseLevelReference(data []byte) (LevelResolver, error) {
 			if def.Equivalent == "" {
 				continue
 			}
+			// A level's equivalent must resolve to an equivalent_levels entry, else
+			// Equivalent would be set while Description stayed silently empty. Fail
+			// at load so a malformed sidecar is caught here, not in every response.
+			eq, ok := y.EquivalentLevels[def.Equivalent]
+			if !ok {
+				return nil, fmt.Errorf("parse admin-level reference: country %s level %d references equivalent %q not defined in equivalent_levels", iso, level, def.Equivalent)
+			}
 			levels[level] = LevelMeaning{
 				Equivalent:  def.Equivalent,
-				Description: y.EquivalentLevels[def.Equivalent].Description,
+				Description: eq.Description,
 				LocalTerm:   def.Name,
 			}
 		}

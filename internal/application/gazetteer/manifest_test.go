@@ -157,3 +157,28 @@ func TestParseLevelReferenceInvalidYAML(t *testing.T) {
 		t.Error("expected error for malformed YAML")
 	}
 }
+
+// TestParseLevelReferenceUndefinedEquivalent asserts a level whose equivalent is
+// not declared in equivalent_levels fails at parse time rather than silently
+// yielding an empty description in every response.
+func TestParseLevelReferenceUndefinedEquivalent(t *testing.T) {
+	const y = `
+version: 1
+equivalent_levels:
+  country:
+    description: "Sovereign state"
+countries:
+  DE:
+    levels:
+      4:
+        name: "Bundesland"
+        equivalent: state
+`
+	_, err := ParseLevelReference([]byte(y))
+	if err == nil {
+		t.Fatal("expected error for equivalent not defined in equivalent_levels")
+	}
+	if !strings.Contains(err.Error(), "state") || !strings.Contains(err.Error(), "equivalent_levels") {
+		t.Errorf("error = %q, want it to name the missing equivalent + equivalent_levels", err)
+	}
+}
