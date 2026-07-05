@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/jobrunner/ortus/internal/domain"
 )
@@ -146,19 +147,22 @@ func formatFix(fix *domain.Fix, prov *provenanceSet) map[string]interface{} {
 
 // gazetteerEnrichmentRequested reports whether /query should attach the gazetteer
 // block. Enrichment is ON by default when the feature is wired; a client opts out
-// with an explicit falsy with-gazetteer value (0/false/no/off) to skip the extra
-// Locate+Bearing spatial work.
+// only with an explicit falsy with-gazetteer value (0/false/no/off) to skip the
+// extra Locate+Bearing spatial work. Any other value — including an unrecognized
+// one — leaves enrichment on.
 func gazetteerEnrichmentRequested(r *http.Request) bool {
-	v := r.URL.Query().Get("with-gazetteer")
-	return v == "" || isTruthy(v)
+	switch strings.ToLower(r.URL.Query().Get("with-gazetteer")) {
+	case "0", "false", "no", "off":
+		return false
+	default:
+		return true
+	}
 }
 
-// isTruthy reports whether a query-parameter value means "on".
-func isTruthy(v string) bool {
-	switch v {
-	case "1", "true", "yes", "on":
-		return true
-	default:
-		return false
-	}
+// isWGS84 reports whether a coordinate is WGS84 (EPSG:4326), treating SRID 0 as
+// unset/WGS84 (the coordinate constructors default to it). The gazetteer dataset
+// is 4326-only, so enrichment is skipped for any other SRID rather than attempted
+// and failed.
+func isWGS84(c domain.Coordinate) bool {
+	return c.SRID == 0 || c.SRID == domain.SRIDWGS84
 }

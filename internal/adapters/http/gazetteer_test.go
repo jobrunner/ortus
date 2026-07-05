@@ -241,15 +241,31 @@ func keysOf(m map[string]any) []string {
 	return ks
 }
 
-func TestIsTruthy(t *testing.T) {
-	for _, v := range []string{"1", "true", "yes", "on"} {
-		if !isTruthy(v) {
-			t.Errorf("isTruthy(%q) = false, want true", v)
+func TestGazetteerEnrichmentRequested(t *testing.T) {
+	// Default on: absent, truthy, and any unrecognized value keep enrichment on.
+	for _, v := range []string{"", "1", "true", "yes", "on", "2", "maybe"} {
+		r := httptest.NewRequest(http.MethodGet, "/api/v1/query?with-gazetteer="+v, nil)
+		if !gazetteerEnrichmentRequested(r) {
+			t.Errorf("with-gazetteer=%q = false, want on (default)", v)
 		}
 	}
-	for _, v := range []string{"", "0", "false", "no", "2"} {
-		if isTruthy(v) {
-			t.Errorf("isTruthy(%q) = true, want false", v)
+	// Off only on explicit falsy (case-insensitive).
+	for _, v := range []string{"0", "false", "no", "off", "FALSE", "Off"} {
+		r := httptest.NewRequest(http.MethodGet, "/api/v1/query?with-gazetteer="+v, nil)
+		if gazetteerEnrichmentRequested(r) {
+			t.Errorf("with-gazetteer=%q = true, want off", v)
 		}
+	}
+}
+
+func TestIsWGS84(t *testing.T) {
+	if !isWGS84(domain.Coordinate{SRID: 0}) {
+		t.Error("SRID 0 (unset) should count as WGS84")
+	}
+	if !isWGS84(domain.Coordinate{SRID: domain.SRIDWGS84}) {
+		t.Error("SRID 4326 should count as WGS84")
+	}
+	if isWGS84(domain.Coordinate{SRID: 25832}) {
+		t.Error("SRID 25832 should not count as WGS84")
 	}
 }

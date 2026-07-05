@@ -571,6 +571,8 @@ components:
       description: Reverse-Geocoding- und Peilungs-Ergebnis für eine Koordinate.
       allOf:
         - type: object
+          required:
+            - coordinate
           properties:
             coordinate:
               $ref: '#/components/schemas/Coordinate'
