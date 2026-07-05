@@ -49,8 +49,9 @@ type App struct {
 	MCPServer         *mcp.Server         // nil when MCP is disabled
 	Gazetteer         *gazetteer.Service  // nil when the gazetteer feature is disabled
 
-	gazetteerClose  func() error         // releases the gazetteer index connection; nil when disabled
-	gazetteerPolicy domain.BearingPolicy // bearing tuning knobs (config) + constraint tier (manifest)
+	gazetteerClose   func() error         // releases the gazetteer index connection; nil when disabled
+	gazetteerPolicy  domain.BearingPolicy // bearing tuning knobs (config) + constraint tier (manifest)
+	gazetteerLicense domain.License       // dataset license/attribution from the manifest; surfaced in responses
 }
 
 // tracerProvider returns the underlying OTel TracerProvider for instrumentation
@@ -318,11 +319,12 @@ func (a *App) buildHTTPServer(cfg *config.Config, logger *slog.Logger) *httpAdap
 		logger,
 		cfg.Query.WithGeometry,
 		httpAdapter.ServerOptions{
-			TracerProvider: a.tracerProvider(),
-			MeterProvider:  a.meterProvider(),
-			ServiceName:    cfg.Tracing.ServiceName,
-			Gazetteer:      a.gazetteerPort(),
-			BearingPolicy:  a.gazetteerPolicy,
+			TracerProvider:   a.tracerProvider(),
+			MeterProvider:    a.meterProvider(),
+			ServiceName:      cfg.Tracing.ServiceName,
+			Gazetteer:        a.gazetteerPort(),
+			BearingPolicy:    a.gazetteerPolicy,
+			GazetteerLicense: a.gazetteerLicense,
 		},
 	)
 }
@@ -342,14 +344,15 @@ func (a *App) MCPDeps() mcp.Deps {
 		version = "dev"
 	}
 	return mcp.Deps{
-		Telemetry:     tq,
-		QueryService:  a.QueryService,
-		Registry:      a.Registry,
-		HealthService: a.HealthService,
-		Gazetteer:     a.gazetteerPort(),
-		BearingPolicy: a.gazetteerPolicy,
-		Version:       version,
-		Tracer:        a.Tracer,
+		Telemetry:        tq,
+		QueryService:     a.QueryService,
+		Registry:         a.Registry,
+		HealthService:    a.HealthService,
+		Gazetteer:        a.gazetteerPort(),
+		BearingPolicy:    a.gazetteerPolicy,
+		GazetteerLicense: a.gazetteerLicense,
+		Version:          version,
+		Tracer:           a.Tracer,
 	}
 }
 

@@ -42,6 +42,10 @@ func startGazetteerServer(t *testing.T) *httptest.Server {
 			DistanceKM: 4, Azimuth: 90, Compass: "E", Label: "4 km E Würzburg",
 		},
 	}
+	deps.GazetteerLicense = domain.License{
+		Name: "ODbL-1.0", URL: "https://opendatacommons.org/licenses/odbl/1-0/",
+		Attribution: "© OpenStreetMap contributors (ODbL 1.0)",
+	}
 	srv := mcpAdapter.New(mcpAdapter.Options{Host: "127.0.0.1", Port: 0, Path: "/mcp"}, deps,
 		slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError})))
 	ts := httptest.NewServer(srv.Handler())
@@ -104,6 +108,10 @@ func TestGazetteerTool(t *testing.T) {
 			Code  string `json:"code"`
 			Short string `json:"short"`
 		} `json:"sources"`
+		License *struct {
+			Name        string `json:"name"`
+			Attribution string `json:"attribution"`
+		} `json:"license"`
 	}
 	raw, err := json.Marshal(res.StructuredContent)
 	if err != nil {
@@ -130,5 +138,9 @@ func TestGazetteerTool(t *testing.T) {
 	}
 	if len(out.Sources) != 1 || out.Sources[0].Code != "latin-osm" || out.Sources[0].Short != "OSM name" {
 		t.Errorf("sources = %+v, want single latin-osm entry", out.Sources)
+	}
+	if out.License == nil || out.License.Name != "ODbL-1.0" ||
+		out.License.Attribution != "© OpenStreetMap contributors (ODbL 1.0)" {
+		t.Errorf("license = %+v, want ODbL attribution", out.License)
 	}
 }

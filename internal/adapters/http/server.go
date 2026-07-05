@@ -23,33 +23,35 @@ import (
 // Server wraps the HTTP server with application handlers. It depends only on
 // the driving ports (input.*), not on concrete application services.
 type Server struct {
-	server         *http.Server
-	router         *mux.Router
-	queryService   input.QueryService
-	registry       input.SourceRegistry
-	health         input.HealthChecker
-	syncService    input.Syncer
-	gazetteer      input.Gazetteer      // nil ⇒ gazetteer feature disabled (no route, no /query enrichment)
-	bearingPolicy  domain.BearingPolicy // configured bearing tuning; zero ⇒ use DefaultBearingPolicy
-	logger         *slog.Logger
-	config         config.ServerConfig
-	withGeometry   bool                 // Include geometry in query results
-	tracerProvider trace.TracerProvider // Used by otelmux middleware; may be nil
-	serviceName    string               // Used as otelmux service name; defaults to "ortus"
-	httpMetrics    *httpMetrics         // HTTP-level instruments; nil when metrics disabled
-	rateLimiter    *ipRateLimiter       // per-IP limiter; nil unless server.rate_limit.enabled
-	trustedProxies []*net.IPNet         // proxy CIDRs allowed to set X-Forwarded-For
+	server           *http.Server
+	router           *mux.Router
+	queryService     input.QueryService
+	registry         input.SourceRegistry
+	health           input.HealthChecker
+	syncService      input.Syncer
+	gazetteer        input.Gazetteer      // nil ⇒ gazetteer feature disabled (no route, no /query enrichment)
+	bearingPolicy    domain.BearingPolicy // configured bearing tuning; zero ⇒ use DefaultBearingPolicy
+	gazetteerLicense domain.License       // dataset license/attribution surfaced in the gazetteer block
+	logger           *slog.Logger
+	config           config.ServerConfig
+	withGeometry     bool                 // Include geometry in query results
+	tracerProvider   trace.TracerProvider // Used by otelmux middleware; may be nil
+	serviceName      string               // Used as otelmux service name; defaults to "ortus"
+	httpMetrics      *httpMetrics         // HTTP-level instruments; nil when metrics disabled
+	rateLimiter      *ipRateLimiter       // per-IP limiter; nil unless server.rate_limit.enabled
+	trustedProxies   []*net.IPNet         // proxy CIDRs allowed to set X-Forwarded-For
 }
 
 // ServerOptions wraps optional dependencies the HTTP server can use, such as
 // the OTel TracerProvider for request-level tracing and the MeterProvider
 // for HTTP request metrics.
 type ServerOptions struct {
-	TracerProvider trace.TracerProvider
-	MeterProvider  metric.MeterProvider
-	ServiceName    string
-	Gazetteer      input.Gazetteer      // optional; enables the /gazetteer route and the with-gazetteer flag
-	BearingPolicy  domain.BearingPolicy // optional bearing tuning; zero value falls back to DefaultBearingPolicy
+	TracerProvider   trace.TracerProvider
+	MeterProvider    metric.MeterProvider
+	ServiceName      string
+	Gazetteer        input.Gazetteer      // optional; enables the /gazetteer route and the with-gazetteer flag
+	BearingPolicy    domain.BearingPolicy // optional bearing tuning; zero value falls back to DefaultBearingPolicy
+	GazetteerLicense domain.License       // optional dataset license/attribution surfaced in the gazetteer block
 }
 
 // NewServer creates a new HTTP server.
@@ -74,18 +76,19 @@ func NewServer(
 	}
 
 	s := &Server{
-		queryService:   queryService,
-		registry:       registry,
-		health:         health,
-		syncService:    syncService,
-		gazetteer:      opts.Gazetteer,
-		bearingPolicy:  opts.BearingPolicy,
-		logger:         logger,
-		config:         cfg,
-		withGeometry:   withGeometry,
-		tracerProvider: opts.TracerProvider,
-		serviceName:    serviceName,
-		httpMetrics:    httpM,
+		queryService:     queryService,
+		registry:         registry,
+		health:           health,
+		syncService:      syncService,
+		gazetteer:        opts.Gazetteer,
+		bearingPolicy:    opts.BearingPolicy,
+		gazetteerLicense: opts.GazetteerLicense,
+		logger:           logger,
+		config:           cfg,
+		withGeometry:     withGeometry,
+		tracerProvider:   opts.TracerProvider,
+		serviceName:      serviceName,
+		httpMetrics:      httpM,
 	}
 
 	// Opt-in per-IP rate limiting (off by default). Only the /api/v1 surface is

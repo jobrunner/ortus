@@ -30,6 +30,11 @@ type manifestYAML struct {
 		CountryColumn  string `yaml:"country_column"`
 		ConstraintTier string `yaml:"bearing_constraint_tier"`
 	} `yaml:"admin"`
+	License struct {
+		Name        string `yaml:"name"`
+		URL         string `yaml:"url"`
+		Attribution string `yaml:"attribution"`
+	} `yaml:"license"`
 }
 
 // ParseManifest parses the gazetteer manifest YAML into a Manifest. It fails when
@@ -63,6 +68,11 @@ func ParseManifest(data []byte) (Manifest, error) {
 		NameNativeColumn: y.Places.NameNativeColumn,
 		NameSourceColumn: y.Places.NameSourceColumn,
 		ConstraintTier:   tier,
+		License: domain.License{
+			Name:        y.License.Name,
+			URL:         y.License.URL,
+			Attribution: y.License.Attribution,
+		},
 	}
 	if err := m.validate(); err != nil {
 		return Manifest{}, err

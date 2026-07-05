@@ -61,6 +61,11 @@ without it ellipsoidal `Distance()` fails and every bearing returns nothing.
 - `name_source_manifest.yaml` — describes each `name_source` code (`short`, `long`,
   `standard`). Drives the response-wide `sources` block. Closed vocabulary enforced by `make verify`.
 
+The `ortus-gazetteer.yaml` manifest also takes an optional `license:` block
+(`name`/`url`/`attribution`) for the dataset as a whole (OSM ODbL + GeoNames +
+Natural Earth + GNS). ortus echoes it as the `license` block in the gazetteer
+response so clients get the attribution they must display — set it.
+
 ## Build pipeline (run in this order — the order is load-bearing)
 
 The canonical driver is the osm-data Makefile. From that repo:

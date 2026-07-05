@@ -57,13 +57,22 @@ type sourceOut struct {
 	Standard string `json:"standard"`
 }
 
+// licenseOut is the dataset-wide license/attribution for the gazetteer data.
+type licenseOut struct {
+	Name        string `json:"name"`
+	URL         string `json:"url"`
+	Attribution string `json:"attribution"`
+}
+
 // gazetteerOut is the tool result: admin and/or bearing, either of which is null
 // when it has no result for the coordinate. Sources is the response-wide
-// provenance excerpt describing each name_source code that appears above.
+// provenance excerpt describing each name_source code that appears above; License
+// is the dataset attribution (null when unset).
 type gazetteerOut struct {
 	Admin   *adminOut   `json:"admin"`
 	Bearing *bearingOut `json:"bearing"`
 	Sources []sourceOut `json:"sources"`
+	License *licenseOut `json:"license"`
 }
 
 // provenanceSet collects the distinct name-source provenances seen in a
@@ -151,6 +160,13 @@ func addGazetteer(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 		}
 
 		out.Sources = prov.list()
+		if !deps.GazetteerLicense.IsEmpty() {
+			out.License = &licenseOut{
+				Name:        deps.GazetteerLicense.Name,
+				URL:         deps.GazetteerLicense.URL,
+				Attribution: deps.GazetteerLicense.Attribution,
+			}
+		}
 		return nil, out, nil
 	})
 }

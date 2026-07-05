@@ -95,6 +95,35 @@ paths:
                       attribution: "© OpenData Berlin"
                 total_features: 1
                 processing_time_ms: 12
+                gazetteer:
+                  admin:
+                    country_iso: DE
+                    hierarchy:
+                      - level: 4
+                        name: Berlin
+                        name_native: ""
+                        name_source: latin-osm
+                        equivalent: state
+                        local_term: Land
+                        equivalent_description: First-level subdivision (state, region, province).
+                  bearing:
+                    reference: Berlin
+                    name_native: ""
+                    name_source: latin-osm
+                    class: city
+                    distance_km: 0.0
+                    azimuth: 0.0
+                    compass: ""
+                    label: "bei Berlin"
+                  sources:
+                    - code: latin-osm
+                      short: OSM name (already Latin)
+                      long: Taken verbatim from the OpenStreetMap name tag; already Latin script, no transliteration applied.
+                      standard: ""
+                  license:
+                    name: "ODbL-1.0"
+                    url: "https://opendatacommons.org/licenses/odbl/1-0/"
+                    attribution: "© OpenStreetMap contributors (ODbL 1.0); Natural Earth (public domain); GeoNames (CC BY 4.0); NGA GNS (public domain)"
         '400':
           description: Ungültige Parameter
           content:
@@ -223,6 +252,10 @@ paths:
                     short: OSM name (already Latin)
                     long: Taken verbatim from the OpenStreetMap name tag; already Latin script, no transliteration applied.
                     standard: ""    # latin-osm has no romanization standard (null in the manifest)
+                license:
+                  name: "ODbL-1.0"
+                  url: "https://opendatacommons.org/licenses/odbl/1-0/"
+                  attribution: "© OpenStreetMap contributors (ODbL 1.0); Natural Earth (public domain); GeoNames (CC BY 4.0); NGA GNS (public domain)"
         '400':
           description: Ungültige Parameter
           content:
@@ -519,23 +552,40 @@ components:
       name: with-gazetteer
       in: query
       description: |
-        Wenn gesetzt (`1`/`true`/`yes`/`on`), wird die Antwort zusätzlich um einen
-        `gazetteer`-Block (Verwaltungshierarchie + Peilung) angereichert — sofern das
-        Gazetteer-Feature aktiv ist. Standard: aus. Best-effort: ein Gazetteer-Fehler
-        bricht die eigentliche Abfrage nicht ab.
+        Steuert die Gazetteer-Anreicherung der Antwort um einen `gazetteer`-Block
+        (Verwaltungshierarchie, Peilung, name_source-Erläuterungen und Datensatz-
+        Attribution). **Standard: an**, sofern das Gazetteer-Feature aktiv ist — so
+        erhält ein Client alle Infos in einem Aufruf. Mit einem expliziten Falsy-Wert
+        (`0`/`false`/`no`/`off`) abschalten, um die zusätzliche Locate+Bearing-Arbeit
+        zu sparen. Best-effort: ein Gazetteer-Fehler bricht die eigentliche Abfrage
+        nicht ab (der Block entfällt dann).
       schema:
         type: string
         enum: ["0", "1", "true", "false", "yes", "no", "on", "off"]
-        default: "0"
-      example: "1"
+        default: "1"
+      example: "0"
 
   schemas:
     GazetteerResponse:
       type: object
       description: Reverse-Geocoding- und Peilungs-Ergebnis für eine Koordinate.
+      allOf:
+        - type: object
+          required:
+            - coordinate
+          properties:
+            coordinate:
+              $ref: '#/components/schemas/Coordinate'
+        - $ref: '#/components/schemas/GazetteerData'
+
+    GazetteerData:
+      type: object
+      description: >-
+        Gazetteer-Anreicherung für eine Koordinate: Verwaltungshierarchie (admin),
+        Peilung (bearing), name_source-Erläuterungen (sources) und Datensatz-Lizenz/
+        Attribution (license). Geliefert von GET /api/v1/gazetteer und — standardmäßig
+        — im `gazetteer`-Block von GET /api/v1/query.
       properties:
-        coordinate:
-          $ref: '#/components/schemas/Coordinate'
         admin:
           nullable: true
           type: object
@@ -626,6 +676,24 @@ components:
               standard:
                 type: string
                 description: Zugrundeliegender Standard bzw. Zitierhinweis.
+        license:
+          type: object
+          nullable: true
+          description: >-
+            Datensatzweite Lizenz/Attribution der Gazetteer-Daten (z. B. OSM/ODbL,
+            GeoNames, Natural Earth), aus dem Manifest (ortus-gazetteer.yaml). Fehlt,
+            wenn im Manifest keine Lizenz gesetzt ist. Diese Attribution muss ein
+            Client anzeigen.
+          properties:
+            name:
+              type: string
+              description: Lizenzname (SPDX-Id oder Bezeichnung), z. B. "ODbL-1.0".
+            url:
+              type: string
+              description: Link zum Lizenztext.
+            attribution:
+              type: string
+              description: Anzuzeigender Attributionstext.
 
     Coordinate:
       type: object
@@ -755,6 +823,14 @@ components:
           type: integer
           format: int64
           description: Gesamte Verarbeitungszeit in Millisekunden
+        gazetteer:
+          allOf:
+            - $ref: '#/components/schemas/GazetteerData'
+          nullable: true
+          description: >-
+            Gazetteer-Anreicherung (admin, bearing, sources, license). Standardmäßig
+            enthalten, wenn das Gazetteer-Feature aktiv ist — mit with-gazetteer=0
+            abschaltbar. Fehlt, wenn das Feature aus ist oder abgeschaltet wurde.
       required:
         - coordinate
         - results

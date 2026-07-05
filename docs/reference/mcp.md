@@ -83,7 +83,7 @@ agent the data it needs to debug ortus from inside a conversation.
 | `list_sources` | All currently loaded sources with ready state and layer count. |
 | `get_source` | Full metadata for one source: layers, extent, size, license. |
 | `get_source_layers` | Layers in a source with geometry type, SRID, feature count, bounding box. |
-| `gazetteer` | Reverse-geocode a coordinate to its admin hierarchy (`admin`) and a bearing to the most salient nearby place (`bearing`). Mirrors `GET /api/v1/gazetteer`: each unit/anchor carries `name_native` + a `name_source` code, admin units also `local_term` + `equivalent_description`, plus a response-wide deduplicated `sources` block. Only registered when the gazetteer feature is enabled. |
+| `gazetteer` | Reverse-geocode a coordinate to its admin hierarchy (`admin`) and a bearing to the most salient nearby place (`bearing`). Mirrors `GET /api/v1/gazetteer`: each unit/anchor carries `name_native` + a `name_source` code, admin units also `local_term` + `equivalent_description`, plus a response-wide deduplicated `sources` block and the dataset `license`/attribution. Only registered when the gazetteer feature is enabled. |
 
 ## Auth model
 
