@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.0](https://github.com/jobrunner/ortus/compare/v0.14.0...v0.15.0) (2026-07-05)
+
+
+### Features
+
+* **gazetteer:** enrich /query by default + dataset attribution ([0624bd0](https://github.com/jobrunner/ortus/commit/0624bd0268959d24f83fdd91a095301055411ba4))
+* **gazetteer:** enrich /query by default + expose dataset attribution ([a972961](https://github.com/jobrunner/ortus/commit/a9729613455e7dd4d0e5e0c5768db632b72381c4))
+
+
+### Bug Fixes
+
+* **gazetteer:** address PR review on default-on /query enrichment ([bfd4dc7](https://github.com/jobrunner/ortus/commit/bfd4dc7d88aec7a167d34416cd88b3adcf47399d))
+
 ## [0.14.0](https://github.com/jobrunner/ortus/compare/v0.13.0...v0.14.0) (2026-07-04)
 
 
