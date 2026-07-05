@@ -464,14 +464,14 @@ const frontendHTML = `<!DOCTYPE html>
                     </select>
                 </div>
 
-                <div class="coord-grid">
-                    <div class="form-group">
-                        <label for="coordX" id="labelX">Längengrad (Lon)</label>
-                        <input type="text" id="coordX" name="x" placeholder="z.B. 13.405" inputmode="decimal" required>
-                    </div>
-                    <div class="form-group">
+                <div class="coord-grid" id="coordGrid">
+                    <div class="form-group" id="groupY">
                         <label for="coordY" id="labelY">Breitengrad (Lat)</label>
                         <input type="text" id="coordY" name="y" placeholder="z.B. 52.52" inputmode="decimal" required>
+                    </div>
+                    <div class="form-group" id="groupX">
+                        <label for="coordX" id="labelX">Längengrad (Lon)</label>
+                        <input type="text" id="coordX" name="x" placeholder="z.B. 13.405" inputmode="decimal" required>
                     </div>
                 </div>
 
@@ -519,6 +519,9 @@ const frontendHTML = `<!DOCTYPE html>
             const sridSelect = document.getElementById('srid');
             const coordX = document.getElementById('coordX');
             const coordY = document.getElementById('coordY');
+            const groupX = document.getElementById('groupX');
+            const groupY = document.getElementById('groupY');
+            const coordGrid = document.getElementById('coordGrid');
             const labelX = document.getElementById('labelX');
             const labelY = document.getElementById('labelY');
             const submitBtn = document.getElementById('submitBtn');
@@ -559,6 +562,19 @@ const frontendHTML = `<!DOCTYPE html>
                 }
             };
 
+            // WGS84 uses the classic navigation order (latitude first, longitude
+            // second); projected systems keep the usual Rechtswert (X) before
+            // Hochwert (Y). Only the visual field order changes — the id/name→query
+            // mapping (coordX→lon/x, coordY→lat/y) stays the same.
+            function applyFieldOrder(srid) {
+                if (srid === '4326') {
+                    coordGrid.insertBefore(groupY, groupX);
+                } else {
+                    coordGrid.insertBefore(groupX, groupY);
+                }
+            }
+            applyFieldOrder(sridSelect.value);
+
             // Update labels when SRID changes
             sridSelect.addEventListener('change', function() {
                 const config = sridConfig[this.value] || sridConfig['4326'];
@@ -566,11 +582,62 @@ const frontendHTML = `<!DOCTYPE html>
                 labelY.textContent = config.yLabel;
                 coordX.placeholder = config.xPlaceholder;
                 coordY.placeholder = config.yPlaceholder;
+                applyFieldOrder(this.value);
 
                 // Clear values when switching coordinate systems
                 coordX.value = '';
                 coordY.value = '';
             });
+
+            // Smart coordinate paste: pasting a full pair like "35.016132, 32.670024"
+            // (or ";"-separated, or with German decimal commas like "35,016132;32,670024")
+            // into EITHER field splits it across both — first part into the visually
+            // first field, second into the second. A single value pastes normally.
+            function parseCoordinatePair(text) {
+                const t = (text || '').trim();
+                if (!t) return null;
+                const hasSemi = t.indexOf(';') >= 0;
+                const hasComma = t.indexOf(',') >= 0;
+                const hasDot = t.indexOf('.') >= 0;
+                const hasSpace = /\s/.test(t);
+                let parts, commaIsDecimal;
+                if (hasSemi) {
+                    parts = t.split(';'); commaIsDecimal = true;          // "35,01;32,67" → comma is decimal
+                } else if (hasComma && hasDot) {
+                    parts = t.split(','); commaIsDecimal = false;         // "35.01, 32.67" → dot decimal, comma separates
+                } else if (hasComma && hasSpace) {
+                    parts = t.split(/\s+/); commaIsDecimal = true;        // "35,01 32,67" → space separates, comma is decimal
+                } else if (!hasComma && hasSpace) {
+                    parts = t.split(/\s+/); commaIsDecimal = false;       // "35.01 32.67" or "35 32"
+                } else {
+                    return null;                                          // single token (incl. lone "35,016132") → normal paste
+                }
+                if (!parts || parts.length < 2) return null;
+                const a = normNum(parts[0], commaIsDecimal);
+                const b = normNum(parts[1], commaIsDecimal);             // extra parts (>2) are ignored
+                if (a === null || b === null) return null;
+                return [a, b];
+            }
+            function normNum(s, commaIsDecimal) {
+                s = (s || '').trim();
+                if (commaIsDecimal) s = s.replace(',', '.');
+                if (!/^[+-]?(\d+\.?\d*|\.\d+)$/.test(s)) return null;
+                return s;
+            }
+            function handleCoordinatePaste(e) {
+                const clip = e.clipboardData || window.clipboardData;
+                if (!clip) return;
+                const pair = parseCoordinatePair(clip.getData('text'));
+                if (!pair) return;                                        // single value → let the browser paste normally
+                e.preventDefault();
+                // Fill by visual order: for WGS84 the first field is lat (coordY),
+                // otherwise the first field is X (coordX).
+                const firstIsY = (sridSelect.value === '4326');
+                (firstIsY ? coordY : coordX).value = pair[0];
+                (firstIsY ? coordX : coordY).value = pair[1];
+            }
+            coordX.addEventListener('paste', handleCoordinatePaste);
+            coordY.addEventListener('paste', handleCoordinatePaste);
 
             // Geolocation
             locationBtn.addEventListener('click', function() {
