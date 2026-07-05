@@ -49,6 +49,33 @@ curl "http://localhost:8080/api/v1/query?lon=13.405&lat=52.52&properties=name,po
 }
 ```
 
+Each result carries its source's `license` (name/url/attribution) when the
+GeoPackage ships that metadata.
+
+**Gazetteer enrichment (on by default).** When the [gazetteer feature](configuration.md)
+is enabled, the query response additionally carries a `gazetteer` block with the
+administrative hierarchy, bearing, name-source explanations and the dataset
+attribution — so a client gets everything to process the result in one call. It is
+the same structure as the [gazetteer endpoint](#gazetteer-endpoint) (minus
+`coordinate`). Opt out per request with `?with-gazetteer=0` (or `false`/`no`/`off`)
+to skip the extra spatial work; enrichment is best-effort and is omitted (never
+errors the query) if it fails.
+
+```jsonc
+{
+  "coordinate": { "x": 13.405, "y": 52.52, "srid": 4326 },
+  "results": [ /* … as above, incl. per-source license … */ ],
+  "total_features": 1,
+  "processing_time_ms": 12,
+  "gazetteer": {
+    "admin": { "country_iso": "DE", "hierarchy": [ /* … */ ] },
+    "bearing": { /* … */ },
+    "sources": [ { "code": "latin-osm", "short": "…", "long": "…", "standard": "" } ],
+    "license": { "name": "ODbL-1.0", "url": "…", "attribution": "© OpenStreetMap contributors …" }
+  }
+}
+```
+
 ### Query a specific source
 
 ```text
@@ -96,7 +123,12 @@ within reach. The dataset is WGS84; a non-4326 `srid` is rejected.
     { "code": "latin-osm", "short": "OSM name (already Latin)",
       "long": "Taken verbatim from the OpenStreetMap name tag; already Latin script, no transliteration applied.",
       "standard": "" }
-  ]
+  ],
+  "license": {
+    "name": "ODbL-1.0",
+    "url": "https://opendatacommons.org/licenses/odbl/1-0/",
+    "attribution": "© OpenStreetMap contributors (ODbL 1.0); Natural Earth (public domain); GeoNames (CC BY 4.0); NGA GNS (public domain)"
+  }
 }
 ```
 
@@ -109,7 +141,10 @@ response-wide `sources` block describes each distinct `name_source` code once
 `[]` when no codes are present. Enrichment of `sources` requires
 `gazetteer.name_source_manifest_path` to be configured — without it each record
 still carries its raw `name_source` code but the `sources` entries have empty
-descriptions.
+descriptions. The `license` block is the dataset-wide attribution (from the
+`license:` section of `ortus-gazetteer.yaml`); it is omitted when the manifest
+sets no license. This is the same block that appears under `gazetteer` in the
+[`/query`](#query-all-sources) response.
 
 ## Source management
 

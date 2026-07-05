@@ -68,6 +68,15 @@ func (s *Server) gazetteerSections(ctx context.Context, coord domain.Coordinate)
 	// Response-wide provenance excerpt: each distinct name_source code that appears
 	// above, described once (not repeated per record).
 	out["sources"] = prov.list()
+	// Dataset-wide license/attribution for the gazetteer data (OSM/ODbL, GeoNames,
+	// Natural Earth, …), so a client has everything it must display in one place.
+	if !s.gazetteerLicense.IsEmpty() {
+		out["license"] = map[string]interface{}{
+			"name":        s.gazetteerLicense.Name,
+			"url":         s.gazetteerLicense.URL,
+			"attribution": s.gazetteerLicense.Attribution,
+		}
+	}
 	return out, nil
 }
 
@@ -135,8 +144,16 @@ func formatFix(fix *domain.Fix, prov *provenanceSet) map[string]interface{} {
 	}
 }
 
-// isTruthy reports whether a query-parameter value means "on". Used for the
-// opt-in with-gazetteer flag on /query (default off).
+// gazetteerEnrichmentRequested reports whether /query should attach the gazetteer
+// block. Enrichment is ON by default when the feature is wired; a client opts out
+// with an explicit falsy with-gazetteer value (0/false/no/off) to skip the extra
+// Locate+Bearing spatial work.
+func gazetteerEnrichmentRequested(r *http.Request) bool {
+	v := r.URL.Query().Get("with-gazetteer")
+	return v == "" || isTruthy(v)
+}
+
+// isTruthy reports whether a query-parameter value means "on".
 func isTruthy(v string) bool {
 	switch v {
 	case "1", "true", "yes", "on":

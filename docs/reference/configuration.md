@@ -103,8 +103,9 @@ a setting that wins there maps one-to-one onto these keys.
 The gazetteer (reverse geocoding + bearing / "Peilung") is an optional feature,
 off by default and inert until enabled. It loads a dedicated places/admin
 GeoPackage **separately** from the generic query source pool — it is never a
-point-in-polygon source. It powers `GET /api/v1/gazetteer` and the `gazetteer`
-MCP tool.
+point-in-polygon source. It powers `GET /api/v1/gazetteer`, the `gazetteer` MCP
+tool, and — when enabled — the `gazetteer` block that `GET /api/v1/query` returns
+by default (opt out per request with `?with-gazetteer=0`).
 
 ```yaml
 gazetteer:
@@ -130,5 +131,8 @@ gazetteer:
 - `name_source_manifest_path` (optional) populates the response-wide `sources`
   block that describes each name-romanization/provenance code. Without it, each
   record still carries its raw `name_source` code but the descriptions are empty.
+- The dataset attribution shown in the response comes from the optional `license:`
+  block in `ortus-gazetteer.yaml` (name/url/attribution) — set it so clients get
+  the attribution they must display.
 - The dataset and its sidecars are built by the `build-gazetteer-package` skill
   (see `.claude/skills/build-gazetteer-package/`).

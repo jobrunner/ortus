@@ -43,6 +43,11 @@ type Manifest struct {
 
 	// bearing
 	ConstraintTier string // semantic tier anchors must share, e.g. "state"
+
+	// License is the dataset-wide license/attribution for the gazetteer data
+	// (e.g. OSM/ODbL + GeoNames + Natural Earth), surfaced in responses so a
+	// client has the attribution it must display. Empty when unset.
+	License domain.License
 }
 
 // LevelMeaning is what an (ISO, admin_level) pair means, from the sidecar: the

@@ -3,6 +3,8 @@ package gazetteer
 import (
 	"strings"
 	"testing"
+
+	"github.com/jobrunner/ortus/internal/domain"
 )
 
 const validManifest = `
@@ -33,6 +35,27 @@ func TestParseManifest(t *testing.T) {
 	}
 	if m != want {
 		t.Errorf("manifest = %+v\nwant %+v", m, want)
+	}
+}
+
+func TestParseManifestLicense(t *testing.T) {
+	const y = validManifest + `
+license:
+  name: "ODbL-1.0"
+  url: "https://opendatacommons.org/licenses/odbl/1-0/"
+  attribution: "© OpenStreetMap contributors (ODbL 1.0); GeoNames (CC BY 4.0)"
+`
+	m, err := ParseManifest([]byte(y))
+	if err != nil {
+		t.Fatalf("ParseManifest: %v", err)
+	}
+	want := domain.License{
+		Name:        "ODbL-1.0",
+		URL:         "https://opendatacommons.org/licenses/odbl/1-0/",
+		Attribution: "© OpenStreetMap contributors (ODbL 1.0); GeoNames (CC BY 4.0)",
+	}
+	if m.License != want {
+		t.Errorf("license = %+v, want %+v", m.License, want)
 	}
 }
 

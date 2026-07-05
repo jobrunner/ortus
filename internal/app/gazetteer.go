@@ -77,6 +77,7 @@ func (a *App) buildGazetteer(ctx context.Context) error {
 	if nameSources != nil {
 		a.Gazetteer.SetNameSources(nameSources)
 	}
+	a.gazetteerLicense = manifest.License
 	a.gazetteerClose = idx.Close
 	// Build the bearing policy from the tuning knobs (config) + the constraint
 	// tier (manifest, dataset-bound). Handlers pass this to Bearing().

@@ -34,14 +34,15 @@ import (
 // services, so both adapters share one set of contracts and stay decoupled
 // from the core implementation.
 type Deps struct {
-	Telemetry     input.TelemetryQuery // may be nil when tracing is off — tools degrade gracefully
-	QueryService  input.QueryService
-	Registry      input.SourceRegistry
-	HealthService input.HealthChecker
-	Gazetteer     input.Gazetteer      // nil ⇒ gazetteer tool not registered
-	BearingPolicy domain.BearingPolicy // bearing tuning; zero value falls back to DefaultBearingPolicy
-	Version       string
-	Tracer        output.Tracer // nil ⇒ no entry-point spans (tests); app passes a NoOp when tracing is off
+	Telemetry        input.TelemetryQuery // may be nil when tracing is off — tools degrade gracefully
+	QueryService     input.QueryService
+	Registry         input.SourceRegistry
+	HealthService    input.HealthChecker
+	Gazetteer        input.Gazetteer      // nil ⇒ gazetteer tool not registered
+	BearingPolicy    domain.BearingPolicy // bearing tuning; zero value falls back to DefaultBearingPolicy
+	GazetteerLicense domain.License       // dataset license/attribution surfaced in the gazetteer tool output
+	Version          string
+	Tracer           output.Tracer // nil ⇒ no entry-point spans (tests); app passes a NoOp when tracing is off
 }
 
 // Server bundles the MCP server lifecycle around an http.Server.

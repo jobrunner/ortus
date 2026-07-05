@@ -43,10 +43,13 @@ func (s *Server) handleQuery(w http.ResponseWriter, r *http.Request) {
 	}
 
 	out := s.formatQueryResponse(response)
-	// Opt-in gazetteer enrichment (with-gazetteer=1, default off). Best-effort:
-	// a gazetteer failure is logged and omitted so it never breaks the core
-	// query result. Assumes WGS84 input — the gazetteer dataset is EPSG:4326.
-	if s.gazetteer != nil && isTruthy(r.URL.Query().Get("with-gazetteer")) {
+	// Gazetteer enrichment is ON by default when the feature is wired, so a client
+	// gets the admin hierarchy, bearing, name-source explanations and dataset
+	// attribution in the same call. Opt out with with-gazetteer=0 (or false/no/off)
+	// to skip the extra spatial work. Best-effort: a gazetteer failure is logged
+	// and omitted so it never breaks the core query result. Assumes WGS84 input —
+	// the gazetteer dataset is EPSG:4326.
+	if s.gazetteer != nil && gazetteerEnrichmentRequested(r) {
 		if g, gerr := s.gazetteerSections(r.Context(), req.Coordinate); gerr != nil {
 			s.logger.Warn("gazetteer enrichment failed", "error", gerr)
 		} else {

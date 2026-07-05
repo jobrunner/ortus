@@ -50,8 +50,16 @@ func newGazetteerServer(t *testing.T, gaz input.Gazetteer) *Server {
 	return NewServer(
 		config.ServerConfig{Host: "localhost", Port: 8080, ReadTimeout: time.Second, WriteTimeout: time.Second},
 		query, reg, health, nil, logger, false,
-		ServerOptions{Gazetteer: gaz},
+		ServerOptions{Gazetteer: gaz, GazetteerLicense: sampleGazetteerLicense()},
 	)
+}
+
+func sampleGazetteerLicense() domain.License {
+	return domain.License{
+		Name:        "ODbL-1.0",
+		URL:         "https://opendatacommons.org/licenses/odbl/1-0/",
+		Attribution: "© OpenStreetMap contributors (ODbL 1.0)",
+	}
 }
 
 func sampleLocality() *domain.Locality {
@@ -149,6 +157,12 @@ func TestGazetteerSourcesBlock(t *testing.T) {
 	if bearing["name_source"] != "latin-osm" || bearing["name_native"] != "Θεσσαλονίκη" {
 		t.Errorf("bearing = %v, want latin-osm code + native name", bearing)
 	}
+
+	// Dataset-wide attribution/license in the same response.
+	license, ok := body["license"].(map[string]any)
+	if !ok || license["name"] != "ODbL-1.0" || license["attribution"] != "© OpenStreetMap contributors (ODbL 1.0)" {
+		t.Errorf("license = %v, want ODbL attribution", body["license"])
+	}
 }
 
 func TestGazetteerEndpointPartial(t *testing.T) {
@@ -183,20 +197,48 @@ func TestGazetteerRouteAbsentWhenDisabled(t *testing.T) {
 	}
 }
 
-func TestQueryWithGazetteerFlag(t *testing.T) {
+func TestQueryGazetteerDefaultOn(t *testing.T) {
 	srv := newGazetteerServer(t, fakeGazetteer{loc: sampleLocality(), fix: sampleFix()})
 
-	// Opt-in flag → gazetteer section present.
-	_, body := doGET(t, srv, "/api/v1/query?lon=9.93&lat=49.79&with-gazetteer=1")
-	if _, ok := body["gazetteer"].(map[string]any); !ok {
-		t.Errorf("with-gazetteer=1: gazetteer section missing")
+	// Default (no flag) → gazetteer section present, with the full metadata a
+	// client needs: admin hierarchy, bearing, sources and dataset license.
+	_, body := doGET(t, srv, "/api/v1/query?lon=9.93&lat=49.79")
+	gaz, ok := body["gazetteer"].(map[string]any)
+	if !ok {
+		t.Fatalf("default: gazetteer section missing; got keys %v", keysOf(body))
+	}
+	if _, ok := gaz["admin"].(map[string]any); !ok {
+		t.Errorf("gazetteer.admin missing")
+	}
+	if _, ok := gaz["bearing"].(map[string]any); !ok {
+		t.Errorf("gazetteer.bearing missing")
+	}
+	if _, ok := gaz["sources"].([]any); !ok {
+		t.Errorf("gazetteer.sources missing")
+	}
+	if lic, ok := gaz["license"].(map[string]any); !ok || lic["name"] != "ODbL-1.0" {
+		t.Errorf("gazetteer.license = %v, want ODbL", gaz["license"])
+	}
+	// The core PiP results are still present alongside it.
+	if _, ok := body["results"]; !ok {
+		t.Errorf("query results missing")
 	}
 
-	// Default (no flag) → no gazetteer section.
-	_, body = doGET(t, srv, "/api/v1/query?lon=9.93&lat=49.79")
-	if _, present := body["gazetteer"]; present {
-		t.Errorf("without flag: gazetteer section should be absent")
+	// Explicit opt-out → no gazetteer section.
+	for _, off := range []string{"0", "false", "no", "off"} {
+		_, body = doGET(t, srv, "/api/v1/query?lon=9.93&lat=49.79&with-gazetteer="+off)
+		if _, present := body["gazetteer"]; present {
+			t.Errorf("with-gazetteer=%s: gazetteer section should be absent", off)
+		}
 	}
+}
+
+func keysOf(m map[string]any) []string {
+	ks := make([]string, 0, len(m))
+	for k := range m {
+		ks = append(ks, k)
+	}
+	return ks
 }
 
 func TestIsTruthy(t *testing.T) {
