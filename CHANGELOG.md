@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.0](https://github.com/jobrunner/ortus/compare/v0.15.0...v0.16.0) (2026-07-06)
+
+
+### Features
+
+* **frontend:** lat/lon field order + smart coordinate paste ([4ef2794](https://github.com/jobrunner/ortus/commit/4ef27947a1717547d195b087bfa74b3deb3bd269))
+* **frontend:** lat/lon field order + smart coordinate paste ([9a83c9d](https://github.com/jobrunner/ortus/commit/9a83c9dd1316565b513955c2dec20ff9d5a0641f))
+
+
+### Bug Fixes
+
+* **frontend:** accessibility + mobile touch targets ([8c755b5](https://github.com/jobrunner/ortus/commit/8c755b561e6f9c70f3fbe5cfd40794eb0ae091db))
+* **frontend:** use standard text/plain clipboard type + tighten paste test ([c9366e7](https://github.com/jobrunner/ortus/commit/c9366e7a63dc6b693261b0f5a39a8ac9b4fdf077))
+
 ## [0.15.0](https://github.com/jobrunner/ortus/compare/v0.14.0...v0.15.0) (2026-07-05)
 
 
