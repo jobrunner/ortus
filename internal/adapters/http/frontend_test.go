@@ -24,16 +24,17 @@ func TestFrontendCoordinateInputWiring(t *testing.T) {
 	}
 
 	for _, marker := range []string{
-		"applyFieldOrder",                 // SRID-aware field reordering
-		"function parseCoordinatePair",    // pair splitter
-		"handleCoordinatePaste",           // paste handler
-		"coordX.addEventListener('paste'", // wired to the longitude input
-		"coordY.addEventListener('paste'", // wired to the latitude input
-		"function renderGazetteer",        // location-context renderer
-		"if (data.gazetteer)",             // wired into displayResults
-		"equivalent_description",          // admin-level meaning rendered
-		"Namensquellen",                   // name_source explanations section
-		"Datenlizenz",                     // dataset attribution rendered
+		"applyFieldOrder",                     // SRID-aware field reordering
+		"function parseCoordinatePair",        // pair splitter
+		"handleCoordinatePaste",               // paste handler
+		"coordX.addEventListener('paste'",     // wired to the longitude input
+		"coordY.addEventListener('paste'",     // wired to the latitude input
+		"function renderGazetteer",            // location-context renderer
+		"function hasGazetteerContent",        // empty-block guard
+		"hasGazetteerContent(data.gazetteer)", // wired into displayResults
+		"equivalent_description",              // admin-level meaning rendered
+		"Namensquellen",                       // name_source explanations section
+		"Datenlizenz",                         // dataset attribution rendered
 	} {
 		if !strings.Contains(html, marker) {
 			t.Errorf("frontend is missing expected marker %q", marker)

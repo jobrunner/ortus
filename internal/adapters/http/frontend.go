@@ -902,8 +902,11 @@ const frontendHTML = `<!DOCTYPE html>
 
                 // Location context (gazetteer): admin hierarchy with level meaning,
                 // bearing, name-source explanations and dataset attribution. Present
-                // for WGS84 when the gazetteer feature is enabled.
-                if (data.gazetteer) {
+                // for WGS84 when the gazetteer feature is enabled — but only rendered
+                // when it actually has location content (a point with no admin
+                // coverage and no anchor would otherwise be an empty box; sources are
+                // empty and the dataset license alone is not location context).
+                if (hasGazetteerContent(data.gazetteer)) {
                     html += renderGazetteer(data.gazetteer);
                 }
 
@@ -996,6 +999,14 @@ const frontendHTML = `<!DOCTYPE html>
 
                 html += '</div>';
                 return html;
+            }
+
+            // Whether the gazetteer block has anything worth showing. Only admin or
+            // bearing constitute location content — the sources list is empty without
+            // them, and the dataset license alone is not location context. Guards
+            // against an empty "Ort & Umgebung" box for points with no coverage.
+            function hasGazetteerContent(gaz) {
+                return !!(gaz && (gaz.admin || gaz.bearing));
             }
 
             // Renders the location-context block: administrative hierarchy (with the
