@@ -646,7 +646,9 @@ const frontendHTML = `<!DOCTYPE html>
             function handleCoordinatePaste(e) {
                 const clip = e.clipboardData || window.clipboardData;
                 if (!clip) return;
-                const pair = parseCoordinatePair(clip.getData('text'));
+                // 'text/plain' is the standard type; 'text' is a legacy fallback (older IE/Edge).
+                const pasted = clip.getData('text/plain') || clip.getData('text');
+                const pair = parseCoordinatePair(pasted);
                 if (!pair) return;                                        // single value → let the browser paste normally
                 e.preventDefault();
                 // Fill by visual order: for WGS84 the first field is lat (coordY),
