@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.0](https://github.com/jobrunner/ortus/compare/v0.16.0...v0.17.0) (2026-07-06)
+
+
+### Features
+
+* **frontend:** render gazetteer block (admin meaning, sources, attribution) ([acc3ade](https://github.com/jobrunner/ortus/commit/acc3ade6119a47e771fa9f792618dbc90ae66180))
+* **frontend:** render the gazetteer block (admin meaning, sources, attribution) ([fa1eb9b](https://github.com/jobrunner/ortus/commit/fa1eb9bf96a86bf94955ba7084bf94544490c96b))
+
+
+### Bug Fixes
+
+* **frontend:** don't render an empty gazetteer box ([e029a3f](https://github.com/jobrunner/ortus/commit/e029a3fd5bfe62ef9961e4364a0c2440b3e2a74f))
+
 ## [0.16.0](https://github.com/jobrunner/ortus/compare/v0.15.0...v0.16.0) (2026-07-06)
 
 
