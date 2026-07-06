@@ -128,6 +128,7 @@ const frontendHTML = `<!DOCTYPE html>
             align-items: center;
             justify-content: center;
             width: 100%;
+            min-height: 44px;
             padding: 0.75rem 1rem;
             font-size: 1rem;
             font-weight: 500;
@@ -141,6 +142,13 @@ const frontendHTML = `<!DOCTYPE html>
 
         .btn:hover {
             background: var(--primary-dark);
+        }
+
+        /* Visible keyboard-focus ring for buttons and the (focusable) source headers. */
+        .btn:focus-visible,
+        .source-header:focus-visible {
+            outline: 2px solid var(--primary);
+            outline-offset: 2px;
         }
 
         .btn:disabled {
@@ -247,6 +255,8 @@ const frontendHTML = `<!DOCTYPE html>
             display: flex;
             justify-content: space-between;
             align-items: center;
+            gap: 0.5rem;
+            min-height: 44px;
             padding: 0.75rem 1rem;
             background: var(--bg);
             cursor: pointer;
@@ -440,6 +450,15 @@ const frontendHTML = `<!DOCTYPE html>
                 padding: 2rem 1rem;
             }
         }
+
+        /* Respect users who ask for less motion (e.g. vestibular disorders). */
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
     </style>
 </head>
 <body>
@@ -477,8 +496,8 @@ const frontendHTML = `<!DOCTYPE html>
 
                 <div class="btn-row">
                     <button type="submit" class="btn" id="submitBtn">Abfragen</button>
-                    <button type="button" class="btn btn-secondary" id="locationBtn" title="Aktuellen Standort verwenden">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <button type="button" class="btn btn-secondary" id="locationBtn" title="Aktuellen Standort verwenden" aria-label="Aktuellen Standort verwenden">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" focusable="false">
                             <circle cx="12" cy="12" r="3"/>
                             <path d="M12 2v4m0 12v4M2 12h4m12 0h4"/>
                         </svg>
@@ -488,9 +507,9 @@ const frontendHTML = `<!DOCTYPE html>
             </form>
         </div>
 
-        <div class="error" id="error"></div>
+        <div class="error" id="error" role="alert"></div>
 
-        <div class="loading" id="loading">
+        <div class="loading" id="loading" role="status" aria-live="polite">
             <div class="spinner"></div>
             <p>Abfrage wird ausgeführt...</p>
         </div>
@@ -498,7 +517,7 @@ const frontendHTML = `<!DOCTYPE html>
         <div id="results">
             <div class="card">
                 <h2 class="card-title">Ergebnisse</h2>
-                <div class="result-header">
+                <div class="result-header" role="status" aria-live="polite">
                     <span class="result-coord" id="resultCoord"></span>
                     <span class="result-stats" id="resultStats"></span>
                 </div>
@@ -757,10 +776,18 @@ const frontendHTML = `<!DOCTYPE html>
                     });
                     resultContent.innerHTML = html;
 
-                    // Add click handlers for expand/collapse
+                    // Expand/collapse — keyboard-accessible (the header is role="button").
                     document.querySelectorAll('.source-header').forEach(function(header) {
-                        header.addEventListener('click', function() {
-                            this.parentElement.classList.toggle('expanded');
+                        function toggle() {
+                            const isExpanded = header.parentElement.classList.toggle('expanded');
+                            header.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+                        }
+                        header.addEventListener('click', toggle);
+                        header.addEventListener('keydown', function(e) {
+                            if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+                                e.preventDefault();
+                                toggle();
+                            }
                         });
                     });
                 }
@@ -770,12 +797,12 @@ const frontendHTML = `<!DOCTYPE html>
 
             function renderSource(pkg, expanded) {
                 let html = '<div class="source-card' + (expanded ? ' expanded' : '') + '">';
-                html += '<div class="source-header">';
+                html += '<div class="source-header" role="button" tabindex="0" aria-expanded="' + (expanded ? 'true' : 'false') + '">';
                 html += '<span class="source-name">' + escapeHtml(pkg.source_name || pkg.source_id) + '</span>';
                 html += '<div class="source-meta">';
                 html += '<span class="badge">' + pkg.feature_count + ' Feature(s)</span>';
                 html += '<span>' + pkg.query_time_ms + 'ms</span>';
-                html += '<svg class="toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>';
+                html += '<svg class="toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" focusable="false"><path d="M6 9l6 6 6-6"/></svg>';
                 html += '</div></div>';
 
                 html += '<div class="source-content">';

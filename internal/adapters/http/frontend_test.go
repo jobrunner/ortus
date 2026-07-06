@@ -34,3 +34,25 @@ func TestFrontendCoordinateInputWiring(t *testing.T) {
 		}
 	}
 }
+
+// TestFrontendAccessibilityMarkers guards the accessibility affordances so they
+// aren't silently dropped: announced status/error regions, an accessible name on
+// the icon-only location button, keyboard-operable collapsible source headers, and
+// reduced-motion support.
+func TestFrontendAccessibilityMarkers(t *testing.T) {
+	html := frontendHTML
+	for _, marker := range []string{
+		`role="alert"`,                             // error region announced
+		`role="status"`,                            // loading + results summary announced
+		`aria-label="Aktuellen Standort`,           // icon-only button has a name
+		`role="button" tabindex="0" aria-expanded`, // collapsible header is keyboard-operable
+		`addEventListener('keydown'`,               // Enter/Space toggle
+		`prefers-reduced-motion`,                   // honors reduced-motion
+		`:focus-visible`,                           // visible keyboard focus
+		`min-height: 44px`,                         // touch-target size
+	} {
+		if !strings.Contains(html, marker) {
+			t.Errorf("frontend is missing accessibility marker %q", marker)
+		}
+	}
+}
