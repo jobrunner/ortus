@@ -128,6 +128,7 @@ const frontendHTML = `<!DOCTYPE html>
             align-items: center;
             justify-content: center;
             width: 100%;
+            min-height: 44px;
             padding: 0.75rem 1rem;
             font-size: 1rem;
             font-weight: 500;
@@ -141,6 +142,13 @@ const frontendHTML = `<!DOCTYPE html>
 
         .btn:hover {
             background: var(--primary-dark);
+        }
+
+        /* Visible keyboard-focus ring for buttons and the (focusable) source headers. */
+        .btn:focus-visible,
+        .source-header:focus-visible {
+            outline: 2px solid var(--primary);
+            outline-offset: 2px;
         }
 
         .btn:disabled {
@@ -247,6 +255,8 @@ const frontendHTML = `<!DOCTYPE html>
             display: flex;
             justify-content: space-between;
             align-items: center;
+            gap: 0.5rem;
+            min-height: 44px;
             padding: 0.75rem 1rem;
             background: var(--bg);
             cursor: pointer;
@@ -440,6 +450,15 @@ const frontendHTML = `<!DOCTYPE html>
                 padding: 2rem 1rem;
             }
         }
+
+        /* Respect users who ask for less motion (e.g. vestibular disorders). */
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
     </style>
 </head>
 <body>
@@ -464,21 +483,21 @@ const frontendHTML = `<!DOCTYPE html>
                     </select>
                 </div>
 
-                <div class="coord-grid">
-                    <div class="form-group">
-                        <label for="coordX" id="labelX">Längengrad (Lon)</label>
-                        <input type="text" id="coordX" name="x" placeholder="z.B. 13.405" inputmode="decimal" required>
-                    </div>
-                    <div class="form-group">
+                <div class="coord-grid" id="coordGrid">
+                    <div class="form-group" id="groupY">
                         <label for="coordY" id="labelY">Breitengrad (Lat)</label>
                         <input type="text" id="coordY" name="y" placeholder="z.B. 52.52" inputmode="decimal" required>
+                    </div>
+                    <div class="form-group" id="groupX">
+                        <label for="coordX" id="labelX">Längengrad (Lon)</label>
+                        <input type="text" id="coordX" name="x" placeholder="z.B. 13.405" inputmode="decimal" required>
                     </div>
                 </div>
 
                 <div class="btn-row">
                     <button type="submit" class="btn" id="submitBtn">Abfragen</button>
-                    <button type="button" class="btn btn-secondary" id="locationBtn" title="Aktuellen Standort verwenden">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <button type="button" class="btn btn-secondary" id="locationBtn" title="Aktuellen Standort verwenden" aria-label="Aktuellen Standort verwenden">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" focusable="false">
                             <circle cx="12" cy="12" r="3"/>
                             <path d="M12 2v4m0 12v4M2 12h4m12 0h4"/>
                         </svg>
@@ -488,9 +507,9 @@ const frontendHTML = `<!DOCTYPE html>
             </form>
         </div>
 
-        <div class="error" id="error"></div>
+        <div class="error" id="error" role="alert"></div>
 
-        <div class="loading" id="loading">
+        <div class="loading" id="loading" role="status" aria-live="polite">
             <div class="spinner"></div>
             <p>Abfrage wird ausgeführt...</p>
         </div>
@@ -498,7 +517,7 @@ const frontendHTML = `<!DOCTYPE html>
         <div id="results">
             <div class="card">
                 <h2 class="card-title">Ergebnisse</h2>
-                <div class="result-header">
+                <div class="result-header" role="status" aria-live="polite">
                     <span class="result-coord" id="resultCoord"></span>
                     <span class="result-stats" id="resultStats"></span>
                 </div>
@@ -519,6 +538,9 @@ const frontendHTML = `<!DOCTYPE html>
             const sridSelect = document.getElementById('srid');
             const coordX = document.getElementById('coordX');
             const coordY = document.getElementById('coordY');
+            const groupX = document.getElementById('groupX');
+            const groupY = document.getElementById('groupY');
+            const coordGrid = document.getElementById('coordGrid');
             const labelX = document.getElementById('labelX');
             const labelY = document.getElementById('labelY');
             const submitBtn = document.getElementById('submitBtn');
@@ -559,6 +581,19 @@ const frontendHTML = `<!DOCTYPE html>
                 }
             };
 
+            // WGS84 uses the classic navigation order (latitude first, longitude
+            // second); projected systems keep the usual Rechtswert (X) before
+            // Hochwert (Y). Only the visual field order changes — the id/name→query
+            // mapping (coordX→lon/x, coordY→lat/y) stays the same.
+            function applyFieldOrder(srid) {
+                if (srid === '4326') {
+                    coordGrid.insertBefore(groupY, groupX);
+                } else {
+                    coordGrid.insertBefore(groupX, groupY);
+                }
+            }
+            applyFieldOrder(sridSelect.value);
+
             // Update labels when SRID changes
             sridSelect.addEventListener('change', function() {
                 const config = sridConfig[this.value] || sridConfig['4326'];
@@ -566,11 +601,64 @@ const frontendHTML = `<!DOCTYPE html>
                 labelY.textContent = config.yLabel;
                 coordX.placeholder = config.xPlaceholder;
                 coordY.placeholder = config.yPlaceholder;
+                applyFieldOrder(this.value);
 
                 // Clear values when switching coordinate systems
                 coordX.value = '';
                 coordY.value = '';
             });
+
+            // Smart coordinate paste: pasting a full pair like "35.016132, 32.670024"
+            // (or ";"-separated, or with German decimal commas like "35,016132;32,670024")
+            // into EITHER field splits it across both — first part into the visually
+            // first field, second into the second. A single value pastes normally.
+            function parseCoordinatePair(text) {
+                const t = (text || '').trim();
+                if (!t) return null;
+                const hasSemi = t.indexOf(';') >= 0;
+                const hasComma = t.indexOf(',') >= 0;
+                const hasDot = t.indexOf('.') >= 0;
+                const hasSpace = /\s/.test(t);
+                let parts, commaIsDecimal;
+                if (hasSemi) {
+                    parts = t.split(';'); commaIsDecimal = true;          // "35,01;32,67" → comma is decimal
+                } else if (hasComma && hasDot) {
+                    parts = t.split(','); commaIsDecimal = false;         // "35.01, 32.67" → dot decimal, comma separates
+                } else if (hasComma && hasSpace) {
+                    parts = t.split(/\s+/); commaIsDecimal = true;        // "35,01 32,67" → space separates, comma is decimal
+                } else if (!hasComma && hasSpace) {
+                    parts = t.split(/\s+/); commaIsDecimal = false;       // "35.01 32.67" or "35 32"
+                } else {
+                    return null;                                          // single token (incl. lone "35,016132") → normal paste
+                }
+                if (!parts || parts.length < 2) return null;
+                const a = normNum(parts[0], commaIsDecimal);
+                const b = normNum(parts[1], commaIsDecimal);             // extra parts (>2) are ignored
+                if (a === null || b === null) return null;
+                return [a, b];
+            }
+            function normNum(s, commaIsDecimal) {
+                s = (s || '').trim();
+                if (commaIsDecimal) s = s.replace(',', '.');
+                if (!/^[+-]?(\d+\.?\d*|\.\d+)$/.test(s)) return null;
+                return s;
+            }
+            function handleCoordinatePaste(e) {
+                const clip = e.clipboardData || window.clipboardData;
+                if (!clip) return;
+                // 'text/plain' is the standard type; 'text' is a legacy fallback (older IE/Edge).
+                const pasted = clip.getData('text/plain') || clip.getData('text');
+                const pair = parseCoordinatePair(pasted);
+                if (!pair) return;                                        // single value → let the browser paste normally
+                e.preventDefault();
+                // Fill by visual order: for WGS84 the first field is lat (coordY),
+                // otherwise the first field is X (coordX).
+                const firstIsY = (sridSelect.value === '4326');
+                (firstIsY ? coordY : coordX).value = pair[0];
+                (firstIsY ? coordX : coordY).value = pair[1];
+            }
+            coordX.addEventListener('paste', handleCoordinatePaste);
+            coordY.addEventListener('paste', handleCoordinatePaste);
 
             // Geolocation
             locationBtn.addEventListener('click', function() {
@@ -690,10 +778,18 @@ const frontendHTML = `<!DOCTYPE html>
                     });
                     resultContent.innerHTML = html;
 
-                    // Add click handlers for expand/collapse
+                    // Expand/collapse — keyboard-accessible (the header is role="button").
                     document.querySelectorAll('.source-header').forEach(function(header) {
-                        header.addEventListener('click', function() {
-                            this.parentElement.classList.toggle('expanded');
+                        function toggle() {
+                            const isExpanded = header.parentElement.classList.toggle('expanded');
+                            header.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+                        }
+                        header.addEventListener('click', toggle);
+                        header.addEventListener('keydown', function(e) {
+                            if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+                                e.preventDefault();
+                                toggle();
+                            }
                         });
                     });
                 }
@@ -703,12 +799,12 @@ const frontendHTML = `<!DOCTYPE html>
 
             function renderSource(pkg, expanded) {
                 let html = '<div class="source-card' + (expanded ? ' expanded' : '') + '">';
-                html += '<div class="source-header">';
+                html += '<div class="source-header" role="button" tabindex="0" aria-expanded="' + (expanded ? 'true' : 'false') + '">';
                 html += '<span class="source-name">' + escapeHtml(pkg.source_name || pkg.source_id) + '</span>';
                 html += '<div class="source-meta">';
                 html += '<span class="badge">' + pkg.feature_count + ' Feature(s)</span>';
                 html += '<span>' + pkg.query_time_ms + 'ms</span>';
-                html += '<svg class="toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>';
+                html += '<svg class="toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" focusable="false"><path d="M6 9l6 6 6-6"/></svg>';
                 html += '</div></div>';
 
                 html += '<div class="source-content">';
