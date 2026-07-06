@@ -403,6 +403,136 @@ const frontendHTML = `<!DOCTYPE html>
             transform: rotate(180deg);
         }
 
+        /* Gazetteer (location context) block */
+        .gazetteer-block {
+            border: 1px solid var(--border);
+            border-left: 3px solid var(--primary);
+            border-radius: var(--radius);
+            background: var(--bg);
+            padding: 0.875rem 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .gazetteer-title {
+            font-size: 0.9375rem;
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+        }
+
+        .gaz-section {
+            padding-top: 0.75rem;
+            margin-top: 0.75rem;
+            border-top: 1px solid var(--border);
+        }
+
+        .gaz-section:first-of-type {
+            padding-top: 0;
+            margin-top: 0;
+            border-top: none;
+        }
+
+        .gaz-label {
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            margin-bottom: 0.5rem;
+        }
+
+        .admin-list, .source-explain-list {
+            list-style: none;
+        }
+
+        .admin-item {
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .admin-item:last-child {
+            border-bottom: none;
+        }
+
+        .admin-line {
+            display: flex;
+            align-items: baseline;
+            flex-wrap: wrap;
+            gap: 0.375rem;
+        }
+
+        .admin-name {
+            font-weight: 500;
+        }
+
+        .admin-native {
+            color: var(--text-muted);
+            font-size: 0.875rem;
+        }
+
+        .admin-level {
+            margin-left: auto;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            font-family: monospace;
+        }
+
+        .admin-tier {
+            font-size: 0.8125rem;
+            color: var(--primary);
+            margin-top: 0.125rem;
+        }
+
+        .admin-desc {
+            font-size: 0.8125rem;
+            color: var(--text-muted);
+            margin-top: 0.125rem;
+        }
+
+        .admin-src, .gaz-bearing-meta {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 0.125rem;
+        }
+
+        .admin-src code, .source-explain-list code {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 0 0.25rem;
+            font-size: 0.75rem;
+        }
+
+        .gaz-bearing {
+            font-weight: 500;
+        }
+
+        .source-explain-list li {
+            font-size: 0.8125rem;
+            padding: 0.25rem 0;
+        }
+
+        .src-standard {
+            color: var(--text-muted);
+        }
+
+        .gaz-license {
+            font-size: 0.8125rem;
+            color: var(--text-muted);
+        }
+
+        .gaz-license a {
+            color: var(--primary);
+            text-decoration: none;
+        }
+
+        .gaz-license a:hover {
+            text-decoration: underline;
+        }
+
+        .gaz-attribution {
+            margin-top: 0.25rem;
+        }
+
         footer {
             text-align: center;
             padding: 1.5rem 0;
@@ -768,31 +898,42 @@ const frontendHTML = `<!DOCTYPE html>
 
                 resultStats.textContent = data.total_features + ' Feature(s) in ' + data.processing_time_ms + 'ms';
 
-                // Results content
+                let html = '';
+
+                // Location context (gazetteer): admin hierarchy with level meaning,
+                // bearing, name-source explanations and dataset attribution. Present
+                // for WGS84 when the gazetteer feature is enabled — but only rendered
+                // when it actually has location content (a point with no admin
+                // coverage and no anchor would otherwise be an empty box; sources are
+                // empty and the dataset license alone is not location context).
+                if (hasGazetteerContent(data.gazetteer)) {
+                    html += renderGazetteer(data.gazetteer);
+                }
+
+                // Point-in-polygon results
                 if (!data.results || data.results.length === 0) {
-                    resultContent.innerHTML = '<div class="no-results">Keine Features an dieser Position gefunden.</div>';
+                    html += '<div class="no-results">Keine Features an dieser Position gefunden.</div>';
                 } else {
-                    let html = '';
                     data.results.forEach(function(pkg, idx) {
                         html += renderSource(pkg, idx === 0);
                     });
-                    resultContent.innerHTML = html;
-
-                    // Expand/collapse — keyboard-accessible (the header is role="button").
-                    document.querySelectorAll('.source-header').forEach(function(header) {
-                        function toggle() {
-                            const isExpanded = header.parentElement.classList.toggle('expanded');
-                            header.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
-                        }
-                        header.addEventListener('click', toggle);
-                        header.addEventListener('keydown', function(e) {
-                            if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
-                                e.preventDefault();
-                                toggle();
-                            }
-                        });
-                    });
                 }
+                resultContent.innerHTML = html;
+
+                // Expand/collapse — keyboard-accessible (the header is role="button").
+                document.querySelectorAll('.source-header').forEach(function(header) {
+                    function toggle() {
+                        const isExpanded = header.parentElement.classList.toggle('expanded');
+                        header.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+                    }
+                    header.addEventListener('click', toggle);
+                    header.addEventListener('keydown', function(e) {
+                        if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+                            e.preventDefault();
+                            toggle();
+                        }
+                    });
+                });
 
                 results.classList.add('active');
             }
@@ -819,7 +960,7 @@ const frontendHTML = `<!DOCTYPE html>
                     html += '<div class="license-info">';
                     html += '<strong>Lizenz:</strong> ';
                     if (pkg.license.url) {
-                        html += '<a href="' + escapeHtml(pkg.license.url) + '" target="_blank">' + escapeHtml(pkg.license.name || 'Link') + '</a>';
+                        html += '<a href="' + escapeHtml(pkg.license.url) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(pkg.license.name || 'Link') + '</a>';
                     } else {
                         html += escapeHtml(pkg.license.name || '-');
                     }
@@ -853,6 +994,106 @@ const frontendHTML = `<!DOCTYPE html>
                     html += '<strong>' + escapeHtml(feature.geometry.type || 'Geometry') + ':</strong> ';
                     const wkt = feature.geometry.wkt;
                     html += escapeHtml(wkt.length > 200 ? wkt.substring(0, 200) + '...' : wkt);
+                    html += '</div>';
+                }
+
+                html += '</div>';
+                return html;
+            }
+
+            // Whether the gazetteer block has anything worth showing. Only admin or
+            // bearing constitute location content — the sources list is empty without
+            // them, and the dataset license alone is not location context. Guards
+            // against an empty "Ort & Umgebung" box for points with no coverage.
+            function hasGazetteerContent(gaz) {
+                return !!(gaz && (gaz.admin || gaz.bearing));
+            }
+
+            // Renders the location-context block: administrative hierarchy (with the
+            // meaning of each level), bearing, name-source explanations and the
+            // dataset attribution — everything the /query response carries under
+            // "gazetteer" so the page shows it without a second request.
+            function renderGazetteer(gaz) {
+                let html = '<div class="gazetteer-block">';
+                html += '<h3 class="gazetteer-title">Ort &amp; Umgebung</h3>';
+
+                if (gaz.admin) {
+                    html += '<div class="gaz-section">';
+                    html += '<div class="gaz-label">Verwaltungshierarchie';
+                    if (gaz.admin.country_iso) {
+                        html += ' <span class="badge">' + escapeHtml(gaz.admin.country_iso) + '</span>';
+                    }
+                    html += '</div>';
+                    const chain = gaz.admin.hierarchy || [];
+                    if (chain.length > 0) {
+                        html += '<ul class="admin-list">';
+                        chain.forEach(function(u) {
+                            html += '<li class="admin-item">';
+                            html += '<div class="admin-line">';
+                            html += '<span class="admin-name">' + escapeHtml(u.name || '-') + '</span>';
+                            if (u.name_native && u.name_native !== u.name) {
+                                html += ' <span class="admin-native">' + escapeHtml(u.name_native) + '</span>';
+                            }
+                            html += '<span class="admin-level">L' + escapeHtml(String(u.level)) + '</span>';
+                            html += '</div>';
+                            const tier = [];
+                            if (u.equivalent) tier.push(escapeHtml(u.equivalent));
+                            if (u.local_term) tier.push(escapeHtml(u.local_term));
+                            if (tier.length > 0) {
+                                html += '<div class="admin-tier">' + tier.join(' &middot; ') + '</div>';
+                            }
+                            if (u.equivalent_description) {
+                                html += '<div class="admin-desc">' + escapeHtml(u.equivalent_description) + '</div>';
+                            }
+                            if (u.name_source) {
+                                html += '<div class="admin-src">Name: <code>' + escapeHtml(u.name_source) + '</code></div>';
+                            }
+                            html += '</li>';
+                        });
+                        html += '</ul>';
+                    }
+                    html += '</div>';
+                }
+
+                if (gaz.bearing) {
+                    html += '<div class="gaz-section">';
+                    html += '<div class="gaz-label">Peilung</div>';
+                    html += '<div class="gaz-bearing">' + escapeHtml(gaz.bearing.label || (gaz.bearing.reference || '')) + '</div>';
+                    const meta = [];
+                    if (gaz.bearing.class) meta.push(escapeHtml(gaz.bearing.class));
+                    if (typeof gaz.bearing.distance_km === 'number') meta.push(gaz.bearing.distance_km.toFixed(1) + ' km');
+                    if (gaz.bearing.name_source) meta.push('Name: ' + escapeHtml(gaz.bearing.name_source));
+                    if (meta.length > 0) {
+                        html += '<div class="gaz-bearing-meta">' + meta.join(' &middot; ') + '</div>';
+                    }
+                    html += '</div>';
+                }
+
+                if (gaz.sources && gaz.sources.length > 0) {
+                    html += '<div class="gaz-section">';
+                    html += '<div class="gaz-label">Namensquellen</div>';
+                    html += '<ul class="source-explain-list">';
+                    gaz.sources.forEach(function(s) {
+                        html += '<li><code>' + escapeHtml(s.code) + '</code> ' + escapeHtml(s.long || s.short || '');
+                        if (s.standard) {
+                            html += ' <span class="src-standard">(' + escapeHtml(s.standard) + ')</span>';
+                        }
+                        html += '</li>';
+                    });
+                    html += '</ul></div>';
+                }
+
+                if (gaz.license) {
+                    html += '<div class="gaz-section gaz-license">';
+                    html += '<strong>Datenlizenz:</strong> ';
+                    if (gaz.license.url) {
+                        html += '<a href="' + escapeHtml(gaz.license.url) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(gaz.license.name || 'Lizenz') + '</a>';
+                    } else {
+                        html += escapeHtml(gaz.license.name || '-');
+                    }
+                    if (gaz.license.attribution) {
+                        html += '<div class="gaz-attribution">' + escapeHtml(gaz.license.attribution) + '</div>';
+                    }
                     html += '</div>';
                 }
 
