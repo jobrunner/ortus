@@ -555,10 +555,12 @@ components:
         Steuert die Gazetteer-Anreicherung der Antwort um einen `gazetteer`-Block
         (Verwaltungshierarchie, Peilung, name_source-Erläuterungen und Datensatz-
         Attribution). **Standard: an**, sofern das Gazetteer-Feature aktiv ist — so
-        erhält ein Client alle Infos in einem Aufruf. Mit einem expliziten Falsy-Wert
-        (`0`/`false`/`no`/`off`) abschalten, um die zusätzliche Locate+Bearing-Arbeit
-        zu sparen. Best-effort: ein Gazetteer-Fehler bricht die eigentliche Abfrage
-        nicht ab (der Block entfällt dann).
+        erhält ein Client alle Infos in einem Aufruf. Reines Opt-out: die falsy
+        Werte (`0`/`false`/`no`/`off`) schalten die Anreicherung ab, die übrigen
+        Werte lassen sie an. (Der Server ist tolerant und behandelt jeden nicht-
+        falsy Wert als „an"; die aufgezählten Werte sind die unterstützten.)
+        Best-effort: ein Gazetteer-Fehler bricht die eigentliche Abfrage nicht ab
+        (der Block entfällt dann).
       schema:
         type: string
         enum: ["0", "1", "true", "false", "yes", "no", "on", "off"]
@@ -1032,7 +1034,26 @@ components:
           description: Status je Datenquelle.
           items:
             type: object
-            additionalProperties: true
+            properties:
+              id:
+                type: string
+                description: Datenquellen-ID.
+              status:
+                type: string
+                description: Lebenszyklus-Status der Datenquelle.
+                enum:
+                  - loading
+                  - indexing
+                  - ready
+                  - error
+                  - unloading
+              ready:
+                type: boolean
+                description: Datenquelle ist abfragebereit.
+            required:
+              - id
+              - status
+              - ready
         components:
           type: object
           additionalProperties:
@@ -1043,6 +1064,8 @@ components:
         - ready
         - sources_loaded
         - sources_ready
+        - sources
+        - components
 
     LivenessStatus:
       type: object
