@@ -31,8 +31,8 @@ curl -X POST "http://localhost:8080/api/v1/sync"
 ```
 
 Sync adds new sources and removes ones that no longer exist remotely. The
-endpoint is rate-limited to 2 requests/minute (`429` + `Retry-After: 30` over
-the limit).
+endpoint is rate-limited to one trigger per 30 seconds (`429` + `Retry-After: 30`
+within the cooldown).
 
 > Sync is for remote backends only. For local storage, hot-reload detects file
 > changes automatically.

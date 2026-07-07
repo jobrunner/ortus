@@ -9,7 +9,7 @@
 .PHONY: fmt format fmt-check
 .PHONY: check check-ci verify hooks arch debt debt-guard debt-coverage debt-deadcode
 .PHONY: deps deps-update deps-verify
-.PHONY: doc doc-serve docs docs-serve
+.PHONY: doc doc-serve docs docs-serve doc-drift
 .PHONY: release release-dry
 .PHONY: ci-local ci-lint ci-test ci-build ci-dry ci-amd64 ci-check
 
@@ -269,6 +269,9 @@ docs: ## Doku strict bauen (MkDocs Material via uvx) — failt bei kaputten Link
 	$(MKDOCS) build --strict
 docs-serve: ## Doku lokal mit Live-Reload servieren (http://localhost:8000)
 	$(MKDOCS) serve
+
+doc-drift: ## Doku-Drift-Harness: prüft Code ↔ OpenAPI ↔ Docs (0 = keine Drift)
+	@bash .claude/skills/doc-drift-check/scripts/check-doc-drift.sh
 
 ## Release
 release-dry: ## Teste Release (dry-run)

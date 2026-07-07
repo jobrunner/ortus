@@ -5,7 +5,7 @@ repository operations, storage I/O, and sync runs. The data is exported in two
 places at once:
 
 1. **In-memory ring buffer** — keeps the last N completed traces (default 256)
-   so the upcoming MCP server can return concrete trace data to Claude without
+   so the MCP server can return concrete trace data to Claude without
    talking to an external backend.
 2. **OTLP exporter** — sends spans to a collector (Jaeger, Tempo, OpenTelemetry
    Collector, etc.) when `tracing.endpoint` is configured.
@@ -112,7 +112,7 @@ When tracing is active, the HTTP request log includes `trace_id` and
 `span_id`, so a log line can be jumped to the trace in Jaeger/Tempo (or the
 in-memory buffer) directly.
 
-## For the MCP server (next iteration)
+## How the MCP server reads it
 
 The application keeps the `*telemetry.Provider` on `app.App.TelemetryProvider`.
 The buffer is reachable as:

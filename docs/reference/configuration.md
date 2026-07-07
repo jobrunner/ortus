@@ -48,11 +48,29 @@ All options can be set with the `ORTUS_` prefix:
 | `ORTUS_SERVER_RATE_LIMIT_TRUSTED_PROXIES` | `[]` | Front-proxy CIDRs allowed to set `X-Forwarded-For` |
 | `ORTUS_SYNC_ENABLED` | `false` | Enable periodic remote storage sync |
 | `ORTUS_SYNC_INTERVAL` | `1h` | Sync interval (e.g. 30m, 1h, 24h) |
+| `ORTUS_QUERY_TIMEOUT` | `30s` | Per-query timeout |
+| `ORTUS_QUERY_MAX_FEATURES` | `1000` | Max features returned per query |
+| `ORTUS_QUERY_WITH_GEOMETRY` | `false` | Include feature geometry (WKT) in query results |
+| `ORTUS_SERVER_READ_TIMEOUT` | `30s` | HTTP read timeout |
+| `ORTUS_SERVER_WRITE_TIMEOUT` | `30s` | HTTP write timeout |
+| `ORTUS_SERVER_SHUTDOWN_TIMEOUT` | `10s` | Graceful-shutdown timeout |
+| `ORTUS_SERVER_FRONTEND_ENABLED` | `true` | Serve the mini query frontend at `GET /` |
+| `ORTUS_MCP_ENABLED` | `false` | Enable the MCP server |
+| `ORTUS_MCP_HOST` | `127.0.0.1` | MCP bind host (non-loopback requires a token) |
+| `ORTUS_MCP_PORT` | `9091` | MCP server port |
+| `ORTUS_MCP_PATH` | `/mcp` | MCP HTTP path |
+| `ORTUS_MCP_TOKEN` | — | MCP bearer token (env only, never the config file) |
 | `ORTUS_QUERY_SQLITE_CACHE_MODE` | `private` | SQLite cache mode (`private`/`shared`) |
 | `ORTUS_QUERY_SQLITE_BUSY_TIMEOUT_MS` | `5000` | Busy timeout (ms) before a locked-DB query errors |
 | `ORTUS_QUERY_SQLITE_JOURNAL_MODE` | (file's) | Journal mode (e.g. `WAL`); empty leaves the file's mode |
 | `ORTUS_QUERY_SQLITE_MAX_OPEN_CONNS` | `0` | Max open connections per source (`0` = unlimited) |
 | `ORTUS_QUERY_SQLITE_MAX_IDLE_CONNS` | `4` | Max idle connections per source |
+
+From the storage path (`storage.local_path` or the remote bucket/prefix) ortus
+loads only two file types: **`.gpkg`** (vector GeoPackage sources) and **`.zip`**
+(raster bundles, see [Raster bundle](raster-bundle.md)). Other files are ignored.
+The gazetteer GeoPackage is loaded separately via its own paths (see
+[Gazetteer](#gazetteer)), not from the storage path.
 
 ## Config file
 
@@ -80,6 +98,9 @@ metrics:
   path: "/metrics"
 
 query:
+  timeout: 30s             # per-query timeout
+  max_features: 1000       # cap on features returned per query
+  with_geometry: false     # include feature geometry (WKT) in results
   sqlite:
     cache_mode: private      # private favours read concurrency; shared serialises
     busy_timeout_ms: 5000    # wait on a locked DB before erroring

@@ -36,6 +36,8 @@ servers:
 tags:
   - name: Query
     description: Räumliche Punktabfragen auf Datenquellen
+  - name: Gazetteer
+    description: Reverse-Geocoding auf die Verwaltungseinheit und Peilung (bearing)
   - name: Sources
     description: Datenquellen-Verwaltung und -Information
   - name: Health
@@ -60,6 +62,7 @@ paths:
         - $ref: '#/components/parameters/YParam'
         - $ref: '#/components/parameters/SridParam'
         - $ref: '#/components/parameters/PropertiesParam'
+        - $ref: '#/components/parameters/WithGazetteerParam'
       responses:
         '200':
           description: Erfolgreiche Abfrage
@@ -92,6 +95,35 @@ paths:
                       attribution: "© OpenData Berlin"
                 total_features: 1
                 processing_time_ms: 12
+                gazetteer:
+                  admin:
+                    country_iso: DE
+                    hierarchy:
+                      - level: 4
+                        name: Berlin
+                        name_native: ""
+                        name_source: latin-osm
+                        equivalent: state
+                        local_term: Land
+                        equivalent_description: First-level subdivision (state, region, province).
+                  bearing:
+                    reference: Berlin
+                    name_native: ""
+                    name_source: latin-osm
+                    class: city
+                    distance_km: 0.0
+                    azimuth: 0.0
+                    compass: ""
+                    label: "bei Berlin"
+                  sources:
+                    - code: latin-osm
+                      short: OSM name (already Latin)
+                      long: Taken verbatim from the OpenStreetMap name tag; already Latin script, no transliteration applied.
+                      standard: ""
+                  license:
+                    name: "ODbL-1.0"
+                    url: "https://opendatacommons.org/licenses/odbl/1-0/"
+                    attribution: "© OpenStreetMap contributors (ODbL 1.0); Natural Earth (public domain); GeoNames (CC BY 4.0); NGA GNS (public domain)"
         '400':
           description: Ungültige Parameter
           content:
@@ -137,7 +169,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/QueryResponse'
+                $ref: '#/components/schemas/QueryResponsePerSource'
         '400':
           description: Ungültige Parameter
           content:
@@ -153,6 +185,83 @@ paths:
               example:
                 error: Not Found
                 message: Source not found
+        '500':
+          description: Interner Serverfehler
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /gazetteer:
+    get:
+      tags:
+        - Gazetteer
+      summary: Reverse-Geocoding + Peilung
+      description: |
+        Löst eine Koordinate auf ihre Verwaltungshierarchie (`admin`) auf und berechnet
+        eine Peilung zum salientesten nahen Ort (`bearing`, z. B. "4 km E Würzburg").
+        Jeder Teil ist `null`, wenn es kein Ergebnis gibt — keine Admin-Abdeckung bzw.
+        kein Anker in Reichweite. Nur verfügbar, wenn das Gazetteer-Feature aktiv ist.
+      operationId: gazetteer
+      parameters:
+        - $ref: '#/components/parameters/LonParam'
+        - $ref: '#/components/parameters/LatParam'
+        - $ref: '#/components/parameters/XParam'
+        - $ref: '#/components/parameters/YParam'
+        - $ref: '#/components/parameters/SridParam'
+      responses:
+        '200':
+          description: Erfolgreiche Abfrage
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GazetteerResponse'
+              example:
+                coordinate:
+                  x: 9.93
+                  y: 49.79
+                  srid: 4326
+                admin:
+                  country_iso: DE
+                  hierarchy:
+                    - level: 8
+                      name: Würzburg
+                      name_native: ""          # empty: already-Latin name (identical to name)
+                      name_source: latin-osm
+                      equivalent: municipality
+                      local_term: Kreisfreie Stadt
+                      equivalent_description: Local municipal authority (city/town/commune).
+                    - level: 4
+                      name: Bayern
+                      name_native: ""          # empty: already-Latin name (identical to name)
+                      name_source: latin-osm
+                      equivalent: state
+                      local_term: Land
+                      equivalent_description: First-level subdivision (state, region, province).
+                bearing:
+                  reference: Würzburg
+                  name_native: ""            # empty: already-Latin name (identical to reference)
+                  name_source: latin-osm
+                  class: city
+                  distance_km: 4.0
+                  azimuth: 90.0
+                  compass: E
+                  label: "4 km E Würzburg"
+                sources:
+                  - code: latin-osm
+                    short: OSM name (already Latin)
+                    long: Taken verbatim from the OpenStreetMap name tag; already Latin script, no transliteration applied.
+                    standard: ""    # latin-osm has no romanization standard (null in the manifest)
+                license:
+                  name: "ODbL-1.0"
+                  url: "https://opendatacommons.org/licenses/odbl/1-0/"
+                  attribution: "© OpenStreetMap contributors (ODbL 1.0); Natural Earth (public domain); GeoNames (CC BY 4.0); NGA GNS (public domain)"
+        '400':
+          description: Ungültige Parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '500':
           description: Interner Serverfehler
           content:
@@ -325,7 +434,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SimpleStatus'
+                $ref: '#/components/schemas/LivenessStatus'
               example:
                 status: ok
         '503':
@@ -333,7 +442,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SimpleStatus'
+                $ref: '#/components/schemas/LivenessStatus'
               example:
                 status: unhealthy
 
@@ -355,7 +464,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SimpleStatus'
+                $ref: '#/components/schemas/ReadinessStatus'
               example:
                 status: ok
         '503':
@@ -363,7 +472,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SimpleStatus'
+                $ref: '#/components/schemas/ReadinessStatus'
               example:
                 status: not ready
 
@@ -439,7 +548,155 @@ components:
         type: string
       example: name,population
 
+    WithGazetteerParam:
+      name: with-gazetteer
+      in: query
+      description: |
+        Steuert die Gazetteer-Anreicherung der Antwort um einen `gazetteer`-Block
+        (Verwaltungshierarchie, Peilung, name_source-Erläuterungen und Datensatz-
+        Attribution). **Standard: an**, sofern das Gazetteer-Feature aktiv ist — so
+        erhält ein Client alle Infos in einem Aufruf. Reines Opt-out: die falsy
+        Werte (`0`/`false`/`no`/`off`) schalten die Anreicherung ab, die übrigen
+        Werte lassen sie an. (Der Server ist tolerant und behandelt jeden nicht-
+        falsy Wert als „an"; die aufgezählten Werte sind die unterstützten.)
+        Best-effort: ein Gazetteer-Fehler bricht die eigentliche Abfrage nicht ab
+        (der Block entfällt dann).
+      schema:
+        type: string
+        enum: ["0", "1", "true", "false", "yes", "no", "on", "off"]
+        default: "1"
+      example: "0"
+
   schemas:
+    GazetteerResponse:
+      type: object
+      description: Reverse-Geocoding- und Peilungs-Ergebnis für eine Koordinate.
+      allOf:
+        - type: object
+          required:
+            - coordinate
+          properties:
+            coordinate:
+              $ref: '#/components/schemas/Coordinate'
+        - $ref: '#/components/schemas/GazetteerData'
+
+    GazetteerData:
+      type: object
+      description: >-
+        Gazetteer-Anreicherung für eine Koordinate: Verwaltungshierarchie (admin),
+        Peilung (bearing), name_source-Erläuterungen (sources) und Datensatz-Lizenz/
+        Attribution (license). Geliefert von GET /api/v1/gazetteer und — standardmäßig
+        — im `gazetteer`-Block von GET /api/v1/query.
+      properties:
+        admin:
+          nullable: true
+          type: object
+          description: Verwaltungshierarchie, die die Koordinate enthält (null ohne Abdeckung).
+          properties:
+            country_iso:
+              type: string
+              description: ISO 3166-1 alpha-2 Ländercode.
+            hierarchy:
+              type: array
+              description: Ebenen, lokalste zuerst.
+              items:
+                type: object
+                properties:
+                  level:
+                    type: integer
+                    description: OSM admin_level.
+                  name:
+                    type: string
+                    description: Name in lateinischer Schrift (immer gesetzt).
+                  name_native:
+                    type: string
+                    description: Name in Originalschrift (leer, wenn identisch mit name).
+                  name_source:
+                    type: string
+                    description: >-
+                      Codierung der Namensherkunft/Romanisierung; im
+                      response-weiten sources-Block beschrieben. Leer, wenn keine.
+                  equivalent:
+                    type: string
+                    description: Semantische Bedeutung (country | state | … | municipality).
+                  local_term:
+                    type: string
+                    description: Landesspezifischer Begriff für diese Ebene (z. B. „Landkreis").
+                  equivalent_description:
+                    type: string
+                    description: Generische Beschreibung des equivalent-Levels.
+        bearing:
+          nullable: true
+          type: object
+          description: Peilung zum salientesten nahen Ort (null ohne Anker in Reichweite).
+          properties:
+            reference:
+              type: string
+              description: Name des Anker-Orts (lateinische Schrift).
+            name_native:
+              type: string
+              description: Name des Anker-Orts in Originalschrift (leer, wenn identisch).
+            name_source:
+              type: string
+              description: >-
+                Codierung der Namensherkunft/Romanisierung des Ankers; im
+                response-weiten sources-Block beschrieben. Leer, wenn keine.
+            class:
+              type: string
+              description: OSM place-Klasse (village | town | city).
+            distance_km:
+              type: number
+              format: double
+            azimuth:
+              type: number
+              format: double
+              description: Azimut Referenz→Punkt in Grad (0=N, 90=O).
+            compass:
+              type: string
+              description: Quantisierte Himmelsrichtung (z. B. E, NW).
+            label:
+              type: string
+              description: Fertiges Label, z. B. „4 km E Würzburg".
+        sources:
+          type: array
+          description: >-
+            Response-weiter Herkunfts-Auszug: jede in admin/bearing vorkommende
+            name_source-Codierung wird hier genau einmal beschrieben (nicht pro
+            Datensatz wiederholt). Leeres Array, wenn keine Codierungen gesetzt sind.
+          items:
+            type: object
+            properties:
+              code:
+                type: string
+                description: Codierung, auf die name_source verweist.
+              short:
+                type: string
+                description: Kurzbezeichnung der Quelle/Codierung.
+              long:
+                type: string
+                description: Ausführliche Beschreibung der Quelle/Codierung.
+              standard:
+                type: string
+                description: Zugrundeliegender Standard bzw. Zitierhinweis.
+        license:
+          type: object
+          nullable: true
+          description: >-
+            Datensatzweite Lizenz/Attribution der Gazetteer-Daten (z. B. OSM/ODbL,
+            GeoNames, Natural Earth), aus dem Manifest (ortus-gazetteer.yaml). Fehlt,
+            wenn im Manifest keine Lizenz gesetzt ist. Diese Attribution muss ein
+            Client anzeigen.
+          properties:
+            name:
+              type: string
+              description: Lizenzname (SPDX-Id oder Bezeichnung), z. B. "ODbL-1.0".
+            url:
+              type: string
+              description: Link zum Lizenztext.
+            attribution:
+              type: string
+              description: Anzuzeigender Attributionstext.
+
     Coordinate:
       type: object
       description: Geografische Koordinate
@@ -552,7 +809,45 @@ components:
 
     QueryResponse:
       type: object
-      description: Vollständige Abfrageantwort
+      description: >-
+        Antwort von GET /api/v1/query (Sammelabfrage über alle Quellen), inklusive
+        dem optionalen gazetteer-Block. GET /api/v1/query/{sourceId} liefert diesen
+        Block NICHT (siehe QueryResponsePerSource).
+      properties:
+        coordinate:
+          $ref: '#/components/schemas/Coordinate'
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/QueryResult'
+          description: Ergebnisse pro Datenquelle
+        total_features:
+          type: integer
+          description: Gesamtanzahl der gefundenen Features
+        processing_time_ms:
+          type: integer
+          format: int64
+          description: Gesamte Verarbeitungszeit in Millisekunden
+        gazetteer:
+          allOf:
+            - $ref: '#/components/schemas/GazetteerData'
+          nullable: true
+          description: >-
+            Gazetteer-Anreicherung (admin, bearing, sources, license). Standardmäßig
+            enthalten, wenn das Gazetteer-Feature aktiv ist und die Koordinate WGS84
+            ist — mit with-gazetteer=0 (false/no/off) abschaltbar. Fehlt, wenn das
+            Feature aus ist, abgeschaltet wurde oder die Koordinate nicht WGS84 ist.
+      required:
+        - coordinate
+        - results
+        - total_features
+        - processing_time_ms
+
+    QueryResponsePerSource:
+      type: object
+      description: >-
+        Antwort von GET /api/v1/query/{sourceId}. Wie QueryResponse, aber OHNE den
+        gazetteer-Block (die Einzelquellen-Abfrage reichert nicht an).
       properties:
         coordinate:
           $ref: '#/components/schemas/Coordinate'
@@ -734,6 +1029,31 @@ components:
         sources_ready:
           type: integer
           description: Anzahl abfragebereiter Datenquellen
+        sources:
+          type: array
+          description: Status je Datenquelle.
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                description: Datenquellen-ID.
+              status:
+                type: string
+                description: Lebenszyklus-Status der Datenquelle.
+                enum:
+                  - loading
+                  - indexing
+                  - ready
+                  - error
+                  - unloading
+              ready:
+                type: boolean
+                description: Datenquelle ist abfragebereit.
+            required:
+              - id
+              - status
+              - ready
         components:
           type: object
           additionalProperties:
@@ -744,19 +1064,33 @@ components:
         - ready
         - sources_loaded
         - sources_ready
+        - sources
+        - components
 
-    SimpleStatus:
+    LivenessStatus:
       type: object
-      description: Einfacher Status
+      description: Liveness-Status (GET /health/live).
       properties:
         status:
           type: string
           enum:
             - ok
             - unhealthy
+      required:
+        - status
+
+    ReadinessStatus:
+      type: object
+      description: Readiness-Status (GET /health/ready).
+      properties:
+        status:
+          type: string
+          enum:
+            - ok
             - not ready
       required:
         - status
+
 
     Error:
       type: object

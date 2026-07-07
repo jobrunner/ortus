@@ -2,7 +2,16 @@
 
 All API endpoints are prefixed with `/api/v1`. Health endpoints live at the root.
 The full OpenAPI 3.0 spec is served at `GET /openapi.json`, with Swagger UI at
-`/docs` (and `/swagger`).
+`/docs` (and `/swagger`). When `server.frontend_enabled` is on, a small query
+frontend is served at `GET /`.
+
+**Error responses.** Every error (any non-2xx) uses the same envelope:
+
+```json
+{ "error": "Bad Request", "message": "coordinates required: use lon/lat or x/y" }
+```
+
+where `error` is the HTTP status text and `message` is a human-readable detail.
 
 ## Query endpoints
 
@@ -154,9 +163,26 @@ GET /api/v1/sources/{sourceId}           # source details
 GET /api/v1/sources/{sourceId}/layers    # layers of a source
 ```
 
-`GET /api/v1/sources` returns id, name, path, size, layer count, and `ready`
-status per source. `…/layers` returns geometry type/column, SRID, index status,
-feature count, and extent per layer.
+`GET /api/v1/sources` returns `{ sources: [...], count }`, each source with
+`id`, `name`, `path`, `size`, `layer_count`, `indexed`, `ready`, `loaded_at`,
+`last_queried`:
+
+```json
+{
+  "sources": [
+    { "id": "districts", "name": "districts.gpkg", "path": "districts.gpkg",
+      "size": 1048576, "layer_count": 1, "indexed": true, "ready": true,
+      "loaded_at": "2026-07-06T12:00:00Z", "last_queried": "2026-07-06T12:05:00Z" }
+  ],
+  "count": 1
+}
+```
+
+`GET /api/v1/sources/{sourceId}` returns a single source object (same fields, not
+wrapped). `GET /api/v1/sources/{sourceId}/layers` returns
+`{ source_id, layers: [...], count }`, each layer with `name`, `description`,
+`geometry_type`, `geometry_column`, `srid`, `has_index`, `feature_count`, and an
+optional `extent` (`min_x`/`min_y`/`max_x`/`max_y`).
 
 ## Sync endpoint
 
@@ -166,15 +192,15 @@ POST /api/v1/sync
 
 Manually trigger a sync with remote storage (see
 [Sync sources from remote storage](../how-to/sync-remote-storage.md)). Rate
-limited to 2 requests/minute.
+limited to **one trigger per 30 seconds**.
 
 ```json
 { "sources_added": 2, "sources_removed": 1, "sources_total": 5,
   "synced_at": "2025-12-22T12:00:00Z", "next_scheduled_at": "2025-12-22T13:00:00Z" }
 ```
 
-Over the limit returns `429` with `Retry-After: 30`. Only available when sync is
-enabled on a remote storage backend.
+Within the 30-second cooldown it returns `429` with `Retry-After: 30`. Only
+available when sync is enabled on a remote storage backend.
 
 ## Health endpoints
 
@@ -183,6 +209,12 @@ curl "http://localhost:8080/health"        # detailed, per-source status
 curl "http://localhost:8080/health/live"   # liveness
 curl "http://localhost:8080/health/ready"  # readiness
 ```
+
+`GET /health` returns `{ status: "ok"|"unhealthy", ready, sources_loaded,
+sources_ready, sources: [...], components: {...} }` (HTTP `200` when healthy,
+`503` otherwise). `GET /health/live` returns `{ "status": "ok" }` (or
+`"unhealthy"`); `GET /health/ready` returns `{ "status": "ok" }` (or
+`"not ready"`).
 
 **Readiness semantics:** `/health/ready` reports **not ready only during the
 initial load** (sources downloading/indexing), so clients retry while data comes
