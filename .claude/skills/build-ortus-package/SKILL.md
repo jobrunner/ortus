@@ -92,7 +92,8 @@ can't prune, so every query runs `ST_Contains` against multi-100k-vertex
 geometries.
 
 **Fix: `ST_Subdivide` — split each polygon into small pieces (≤ N vertices),
-copying the attributes onto every piece.** Crucially this is *not* simplification:
+carrying its attributes (plus an `orig_id`) onto every piece.** Crucially this is
+*not* simplification:
 the outer boundaries stay vertex-for-vertex identical, so **boundary-near points
 remain exactly correct** (unlike `ST_Simplify`, which moves the boundary). It only
 cuts the polygon along internal lines; the R-tree then prunes to the one small
@@ -106,21 +107,33 @@ indexed lookup prunes to **1 piece** and `ST_Contains` drops to **~0.03 ms**
 Recipe (SpatiaLite ≥ 5.1; `ST_Subdivide` returns a MULTIPOLYGON of pieces, so
 explode it into rows). PostGIS/QGIS ("Subdivide") is set-returning and simpler:
 
+This runs in a **scratch** SpatiaLite DB — it is *not* a GeoPackage, so the last
+step exports the result to a `.gpkg` (that is what ortus loads; ortus discovers
+layers via `gpkg_contents`/`gpkg_geometry_columns`). Carry every attribute you
+want ortus to return (here `name` — add more columns as needed); `orig_id` is for
+dedup.
+
 ```sql
--- into a fresh spatialite db (InitSpatialMetaData first), src = your source layer
-CREATE TABLE tiled (orig_id INTEGER);            -- carry the original feature id
+-- scratch.sqlite: InitSpatialMetaData(1) first; src = your source layer (ATTACHed)
+CREATE TABLE tiled (orig_id INTEGER, name TEXT);   -- + any attributes to return
 SELECT AddGeometryColumn('tiled','geom',4326,'POLYGON',2);
-INSERT INTO tiled (orig_id, geom)
-  WITH RECURSIVE s(id,m) AS (SELECT rowid, ST_Subdivide(CastAutomagic(geom),256) FROM src),
-       n(id,i,m) AS (SELECT id,1,m FROM s UNION ALL SELECT id,i+1,m FROM n WHERE i < ST_NumGeometries(m))
-  SELECT id, ST_GeometryN(m,i) FROM n;
-SELECT CreateSpatialIndex('tiled','geom');       -- rebuild the index on the pieces
+INSERT INTO tiled (orig_id, name, geom)
+  WITH RECURSIVE s(id,nm,m) AS (SELECT rowid, name, ST_Subdivide(CastAutomagic(geom),256) FROM src),
+       n(id,nm,i,m) AS (SELECT id,nm,1,m FROM s
+                        UNION ALL SELECT id,nm,i+1,m FROM n WHERE i < ST_NumGeometries(m))
+  SELECT id, nm, ST_GeometryN(m,i) FROM n;
+SELECT CreateSpatialIndex('tiled','geom');
+```
+
+```bash
+# export the tiled table to a GeoPackage ortus can serve (rebuilds the rtree):
+ogr2ogr -f GPKG my-tiled.gpkg scratch.sqlite tiled -nln regions -lco SPATIAL_INDEX=YES
 ```
 
 Trade-offs:
 - **More rows** (one polygon → many small pieces), each tiny. Storage up, queries down.
 - **Dedup:** a point exactly on an internal cut edge matches ≥ 2 pieces of the
-  *same* feature → carry an `orig_id` and dedup by it (ortus's `/query` would
+  *same* feature → carry an `orig_id` and dedup by it (`GET /api/v1/query` would
   otherwise return duplicate features for that measure-zero case).
 - Pick **N = 256–512** vertices — a good speed/row-count balance.
 - Also put the `.gpkg` on **SSD** (or give the host enough RAM to cache it):
