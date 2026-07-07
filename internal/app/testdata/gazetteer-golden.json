@@ -67,7 +67,8 @@
       "label": "2 km NE Lefkosia - Lefkosa",
       "reference": "Lefkosia - Lefkosa",
       "name_native": "Λευκωσία - Lefkoşa",
-      "name_source": "translit-el-843"
+      "name_source": "translit-el-843",
+      "inside": false
     }
   },
   {
@@ -147,7 +148,8 @@
       "label": "30 km W Würzburg",
       "reference": "Würzburg",
       "name_native": "",
-      "name_source": "latin-osm"
+      "name_source": "latin-osm",
+      "inside": false
     }
   },
   {
@@ -215,10 +217,11 @@
       }
     ],
     "bearing": {
-      "label": "bei Wertheim",
+      "label": "in Wertheim",
       "reference": "Wertheim",
       "name_native": "",
-      "name_source": "latin-osm"
+      "name_source": "latin-osm",
+      "inside": true
     }
   },
   {
@@ -295,10 +298,11 @@
       }
     ],
     "bearing": {
-      "label": "bei Thessaloniki",
+      "label": "in Thessaloniki",
       "reference": "Thessaloniki",
       "name_native": "Θεσσαλονίκη",
-      "name_source": "translit-el-843"
+      "name_source": "translit-el-843",
+      "inside": true
     }
   },
   {
@@ -348,10 +352,11 @@
       }
     ],
     "bearing": {
-      "label": "bei Tel Aviv",
+      "label": "in Tel Aviv",
       "reference": "Tel Aviv",
       "name_native": "תל אביב–יפו",
-      "name_source": "osm-en"
+      "name_source": "osm-en",
+      "inside": true
     }
   },
   {
@@ -401,10 +406,11 @@
       }
     ],
     "bearing": {
-      "label": "1.5 km W Amman",
+      "label": "in Amman",
       "reference": "Amman",
       "name_native": "عمان",
-      "name_source": "osm-en"
+      "name_source": "osm-en",
+      "inside": true
     }
   },
   {
@@ -448,7 +454,8 @@
       "label": "4 km W Kaliningrad",
       "reference": "Kaliningrad",
       "name_native": "Калининград",
-      "name_source": "translit-ru-bgn"
+      "name_source": "translit-ru-bgn",
+      "inside": false
     }
   },
   {
@@ -489,10 +496,11 @@
       }
     ],
     "bearing": {
-      "label": "6.5 km S Kalba",
+      "label": "in Kalba",
       "reference": "Kalba",
       "name_native": "كلباء",
-      "name_source": "osm-en"
+      "name_source": "osm-en",
+      "inside": true
     }
   },
   {
@@ -533,10 +541,11 @@
       }
     ],
     "bearing": {
-      "label": "4 km W Khor Fakkan",
+      "label": "in Khor Fakkan",
       "reference": "Khor Fakkan",
       "name_native": "خورفكان",
-      "name_source": "osm-en"
+      "name_source": "osm-en",
+      "inside": true
     }
   },
   {
@@ -589,7 +598,8 @@
       "label": "4.5 km NW Sharjah",
       "reference": "Sharjah",
       "name_native": "الشارقة",
-      "name_source": "osm-en"
+      "name_source": "osm-en",
+      "inside": false
     }
   },
   {
@@ -633,7 +643,8 @@
       "label": "1.5 km NW Ajman",
       "reference": "Ajman",
       "name_native": "عجمان",
-      "name_source": "osm-en"
+      "name_source": "osm-en",
+      "inside": false
     }
   },
   {
@@ -677,7 +688,8 @@
       "label": "3 km N Ajman",
       "reference": "Ajman",
       "name_native": "عجمان",
-      "name_source": "osm-en"
+      "name_source": "osm-en",
+      "inside": false
     }
   },
   {
@@ -757,7 +769,8 @@
       "label": "15 km S Athina",
       "reference": "Athina",
       "name_native": "Αθήνα",
-      "name_source": "translit-el-843"
+      "name_source": "translit-el-843",
+      "inside": false
     }
   },
   {
@@ -828,7 +841,8 @@
       "label": "4 km N Peiraias",
       "reference": "Peiraias",
       "name_native": "Πειραιάς",
-      "name_source": "translit-el-843"
+      "name_source": "translit-el-843",
+      "inside": false
     }
   },
   {
@@ -899,7 +913,8 @@
       "label": "7.5 km N Athina",
       "reference": "Athina",
       "name_native": "Αθήνα",
-      "name_source": "translit-el-843"
+      "name_source": "translit-el-843",
+      "inside": false
     }
   },
   {
@@ -970,7 +985,8 @@
       "label": "4 km NW Peiraias",
       "reference": "Peiraias",
       "name_native": "Πειραιάς",
-      "name_source": "translit-el-843"
+      "name_source": "translit-el-843",
+      "inside": false
     }
   },
   {
@@ -1041,7 +1057,8 @@
       "label": "2 km W Peiraias",
       "reference": "Peiraias",
       "name_native": "Πειραιάς",
-      "name_source": "translit-el-843"
+      "name_source": "translit-el-843",
+      "inside": false
     }
   },
   {
@@ -1091,10 +1108,11 @@
       }
     ],
     "bearing": {
-      "label": "1 km SW Ness Ziona",
+      "label": "in Ness Ziona",
       "reference": "Ness Ziona",
       "name_native": "נס ציונה",
-      "name_source": "osm-en"
+      "name_source": "osm-en",
+      "inside": true
     }
   },
   {
@@ -1144,10 +1162,11 @@
       }
     ],
     "bearing": {
-      "label": "bei Rehovot",
+      "label": "in Rehovot",
       "reference": "Rehovot",
       "name_native": "רחובות",
-      "name_source": "osm-en"
+      "name_source": "osm-en",
+      "inside": true
     }
   },
   {
@@ -1200,7 +1219,8 @@
       "label": "17 km N Al-Quneitra",
       "reference": "Al-Quneitra",
       "name_native": "القنيطرة",
-      "name_source": "osm-en"
+      "name_source": "osm-en",
+      "inside": false
     }
   },
   {
@@ -1253,7 +1273,8 @@
       "label": "10 km N Al-Quneitra",
       "reference": "Al-Quneitra",
       "name_native": "القنيطرة",
-      "name_source": "osm-en"
+      "name_source": "osm-en",
+      "inside": false
     }
   },
   {
@@ -1306,7 +1327,8 @@
       "label": "13 km N Al-Quneitra",
       "reference": "Al-Quneitra",
       "name_native": "القنيطرة",
-      "name_source": "osm-en"
+      "name_source": "osm-en",
+      "inside": false
     }
   },
   {
@@ -1350,7 +1372,8 @@
       "label": "18 km W Moskva",
       "reference": "Moskva",
       "name_native": "Москва",
-      "name_source": "translit-ru-bgn"
+      "name_source": "translit-ru-bgn",
+      "inside": false
     }
   },
   {
@@ -1394,7 +1417,8 @@
       "label": "12 km W Moskva",
       "reference": "Moskva",
       "name_native": "Москва",
-      "name_source": "translit-ru-bgn"
+      "name_source": "translit-ru-bgn",
+      "inside": false
     }
   },
   {
@@ -1438,7 +1462,8 @@
       "label": "49 km NE Vyborg",
       "reference": "Vyborg",
       "name_native": "Выборг",
-      "name_source": "translit-ru-bgn"
+      "name_source": "translit-ru-bgn",
+      "inside": false
     }
   },
   {
@@ -1482,7 +1507,8 @@
       "label": "27 km E Vyborg",
       "reference": "Vyborg",
       "name_native": "Выборг",
-      "name_source": "translit-ru-bgn"
+      "name_source": "translit-ru-bgn",
+      "inside": false
     }
   },
   {
@@ -1535,7 +1561,8 @@
       "label": "2.5 km N Vyborg",
       "reference": "Vyborg",
       "name_native": "Выборг",
-      "name_source": "translit-ru-bgn"
+      "name_source": "translit-ru-bgn",
+      "inside": false
     }
   }
 ]

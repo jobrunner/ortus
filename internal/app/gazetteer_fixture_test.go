@@ -36,6 +36,7 @@ type fixtureBearing struct {
 	Reference  string `json:"reference"`
 	NameNative string `json:"name_native"`
 	NameSource string `json:"name_source"`
+	Inside     bool   `json:"inside"`
 }
 type fixtureGolden struct {
 	Point struct {
@@ -124,6 +125,9 @@ func TestGazetteerFixtureGolden(t *testing.T) {
 			if fix.Reference.NameNative != want.Bearing.NameNative || fix.Reference.NameSource.Code != want.Bearing.NameSource {
 				t.Errorf("bearing provenance = {native %q source %q}, want {native %q source %q}",
 					fix.Reference.NameNative, fix.Reference.NameSource.Code, want.Bearing.NameNative, want.Bearing.NameSource)
+			}
+			if fix.Inside != want.Bearing.Inside {
+				t.Errorf("bearing inside = %v, want %v", fix.Inside, want.Bearing.Inside)
 			}
 		})
 	}

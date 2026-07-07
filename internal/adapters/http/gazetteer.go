@@ -142,6 +142,7 @@ func formatFix(fix *domain.Fix, prov *provenanceSet) map[string]interface{} {
 		"azimuth":     fix.Azimuth,
 		"compass":     fix.Compass,
 		"label":       fix.Label,
+		"inside":      fix.Inside,
 	}
 }
 

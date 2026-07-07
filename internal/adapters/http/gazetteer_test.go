@@ -118,7 +118,7 @@ func TestGazetteerSourcesBlock(t *testing.T) {
 	fix := &domain.Fix{
 		Reference: domain.Place{Name: "Thessaloniki", NameNative: "Θεσσαλονίκη", Class: domain.ClassCity,
 			NameSource: domain.NameProvenance{Code: "latin-osm", Short: "OSM name", Long: "OSM name tag.", Standard: ""}},
-		DistanceKM: 4, Azimuth: 90, Compass: "E", Label: "4 km E Thessaloniki",
+		DistanceKM: 0.4, Label: "in Thessaloniki", Inside: true,
 	}
 	srv := newGazetteerServer(t, fakeGazetteer{loc: loc, fix: fix})
 	rec, body := doGET(t, srv, "/api/v1/gazetteer?lon=22.94&lat=40.64")
@@ -156,6 +156,10 @@ func TestGazetteerSourcesBlock(t *testing.T) {
 	bearing := body["bearing"].(map[string]any)
 	if bearing["name_source"] != "latin-osm" || bearing["name_native"] != "Θεσσαλονίκη" {
 		t.Errorf("bearing = %v, want latin-osm code + native name", bearing)
+	}
+	// "in X" (inside the place's admin unit) is signaled by inside=true.
+	if bearing["inside"] != true || bearing["label"] != "in Thessaloniki" {
+		t.Errorf("bearing inside/label = %v / %v, want true / 'in Thessaloniki'", bearing["inside"], bearing["label"])
 	}
 
 	// Dataset-wide attribution/license in the same response.

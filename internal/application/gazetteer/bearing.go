@@ -31,10 +31,14 @@ func (s *Service) Bearing(ctx context.Context, p domain.Coordinate, pol domain.B
 	if err := requireWGS84(p); err != nil {
 		return nil, err
 	}
-	ancestor, constrained, err := s.constraintAncestor(ctx, p, pol.ConstraintTier)
+	// One point-in-polygon over the admin layer serves BOTH the boundary constraint
+	// (which tier ancestor contains the point) and the in/bei decision (is the point
+	// inside the anchor's own admin unit) — so we query it once, not twice.
+	containing, err := s.index.PointInPolygon(ctx, s.manifest.AdminLayer, p)
 	if err != nil {
 		return nil, err
 	}
+	ancestor, constrained := s.constraintAncestorIn(containing, pol.ConstraintTier)
 	cands, err := s.gatherCandidates(ctx, p, pol, ancestor, constrained)
 	if err != nil {
 		return nil, err
@@ -43,7 +47,8 @@ func (s *Service) Bearing(ctx context.Context, p domain.Coordinate, pol domain.B
 	if !ok {
 		return nil, fmt.Errorf("bearing (%v): %w", p, domain.ErrNotFound)
 	}
-	return s.buildFix(ctx, p, best, pol), nil
+	inside := containsAdminUnit(containing, best.Place.AdminID)
+	return s.buildFix(ctx, p, best, pol, inside), nil
 }
 
 // gatherCandidates collects the nearest eligible place of each class: one
@@ -98,30 +103,41 @@ func (s *Service) nearestInClass(ctx context.Context, p domain.Coordinate, class
 	return Candidate{}, false, nil
 }
 
-// constraintAncestor resolves the fid of the admin unit at the configured tier
-// (e.g. "state") that contains the query point, via the containing admin
-// polygons. ok is false when there is no tier or none resolves — the caller then
-// runs unconstrained. A real index error is returned (not swallowed), since the
-// boundary constraint is a correctness guarantee, not an optional hint.
-func (s *Service) constraintAncestor(ctx context.Context, p domain.Coordinate, tier string) (fid int64, ok bool, err error) {
+// constraintAncestorIn resolves the fid of the admin unit at the configured tier
+// (e.g. "state") among the polygons that already contain the query point (fetched
+// once by the caller). ok is false when there is no tier or none resolves — the
+// caller then runs unconstrained.
+func (s *Service) constraintAncestorIn(containing []domain.Feature, tier string) (fid int64, ok bool) {
 	if tier == "" {
-		return 0, false, nil
+		return 0, false
 	}
-	feats, err := s.index.PointInPolygon(ctx, s.manifest.AdminLayer, p)
-	if err != nil {
-		return 0, false, err
-	}
-	for i := range feats {
-		f := &feats[i]
+	for i := range containing {
+		f := &containing[i]
 		level, atoiErr := strconv.Atoi(f.GetStringProperty(s.manifest.LevelColumn))
 		if atoiErr != nil {
 			continue
 		}
 		if m, resolved := s.levels.Resolve(f.GetStringProperty(s.manifest.CountryColumn), level); resolved && m.Equivalent == tier {
-			return f.ID, true, nil
+			return f.ID, true
 		}
 	}
-	return 0, false, nil
+	return 0, false
+}
+
+// containsAdminUnit reports whether the query point's containing admin polygons
+// include the unit adminFID (the anchor place's own unit) — the containment test
+// behind "in X" vs "bei X". A zero fid (unknown admin) yields false, so the caller
+// falls back to the distance heuristic.
+func containsAdminUnit(containing []domain.Feature, adminFID int64) bool {
+	if adminFID == 0 {
+		return false
+	}
+	for i := range containing {
+		if containing[i].ID == adminFID {
+			return true
+		}
+	}
+	return false
 }
 
 // sameTier reports whether a place's admin chain reaches the same tier ancestor
@@ -168,26 +184,32 @@ func (s *Service) placeFromFeature(f *domain.Feature) (domain.Place, bool) {
 	}, true
 }
 
-// buildFix renders the bearing fix. Below the inside threshold the point is
-// essentially at the reference, so it labels "bei {name}" without a direction;
-// otherwise it quantizes the reference→point azimuth to a compass point.
-func (s *Service) buildFix(ctx context.Context, p domain.Coordinate, best Candidate, pol domain.BearingPolicy) *domain.Fix {
+// buildFix renders the bearing fix. The "in X" vs "bei X" vs "N km <dir> X"
+// choice comes first from containment (inside, decided by the caller via the
+// point's admin polygons — true even far from a big place's center node), then
+// the near-but-outside distance threshold, then the directional label. If Azimuth
+// fails (degenerate geometry) it keeps the directionless "bei" fallback rather
+// than dropping an otherwise valid anchor.
+func (s *Service) buildFix(ctx context.Context, p domain.Coordinate, best Candidate, pol domain.BearingPolicy, inside bool) *domain.Fix {
 	ref := best.Place
 	fix := &domain.Fix{Reference: ref, DistanceKM: best.DistanceKM}
+
+	if inside {
+		fix.Inside = true
+		fix.Label = "in " + ref.Name
+		return fix
+	}
 	if best.DistanceKM < pol.InsideLabelKM {
+		// Near, but outside the place's admin unit.
 		fix.Label = "bei " + ref.Name
 		return fix
 	}
-	az, err := s.index.Azimuth(ctx, ref.At, p)
-	if err != nil {
-		// Azimuth failed (degenerate geometry); fall back to a directionless label
-		// rather than dropping an otherwise valid anchor.
-		fix.Label = "bei " + ref.Name
-		return fix
+	fix.Label = "bei " + ref.Name
+	if az, azErr := s.index.Azimuth(ctx, ref.At, p); azErr == nil {
+		fix.Azimuth = az
+		fix.Compass = domain.Compass(az, pol.CompassPoints)
+		fix.Label = domain.FormatBearingLabel(domain.RoundDistanceKM(best.DistanceKM), fix.Compass, ref.Name)
 	}
-	fix.Azimuth = az
-	fix.Compass = domain.Compass(az, pol.CompassPoints)
-	fix.Label = domain.FormatBearingLabel(domain.RoundDistanceKM(best.DistanceKM), fix.Compass, ref.Name)
 	return fix
 }
 
