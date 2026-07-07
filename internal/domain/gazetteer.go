@@ -102,7 +102,7 @@ type Fix struct {
 	Label      string
 	// Inside is true when the query point lies within the reference's own
 	// administrative unit — i.e. we are IN that place ("in Ochsenfurt"), not merely
-	// near it ("bei Ochsenfurt"). Decided by containment, not distance, so it holds
+	// near it ("prope Ochsenfurt"). Decided by containment, not distance, so it holds
 	// even far from a large place's center node. Azimuth/Compass are unset when Inside.
 	Inside bool
 }
@@ -114,7 +114,7 @@ type BearingPolicy struct {
 	Reach           map[PlaceClass]float64 // km per class
 	PreferNearestKM float64                // a town-or-larger anchor within this radius wins outright (0 = off)
 	ConstraintTier  string                 // semantic admin tier anchors must share (e.g. "state")
-	InsideLabelKM   float64                // below this, label as "in/bei {name}" without a bearing
+	InsideLabelKM   float64                // below this, label as "in/prope {name}" without a bearing
 	CompassPoints   int                    // 8 or 16
 }
 

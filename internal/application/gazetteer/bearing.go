@@ -32,7 +32,7 @@ func (s *Service) Bearing(ctx context.Context, p domain.Coordinate, pol domain.B
 		return nil, err
 	}
 	// One point-in-polygon over the admin layer serves BOTH the boundary constraint
-	// (which tier ancestor contains the point) and the in/bei decision (is the point
+	// (which tier ancestor contains the point) and the in/prope decision (is the point
 	// inside the anchor's own admin unit) — so we query it once, not twice.
 	containing, err := s.index.PointInPolygon(ctx, s.manifest.AdminLayer, p)
 	if err != nil {
@@ -126,7 +126,7 @@ func (s *Service) constraintAncestorIn(containing []domain.Feature, tier string)
 
 // containsAdminUnit reports whether the query point's containing admin polygons
 // include the unit adminFID (the anchor place's own unit) — the containment test
-// behind "in X" vs "bei X". A zero fid (unknown admin) yields false, so the caller
+// behind "in X" vs "prope X". A zero fid (unknown admin) yields false, so the caller
 // falls back to the distance heuristic.
 func containsAdminUnit(containing []domain.Feature, adminFID int64) bool {
 	if adminFID == 0 {
@@ -184,16 +184,19 @@ func (s *Service) placeFromFeature(f *domain.Feature) (domain.Place, bool) {
 	}, true
 }
 
-// buildFix renders the bearing fix. The "in X" vs "bei X" vs "N km <dir> X"
+// buildFix renders the bearing fix. The "in X" vs "prope X" vs "N km <dir> X"
 // choice comes first from containment (inside, decided by the caller via the
 // point's admin polygons — true even far from a big place's center node), then
 // the near-but-outside distance threshold, then the directional label. If Azimuth
-// fails (degenerate geometry) it keeps the directionless "bei" fallback rather
+// fails (degenerate geometry) it keeps the directionless "prope" fallback rather
 // than dropping an otherwise valid anchor.
 func (s *Service) buildFix(ctx context.Context, p domain.Coordinate, best Candidate, pol domain.BearingPolicy, inside bool) *domain.Fix {
 	ref := best.Place
 	fix := &domain.Fix{Reference: ref, DistanceKM: best.DistanceKM}
 
+	// Label prefixes follow specimen-label convention: Latin "in" (inside the
+	// place's admin unit) and "prope" (near it) — "prope" is the established Latin
+	// locality term for "near" (abbr. pr.); we spell it out to stay unambiguous.
 	if inside {
 		fix.Inside = true
 		fix.Label = "in " + ref.Name
@@ -201,10 +204,10 @@ func (s *Service) buildFix(ctx context.Context, p domain.Coordinate, best Candid
 	}
 	if best.DistanceKM < pol.InsideLabelKM {
 		// Near, but outside the place's admin unit.
-		fix.Label = "bei " + ref.Name
+		fix.Label = "prope " + ref.Name
 		return fix
 	}
-	fix.Label = "bei " + ref.Name
+	fix.Label = "prope " + ref.Name
 	if az, azErr := s.index.Azimuth(ctx, ref.At, p); azErr == nil {
 		fix.Azimuth = az
 		fix.Compass = domain.Compass(az, pol.CompassPoints)

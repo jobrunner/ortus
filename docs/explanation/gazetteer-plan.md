@@ -266,7 +266,7 @@ un-anchorable `w_dist`. Remaining ties → name, then `osm_id` (deterministic).
   **quantize** to 8/16 points: `idx = round(az/(360/N)) mod N`.
 - **Label** `{round(dist)} km {compass} {name}` → "4 km E Würzburg", using the
   native `name` (localized `name_*` only when present). **Inside threshold**
-  (e.g. <1 km) → "in/bei {name}", no bearing. **Rounding** <10 km to 0.5 km,
+  (e.g. <1 km) → "in/prope {name}", no bearing. **Rounding** <10 km to 0.5 km,
   else 1 km (configurable).
 
 ---
@@ -289,7 +289,7 @@ the reach rule:
 3. Salience.Rank(p, candidates)  (branch-free eligibility + most-salient, §6)
 4. top-1 = reference
    ├─ no eligible hit → widen radii once, else fall back to Locate()
-   ├─ DistanceKM < InsideLabelKM → "in/bei {name}" (no bearing)
+   ├─ DistanceKM < InsideLabelKM → "in/prope {name}" (no bearing)
    └─ else: Azimuth(reference, p) → compass → label
 5. return Fix
 ```
@@ -312,7 +312,7 @@ thematic PiP stays as-is.
 - **M2 — `Locate()` + manifest/sidecar contract.** `Manifest` + `LevelResolver` (the `(country_iso, admin_level) → equivalent` sidecar abstraction); `Locate()` orchestrated in the service (admin PiP → enriched, most-local-first chain). Works on the *current* real file (admin PiP needs no rebuild). **Verify `Distance(...,1)` against the real file** (§4 SRID note). *Gate:* service tests with a fake index. (Salience + Bearing are M3.)
 - **M3 — Bearing end-to-end. ✅ done.** `RankedSalience` (branch-free eligibility + most-salient) + `Bearing()` (class-stratified KNN → boundary constraint via `ResolveChain` state-ancestor compare → compass/label). *Gate met:* service tests with a fake index.
 - **M4 — API + wiring. ✅ done.** `gazetteer.*` config (disabled by default) + composition-root wiring (dedicated GeoPackage, out of competition); `GET /api/v1/gazetteer` (Option A) returning `{coordinate, admin, bearing}`; opt-in `with-gazetteer=1` enrichment on `/query` (best-effort); MCP `gazetteer` tool (registered only when wired). *Gate met:* handler tests + MCP client test with a fake gazetteer. The `{admin, bearing}` object is the reusable unit for the future batch endpoint (caller-chosen echo id).
-- **M5 — Verification, tuning & eval. ✅ done.** **Validated against the real rebuilt file (2026-07-02).** `VerifySRID` passes (ellipsoidal `Distance` computes correctly despite cosmetic SpatiaLite `unknown SRID` stderr — pre-existing `CastAutomagic` behaviour). `Locate(Würzburg)` returns the full sidecar-enriched chain (Altstadt → county → region → state Bayern → Deutschland). **Calibration resolved:** a **proximity override** (nearest town-or-larger within `PreferNearestKM`, default 5 km, villages excluded) now beats a far city, so a point ~2 km from Volkach yields "bei Volkach" and one near Dettelbach "3 km N Dettelbach", while genuinely rural points still peil to the salient city. Reach radii + override are **config-injectable** (`gazetteer.bearing.*`). Opt-in e2e test + calibration sweep in `internal/app` (env-gated, skips in CI).
+- **M5 — Verification, tuning & eval. ✅ done.** **Validated against the real rebuilt file (2026-07-02).** `VerifySRID` passes (ellipsoidal `Distance` computes correctly despite cosmetic SpatiaLite `unknown SRID` stderr — pre-existing `CastAutomagic` behaviour). `Locate(Würzburg)` returns the full sidecar-enriched chain (Altstadt → county → region → state Bayern → Deutschland). **Calibration resolved:** a **proximity override** (nearest town-or-larger within `PreferNearestKM`, default 5 km, villages excluded) now beats a far city, so a point ~2 km from Volkach yields "prope Volkach" and one near Dettelbach "3 km N Dettelbach", while genuinely rural points still peil to the salient city. Reach radii + override are **config-injectable** (`gazetteer.bearing.*`). Opt-in e2e test + calibration sweep in `internal/app` (env-gated, skips in CI).
 
 ---
 

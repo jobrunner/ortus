@@ -659,13 +659,14 @@ components:
             label:
               type: string
               description: >-
-                Fertiges Label: „4 km E Würzburg", „bei Würzburg" (nah, außerhalb)
-                oder „in Würzburg" (`inside`).
+                Fertiges Label: „4 km E Würzburg", „prope Würzburg" (nah, außerhalb)
+                oder „in Würzburg" (`inside`). Präfixe folgen der Etiketten-Konvention:
+                lateinisch „in" bzw. „prope" (= „bei/nahe", etablierter Fundort-Terminus).
             inside:
               type: boolean
               description: >-
                 Der Abfragepunkt liegt INNERHALB der Verwaltungseinheit des Anker-Orts
-                — wir sind IN diesem Ort („in X"), nicht nur in der Nähe („bei X").
+                — wir sind IN diesem Ort („in X"), nicht nur in der Nähe („prope X").
                 Per Containment bestimmt (nicht per Distanz), gilt also auch weit vom
                 Ortsmittelpunkt großer Städte. Ein Client kann bei `true` die Peilung
                 weglassen (der Fund liegt direkt im Ort).
