@@ -68,7 +68,7 @@ layers:
 | `layers[].file` | yes | Relative `.tif`/`.tiff`, no leading slash, no `..`. |
 | `layers[].band` | no (def. 1) | 1-based band index. |
 | `layers[].nodata` | no | Sample == nodata → no match (not an error). |
-| `layers[].sampling` | no (def. `nearest`) | `nearest` for categorical; `bilinear` only for continuous data. |
+| `layers[].sampling` | no (def. `nearest`) | Only `nearest` is supported — categorical rasters must not interpolate. Any other value is rejected at ingest. |
 | `layers[].mapping` **xor** `layers[].value_mapping` | yes | Exactly one. Inline table, or sidecar pointer. |
 
 ### The value → attribute mapping

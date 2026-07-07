@@ -11,7 +11,9 @@ There are two ways to talk to it:
 | HTTP (streamable) | Production / shared service | Bearer token | Direct HTTP for Claude Code; `mcp-remote` bridge for Claude Desktop |
 | stdio | Local / dev | Process boundary | Claude Desktop config spawns `./ortus mcp` |
 
-The two modes expose the same tool set; the difference is purely transport.
+Both modes expose the same tool set; the difference is purely transport. (The
+`gazetteer` tool is present only when the gazetteer feature is enabled — see the
+note under the tool catalogue.)
 
 ## Quick start
 
@@ -53,7 +55,10 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 ```
 
 Restart Claude Desktop — ortus will appear as an MCP source with the
-nine tools listed below.
+tools listed below. The query tools and the diagnostic/`health` tools are always
+registered; the diagnostic tools return "tracing is disabled" until
+`tracing.enabled` is on. The `gazetteer` tool is registered only when the
+gazetteer feature is enabled.
 
 ## Tool catalogue
 

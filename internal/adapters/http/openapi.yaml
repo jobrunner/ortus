@@ -169,7 +169,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/QueryResponse'
+                $ref: '#/components/schemas/QueryResponsePerSource'
         '400':
           description: Ungültige Parameter
           content:
@@ -434,7 +434,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SimpleStatus'
+                $ref: '#/components/schemas/LivenessStatus'
               example:
                 status: ok
         '503':
@@ -442,7 +442,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SimpleStatus'
+                $ref: '#/components/schemas/LivenessStatus'
               example:
                 status: unhealthy
 
@@ -464,7 +464,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SimpleStatus'
+                $ref: '#/components/schemas/ReadinessStatus'
               example:
                 status: ok
         '503':
@@ -472,7 +472,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SimpleStatus'
+                $ref: '#/components/schemas/ReadinessStatus'
               example:
                 status: not ready
 
@@ -807,7 +807,10 @@ components:
 
     QueryResponse:
       type: object
-      description: Vollständige Abfrageantwort
+      description: >-
+        Antwort von GET /api/v1/query (Sammelabfrage über alle Quellen), inklusive
+        dem optionalen gazetteer-Block. GET /api/v1/query/{sourceId} liefert diesen
+        Block NICHT (siehe QueryResponsePerSource).
       properties:
         coordinate:
           $ref: '#/components/schemas/Coordinate'
@@ -829,8 +832,35 @@ components:
           nullable: true
           description: >-
             Gazetteer-Anreicherung (admin, bearing, sources, license). Standardmäßig
-            enthalten, wenn das Gazetteer-Feature aktiv ist — mit with-gazetteer=0
-            abschaltbar. Fehlt, wenn das Feature aus ist oder abgeschaltet wurde.
+            enthalten, wenn das Gazetteer-Feature aktiv ist und die Koordinate WGS84
+            ist — mit with-gazetteer=0 (false/no/off) abschaltbar. Fehlt, wenn das
+            Feature aus ist, abgeschaltet wurde oder die Koordinate nicht WGS84 ist.
+      required:
+        - coordinate
+        - results
+        - total_features
+        - processing_time_ms
+
+    QueryResponsePerSource:
+      type: object
+      description: >-
+        Antwort von GET /api/v1/query/{sourceId}. Wie QueryResponse, aber OHNE den
+        gazetteer-Block (die Einzelquellen-Abfrage reichert nicht an).
+      properties:
+        coordinate:
+          $ref: '#/components/schemas/Coordinate'
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/QueryResult'
+          description: Ergebnisse pro Datenquelle
+        total_features:
+          type: integer
+          description: Gesamtanzahl der gefundenen Features
+        processing_time_ms:
+          type: integer
+          format: int64
+          description: Gesamte Verarbeitungszeit in Millisekunden
       required:
         - coordinate
         - results
@@ -997,6 +1027,12 @@ components:
         sources_ready:
           type: integer
           description: Anzahl abfragebereiter Datenquellen
+        sources:
+          type: array
+          description: Status je Datenquelle.
+          items:
+            type: object
+            additionalProperties: true
         components:
           type: object
           additionalProperties:
@@ -1008,18 +1044,30 @@ components:
         - sources_loaded
         - sources_ready
 
-    SimpleStatus:
+    LivenessStatus:
       type: object
-      description: Einfacher Status
+      description: Liveness-Status (GET /health/live).
       properties:
         status:
           type: string
           enum:
             - ok
             - unhealthy
+      required:
+        - status
+
+    ReadinessStatus:
+      type: object
+      description: Readiness-Status (GET /health/ready).
+      properties:
+        status:
+          type: string
+          enum:
+            - ok
             - not ready
       required:
         - status
+
 
     Error:
       type: object
