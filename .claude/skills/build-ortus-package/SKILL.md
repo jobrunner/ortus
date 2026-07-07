@@ -81,6 +81,65 @@ A ready-to-adapt helper is bundled at `scripts/build-geopackage.sh`.
 property on a match, so drop columns you don't want exposed (`ogr2ogr -select ...`).
 Geometry is only returned when `query.with_geometry` is on.
 
+## Big polygons: subdivide for query speed (exact, not simplify)
+
+Point-in-polygon cost is dominated by the exact `ST_Contains` test, which scales
+with a polygon's vertex count — and the R-tree bbox prefilter only helps when
+feature bounding boxes are small and well-separated. A layer of a few **huge,
+high-vertex polygons whose bboxes overlap** (continent/country-scale regions —
+e.g. biogeographic zones, national outlines) is the worst case: the bbox filter
+can't prune, so every query runs `ST_Contains` against multi-100k-vertex
+geometries.
+
+**Fix: `ST_Subdivide` — split each polygon into small pieces (≤ N vertices),
+carrying its attributes (plus an `orig_id`) onto every piece.** Crucially this is
+*not* simplification:
+the outer boundaries stay vertex-for-vertex identical, so **boundary-near points
+remain exactly correct** (unlike `ST_Simplify`, which moves the boundary). It only
+cuts the polygon along internal lines; the R-tree then prunes to the one small
+piece under the query point.
+
+Measured on the real osm-admin-places data (Germany, 159 k vertices): a direct
+`ST_Contains` took ~2–4 ms; after `ST_Subdivide(geom, 256)` (→ 1676 pieces) the
+indexed lookup prunes to **1 piece** and `ST_Contains` drops to **~0.03 ms**
+(~50–100×), same in/out result. The win multiplies on poorly-pruning layers.
+
+Recipe (SpatiaLite ≥ 5.1; `ST_Subdivide` returns a MULTIPOLYGON of pieces, so
+explode it into rows). PostGIS/QGIS ("Subdivide") is set-returning and simpler:
+
+This runs in a **scratch** SpatiaLite DB — it is *not* a GeoPackage, so the last
+step exports the result to a `.gpkg` (that is what ortus loads; ortus discovers
+layers via `gpkg_contents`/`gpkg_geometry_columns`). Carry every attribute you
+want ortus to return (here `name` — add more columns as needed); `orig_id` is for
+dedup.
+
+```sql
+-- scratch.sqlite: InitSpatialMetaData(1) first; src = your source layer (ATTACHed)
+CREATE TABLE tiled (orig_id INTEGER, name TEXT);   -- + any attributes to return
+SELECT AddGeometryColumn('tiled','geom',4326,'POLYGON',2);
+INSERT INTO tiled (orig_id, name, geom)
+  WITH RECURSIVE s(id,nm,m) AS (SELECT rowid, name, ST_Subdivide(CastAutomagic(geom),256) FROM src),
+       n(id,nm,i,m) AS (SELECT id,nm,1,m FROM s
+                        UNION ALL SELECT id,nm,i+1,m FROM n WHERE i < ST_NumGeometries(m))
+  SELECT id, nm, ST_GeometryN(m,i) FROM n;
+SELECT CreateSpatialIndex('tiled','geom');
+```
+
+```bash
+# export the tiled table to a GeoPackage ortus can serve (rebuilds the rtree):
+ogr2ogr -f GPKG my-tiled.gpkg scratch.sqlite tiled -nln regions -lco SPATIAL_INDEX=YES
+```
+
+Trade-offs:
+- **More rows** (one polygon → many small pieces), each tiny. Storage up, queries down.
+- **Dedup:** a point exactly on an internal cut edge matches ≥ 2 pieces of the
+  *same* feature → carry an `orig_id` and dedup by it (`GET /api/v1/query` would
+  otherwise return duplicate features for that measure-zero case).
+- Pick **N = 256–512** vertices — a good speed/row-count balance.
+- Also put the `.gpkg` on **SSD** (or give the host enough RAM to cache it):
+  cold reads of a large file on spinning disk dominate real-world latency more
+  than the `ST_Contains` math does.
+
 ## Source ID and file naming
 
 The **source ID is the filename stem** (`my-dataset.gpkg` → `my-dataset`) via
