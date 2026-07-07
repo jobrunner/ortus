@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.20.0](https://github.com/jobrunner/ortus/compare/v0.19.0...v0.20.0) (2026-07-07)
+
+
+### Features
+
+* **gazetteer:** Latin "prope" for the near-label ([cb8121a](https://github.com/jobrunner/ortus/commit/cb8121a1c33fb4cd4ed1fda0e43704f427626492))
+* **gazetteer:** use Latin "prope" for the near-label (specimen convention) ([78ee8dd](https://github.com/jobrunner/ortus/commit/78ee8dd35ab394b0886a4b5b2c9070e8450eb91f))
+
 ## [0.19.0](https://github.com/jobrunner/ortus/compare/v0.18.0...v0.19.0) (2026-07-07)
 
 
