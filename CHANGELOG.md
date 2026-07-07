@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.19.0](https://github.com/jobrunner/ortus/compare/v0.18.0...v0.19.0) (2026-07-07)
+
+
+### Features
+
+* **gazetteer:** distinguish "in X" from "bei X" via admin containment ([f03c0cb](https://github.com/jobrunner/ortus/commit/f03c0cb3b60cd66501ddeda62c51925c53cdf233))
+* **gazetteer:** distinguish "in X" from "bei X" via admin containment ([960724c](https://github.com/jobrunner/ortus/commit/960724c90dc7b94e69d7fa70d57a797d089aaefa))
+
 ## [0.18.0](https://github.com/jobrunner/ortus/compare/v0.17.0...v0.18.0) (2026-07-07)
 
 
