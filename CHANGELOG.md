@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.0](https://github.com/jobrunner/ortus/compare/v0.17.0...v0.18.0) (2026-07-07)
+
+
+### Features
+
+* **skills:** doc-drift-check harness — zero code↔OpenAPI↔docs drift before PRs ([858cedf](https://github.com/jobrunner/ortus/commit/858cedf3e7b83b0c9da0b7ec2be388e2d7987f53))
+
+
+### Bug Fixes
+
+* **openapi:** concrete health.sources shape + required health fields ([8ffe7e7](https://github.com/jobrunner/ortus/commit/8ffe7e7269fc492a253e58200ba87fe952b42047))
+
 ## [0.17.0](https://github.com/jobrunner/ortus/compare/v0.16.0...v0.17.0) (2026-07-06)
 
 
