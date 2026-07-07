@@ -46,6 +46,9 @@ type bearingOut struct {
 	Azimuth    float64 `json:"azimuth"`
 	Compass    string  `json:"compass"`
 	Label      string  `json:"label"`
+	// Inside: the query point lies within the reference's admin unit ("in X", not
+	// "bei X") — decided by containment, not distance.
+	Inside bool `json:"inside"`
 }
 
 // sourceOut describes one distinct name_source code seen in a response, so the
@@ -152,6 +155,7 @@ func addGazetteer(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 				Azimuth:    fix.Azimuth,
 				Compass:    fix.Compass,
 				Label:      fix.Label,
+				Inside:     fix.Inside,
 			}
 		case errors.Is(err, domain.ErrNotFound):
 			// no anchor within reach — leave nil

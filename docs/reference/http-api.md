@@ -110,6 +110,14 @@ a bearing to the most salient nearby place (`bearing`, e.g. "4 km E Würzburg").
 Either part is `null` when it has no result — no admin coverage, or no anchor
 within reach. The dataset is WGS84; a non-4326 `srid` is rejected.
 
+**"in X" vs "bei X".** The bearing distinguishes being *inside* a place from being
+*near* it by **administrative containment**, not distance: when the query point
+lies within the anchor's own admin unit, `bearing.inside` is `true` and the label
+is `"in Würzburg"` (this holds even far from a large city's center node). Near but
+outside → `"bei Würzburg"` (`inside: false`); otherwise a directional
+`"4 km E Würzburg"`. A client can treat `inside: true` as "the point is in the
+settlement" (e.g. drop the bearing from a label — the find is *in* Würzburg).
+
 **Response**
 
 ```json
@@ -126,7 +134,7 @@ within reach. The dataset is WGS84; a non-4326 `srid` is rejected.
   "bearing": {
     "reference": "Würzburg", "name_native": "", "name_source": "latin-osm",
     "class": "city", "distance_km": 4.0, "azimuth": 90.0, "compass": "E",
-    "label": "4 km E Würzburg"
+    "label": "4 km E Würzburg", "inside": false
   },
   "sources": [
     { "code": "latin-osm", "short": "OSM name (already Latin)",

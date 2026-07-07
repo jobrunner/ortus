@@ -114,7 +114,8 @@ paths:
                     distance_km: 0.0
                     azimuth: 0.0
                     compass: ""
-                    label: "bei Berlin"
+                    label: "in Berlin"
+                    inside: true
                   sources:
                     - code: latin-osm
                       short: OSM name (already Latin)
@@ -247,6 +248,7 @@ paths:
                   azimuth: 90.0
                   compass: E
                   label: "4 km E Würzburg"
+                  inside: false
                 sources:
                   - code: latin-osm
                     short: OSM name (already Latin)
@@ -653,10 +655,20 @@ components:
               description: Azimut Referenz→Punkt in Grad (0=N, 90=O).
             compass:
               type: string
-              description: Quantisierte Himmelsrichtung (z. B. E, NW).
+              description: Quantisierte Himmelsrichtung (z. B. E, NW). Leer, wenn `inside`.
             label:
               type: string
-              description: Fertiges Label, z. B. „4 km E Würzburg".
+              description: >-
+                Fertiges Label: „4 km E Würzburg", „bei Würzburg" (nah, außerhalb)
+                oder „in Würzburg" (`inside`).
+            inside:
+              type: boolean
+              description: >-
+                Der Abfragepunkt liegt INNERHALB der Verwaltungseinheit des Anker-Orts
+                — wir sind IN diesem Ort („in X"), nicht nur in der Nähe („bei X").
+                Per Containment bestimmt (nicht per Distanz), gilt also auch weit vom
+                Ortsmittelpunkt großer Städte. Ein Client kann bei `true` die Peilung
+                weglassen (der Fund liegt direkt im Ort).
         sources:
           type: array
           description: >-

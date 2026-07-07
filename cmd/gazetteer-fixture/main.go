@@ -413,6 +413,7 @@ type bearingGolden struct {
 	Reference  string `json:"reference"`
 	NameNative string `json:"name_native"`
 	NameSource string `json:"name_source"`
+	Inside     bool   `json:"inside"`
 }
 
 func goldenValues(ctx context.Context, gpkg, manifestPath, sidecarPath, nameSourcePath string, points []point) ([]goldenEntry, error) {
@@ -449,6 +450,7 @@ func goldenValues(ctx context.Context, gpkg, manifestPath, sidecarPath, nameSour
 			Reference:  fix.Reference.Name,
 			NameNative: fix.Reference.NameNative,
 			NameSource: fix.Reference.NameSource.Code,
+			Inside:     fix.Inside,
 		}
 		golden = append(golden, e)
 	}
@@ -486,8 +488,8 @@ func verifyFixture(ctx context.Context, fixture, manifestPath, sidecarPath, name
 		if err != nil {
 			return fmt.Errorf("%s Bearing: %w", e.Point.Label, err)
 		}
-		gotFix := fmt.Sprintf("%s|%s|%s|%s", fix.Label, fix.Reference.Name, fix.Reference.NameNative, fix.Reference.NameSource.Code)
-		expFix := fmt.Sprintf("%s|%s|%s|%s", e.Bearing.Label, e.Bearing.Reference, e.Bearing.NameNative, e.Bearing.NameSource)
+		gotFix := fmt.Sprintf("%s|%s|%s|%s|%t", fix.Label, fix.Reference.Name, fix.Reference.NameNative, fix.Reference.NameSource.Code, fix.Inside)
+		expFix := fmt.Sprintf("%s|%s|%s|%s|%t", e.Bearing.Label, e.Bearing.Reference, e.Bearing.NameNative, e.Bearing.NameSource, e.Bearing.Inside)
 		if gotFix != expFix {
 			return fmt.Errorf("%s bearing mismatch: got %q want %q", e.Point.Label, gotFix, expFix)
 		}

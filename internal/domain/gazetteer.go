@@ -100,6 +100,11 @@ type Fix struct {
 	Azimuth    float64 // degrees, 0=N, 90=E (reference→point)
 	Compass    string
 	Label      string
+	// Inside is true when the query point lies within the reference's own
+	// administrative unit — i.e. we are IN that place ("in Ochsenfurt"), not merely
+	// near it ("bei Ochsenfurt"). Decided by containment, not distance, so it holds
+	// even far from a large place's center node. Azimuth/Compass are unset when Inside.
+	Inside bool
 }
 
 // BearingPolicy holds the tunable knobs of bearing selection. It is data, not

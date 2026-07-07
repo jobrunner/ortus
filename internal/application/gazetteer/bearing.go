@@ -43,7 +43,7 @@ func (s *Service) Bearing(ctx context.Context, p domain.Coordinate, pol domain.B
 	if !ok {
 		return nil, fmt.Errorf("bearing (%v): %w", p, domain.ErrNotFound)
 	}
-	return s.buildFix(ctx, p, best, pol), nil
+	return s.buildFix(ctx, p, best, pol)
 }
 
 // gatherCandidates collects the nearest eligible place of each class: one
@@ -171,24 +171,58 @@ func (s *Service) placeFromFeature(f *domain.Feature) (domain.Place, bool) {
 // buildFix renders the bearing fix. Below the inside threshold the point is
 // essentially at the reference, so it labels "bei {name}" without a direction;
 // otherwise it quantizes the reference→point azimuth to a compass point.
-func (s *Service) buildFix(ctx context.Context, p domain.Coordinate, best Candidate, pol domain.BearingPolicy) *domain.Fix {
+func (s *Service) buildFix(ctx context.Context, p domain.Coordinate, best Candidate, pol domain.BearingPolicy) (*domain.Fix, error) {
 	ref := best.Place
 	fix := &domain.Fix{Reference: ref, DistanceKM: best.DistanceKM}
-	if best.DistanceKM < pol.InsideLabelKM {
-		fix.Label = "bei " + ref.Name
-		return fix
-	}
-	az, err := s.index.Azimuth(ctx, ref.At, p)
+
+	// "in X" vs "bei X" is decided by administrative containment, not distance: if
+	// the query point lies inside the anchor's own admin unit we are IN that place
+	// ("in Ochsenfurt"), regardless of how far it is from the place's center node —
+	// which matters for large cities whose node is kilometers from the boundary.
+	inside, err := s.pointInAdminUnit(ctx, p, ref.AdminID)
 	if err != nil {
-		// Azimuth failed (degenerate geometry); fall back to a directionless label
-		// rather than dropping an otherwise valid anchor.
-		fix.Label = "bei " + ref.Name
-		return fix
+		return nil, err
 	}
-	fix.Azimuth = az
-	fix.Compass = domain.Compass(az, pol.CompassPoints)
-	fix.Label = domain.FormatBearingLabel(domain.RoundDistanceKM(best.DistanceKM), fix.Compass, ref.Name)
-	return fix
+	if inside {
+		fix.Inside = true
+		fix.Label = "in " + ref.Name
+		return fix, nil
+	}
+
+	if best.DistanceKM < pol.InsideLabelKM {
+		// Near, but outside the place's admin unit.
+		fix.Label = "bei " + ref.Name
+		return fix, nil
+	}
+	// Directional label. If Azimuth fails (degenerate geometry) we keep the
+	// directionless "bei" fallback rather than dropping an otherwise valid anchor.
+	fix.Label = "bei " + ref.Name
+	if az, azErr := s.index.Azimuth(ctx, ref.At, p); azErr == nil {
+		fix.Azimuth = az
+		fix.Compass = domain.Compass(az, pol.CompassPoints)
+		fix.Label = domain.FormatBearingLabel(domain.RoundDistanceKM(best.DistanceKM), fix.Compass, ref.Name)
+	}
+	return fix, nil
+}
+
+// pointInAdminUnit reports whether p lies inside the admin unit identified by
+// adminFID (the anchor place's own unit) — the containment test behind "in X" vs
+// "bei X". A zero fid (unknown admin) yields false, so the caller falls back to the
+// distance heuristic. A real index error is returned rather than swallowed.
+func (s *Service) pointInAdminUnit(ctx context.Context, p domain.Coordinate, adminFID int64) (bool, error) {
+	if adminFID == 0 {
+		return false, nil
+	}
+	feats, err := s.index.PointInPolygon(ctx, s.manifest.AdminLayer, p)
+	if err != nil {
+		return false, err
+	}
+	for i := range feats {
+		if feats[i].ID == adminFID {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // parsePointWKT extracts a WGS84 coordinate from a POINT WKT string such as

@@ -96,6 +96,36 @@ func TestBearingInsideLabel(t *testing.T) {
 	if fix.Compass != "" {
 		t.Errorf("compass = %q, want empty (inside threshold)", fix.Compass)
 	}
+	if fix.Inside {
+		t.Error("Inside = true, want false (near but not within the anchor's admin unit)")
+	}
+}
+
+func TestBearingInsideAdminUnit(t *testing.T) {
+	// Containment, not distance: the query point lies inside the anchor's own admin
+	// unit (fid 42), so the label is "in X" even though the anchor node is ~3.6 km
+	// away — the case a distance threshold would wrongly render directional.
+	idx := fakeIndex{
+		knn: map[string][]domain.Feature{
+			"city": {placeFeature("city", "Ochsenfurt", 42, 10.05)}, // ~3.6 km E of the query
+		},
+		pip: []domain.Feature{adminFeatureID(42, "8", "Ochsenfurt")}, // query point ∈ fid 42
+	}
+	svc := NewService(idx, testManifest(), nil, nil, true)
+
+	fix, err := svc.Bearing(context.Background(), domain.NewWGS84Coordinate(10.0, 50.0), noConstraint())
+	if err != nil {
+		t.Fatalf("Bearing: %v", err)
+	}
+	if !fix.Inside {
+		t.Error("Inside = false, want true (query point is within the anchor's admin unit)")
+	}
+	if fix.Label != "in Ochsenfurt" {
+		t.Errorf("label = %q, want 'in Ochsenfurt'", fix.Label)
+	}
+	if fix.Compass != "" {
+		t.Errorf("compass = %q, want empty when inside", fix.Compass)
+	}
 }
 
 func TestBearingNoCandidate(t *testing.T) {
