@@ -90,8 +90,8 @@ func TestBearingInsideLabel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Bearing: %v", err)
 	}
-	if fix.Label != "bei Smallville" {
-		t.Errorf("label = %q, want 'bei Smallville'", fix.Label)
+	if fix.Label != "prope Smallville" {
+		t.Errorf("label = %q, want 'prope Smallville'", fix.Label)
 	}
 	if fix.Compass != "" {
 		t.Errorf("compass = %q, want empty (inside threshold)", fix.Compass)

@@ -47,7 +47,7 @@ type bearingOut struct {
 	Compass    string  `json:"compass"`
 	Label      string  `json:"label"`
 	// Inside: the query point lies within the reference's admin unit ("in X", not
-	// "bei X") — decided by containment, not distance.
+	// "prope X") — decided by containment, not distance.
 	Inside bool `json:"inside"`
 }
 

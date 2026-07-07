@@ -30,7 +30,12 @@ Distanzmetrik, KNN-Mechanik, und wie der Grenz-Constraint technisch greift.
   keine Descendant-Abfrage. `k > 1` pro Klasse lässt einen näheren Anker jenseits der Grenze
   zugunsten eines innerhalb überspringen. Der Tier ist **semantisch** (über das Sidecar,
   `equivalent`), nicht die feste Zahl 4.
-- **Inside-Schwelle:** unter `InsideLabelKM` (Default 1 km) → richtungsloses „bei {name}".
+- **„in" vs „prope" (aktualisiert):** Ob wir *im* Ort oder nur *in der Nähe* sind,
+  entscheidet **Verwaltungs-Containment**, nicht die Distanz. Liegt der Abfragepunkt
+  in der eigenen Admin-Einheit des Ankers → „in {name}" (Flag `inside=true`); sonst
+  nah, aber außerhalb (unter `InsideLabelKM`, Default 1 km) → richtungsloses
+  „prope {name}"; andernfalls das Richtungs-Label. Präfixe folgen der Etiketten-
+  Konvention: lateinisch „in" bzw. „prope" (etablierter Fundort-Terminus für „bei").
 
 ## Konsequenzen
 
