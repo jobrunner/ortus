@@ -81,6 +81,52 @@ A ready-to-adapt helper is bundled at `scripts/build-geopackage.sh`.
 property on a match, so drop columns you don't want exposed (`ogr2ogr -select ...`).
 Geometry is only returned when `query.with_geometry` is on.
 
+## Big polygons: subdivide for query speed (exact, not simplify)
+
+Point-in-polygon cost is dominated by the exact `ST_Contains` test, which scales
+with a polygon's vertex count — and the R-tree bbox prefilter only helps when
+feature bounding boxes are small and well-separated. A layer of a few **huge,
+high-vertex polygons whose bboxes overlap** (continent/country-scale regions —
+e.g. biogeographic zones, national outlines) is the worst case: the bbox filter
+can't prune, so every query runs `ST_Contains` against multi-100k-vertex
+geometries.
+
+**Fix: `ST_Subdivide` — split each polygon into small pieces (≤ N vertices),
+copying the attributes onto every piece.** Crucially this is *not* simplification:
+the outer boundaries stay vertex-for-vertex identical, so **boundary-near points
+remain exactly correct** (unlike `ST_Simplify`, which moves the boundary). It only
+cuts the polygon along internal lines; the R-tree then prunes to the one small
+piece under the query point.
+
+Measured on the real osm-admin-places data (Germany, 159 k vertices): a direct
+`ST_Contains` took ~2–4 ms; after `ST_Subdivide(geom, 256)` (→ 1676 pieces) the
+indexed lookup prunes to **1 piece** and `ST_Contains` drops to **~0.03 ms**
+(~50–100×), same in/out result. The win multiplies on poorly-pruning layers.
+
+Recipe (SpatiaLite ≥ 5.1; `ST_Subdivide` returns a MULTIPOLYGON of pieces, so
+explode it into rows). PostGIS/QGIS ("Subdivide") is set-returning and simpler:
+
+```sql
+-- into a fresh spatialite db (InitSpatialMetaData first), src = your source layer
+CREATE TABLE tiled (orig_id INTEGER);            -- carry the original feature id
+SELECT AddGeometryColumn('tiled','geom',4326,'POLYGON',2);
+INSERT INTO tiled (orig_id, geom)
+  WITH RECURSIVE s(id,m) AS (SELECT rowid, ST_Subdivide(CastAutomagic(geom),256) FROM src),
+       n(id,i,m) AS (SELECT id,1,m FROM s UNION ALL SELECT id,i+1,m FROM n WHERE i < ST_NumGeometries(m))
+  SELECT id, ST_GeometryN(m,i) FROM n;
+SELECT CreateSpatialIndex('tiled','geom');       -- rebuild the index on the pieces
+```
+
+Trade-offs:
+- **More rows** (one polygon → many small pieces), each tiny. Storage up, queries down.
+- **Dedup:** a point exactly on an internal cut edge matches ≥ 2 pieces of the
+  *same* feature → carry an `orig_id` and dedup by it (ortus's `/query` would
+  otherwise return duplicate features for that measure-zero case).
+- Pick **N = 256–512** vertices — a good speed/row-count balance.
+- Also put the `.gpkg` on **SSD** (or give the host enough RAM to cache it):
+  cold reads of a large file on spinning disk dominate real-world latency more
+  than the `ST_Contains` math does.
+
 ## Source ID and file naming
 
 The **source ID is the filename stem** (`my-dataset.gpkg` → `my-dataset`) via
