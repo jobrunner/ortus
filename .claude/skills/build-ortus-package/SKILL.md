@@ -140,6 +140,27 @@ Trade-offs:
   cold reads of a large file on spinning disk dominate real-world latency more
   than the `ST_Contains` math does.
 
+### Worked example: European biogeographic regions
+
+The textbook worst case. `biogeo-regions-europe-2016.gpkg` holds **11**
+continent-scale MULTIPOLYGONs (EPSG:4326), ~**3.0 M** vertices total (largest
+single region ~850 k). Their bounding boxes overlap heavily, so for a point in
+central Germany (Würzburg, `9.93,49.79`) the R-tree prefilter returns **3**
+candidate regions — it can't prune — and each is an exact `ST_Contains` against
+a multi-100k-vertex polygon: **~23 ms** per query.
+
+Subdividing at `N = 256` (recipe above, carrying `orig_id, short_name, pre_2012,
+code, name`) explodes the 11 regions into **59,707** small pieces. Now the
+R-tree prunes to a **single** piece under the point and the one `ST_Contains`
+runs on a ≤256-vertex polygon: **~0.08 ms** — about **300×** faster, with the
+*identical* result (Würzburg → `Continental`, mid-Atlantic → no match). Because
+`ST_Subdivide` only cuts along internal lines, the outer coastlines/borders stay
+vertex-for-vertex exact, so boundary-near points are unaffected.
+
+Cost: file grows **47 MB → 72 MB** and feature count **11 → 59,707** (dedup by
+`orig_id` on the rare cut-edge point). Keep the same filename stem so the source
+ID is unchanged, or append `-tiled` if you want both to coexist.
+
 ## Source ID and file naming
 
 The **source ID is the filename stem** (`my-dataset.gpkg` → `my-dataset`) via
