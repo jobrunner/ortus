@@ -145,7 +145,7 @@ Trade-offs:
 The textbook worst case. `biogeo-regions-europe-2016.gpkg` holds **11**
 continent-scale MULTIPOLYGONs (EPSG:4326), ~**3.0 M** vertices total (largest
 single region ~850 k). Their bounding boxes overlap heavily, so for a point in
-central Germany (Würzburg, `9.93,49.79`) the R-tree prefilter returns **3**
+central Germany (Würzburg, lon/lat `9.93, 49.79`) the R-tree prefilter returns **3**
 candidate regions — it can't prune — and each is an exact `ST_Contains` against
 a multi-100k-vertex polygon: **~23 ms** per query.
 
@@ -153,9 +153,12 @@ Subdividing at `N = 256` (recipe above, carrying `orig_id, short_name, pre_2012,
 code, name`) explodes the 11 regions into **59,707** small pieces. Now the
 R-tree prunes to a **single** piece under the point and the one `ST_Contains`
 runs on a ≤256-vertex polygon: **~0.08 ms** — about **300×** faster, with the
-*identical* result (Würzburg → `Continental`, mid-Atlantic → no match). Because
-`ST_Subdivide` only cuts along internal lines, the outer coastlines/borders stay
-vertex-for-vertex exact, so boundary-near points are unaffected.
+*identical* result (Würzburg → `Continental`, mid-Atlantic → no match). This is
+not simplification: `ST_Subdivide` splits the polygon along internal lines and
+never moves a point off the true border, so the boundary geometry is preserved
+exactly and boundary-near points stay correct. (It may insert extra vertices
+where a cut meets the outer ring, but each such vertex lies exactly on the
+original edge.) Contrast `ST_Simplify`, which displaces the boundary.
 
 Cost: file grows **47 MB → 72 MB** and feature count **11 → 59,707** (dedup by
 `orig_id` on the rare cut-edge point). Keep the same filename stem so the source
