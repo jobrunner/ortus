@@ -53,7 +53,9 @@ def main():
     ap.add_argument("--name", required=True, help="license name/SPDX id ('' if none)")
     ap.add_argument("--url", required=True, help="license URL ('' if none)")
     ap.add_argument("--attribution", required=True, help="attribution / citation text")
-    ap.add_argument("--description", default="")
+    ap.add_argument("--description", default="",
+                    help="optional dataset description; if omitted, an existing "
+                         "ortus row's description is preserved")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
@@ -80,9 +82,24 @@ def main():
             return 2
         cur.execute(META_DDL)
         cur.execute(REF_DDL)
-        cur.execute("SELECT id FROM gpkg_metadata WHERE md_standard_uri=?", (ORTUS_URI,))
-        ids = [r[0] for r in cur.fetchall()]
+        cur.execute("SELECT id, COALESCE(metadata,'') FROM gpkg_metadata WHERE md_standard_uri=?", (ORTUS_URI,))
+        existing = cur.fetchall()
+        ids = [r[0] for r in existing]
         if ids:
+            # Preserve an existing description when --description was not supplied,
+            # so re-running only to fix the license stays truly additive and does
+            # not silently drop the description.
+            if not args.description:
+                for _, meta in existing:
+                    try:
+                        prev = json.loads(meta)
+                    except (json.JSONDecodeError, TypeError):
+                        continue
+                    prior = prev.get("description") if isinstance(prev, dict) else None
+                    if isinstance(prior, str) and prior.strip():
+                        doc["description"] = prior
+                        payload = json.dumps(doc, ensure_ascii=False, separators=(",", ":"))
+                        break
             # Update ALL matching rows, not just the first: ortus reads by id order
             # (last wins), so leaving a stale duplicate would let the wrong row win.
             cur.execute(
