@@ -230,6 +230,29 @@ func TestHandleListSources(t *testing.T) {
 	}
 }
 
+func TestFormatSourceLicense(t *testing.T) {
+	srv := newTestServer(nil, nil, nil)
+
+	// A licensed source exposes the license block in the sources listing.
+	licensed := srv.formatSource(&domain.Source{
+		ID:      "with-license",
+		License: domain.License{Name: "CC-BY-4.0", URL: "https://example/lic", Attribution: "© Provider"},
+	})
+	lic, ok := licensed["license"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("license missing from formatSource output: %v", licensed)
+	}
+	if lic["name"] != "CC-BY-4.0" || lic["url"] != "https://example/lic" || lic["attribution"] != "© Provider" {
+		t.Errorf("license = %v, want name/url/attribution populated", lic)
+	}
+
+	// A source without license omits the block entirely (not an empty object).
+	unlicensed := srv.formatSource(&domain.Source{ID: "no-license"})
+	if _, present := unlicensed["license"]; present {
+		t.Errorf("license present for unlicensed source, want omitted: %v", unlicensed)
+	}
+}
+
 func TestHandleQueryMissingCoordinates(t *testing.T) {
 	srv := newTestServer(nil, nil, nil)
 

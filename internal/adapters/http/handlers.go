@@ -349,7 +349,7 @@ func (s *Server) formatQueryResponse(resp *domain.QueryResponse) map[string]inte
 
 // formatSource formats a source for JSON output.
 func (s *Server) formatSource(pkg *domain.Source) map[string]interface{} {
-	return map[string]interface{}{
+	out := map[string]interface{}{
 		"id":           pkg.ID,
 		"name":         pkg.Name,
 		"path":         pkg.Path,
@@ -360,6 +360,14 @@ func (s *Server) formatSource(pkg *domain.Source) map[string]interface{} {
 		"loaded_at":    pkg.LoadedAt,
 		"last_queried": pkg.LastQueried,
 	}
+	if !pkg.License.IsEmpty() {
+		out["license"] = map[string]interface{}{
+			"name":        pkg.License.Name,
+			"url":         pkg.License.URL,
+			"attribution": pkg.License.Attribution,
+		}
+	}
+	return out
 }
 
 // handleQueryError maps a domain error to the appropriate HTTP status. The

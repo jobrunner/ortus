@@ -282,3 +282,80 @@ func TestIntegration_Transformer(t *testing.T) {
 		t.Errorf("Web Mercator coords look untransformed: %+v", out)
 	}
 }
+
+// insertMetadataRow adds gpkg_metadata (creating it if absent) and inserts one
+// row with the given mime type and metadata payload.
+func insertMetadataRow(t *testing.T, path, mime, metadata string) {
+	t.Helper()
+	db, err := sql.Open("sqlite3_with_extensions", "file:"+path)
+	if err != nil {
+		t.Fatalf("open for metadata insert: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+	ctx := context.Background()
+	ddl := `CREATE TABLE IF NOT EXISTS gpkg_metadata (
+		id INTEGER PRIMARY KEY, md_scope TEXT NOT NULL DEFAULT 'dataset',
+		md_standard_uri TEXT NOT NULL, mime_type TEXT NOT NULL DEFAULT 'text/xml',
+		metadata TEXT NOT NULL DEFAULT '')`
+	if _, err := db.ExecContext(ctx, ddl); err != nil {
+		t.Fatalf("create gpkg_metadata: %v", err)
+	}
+	if _, err := db.ExecContext(ctx,
+		`INSERT INTO gpkg_metadata (md_scope, md_standard_uri, mime_type, metadata) VALUES ('dataset', 'https://ortus.dev/schema/dataset-metadata.json', ?, ?)`,
+		mime, metadata,
+	); err != nil {
+		t.Fatalf("insert gpkg_metadata: %v", err)
+	}
+}
+
+func TestIntegration_OpenReadsLicenseMetadata(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "regions.gpkg")
+	buildFixtureGPKG(t, path)
+	insertMetadataRow(t, path, "application/json",
+		`{"license":{"name":"CC-BY-4.0","url":"https://creativecommons.org/licenses/by/4.0/","attribution":"© Test Provider"},"description":"test dataset"}`)
+
+	repo := NewRepository(Options{})
+	t.Cleanup(func() { _ = repo.Close(context.Background(), "regions") })
+	src, err := repo.Open(context.Background(), path)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	if src.License.IsEmpty() {
+		t.Fatal("License is empty, want populated from gpkg_metadata JSON")
+	}
+	if src.License.Name != "CC-BY-4.0" {
+		t.Errorf("License.Name = %q, want CC-BY-4.0", src.License.Name)
+	}
+	if src.License.URL != "https://creativecommons.org/licenses/by/4.0/" {
+		t.Errorf("License.URL = %q", src.License.URL)
+	}
+	if src.License.Attribution != "© Test Provider" {
+		t.Errorf("License.Attribution = %q, want © Test Provider", src.License.Attribution)
+	}
+	if src.Metadata.Description != "test dataset" {
+		t.Errorf("Description = %q, want 'test dataset' (from JSON)", src.Metadata.Description)
+	}
+}
+
+func TestIntegration_PlainTextMetadataIsNotLicense(t *testing.T) {
+	// A legacy free-text metadata blob must NOT populate the license — it only
+	// becomes the description. (Clean break from the old free-text convention.)
+	path := filepath.Join(t.TempDir(), "regions.gpkg")
+	buildFixtureGPKG(t, path)
+	insertMetadataRow(t, path, "text/plain", "Source: X | License: CC-BY-4.0 | Attribution: Y")
+
+	repo := NewRepository(Options{})
+	t.Cleanup(func() { _ = repo.Close(context.Background(), "regions") })
+	src, err := repo.Open(context.Background(), path)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	if !src.License.IsEmpty() {
+		t.Errorf("License = %+v, want empty (plain text must not be parsed as license)", src.License)
+	}
+	if src.Metadata.Description != "Source: X | License: CC-BY-4.0 | Attribution: Y" {
+		t.Errorf("Description = %q, want the plain-text blob", src.Metadata.Description)
+	}
+}

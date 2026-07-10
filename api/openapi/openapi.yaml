@@ -1000,6 +1000,13 @@ components:
           type: string
           format: date-time
           description: Zeitpunkt der letzten Abfrage
+        license:
+          allOf:
+            - $ref: '#/components/schemas/License'
+          description: >-
+            Lizenz/Attribution der Datenquelle, sofern im Paket hinterlegt
+            (bei GeoPackages im gpkg_metadata-JSON, bei Raster-Bundles im
+            Manifest). Fehlt, wenn das Paket keine Lizenz mitführt.
       required:
         - id
         - name

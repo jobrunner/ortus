@@ -4,6 +4,7 @@ package geopackage
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -578,27 +579,70 @@ func (r *Repository) readLayers(ctx context.Context, db *sql.DB) ([]domain.Layer
 	return layers, rows.Err()
 }
 
-// readMetadata reads optional metadata from gpkg_metadata.
+// datasetMetadata is the JSON document ortus embeds in gpkg_metadata (mime_type
+// application/json) to carry license/attribution that travels inside the file —
+// the vector equivalent of the raster bundle's ortus-raster.yaml license block.
+type datasetMetadata struct {
+	License struct {
+		Name        string `json:"name"`
+		URL         string `json:"url"`
+		Attribution string `json:"attribution"`
+	} `json:"license"`
+	Description string `json:"description"`
+}
+
+// readMetadata reads optional dataset metadata from gpkg_metadata. It populates
+// the license/attribution (from an application/json entry — the ortus contract)
+// and a description (from a JSON "description" or a plain-text entry). All of it
+// is optional: a GeoPackage without a gpkg_metadata table, or without a license
+// entry, still loads — the license simply stays empty.
 func (r *Repository) readMetadata(ctx context.Context, db *sql.DB, src *domain.Source) error {
-	// Check if metadata table exists
+	// The gpkg_metadata table is optional; if it is absent (or the probe fails)
+	// there is simply no dataset metadata to read — not a fatal condition.
 	var exists int
 	err := db.QueryRowContext(ctx,
 		"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='gpkg_metadata'",
 	).Scan(&exists)
 	if err != nil || exists == 0 {
-		return nil //nolint:nilerr // intentionally returning nil for optional metadata
+		return nil
 	}
 
-	// Read first metadata entry
-	query := `SELECT metadata FROM gpkg_metadata LIMIT 1`
-	var metadata string
-	if err := db.QueryRowContext(ctx, query).Scan(&metadata); err != nil {
-		return err
+	rows, err := db.QueryContext(ctx, `SELECT COALESCE(mime_type,''), COALESCE(metadata,'') FROM gpkg_metadata`)
+	if err != nil {
+		return fmt.Errorf("reading gpkg_metadata: %w", err)
 	}
+	defer func() { _ = rows.Close() }()
 
-	// Parse metadata (simplified - would need proper XML parsing for full support)
-	src.Metadata.Description = metadata
-	return nil
+	for rows.Next() {
+		var mime, metadata string
+		if err := rows.Scan(&mime, &metadata); err != nil {
+			return fmt.Errorf("scanning gpkg_metadata: %w", err)
+		}
+		if mime == "application/json" {
+			var doc datasetMetadata
+			if err := json.Unmarshal([]byte(metadata), &doc); err != nil {
+				// A malformed JSON entry is skipped, not fatal — other entries
+				// (or none) still let the source load.
+				continue
+			}
+			if src.License.IsEmpty() {
+				src.License = domain.License{
+					Name:        doc.License.Name,
+					URL:         doc.License.URL,
+					Attribution: doc.License.Attribution,
+				}
+			}
+			if src.Metadata.Description == "" && doc.Description != "" {
+				src.Metadata.Description = doc.Description
+			}
+			continue
+		}
+		// Non-JSON entry: keep the first as a plain-text description.
+		if src.Metadata.Description == "" {
+			src.Metadata.Description = metadata
+		}
+	}
+	return rows.Err()
 }
 
 // executePointQuery performs the actual point query using ST_Contains.
