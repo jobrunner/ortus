@@ -175,17 +175,52 @@ The **source ID is the filename stem** (`my-dataset.gpkg` → `my-dataset`) via
   and in the sources listing. Encode a reference period if the data is time-bound
   (`soil-2020`), never "latest".
 
-## Licensing metadata (recommended)
+## Licensing metadata (required in practice)
 
-ortus surfaces per-source license/attribution in its sources API. Embed it in the
-GeoPackage's `gpkg_metadata` table so it travels with the file:
+ortus surfaces per-source license/attribution in **both** the sources listing
+(`GET /api/v1/sources`) and every query response (`GET /api/v1/query`), and the
+built-in frontend renders it. Always embed it — a package without it shows *no*
+attribution anywhere and logs a load-time warning.
+
+**Contract (structured, not free text).** ortus reads the license from the
+`gpkg_metadata` row whose `mime_type` is **`application/json`** **and**
+`md_standard_uri` is exactly **`https://ortus.dev/schema/dataset-metadata.json`**,
+holding a `license` object with `name` / `url` / `attribution` (the vector
+equivalent of the raster bundle's `license:` block). Both the mime type and that
+URI must match — JSON stored under any other URI is ignored, so the ortus row is
+never confused with unrelated metadata. A plain-text `metadata` blob is **not**
+parsed into the license — it only becomes the description. Adapter:
+`internal/adapters/geopackage/repository.go` (`readMetadata` /
+`datasetMetadata` / `ortusMetadataURI`).
 
 ```bash
+# GeoPackage requires the metadata tables to exist first. If ogr2ogr didn't
+# create them, add them once (harmless if already present):
+sqlite3 my-dataset.gpkg "
+  CREATE TABLE IF NOT EXISTS gpkg_metadata (
+    id INTEGER PRIMARY KEY, md_scope TEXT NOT NULL DEFAULT 'dataset',
+    md_standard_uri TEXT NOT NULL, mime_type TEXT NOT NULL DEFAULT 'text/xml',
+    metadata TEXT NOT NULL DEFAULT '');
+  CREATE TABLE IF NOT EXISTS gpkg_metadata_reference (
+    reference_scope TEXT NOT NULL, table_name TEXT, column_name TEXT,
+    row_id_value INTEGER, timestamp DATETIME NOT NULL
+      DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    md_file_id INTEGER NOT NULL, md_parent_id INTEGER);"
+
+# Embed the license as application/json — this is what ortus parses. The
+# metadata is stored as raw text, so a plain string literal is enough (no need
+# for SQLite's json() function, which requires the JSON1 extension). Make sure
+# the string is valid JSON.
 sqlite3 my-dataset.gpkg "INSERT OR REPLACE INTO gpkg_metadata
   (id, md_scope, md_standard_uri, mime_type, metadata) VALUES
-  (1, 'dataset', 'http://schema.org', 'text/plain',
-   'Source: … | License: CC-BY-4.0 | Attribution: …');"
+  (1, 'dataset', 'https://ortus.dev/schema/dataset-metadata.json', 'application/json',
+   '{\"license\":{\"name\":\"CC-BY-4.0\",\"url\":\"https://creativecommons.org/licenses/by/4.0/\",\"attribution\":\"© Example Data Provider\"}}');"
 ```
+
+An optional top-level `"description"` string in the same JSON becomes the
+source description. Any pre-existing packages built with the old free-text
+format must be **rebuilt** with this JSON form — the free text is no longer
+parsed into a license.
 
 ## Placement & config
 
@@ -222,7 +257,12 @@ cp my-dataset.gpkg ./data/       # local: the watcher hot-loads it within ~500ms
 1. `ogrinfo -so my-dataset.gpkg <layer>` — geometry type + SRID as intended, feature
    count non-zero, extent sane.
 2. Confirm the rtree table exists: `ogrinfo my-dataset.gpkg -sql "SELECT name FROM sqlite_master WHERE name LIKE 'rtree_%'"`.
-3. Load it: start ortus pointing at the storage path, check `GET /api/v1/sources`
-   lists the source as ready, then `GET /api/v1/query?lon=..&lat=..` (or
-   `/query/{sourceId}`) returns the expected feature properties for a known point.
-4. `GET /health/ready` is 200 once the initial load pass completes.
+3. Confirm the license is embedded and parseable:
+   `sqlite3 my-dataset.gpkg "SELECT metadata FROM gpkg_metadata WHERE mime_type='application/json' AND md_standard_uri='https://ortus.dev/schema/dataset-metadata.json'"`
+   must return JSON with a `license` object (name/url/attribution).
+4. Load it: start ortus pointing at the storage path, check `GET /api/v1/sources`
+   lists the source as ready **and shows the `license` block**, then
+   `GET /api/v1/query?lon=..&lat=..` (or `/query/{sourceId}`) returns the expected
+   feature properties **and a `license`** for a known point. If the license is
+   missing, ortus logs a warning at load — check the logs.
+5. `GET /health/ready` is 200 once the initial load pass completes.

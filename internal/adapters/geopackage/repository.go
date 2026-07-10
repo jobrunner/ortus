@@ -4,6 +4,7 @@ package geopackage
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -578,27 +579,82 @@ func (r *Repository) readLayers(ctx context.Context, db *sql.DB) ([]domain.Layer
 	return layers, rows.Err()
 }
 
-// readMetadata reads optional metadata from gpkg_metadata.
+// ortusMetadataURI is the md_standard_uri that identifies the ortus dataset
+// metadata row in gpkg_metadata. Keying on it (rather than on mime_type alone)
+// means unrelated application/json metadata a GeoPackage might carry cannot be
+// mistaken for the ortus license/attribution contract. The build-ortus-package
+// skill writes exactly this URI.
+const ortusMetadataURI = "https://ortus.dev/schema/dataset-metadata.json"
+
+// datasetMetadata is the JSON document ortus embeds in gpkg_metadata (mime_type
+// application/json, md_standard_uri ortusMetadataURI) to carry
+// license/attribution that travels inside the file — the vector equivalent of
+// the raster bundle's ortus-raster.yaml license block.
+type datasetMetadata struct {
+	License struct {
+		Name        string `json:"name"`
+		URL         string `json:"url"`
+		Attribution string `json:"attribution"`
+	} `json:"license"`
+	Description string `json:"description"`
+}
+
+// readMetadata reads optional dataset metadata from gpkg_metadata. The
+// license/attribution and description come from the single ortus contract row
+// (md_standard_uri == ortusMetadataURI, mime_type application/json); any other
+// JSON metadata the file carries is ignored for the license so it cannot be
+// mistaken for it. A plain-text row provides a description fallback. All of it
+// is optional: a GeoPackage without a gpkg_metadata table, or without the ortus
+// row, still loads — the license simply stays empty.
 func (r *Repository) readMetadata(ctx context.Context, db *sql.DB, src *domain.Source) error {
-	// Check if metadata table exists
+	// The gpkg_metadata table is optional; if it is absent (or the probe fails)
+	// there is simply no dataset metadata to read — not a fatal condition.
 	var exists int
 	err := db.QueryRowContext(ctx,
 		"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='gpkg_metadata'",
 	).Scan(&exists)
 	if err != nil || exists == 0 {
-		return nil //nolint:nilerr // intentionally returning nil for optional metadata
+		return nil
 	}
 
-	// Read first metadata entry
-	query := `SELECT metadata FROM gpkg_metadata LIMIT 1`
-	var metadata string
-	if err := db.QueryRowContext(ctx, query).Scan(&metadata); err != nil {
-		return err
+	rows, err := db.QueryContext(ctx,
+		`SELECT COALESCE(md_standard_uri,''), COALESCE(mime_type,''), COALESCE(metadata,'') FROM gpkg_metadata ORDER BY id`)
+	if err != nil {
+		return fmt.Errorf("reading gpkg_metadata: %w", err)
 	}
+	defer func() { _ = rows.Close() }()
 
-	// Parse metadata (simplified - would need proper XML parsing for full support)
-	src.Metadata.Description = metadata
-	return nil
+	for rows.Next() {
+		var uri, mime, metadata string
+		if err := rows.Scan(&uri, &mime, &metadata); err != nil {
+			return fmt.Errorf("scanning gpkg_metadata: %w", err)
+		}
+		// The ortus contract row: parse license + description from its JSON.
+		if uri == ortusMetadataURI && mime == "application/json" {
+			var doc datasetMetadata
+			if err := json.Unmarshal([]byte(metadata), &doc); err != nil {
+				// A malformed ortus entry is skipped, not fatal — the source
+				// still loads (without license).
+				continue
+			}
+			src.License = domain.License{
+				Name:        doc.License.Name,
+				URL:         doc.License.URL,
+				Attribution: doc.License.Attribution,
+			}
+			if doc.Description != "" {
+				src.Metadata.Description = doc.Description
+			}
+			continue
+		}
+		// Only a non-JSON (e.g. text/xml or text/plain) row provides a description
+		// fallback. Unrelated application/json rows are ignored entirely — they
+		// feed neither the license nor the description.
+		if mime != "application/json" && src.Metadata.Description == "" {
+			src.Metadata.Description = metadata
+		}
+	}
+	return rows.Err()
 }
 
 // executePointQuery performs the actual point query using ST_Contains.

@@ -175,18 +175,28 @@ GET /api/v1/sources/{sourceId}/layers    # layers of a source
 
 `GET /api/v1/sources` returns `{ sources: [...], count }`, each source with
 `id`, `name`, `path`, `size`, `layer_count`, `indexed`, `ready`, `loaded_at`,
-`last_queried`:
+`last_queried`, and `license` (name/url/attribution) when the package carries
+one — omitted otherwise:
 
 ```json
 {
   "sources": [
     { "id": "districts", "name": "districts.gpkg", "path": "districts.gpkg",
       "size": 1048576, "layer_count": 1, "indexed": true, "ready": true,
-      "loaded_at": "2026-07-06T12:00:00Z", "last_queried": "2026-07-06T12:05:00Z" }
+      "loaded_at": "2026-07-06T12:00:00Z", "last_queried": "2026-07-06T12:05:00Z",
+      "license": { "name": "CC-BY-4.0", "url": "https://creativecommons.org/licenses/by/4.0/",
+        "attribution": "© Example Data Provider" } }
   ],
   "count": 1
 }
 ```
+
+A source's license travels inside the package: for GeoPackages it is the
+`gpkg_metadata` row with `mime_type='application/json'` **and**
+`md_standard_uri='https://ortus.dev/schema/dataset-metadata.json'`, holding a
+`license` object (JSON under any other URI is ignored); for raster bundles it is
+the `license:` block of the manifest. A package without a license loads but logs
+a warning and shows no attribution.
 
 `GET /api/v1/sources/{sourceId}` returns a single source object (same fields, not
 wrapped). `GET /api/v1/sources/{sourceId}/layers` returns

@@ -179,6 +179,14 @@ func (r *SourceRegistry) LoadSource(ctx context.Context, path string) error {
 		output.Int("ortus.layers.count", len(src.Layers)),
 	)
 
+	// License/attribution should travel with every source so it can be surfaced
+	// in query responses and the sources listing. Missing it is not fatal, but
+	// warn loudly so operators notice a package that will show no attribution.
+	if src.License.IsEmpty() {
+		r.logger.Warn("source has no license/attribution metadata — it will show none in responses",
+			"id", src.ID, "kind", string(src.Kind), "path", path)
+	}
+
 	// Register the source
 	r.mu.Lock()
 	r.sources[src.ID] = &sourceEntry{

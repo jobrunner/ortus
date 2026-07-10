@@ -1000,6 +1000,17 @@ components:
           type: string
           format: date-time
           description: Zeitpunkt der letzten Abfrage
+        license:
+          allOf:
+            - $ref: '#/components/schemas/License'
+          description: >-
+            Lizenz/Attribution der Datenquelle, sofern im Paket hinterlegt.
+            Bei GeoPackages ist es die gpkg_metadata-Zeile mit
+            mime_type='application/json' UND
+            md_standard_uri='https://ortus.dev/schema/dataset-metadata.json'
+            (JSON unter anderer URI wird ignoriert); bei Raster-Bundles der
+            license-Block des Manifests. Fehlt, wenn das Paket keine Lizenz
+            mitführt.
       required:
         - id
         - name
