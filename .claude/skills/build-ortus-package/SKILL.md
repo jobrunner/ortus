@@ -182,13 +182,16 @@ ortus surfaces per-source license/attribution in **both** the sources listing
 built-in frontend renders it. Always embed it — a package without it shows *no*
 attribution anywhere and logs a load-time warning.
 
-**Contract (structured, not free text).** ortus reads the license from a
-`gpkg_metadata` row whose `mime_type` is **`application/json`**, holding a
-`license` object with `name` / `url` / `attribution` (the vector equivalent of
-the raster bundle's `license:` block). A plain-text `metadata` blob is **not**
+**Contract (structured, not free text).** ortus reads the license from the
+`gpkg_metadata` row whose `mime_type` is **`application/json`** **and**
+`md_standard_uri` is exactly **`https://ortus.dev/schema/dataset-metadata.json`**,
+holding a `license` object with `name` / `url` / `attribution` (the vector
+equivalent of the raster bundle's `license:` block). Both the mime type and that
+URI must match — JSON stored under any other URI is ignored, so the ortus row is
+never confused with unrelated metadata. A plain-text `metadata` blob is **not**
 parsed into the license — it only becomes the description. Adapter:
 `internal/adapters/geopackage/repository.go` (`readMetadata` /
-`datasetMetadata`).
+`datasetMetadata` / `ortusMetadataURI`).
 
 ```bash
 # GeoPackage requires the metadata tables to exist first. If ogr2ogr didn't
@@ -252,7 +255,7 @@ cp my-dataset.gpkg ./data/       # local: the watcher hot-loads it within ~500ms
    count non-zero, extent sane.
 2. Confirm the rtree table exists: `ogrinfo my-dataset.gpkg -sql "SELECT name FROM sqlite_master WHERE name LIKE 'rtree_%'"`.
 3. Confirm the license is embedded and parseable:
-   `sqlite3 my-dataset.gpkg "SELECT metadata FROM gpkg_metadata WHERE mime_type='application/json'"`
+   `sqlite3 my-dataset.gpkg "SELECT metadata FROM gpkg_metadata WHERE mime_type='application/json' AND md_standard_uri='https://ortus.dev/schema/dataset-metadata.json'"`
    must return JSON with a `license` object (name/url/attribution).
 4. Load it: start ortus pointing at the storage path, check `GET /api/v1/sources`
    lists the source as ready **and shows the `license` block**, then

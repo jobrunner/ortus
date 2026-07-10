@@ -191,10 +191,12 @@ one — omitted otherwise:
 }
 ```
 
-A source's license travels inside the package: for GeoPackages it is a
-`gpkg_metadata` row with `mime_type='application/json'` holding a `license`
-object; for raster bundles it is the `license:` block of the manifest. A package
-without a license loads but logs a warning and shows no attribution.
+A source's license travels inside the package: for GeoPackages it is the
+`gpkg_metadata` row with `mime_type='application/json'` **and**
+`md_standard_uri='https://ortus.dev/schema/dataset-metadata.json'`, holding a
+`license` object (JSON under any other URI is ignored); for raster bundles it is
+the `license:` block of the manifest. A package without a license loads but logs
+a warning and shows no attribution.
 
 `GET /api/v1/sources/{sourceId}` returns a single source object (same fields, not
 wrapped). `GET /api/v1/sources/{sourceId}/layers` returns
