@@ -338,6 +338,31 @@ func TestIntegration_OpenReadsLicenseMetadata(t *testing.T) {
 	}
 }
 
+func TestIntegration_JSONMetadataWinsOverOtherRows(t *testing.T) {
+	// A GeoPackage may carry a text/xml metadata row alongside the ortus JSON
+	// row. Insert the XML row first (lower id) so an unordered scan would pick it
+	// up first; the license and description must still resolve from the JSON row.
+	path := filepath.Join(t.TempDir(), "regions.gpkg")
+	buildFixtureGPKG(t, path)
+	insertMetadataRow(t, path, "text/xml", "<gmd:MD_Metadata>…</gmd:MD_Metadata>")
+	insertMetadataRow(t, path, "application/json",
+		`{"license":{"name":"CC-BY-4.0","url":"https://example/lic","attribution":"© JSON"},"description":"json description"}`)
+
+	repo := NewRepository(Options{})
+	t.Cleanup(func() { _ = repo.Close(context.Background(), "regions") })
+	src, err := repo.Open(context.Background(), path)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	if src.License.Name != "CC-BY-4.0" || src.License.Attribution != "© JSON" {
+		t.Errorf("License = %+v, want the JSON license regardless of row order", src.License)
+	}
+	if src.Metadata.Description != "json description" {
+		t.Errorf("Description = %q, want 'json description' (JSON must win over the XML row)", src.Metadata.Description)
+	}
+}
+
 func TestIntegration_PlainTextMetadataIsNotLicense(t *testing.T) {
 	// A legacy free-text metadata blob must NOT populate the license — it only
 	// becomes the description. (Clean break from the old free-text convention.)

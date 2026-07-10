@@ -607,7 +607,10 @@ func (r *Repository) readMetadata(ctx context.Context, db *sql.DB, src *domain.S
 		return nil
 	}
 
-	rows, err := db.QueryContext(ctx, `SELECT COALESCE(mime_type,''), COALESCE(metadata,'') FROM gpkg_metadata`)
+	// Order the ortus JSON entry first (then by id) so license/description
+	// resolution is deterministic even when other metadata rows (e.g. a text/xml
+	// blob) coexist — the JSON contract always wins.
+	rows, err := db.QueryContext(ctx, `SELECT COALESCE(mime_type,''), COALESCE(metadata,'') FROM gpkg_metadata ORDER BY (mime_type = 'application/json') DESC, id`)
 	if err != nil {
 		return fmt.Errorf("reading gpkg_metadata: %w", err)
 	}
