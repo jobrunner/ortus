@@ -72,15 +72,23 @@ def main():
     con = sqlite3.connect(args.gpkg)
     try:
         cur = con.cursor()
+        # Refuse to mutate anything that is not a GeoPackage — gpkg_contents is
+        # the OGC-required registry table, so its absence means wrong file/type.
+        cur.execute("SELECT count(*) FROM sqlite_master WHERE type='table' AND name='gpkg_contents'")
+        if cur.fetchone()[0] == 0:
+            print(f"ERROR: {args.gpkg} is not a GeoPackage (no gpkg_contents) — refusing to write", file=sys.stderr)
+            return 2
         cur.execute(META_DDL)
         cur.execute(REF_DDL)
         cur.execute("SELECT id FROM gpkg_metadata WHERE md_standard_uri=?", (ORTUS_URI,))
-        row = cur.fetchone()
-        if row:
+        ids = [r[0] for r in cur.fetchall()]
+        if ids:
+            # Update ALL matching rows, not just the first: ortus reads by id order
+            # (last wins), so leaving a stale duplicate would let the wrong row win.
             cur.execute(
-                "UPDATE gpkg_metadata SET mime_type='application/json', md_scope='dataset', metadata=? WHERE id=?",
-                (payload, row[0]))
-            action = f"UPDATED ortus row id={row[0]}"
+                "UPDATE gpkg_metadata SET mime_type='application/json', md_scope='dataset', metadata=? WHERE md_standard_uri=?",
+                (payload, ORTUS_URI))
+            action = f"UPDATED {len(ids)} ortus row(s) id={ids}"
         else:
             cur.execute(
                 "INSERT INTO gpkg_metadata (md_scope, md_standard_uri, mime_type, metadata) "

@@ -33,6 +33,12 @@ def main(path):
         return 2
     try:
         cur = con.cursor()
+        # gpkg_contents is the OGC-required registry table; its absence means this
+        # SQLite file is not a GeoPackage (so NOT_A_GPKG, not merely NO_METADATA).
+        cur.execute("SELECT count(*) FROM sqlite_master WHERE type='table' AND name='gpkg_contents'")
+        if cur.fetchone()[0] == 0:
+            print("STATUS: NOT_A_GPKG (no gpkg_contents table — not a GeoPackage)")
+            return 2
         cur.execute("SELECT count(*) FROM sqlite_master WHERE type='table' AND name='gpkg_metadata'")
         if cur.fetchone()[0] == 0:
             print("STATUS: NO_METADATA (no gpkg_metadata table)")
@@ -55,11 +61,19 @@ def main(path):
             rid, meta = ortus_row
             try:
                 doc = json.loads(meta)
-                print(f"ortus row id={rid} parses; license={json.dumps(doc.get('license', {}), ensure_ascii=False)}")
-                print("STATUS: MIGRATED")
             except json.JSONDecodeError as e:
                 print(f"ortus row id={rid} is present but MALFORMED JSON: {e}")
                 print("STATUS: NEEDS_MIGRATION (ortus row is malformed)")
+                return 0
+            lic = doc.get("license") or {}
+            has_license = any((lic.get(k) or "").strip() for k in ("name", "url", "attribution"))
+            print(f"ortus row id={rid} parses; license={json.dumps(lic, ensure_ascii=False)}")
+            if has_license:
+                print("STATUS: MIGRATED")
+            else:
+                # A JSON row exists but carries no usable license → ortus still shows
+                # nothing, so this is not done.
+                print("STATUS: NEEDS_MIGRATION (ortus row present but license is empty)")
         else:
             print("STATUS: NEEDS_MIGRATION")
         return 0

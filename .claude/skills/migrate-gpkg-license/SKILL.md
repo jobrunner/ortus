@@ -7,9 +7,9 @@ description: >-
   the data provider, then embed it in the structured form ortus reads. Use when a
   deployed .gpkg shows no license in GET /api/v1/sources or /api/v1/query, or after
   inheriting packages built before the JSON-license contract. The skill may (and
-  should) do web research to confirm the licence and find its URL. Not for building
+  should) do web research to confirm the license and find its URL. Not for building
   a new package (use build-ortus-package), rasters (build-geotiff-package), or the
-  gazetteer (build-gazetteer-package, whose licence comes from its manifest).
+  gazetteer (build-gazetteer-package, whose license comes from its manifest).
 ---
 
 # Migrate an existing GeoPackage's license into the ortus contract
@@ -17,15 +17,15 @@ description: >-
 ortus surfaces per-source license/attribution in `GET /api/v1/sources` and every
 `GET /api/v1/query` response (and the built-in frontend renders it) — **but only
 when the license is embedded in the exact form the adapter reads.** Packages
-built before that contract (or by other tools) usually carry their licence as
-free text or ISO-19139/QGIS XML, which ortus does **not** parse into a licence.
+built before that contract (or by other tools) usually carry their license as
+free text or ISO-19139/QGIS XML, which ortus does **not** parse into a license.
 This skill checks one package and, if needed, migrates it in place.
 
 Requires `ortus >= v0.20.1` at serving time (the release that reads this row).
 
 ## The contract (must match the adapter exactly)
 
-ortus reads the licence from the single `gpkg_metadata` row where **both**:
+ortus reads the license from the single `gpkg_metadata` row where **both**:
 - `mime_type = 'application/json'`, **and**
 - `md_standard_uri = 'https://ortus.dev/schema/dataset-metadata.json'`
 
@@ -40,9 +40,9 @@ after-the-fact migration for packages that predate it.
 
 - **Use** on an existing `.gpkg` that shows no attribution in ortus, or one you
   inherited/built with the old free-text metadata.
-- **Not** for building a fresh package (embed the licence at build time via
+- **Not** for building a fresh package (embed the license at build time via
   `build-ortus-package`), rasters (`build-geotiff-package`), or the gazetteer
-  (`build-gazetteer-package` — its licence comes from `ortus-gazetteer.yaml`).
+  (`build-gazetteer-package` — its license comes from `ortus-gazetteer.yaml`).
 
 ## Workflow
 
@@ -56,12 +56,12 @@ python3 scripts/inspect-metadata.py <package.gpkg>
 ```
 
 Branch on the `STATUS:` line:
-- **`MIGRATED`** — an ortus row already exists and parses. Show its licence and
+- **`MIGRATED`** — an ortus row already exists and parses. Show its license and
   stop, unless the user wants to re-derive/correct it (then continue).
 - **`NEEDS_MIGRATION`** / **`NO_METADATA`** — continue below.
 - **`NOT_A_GPKG`** — wrong file/type; stop.
 
-The audit prints every existing metadata row in full — read them for licence
+The audit prints every existing metadata row in full — read them for license
 clues before researching.
 
 ### 2. Extract clues from the existing metadata
@@ -77,22 +77,22 @@ Pull whatever the file already states:
 Note any dataset/record identifier (an EEA record UUID, a BMEL/Thünen catalog id,
 a UNEP-WCMC service name, a DOI) — it is the key to authoritative verification.
 
-### 3. Research the real licence — REQUIRED, do not guess a URL
+### 3. Research the real license — REQUIRED, do not guess a URL
 
 Determine `name`, a canonical `url`, and `attribution`:
 
 - **Resolve known tokens** to their canonical URL from the table below.
 - **Verify at the provider, don't assume.** When the metadata names a provider or
   record, `WebFetch` that authoritative record/page (or `WebSearch` for it) and
-  confirm the actual licence, attribution and a linkable URL. Words like
+  confirm the actual license, attribution and a linkable URL. Words like
   "typisch/typically <X>" in the source are a *hypothesis to confirm*, not a fact
   — a real case read "typisch dl-de/by-2-0" but the provider's catalog record said
   **GeoNutzV**. Another read "Source: … WWF ecoregions" and the provider service
   declared the **UNEP-WCMC General Data License** (non-commercial).
-- **`WebSearch` for the URL** whenever you only have a licence code/name and no
-  link. Prefer the licence steward's own page (creativecommons.org, govdata.de,
+- **`WebSearch` for the URL** whenever you only have a license code/name and no
+  link. Prefer the license steward's own page (creativecommons.org, govdata.de,
   opendatacommons.org, the provider's terms page).
-- **No formal licence?** Some datasets only have custom terms. Leave `name` empty
+- **No formal license?** Some datasets only have custom terms. Leave `name` empty
   (or a short descriptor) and put the full terms + required citation in
   `attribution`; still link a terms URL if one exists. Capture non-commercial /
   share-alike / attribution obligations in the attribution text.
@@ -101,7 +101,7 @@ Always report which source you verified against (cite the URL).
 
 ### 4. Confirm before writing
 
-Licence text is outward-facing — a wrong licence is worse than none. Present the
+License text is outward-facing — a wrong license is worse than none. Present the
 derived `{name, url, attribution, description}`, cite the authoritative source,
 and **flag every inference or assumption**. Get the user's confirmation (or
 correction) before writing — especially for non-SPDX or provider-specific terms.
@@ -130,9 +130,9 @@ and `--url` may be empty strings.
 ### 6. Verify
 
 Re-run `inspect-metadata.py` — expect `STATUS: MIGRATED` with the intended
-licence. For a full check, load the file with `ortus >= v0.20.1` and confirm the
+license. For a full check, load the file with `ortus >= v0.20.1` and confirm the
 `license` block appears in `GET /api/v1/sources` and `GET /api/v1/query` (a
-missing licence logs a load-time warning).
+missing license logs a load-time warning).
 
 ### 7. Operator note
 
@@ -141,9 +141,9 @@ storage path (keep the same filename stem so the source ID is unchanged); the
 local watcher hot-reloads it, remote storage picks it up on sync. Repeat for
 every affected package in the storage path.
 
-## Reference: common geodata licences (name → canonical URL)
+## Reference: common geodata licenses (name → canonical URL)
 
-Starting points — **always confirm the dataset's actual licence at its
+Starting points — **always confirm the dataset's actual license at its
 provider** (step 3); a package's stated code can be wrong.
 
 | name | canonical URL |
