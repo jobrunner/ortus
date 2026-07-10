@@ -44,7 +44,10 @@ def main(path):
             print("STATUS: NO_METADATA (no gpkg_metadata table)")
             return 0
 
-        cur.execute("SELECT id, md_scope, mime_type, md_standard_uri, metadata FROM gpkg_metadata ORDER BY id")
+        # COALESCE NULLs (columns can be NULL in the wild) so parsing/printing
+        # never trips over None — mirrors the adapter's defensive read.
+        cur.execute("SELECT id, COALESCE(md_scope,''), COALESCE(mime_type,''), "
+                    "COALESCE(md_standard_uri,''), COALESCE(metadata,'') FROM gpkg_metadata ORDER BY id")
         rows = cur.fetchall()
         print(f"gpkg_metadata rows: {len(rows)}")
         ortus_row = None
@@ -61,11 +64,15 @@ def main(path):
             rid, meta = ortus_row
             try:
                 doc = json.loads(meta)
-            except json.JSONDecodeError as e:
+            except (json.JSONDecodeError, TypeError) as e:
                 print(f"ortus row id={rid} is present but MALFORMED JSON: {e}")
                 print("STATUS: NEEDS_MIGRATION (ortus row is malformed)")
                 return 0
-            lic = doc.get("license") or {}
+            # A bad writer could store license as a non-object (e.g. a string);
+            # treat anything that isn't a dict as no usable license.
+            lic = doc.get("license") if isinstance(doc, dict) else None
+            if not isinstance(lic, dict):
+                lic = {}
             has_license = any((lic.get(k) or "").strip() for k in ("name", "url", "attribution"))
             print(f"ortus row id={rid} parses; license={json.dumps(lic, ensure_ascii=False)}")
             if has_license:
