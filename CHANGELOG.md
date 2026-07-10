@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.20.1](https://github.com/jobrunner/ortus/compare/v0.20.0...v0.20.1) (2026-07-10)
+
+
+### Bug Fixes
+
+* **geopackage:** key license parsing on the ortus md_standard_uri ([539a841](https://github.com/jobrunner/ortus/commit/539a8414c507f2f75065356b7ea6f29ea2c62dff))
+* **geopackage:** resolve gpkg_metadata deterministically (JSON first) ([3f10c79](https://github.com/jobrunner/ortus/commit/3f10c7918b2993a339d1a7b662bd19268ca76f20))
+* **geopackage:** surface license/attribution from gpkg_metadata ([3fce3af](https://github.com/jobrunner/ortus/commit/3fce3afea6d70da60890226877b02a7924deef63))
+* **geopackage:** surface license/attribution from gpkg_metadata ([8e82e04](https://github.com/jobrunner/ortus/commit/8e82e04db701f919ee64685d93a107993a7aa5cc))
+* **security:** bump Go toolchain to 1.26.5 for GO-2026-5856 ([b6d2f9b](https://github.com/jobrunner/ortus/commit/b6d2f9b96476dcbcb3ace96d5db164dd385ec54c))
+* **security:** bump Go toolchain to 1.26.5 for GO-2026-5856 ([bec6794](https://github.com/jobrunner/ortus/commit/bec679490f661b897928e58a3185f3c0418ead34))
+
 ## [0.20.0](https://github.com/jobrunner/ortus/compare/v0.19.0...v0.20.0) (2026-07-07)
 
 
