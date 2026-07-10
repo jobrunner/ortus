@@ -579,9 +579,17 @@ func (r *Repository) readLayers(ctx context.Context, db *sql.DB) ([]domain.Layer
 	return layers, rows.Err()
 }
 
+// ortusMetadataURI is the md_standard_uri that identifies the ortus dataset
+// metadata row in gpkg_metadata. Keying on it (rather than on mime_type alone)
+// means unrelated application/json metadata a GeoPackage might carry cannot be
+// mistaken for the ortus license/attribution contract. The build-ortus-package
+// skill writes exactly this URI.
+const ortusMetadataURI = "https://ortus.dev/schema/dataset-metadata.json"
+
 // datasetMetadata is the JSON document ortus embeds in gpkg_metadata (mime_type
-// application/json) to carry license/attribution that travels inside the file —
-// the vector equivalent of the raster bundle's ortus-raster.yaml license block.
+// application/json, md_standard_uri ortusMetadataURI) to carry
+// license/attribution that travels inside the file — the vector equivalent of
+// the raster bundle's ortus-raster.yaml license block.
 type datasetMetadata struct {
 	License struct {
 		Name        string `json:"name"`
@@ -591,11 +599,13 @@ type datasetMetadata struct {
 	Description string `json:"description"`
 }
 
-// readMetadata reads optional dataset metadata from gpkg_metadata. It populates
-// the license/attribution (from an application/json entry — the ortus contract)
-// and a description (from a JSON "description" or a plain-text entry). All of it
-// is optional: a GeoPackage without a gpkg_metadata table, or without a license
-// entry, still loads — the license simply stays empty.
+// readMetadata reads optional dataset metadata from gpkg_metadata. The
+// license/attribution and description come from the single ortus contract row
+// (md_standard_uri == ortusMetadataURI, mime_type application/json); any other
+// JSON metadata the file carries is ignored for the license so it cannot be
+// mistaken for it. A plain-text row provides a description fallback. All of it
+// is optional: a GeoPackage without a gpkg_metadata table, or without the ortus
+// row, still loads — the license simply stays empty.
 func (r *Repository) readMetadata(ctx context.Context, db *sql.DB, src *domain.Source) error {
 	// The gpkg_metadata table is optional; if it is absent (or the probe fails)
 	// there is simply no dataset metadata to read — not a fatal condition.
@@ -607,41 +617,39 @@ func (r *Repository) readMetadata(ctx context.Context, db *sql.DB, src *domain.S
 		return nil
 	}
 
-	// Order the ortus JSON entry first (then by id) so license/description
-	// resolution is deterministic even when other metadata rows (e.g. a text/xml
-	// blob) coexist — the JSON contract always wins.
-	rows, err := db.QueryContext(ctx, `SELECT COALESCE(mime_type,''), COALESCE(metadata,'') FROM gpkg_metadata ORDER BY (mime_type = 'application/json') DESC, id`)
+	rows, err := db.QueryContext(ctx,
+		`SELECT COALESCE(md_standard_uri,''), COALESCE(mime_type,''), COALESCE(metadata,'') FROM gpkg_metadata ORDER BY id`)
 	if err != nil {
 		return fmt.Errorf("reading gpkg_metadata: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
-		var mime, metadata string
-		if err := rows.Scan(&mime, &metadata); err != nil {
+		var uri, mime, metadata string
+		if err := rows.Scan(&uri, &mime, &metadata); err != nil {
 			return fmt.Errorf("scanning gpkg_metadata: %w", err)
 		}
-		if mime == "application/json" {
+		// The ortus contract row: parse license + description from its JSON.
+		if uri == ortusMetadataURI && mime == "application/json" {
 			var doc datasetMetadata
 			if err := json.Unmarshal([]byte(metadata), &doc); err != nil {
-				// A malformed JSON entry is skipped, not fatal — other entries
-				// (or none) still let the source load.
+				// A malformed ortus entry is skipped, not fatal — the source
+				// still loads (without license).
 				continue
 			}
-			if src.License.IsEmpty() {
-				src.License = domain.License{
-					Name:        doc.License.Name,
-					URL:         doc.License.URL,
-					Attribution: doc.License.Attribution,
-				}
+			src.License = domain.License{
+				Name:        doc.License.Name,
+				URL:         doc.License.URL,
+				Attribution: doc.License.Attribution,
 			}
-			if src.Metadata.Description == "" && doc.Description != "" {
+			if doc.Description != "" {
 				src.Metadata.Description = doc.Description
 			}
 			continue
 		}
-		// Non-JSON entry: keep the first as a plain-text description.
-		if src.Metadata.Description == "" {
+		// Any other row (unrelated JSON, or a text metadata blob) only provides a
+		// plain-text description fallback — never the license.
+		if mime != "application/json" && src.Metadata.Description == "" {
 			src.Metadata.Description = metadata
 		}
 	}

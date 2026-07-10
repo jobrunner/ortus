@@ -284,8 +284,15 @@ func TestIntegration_Transformer(t *testing.T) {
 }
 
 // insertMetadataRow adds gpkg_metadata (creating it if absent) and inserts one
-// row with the given mime type and metadata payload.
+// row carrying the ortus md_standard_uri with the given mime type and payload.
 func insertMetadataRow(t *testing.T, path, mime, metadata string) {
+	t.Helper()
+	insertMetadataRowURI(t, path, ortusMetadataURI, mime, metadata)
+}
+
+// insertMetadataRowURI is insertMetadataRow with an explicit md_standard_uri, so
+// tests can insert rows that are NOT the ortus contract row.
+func insertMetadataRowURI(t *testing.T, path, uri, mime, metadata string) {
 	t.Helper()
 	db, err := sql.Open("sqlite3_with_extensions", "file:"+path)
 	if err != nil {
@@ -301,10 +308,32 @@ func insertMetadataRow(t *testing.T, path, mime, metadata string) {
 		t.Fatalf("create gpkg_metadata: %v", err)
 	}
 	if _, err := db.ExecContext(ctx,
-		`INSERT INTO gpkg_metadata (md_scope, md_standard_uri, mime_type, metadata) VALUES ('dataset', 'https://ortus.dev/schema/dataset-metadata.json', ?, ?)`,
-		mime, metadata,
+		`INSERT INTO gpkg_metadata (md_scope, md_standard_uri, mime_type, metadata) VALUES ('dataset', ?, ?, ?)`,
+		uri, mime, metadata,
 	); err != nil {
 		t.Fatalf("insert gpkg_metadata: %v", err)
+	}
+}
+
+func TestIntegration_UnrelatedJSONIsNotLicense(t *testing.T) {
+	// An unrelated application/json metadata row (different md_standard_uri) must
+	// not be mistaken for the ortus license — even when it appears first (lower
+	// id) and itself contains a "license" object. The real ortus row wins.
+	path := filepath.Join(t.TempDir(), "regions.gpkg")
+	buildFixtureGPKG(t, path)
+	insertMetadataRowURI(t, path, "https://example.org/other-schema", "application/json",
+		`{"license":{"name":"WRONG","attribution":"not ortus"}}`)
+	insertMetadataRow(t, path, "application/json",
+		`{"license":{"name":"CC-BY-4.0","url":"https://example/lic","attribution":"© Ortus"}}`)
+
+	repo := NewRepository(Options{})
+	t.Cleanup(func() { _ = repo.Close(context.Background(), "regions") })
+	src, err := repo.Open(context.Background(), path)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if src.License.Name != "CC-BY-4.0" || src.License.Attribution != "© Ortus" {
+		t.Errorf("License = %+v, want the ortus row (unrelated JSON must be ignored)", src.License)
 	}
 }
 
