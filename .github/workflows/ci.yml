@@ -342,7 +342,10 @@ jobs:
           ./actionlint -color -shellcheck="-S error"
 
   # =============================================================================
-  # Docker Build (without push) - Multi-arch
+  # Docker Build (without push)
+  # PRs: smoke-test alpine + ubuntu on native linux/amd64 only (fast — no QEMU).
+  # push to main/master: full matrix (all Dockerfiles × amd64 + arm64), since the
+  # release images are multi-arch and must be verified before a release cut.
   # =============================================================================
   docker-build:
     name: Docker Build
@@ -350,12 +353,15 @@ jobs:
     needs: [docker-lint, build, version]
     strategy:
       matrix:
-        dockerfile: [Dockerfile, Dockerfile.alpine, Dockerfile.ubuntu]
-        platform: [linux/amd64, linux/arm64]
+        dockerfile: ${{ github.event_name == 'pull_request' && fromJSON('["Dockerfile.alpine", "Dockerfile.ubuntu"]') || fromJSON('["Dockerfile", "Dockerfile.alpine", "Dockerfile.ubuntu"]') }}
+        platform: ${{ github.event_name == 'pull_request' && fromJSON('["linux/amd64"]') || fromJSON('["linux/amd64", "linux/arm64"]') }}
     steps:
       - uses: actions/checkout@v7
 
+      # QEMU is only needed to build a foreign architecture (arm64 on an amd64
+      # host); native amd64 builds skip it.
       - name: Set up QEMU
+        if: matrix.platform == 'linux/arm64'
         uses: docker/setup-qemu-action@v4
 
       - name: Set up Docker Buildx
