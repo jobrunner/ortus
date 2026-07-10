@@ -70,3 +70,7 @@ data
 
 # MkDocs build output
 site/
+
+# Python bytecode (skills bundle .py helper scripts)
+__pycache__/
+*.pyc
