@@ -82,7 +82,10 @@ def main():
             return 2
         cur.execute(META_DDL)
         cur.execute(REF_DDL)
-        cur.execute("SELECT id, COALESCE(metadata,'') FROM gpkg_metadata WHERE md_standard_uri=?", (ORTUS_URI,))
+        # id DESC so the first row we see is the one ortus effectively uses (it
+        # scans ORDER BY id and the last match wins) — keeps duplicate handling
+        # and description-preservation deterministic.
+        cur.execute("SELECT id, COALESCE(metadata,'') FROM gpkg_metadata WHERE md_standard_uri=? ORDER BY id DESC", (ORTUS_URI,))
         existing = cur.fetchall()
         ids = [r[0] for r in existing]
         if ids:
@@ -117,9 +120,10 @@ def main():
                 "VALUES ('geopackage', NULL, NULL, NULL, ?, NULL)", (new_id,))
             action = f"INSERTED ortus row id={new_id} (+ reference)"
         con.commit()
-        # verify readback
-        cur.execute("SELECT metadata FROM gpkg_metadata WHERE md_standard_uri=?", (ORTUS_URI,))
-        ok = json.loads(cur.fetchone()[0]) == doc
+        # verify readback against the row ortus effectively uses (last by id)
+        cur.execute("SELECT metadata FROM gpkg_metadata WHERE md_standard_uri=? ORDER BY id DESC LIMIT 1", (ORTUS_URI,))
+        got = cur.fetchone()
+        ok = got is not None and json.loads(got[0]) == doc
         print(f"{action} | readback OK={ok} | {os.path.basename(args.gpkg)}")
         return 0 if ok else 1
     finally:

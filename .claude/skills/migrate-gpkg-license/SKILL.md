@@ -25,7 +25,8 @@ Requires `ortus >= v0.20.1` at serving time (the release that reads this row).
 
 ## The contract (must match the adapter exactly)
 
-ortus reads the license from the single `gpkg_metadata` row where **both**:
+ortus reads the license from the `gpkg_metadata` row (the last by `id`, if
+several match) where **both**:
 - `mime_type = 'application/json'`, **and**
 - `md_standard_uri = 'https://ortus.dev/schema/dataset-metadata.json'`
 
