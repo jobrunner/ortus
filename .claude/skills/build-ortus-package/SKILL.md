@@ -207,11 +207,14 @@ sqlite3 my-dataset.gpkg "
       DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
     md_file_id INTEGER NOT NULL, md_parent_id INTEGER);"
 
-# Embed the license as application/json — this is what ortus parses:
+# Embed the license as application/json — this is what ortus parses. The
+# metadata is stored as raw text, so a plain string literal is enough (no need
+# for SQLite's json() function, which requires the JSON1 extension). Make sure
+# the string is valid JSON.
 sqlite3 my-dataset.gpkg "INSERT OR REPLACE INTO gpkg_metadata
   (id, md_scope, md_standard_uri, mime_type, metadata) VALUES
   (1, 'dataset', 'https://ortus.dev/schema/dataset-metadata.json', 'application/json',
-   json('{\"license\":{\"name\":\"CC-BY-4.0\",\"url\":\"https://creativecommons.org/licenses/by/4.0/\",\"attribution\":\"© Example Data Provider\"}}'));"
+   '{\"license\":{\"name\":\"CC-BY-4.0\",\"url\":\"https://creativecommons.org/licenses/by/4.0/\",\"attribution\":\"© Example Data Provider\"}}');"
 ```
 
 An optional top-level `"description"` string in the same JSON becomes the

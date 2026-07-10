@@ -647,8 +647,9 @@ func (r *Repository) readMetadata(ctx context.Context, db *sql.DB, src *domain.S
 			}
 			continue
 		}
-		// Any other row (unrelated JSON, or a text metadata blob) only provides a
-		// plain-text description fallback — never the license.
+		// Only a non-JSON (e.g. text/xml or text/plain) row provides a description
+		// fallback. Unrelated application/json rows are ignored entirely — they
+		// feed neither the license nor the description.
 		if mime != "application/json" && src.Metadata.Description == "" {
 			src.Metadata.Description = metadata
 		}
