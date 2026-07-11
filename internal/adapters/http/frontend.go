@@ -978,6 +978,7 @@ const frontendHTML = `<!DOCTYPE html>
                 html += '<span class="source-name">' + escapeHtml(pkg.source_name || pkg.source_id) + '</span>';
                 html += '<div class="source-meta">';
                 html += '<span class="badge">' + (pkg.feature_count === 1 ? '1 Feature' : pkg.feature_count + ' Features') + '</span>';
+                html += '<span class="meta-sep" aria-hidden="true">&middot;</span>';
                 html += '<span class="source-time">' + pkg.query_time_ms + ' ms</span>';
                 html += '</div>'; // .source-meta
                 html += '</div>'; // .source-main
