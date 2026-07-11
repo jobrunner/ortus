@@ -253,8 +253,7 @@ const frontendHTML = `<!DOCTYPE html>
 
         .source-header {
             display: flex;
-            justify-content: space-between;
-            align-items: center;
+            align-items: flex-start;
             gap: 0.5rem;
             min-height: 44px;
             padding: 0.75rem 1rem;
@@ -267,21 +266,40 @@ const frontendHTML = `<!DOCTYPE html>
             background: #f1f5f9;
         }
 
+        /* Title + meta take the row and may shrink/wrap; the chevron stays pinned
+           top-right so a long source name never fights it. */
+        .source-main {
+            flex: 1;
+            min-width: 0;
+        }
+
         .source-name {
+            display: block;
             font-weight: 500;
             font-size: 0.9375rem;
+            line-height: 1.3;
         }
 
         .source-meta {
             display: flex;
-            gap: 0.75rem;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 0.4rem;
             font-size: 0.75rem;
             color: var(--text-muted);
+        }
+
+        .source-time {
+            white-space: nowrap;
+            font-variant-numeric: tabular-nums;
         }
 
         .badge {
             display: inline-flex;
             align-items: center;
+            flex: none;
+            white-space: nowrap;
             padding: 0.125rem 0.5rem;
             font-size: 0.75rem;
             font-weight: 500;
@@ -358,6 +376,21 @@ const frontendHTML = `<!DOCTYPE html>
             border-bottom: none;
         }
 
+        /* Color-valued properties (e.g. a #RRGGBB class color) get a swatch. */
+        .value-swatch {
+            display: inline-block;
+            width: 0.85em;
+            height: 0.85em;
+            border-radius: 3px;
+            border: 1px solid rgba(0,0,0,0.15);
+            vertical-align: -1px;
+            margin-right: 0.4em;
+        }
+
+        .value-color {
+            font-family: monospace;
+        }
+
         .geometry-preview {
             margin-top: 0.5rem;
             padding: 0.5rem;
@@ -396,6 +429,9 @@ const frontendHTML = `<!DOCTYPE html>
         }
 
         .toggle-icon {
+            flex: none;
+            margin-top: 2px;
+            color: var(--text-muted);
             transition: transform 0.2s;
         }
 
@@ -941,12 +977,16 @@ const frontendHTML = `<!DOCTYPE html>
             function renderSource(pkg, expanded) {
                 let html = '<div class="source-card' + (expanded ? ' expanded' : '') + '">';
                 html += '<div class="source-header" role="button" tabindex="0" aria-expanded="' + (expanded ? 'true' : 'false') + '">';
+                html += '<div class="source-main">';
                 html += '<span class="source-name">' + escapeHtml(pkg.source_name || pkg.source_id) + '</span>';
                 html += '<div class="source-meta">';
-                html += '<span class="badge">' + pkg.feature_count + ' Feature(s)</span>';
-                html += '<span>' + pkg.query_time_ms + 'ms</span>';
+                html += '<span class="badge">' + (pkg.feature_count === 1 ? '1 Feature' : pkg.feature_count + ' Features') + '</span>';
+                html += '<span class="meta-sep" aria-hidden="true">&middot;</span>';
+                html += '<span class="source-time">' + pkg.query_time_ms + ' ms</span>';
+                html += '</div>'; // .source-meta
+                html += '</div>'; // .source-main
                 html += '<svg class="toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" focusable="false"><path d="M6 9l6 6 6-6"/></svg>';
-                html += '</div></div>';
+                html += '</div>'; // .source-header
 
                 html += '<div class="source-content">';
 
@@ -1104,7 +1144,16 @@ const frontendHTML = `<!DOCTYPE html>
             function formatValue(value) {
                 if (value === null || value === undefined) return '<em>null</em>';
                 if (typeof value === 'object') return '<code>' + escapeHtml(JSON.stringify(value)) + '</code>';
-                return escapeHtml(String(value));
+                const str = String(value);
+                // A hex color (#RGB / #RRGGBB / #RRGGBBAA) gets a swatch before the
+                // hex value. The regex guarantees str is only '#' + hex digits, so
+                // it is safe to inline into the style attribute. The swatch is
+                // decorative (aria-hidden) — the hex value beside it is the real one.
+                if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(str)) {
+                    return '<span class="value-swatch" style="background-color:' + str + ';" aria-hidden="true"></span>' +
+                           '<span class="value-color">' + escapeHtml(str) + '</span>';
+                }
+                return escapeHtml(str);
             }
 
             function escapeHtml(str) {
