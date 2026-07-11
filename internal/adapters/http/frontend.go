@@ -297,6 +297,8 @@ const frontendHTML = `<!DOCTYPE html>
         .badge {
             display: inline-flex;
             align-items: center;
+            flex: none;
+            white-space: nowrap;
             padding: 0.125rem 0.5rem;
             font-size: 0.75rem;
             font-weight: 500;
