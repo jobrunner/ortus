@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.20.2](https://github.com/jobrunner/ortus/compare/v0.20.1...v0.20.2) (2026-07-11)
+
+
+### Bug Fixes
+
+* **frontend:** add middle-dot separator between feature badge and query time ([c0777b5](https://github.com/jobrunner/ortus/commit/c0777b55cc9b0aec359ae805835c4638eadf02c0))
+* **frontend:** keep query time on one line; clarify swatch comment/style ([1beb9f9](https://github.com/jobrunner/ortus/commit/1beb9f99733d4a392da320454374003306e7e8b7))
+* **frontend:** prevent badge text from wrapping inside its pill ([2420563](https://github.com/jobrunner/ortus/commit/2420563f0ddb35dcfa7d335e57a94065106c15df))
+* **frontend:** stack source header so long names don't garble the layout ([1eef8b6](https://github.com/jobrunner/ortus/commit/1eef8b635ec42ecedf4d7b94148f631915d9c127))
+* **frontend:** stack source header so long names don't garble the mobile layout ([80dd0df](https://github.com/jobrunner/ortus/commit/80dd0df7c93cd3874fac376c10fd0a7c40867b72))
+* **frontend:** use American spelling in comments, mark swatch aria-hidden ([0e0ce58](https://github.com/jobrunner/ortus/commit/0e0ce5888ab97d670c9cf92f848eb8fe8044f4f1))
+
 ## [0.20.1](https://github.com/jobrunner/ortus/compare/v0.20.0...v0.20.1) (2026-07-10)
 
 
