@@ -373,7 +373,7 @@ const frontendHTML = `<!DOCTYPE html>
             border-bottom: none;
         }
 
-        /* Colour-valued properties (e.g. a #RRGGBB class colour) get a swatch. */
+        /* Color-valued properties (e.g. a #RRGGBB class color) get a swatch. */
         .value-swatch {
             display: inline-block;
             width: 0.85em;
@@ -1141,11 +1141,12 @@ const frontendHTML = `<!DOCTYPE html>
                 if (value === null || value === undefined) return '<em>null</em>';
                 if (typeof value === 'object') return '<code>' + escapeHtml(JSON.stringify(value)) + '</code>';
                 const str = String(value);
-                // A hex colour (#RGB / #RRGGBB / #RRGGBBAA) gets a swatch before the
+                // A hex color (#RGB / #RRGGBB / #RRGGBBAA) gets a swatch before the
                 // code. The regex guarantees str is only '#' + hex digits, so it is
-                // safe to inline into the style attribute.
+                // safe to inline into the style attribute. The swatch is decorative
+                // (aria-hidden) — the hex code beside it is the real value.
                 if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(str)) {
-                    return '<span class="value-swatch" style="background:' + str + '"></span>' +
+                    return '<span class="value-swatch" style="background:' + str + '" aria-hidden="true"></span>' +
                            '<span class="value-color">' + escapeHtml(str) + '</span>';
                 }
                 return escapeHtml(str);
