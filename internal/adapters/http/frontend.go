@@ -291,6 +291,7 @@ const frontendHTML = `<!DOCTYPE html>
         }
 
         .source-time {
+            white-space: nowrap;
             font-variant-numeric: tabular-nums;
         }
 
@@ -1145,11 +1146,11 @@ const frontendHTML = `<!DOCTYPE html>
                 if (typeof value === 'object') return '<code>' + escapeHtml(JSON.stringify(value)) + '</code>';
                 const str = String(value);
                 // A hex color (#RGB / #RRGGBB / #RRGGBBAA) gets a swatch before the
-                // code. The regex guarantees str is only '#' + hex digits, so it is
-                // safe to inline into the style attribute. The swatch is decorative
-                // (aria-hidden) — the hex code beside it is the real value.
+                // hex value. The regex guarantees str is only '#' + hex digits, so
+                // it is safe to inline into the style attribute. The swatch is
+                // decorative (aria-hidden) — the hex value beside it is the real one.
                 if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(str)) {
-                    return '<span class="value-swatch" style="background:' + str + '" aria-hidden="true"></span>' +
+                    return '<span class="value-swatch" style="background-color:' + str + ';" aria-hidden="true"></span>' +
                            '<span class="value-color">' + escapeHtml(str) + '</span>';
                 }
                 return escapeHtml(str);
