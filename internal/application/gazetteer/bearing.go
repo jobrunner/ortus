@@ -145,12 +145,14 @@ func (s *Service) countryOf(containing []domain.Feature) string {
 		}
 		// Coverage fills / non-numeric levels sort below any real level (mapped to
 		// -1 here; numeric levels are >= 2), so a real local unit always outranks
-		// them; among fills the first non-empty still wins.
+		// them. On a tie (e.g. a boundary-inclusive point in two same-level polygons
+		// of different countries — a disputed border) the lexicographically smaller
+		// ISO wins, so the result is independent of PointInPolygon's return order.
 		level, atoiErr := strconv.Atoi(containing[i].GetStringProperty(s.manifest.LevelColumn))
 		if atoiErr != nil {
 			level = -1
 		}
-		if best == "" || level > bestLevel {
+		if best == "" || level > bestLevel || (level == bestLevel && iso < best) {
 			best, bestLevel = iso, level
 		}
 	}

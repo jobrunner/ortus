@@ -84,6 +84,20 @@ func TestBearingPolicyGatherRadiusKM(t *testing.T) {
 	}
 }
 
+func TestBearingPolicyCandidateLimit(t *testing.T) {
+	// Composite (CandidateRadiusKM > 0) gathers a wide pool so a prominent-but-far
+	// anchor is not truncated before scoring; ranked keeps only the nearest few.
+	if got := (BearingPolicy{CandidateRadiusKM: 120}).CandidateLimit(); got != compositeCandidateLimit {
+		t.Errorf("composite CandidateLimit = %d, want %d", got, compositeCandidateLimit)
+	}
+	if got := (BearingPolicy{}).CandidateLimit(); got != rankedCandidateLimit {
+		t.Errorf("ranked CandidateLimit = %d, want %d", got, rankedCandidateLimit)
+	}
+	if compositeCandidateLimit <= rankedCandidateLimit {
+		t.Errorf("composite limit (%d) must exceed ranked limit (%d)", compositeCandidateLimit, rankedCandidateLimit)
+	}
+}
+
 func TestBearingPolicyOrDefault(t *testing.T) {
 	// A zero policy (nil Reach) falls back to the defaults.
 	if got := (BearingPolicy{}).OrDefault(); got.ReachKM(ClassCity) != DefaultBearingPolicy().ReachKM(ClassCity) {

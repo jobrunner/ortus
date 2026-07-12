@@ -17,8 +17,10 @@ Columns added to `places` (all nullable, ADD COLUMN IF NOT EXISTS):
                          admin rank of the unit this place is the seat of. Consumer maps it to a bonus.
   wikidata   TEXT     -- OSM `wikidata` QID; its presence is a notability proxy.
 
-Ordering: run after `link-hierarchy` (needs final `places` rows / osm_id). Independent of
-romanize. See PLAN-bearing-salience.md and docs/reference/geopackage-schema.md.
+Ordering: run after `link-hierarchy` (needs final `places` rows / osm_id). The plain
+`--apply` (OSM tags) is independent of romanize, but `--apply --geonames` matches on
+`name_native` and so must run AFTER romanize. See PLAN-bearing-salience.md and
+docs/reference/geopackage-schema.md.
 """
 import argparse, collections, glob, json, re, sqlite3, subprocess, sys
 
