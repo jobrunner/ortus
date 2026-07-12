@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.22.0](https://github.com/jobrunner/ortus/compare/v0.21.0...v0.22.0) (2026-07-12)
+
+
+### Features
+
+* bearing follow-ups (KNN distance projection, tunable priors) + version footer ([05b331c](https://github.com/jobrunner/ortus/commit/05b331cf0391c378cadb3f4477bf90304a672cee))
+* **frontend:** show the ortus build version in the footer ([b322ea9](https://github.com/jobrunner/ortus/commit/b322ea92d5b6badc92b88fbdfd5cb7cefff35fd8))
+* **gazetteer:** make class_prior and capital_bonus config-tunable ([b272e1b](https://github.com/jobrunner/ortus/commit/b272e1bb35c8710a0f677b6416a66212272f8fb8))
+
+
+### Performance Improvements
+
+* **frontend:** pre-render footer version once; quote yes config key ([4037497](https://github.com/jobrunner/ortus/commit/4037497bfc540201d1c2638ff0d556408284692f))
+* **gazetteer:** order KNN by the projected distance alias ([ddd551d](https://github.com/jobrunner/ortus/commit/ddd551d4c5a48879635eb0a9839d808d1a99d896))
+* **gazetteer:** project KNN distance instead of a per-candidate round-trip ([69344e8](https://github.com/jobrunner/ortus/commit/69344e84ce7bb3bdd80510931e77058acae6e0db))
+* **http:** only pre-render the frontend when it is enabled ([79b459c](https://github.com/jobrunner/ortus/commit/79b459cf1f8347df4b714571d5b9d73e8652ed04))
+
 ## [0.21.0](https://github.com/jobrunner/ortus/compare/v0.20.3...v0.21.0) (2026-07-12)
 
 
