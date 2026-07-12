@@ -172,8 +172,9 @@ gazetteer:
   class-then-distance behaviour (uses `reach_*_km` + `prefer_nearest_km`). The composite
   strategy gathers candidates within `candidate_radius_km` (a flat radius for all classes)
   and lets the distance decay, not a hard per-class cap, shape the result. Both strategies
-  always constrain anchors to the query point's country (and to its state-equivalent unit
-  when the manifest's `bearing_constraint_tier` resolves).
+  constrain anchors to the query point's country when it can be determined (skipped only
+  where the point lies in no polygon, e.g. open sea), and to its state-equivalent unit when
+  the manifest's `bearing_constraint_tier` resolves.
 - `level_reference_path` (optional) enriches each admin level with its semantic
   `equivalent`, country-specific `local_term`, and `equivalent_description`.
   Without it, Locate still returns the raw hierarchy.

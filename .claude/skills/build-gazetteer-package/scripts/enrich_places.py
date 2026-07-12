@@ -70,6 +70,7 @@ def extract_from_pbfs(pbf_glob=PBF_GLOB, log=print):
             oid = f.get("id")
             if not oid:
                 continue
+            oid = str(oid)   # osmium emits 'n27564946'; be robust to a non-string id too
             oid = oid[1:] if oid[:1] in "nwr" else oid   # 'n27564946' -> '27564946'
             p = f.get("properties", {})
             pop = parse_population(p.get("population"))
@@ -85,7 +86,9 @@ def extract_from_pbfs(pbf_glob=PBF_GLOB, log=print):
                     prev[1] = cap
                 if wd and not prev[2]:
                     prev[2] = wd
-        proc.wait()
+        if proc.wait() != 0:
+            raise RuntimeError(f"osmium export failed for {path} (exit {proc.returncode}) — "
+                               "aborting rather than writing a silently-degraded enrichment")
     return out
 
 
