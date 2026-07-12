@@ -66,6 +66,24 @@ func TestBearingPolicyReachKMUnknownClass(t *testing.T) {
 	}
 }
 
+func TestBearingPolicyGatherRadiusKM(t *testing.T) {
+	// Without CandidateRadiusKM (rank mode) the per-class reach is used.
+	p := DefaultBearingPolicy()
+	if got := p.GatherRadiusKM(ClassCity); got != p.ReachKM(ClassCity) {
+		t.Errorf("GatherRadiusKM(city) = %v, want per-class reach %v", got, p.ReachKM(ClassCity))
+	}
+	if got := p.GatherRadiusKM(ClassUnknown); got != 0 {
+		t.Errorf("GatherRadiusKM(unknown) = %v, want 0", got)
+	}
+	// With CandidateRadiusKM set (composite mode) the flat radius applies to every class.
+	p.CandidateRadiusKM = 120
+	for _, c := range []PlaceClass{ClassVillage, ClassTown, ClassCity} {
+		if got := p.GatherRadiusKM(c); got != 120 {
+			t.Errorf("GatherRadiusKM(%v) = %v, want flat 120", c, got)
+		}
+	}
+}
+
 func TestBearingPolicyOrDefault(t *testing.T) {
 	// A zero policy (nil Reach) falls back to the defaults.
 	if got := (BearingPolicy{}).OrDefault(); got.ReachKM(ClassCity) != DefaultBearingPolicy().ReachKM(ClassCity) {

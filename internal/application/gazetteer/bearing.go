@@ -39,7 +39,12 @@ func (s *Service) Bearing(ctx context.Context, p domain.Coordinate, pol domain.B
 		return nil, err
 	}
 	ancestor, constrained := s.constraintAncestorIn(containing, pol.ConstraintTier)
-	cands, err := s.gatherCandidates(ctx, p, pol, ancestor, constrained)
+	// Requirement: a bearing anchor must lie in the same country as the query point.
+	// The state-tier constraint implies this where it applies, but not where the point
+	// has no state ancestor — and the composite candidate radius is wide enough to reach
+	// across a border — so enforce it explicitly from the point's own containing country.
+	queryCountry := s.countryOf(containing)
+	cands, err := s.gatherCandidates(ctx, p, pol, ancestor, constrained, queryCountry)
 	if err != nil {
 		return nil, err
 	}
@@ -51,44 +56,49 @@ func (s *Service) Bearing(ctx context.Context, p domain.Coordinate, pol domain.B
 	return s.buildFix(ctx, p, best, pol, inside), nil
 }
 
-// gatherCandidates collects the nearest eligible place of each class: one
-// class-filtered KNN within the class reach, keeping the nearest candidate that
-// also satisfies the boundary constraint (when one is in force).
-func (s *Service) gatherCandidates(ctx context.Context, p domain.Coordinate, pol domain.BearingPolicy, ancestor int64, constrained bool) ([]Candidate, error) {
+// gatherCandidates collects the constraint-satisfying candidates of each class within
+// that class's gather radius. RankedSalience gets the nearest per class (its per-class
+// reach as the radius); CompositeSalience gets a wider pool (a flat CandidateRadiusKM)
+// and lets its score decide. Either way the salience strategy picks the winner.
+func (s *Service) gatherCandidates(ctx context.Context, p domain.Coordinate, pol domain.BearingPolicy, ancestor int64, constrained bool, country string) ([]Candidate, error) {
 	var cands []Candidate
 	for _, class := range salienceClasses {
-		if pol.ReachKM(class) <= 0 {
+		if pol.GatherRadiusKM(class) <= 0 {
 			continue
 		}
-		c, ok, err := s.nearestInClass(ctx, p, class, pol, ancestor, constrained)
+		cs, err := s.candidatesInClass(ctx, p, class, pol, ancestor, constrained, country)
 		if err != nil {
 			return nil, err
 		}
-		if ok {
-			cands = append(cands, c)
-		}
+		cands = append(cands, cs...)
 	}
 	return cands, nil
 }
 
-// nearestInClass returns the nearest place of a class within its reach that also
-// satisfies the boundary constraint (when in force), paired with its distance.
-// ok is false when no such place exists.
-func (s *Service) nearestInClass(ctx context.Context, p domain.Coordinate, class domain.PlaceClass, pol domain.BearingPolicy, ancestor int64, constrained bool) (Candidate, bool, error) {
-	feats, err := s.index.QueryKNN(ctx, s.manifest.PlacesLayer, p, knnPerClass, pol.ReachKM(class),
+// candidatesInClass returns the places of a class within its gather radius that also
+// satisfy the boundary constraint (when in force), each paired with its distance,
+// nearest first. Empty when none qualify.
+func (s *Service) candidatesInClass(ctx context.Context, p domain.Coordinate, class domain.PlaceClass, pol domain.BearingPolicy, ancestor int64, constrained bool, country string) ([]Candidate, error) {
+	feats, err := s.index.QueryKNN(ctx, s.manifest.PlacesLayer, p, knnPerClass, pol.GatherRadiusKM(class),
 		&output.Filter{Column: s.manifest.RankColumn, Values: []any{class.String()}})
 	if err != nil {
-		return Candidate{}, false, err
+		return nil, err
 	}
+	var out []Candidate
 	for i := range feats {
 		place, ok := s.placeFromFeature(&feats[i])
 		if !ok {
 			continue
 		}
+		// Same-country guard (see Bearing): drop anchors outside the query's country.
+		// Skipped only when the query country is unknown (no containing polygon).
+		if country != "" && place.CountryISO != country {
+			continue
+		}
 		if constrained {
 			same, err := s.sameTier(ctx, place.AdminID, ancestor, pol.ConstraintTier)
 			if err != nil {
-				return Candidate{}, false, err
+				return nil, err
 			}
 			if !same {
 				continue
@@ -96,11 +106,11 @@ func (s *Service) nearestInClass(ctx context.Context, p domain.Coordinate, class
 		}
 		dist, err := s.index.DistanceKM(ctx, p, place.At)
 		if err != nil {
-			return Candidate{}, false, err
+			return nil, err
 		}
-		return Candidate{Place: place, DistanceKM: dist}, true, nil // nearest surviving of this class
+		out = append(out, Candidate{Place: place, DistanceKM: dist})
 	}
-	return Candidate{}, false, nil
+	return out, nil
 }
 
 // constraintAncestorIn resolves the fid of the admin unit at the configured tier
@@ -122,6 +132,31 @@ func (s *Service) constraintAncestorIn(containing []domain.Feature, tier string)
 		}
 	}
 	return 0, false
+}
+
+// countryOf returns the ISO country code of the query point from its containing admin
+// polygons. The MOST-LOCAL polygon (highest admin_level) wins: it is both deterministic
+// (independent of PointInPolygon's return order) and more reliable than the country
+// outline, whose NE-join code can be wrong in disputed areas (e.g. the Golan point sits
+// in an admin_level-2 polygon mis-coded PS while its L4/L5/L8 units are correctly IL).
+// Empty when the point is in no polygon (e.g. open sea) — the caller then skips the
+// same-country guard rather than dropping every candidate.
+func (s *Service) countryOf(containing []domain.Feature) string {
+	best, bestLevel := "", -1
+	for i := range containing {
+		iso := containing[i].GetStringProperty(s.manifest.CountryColumn)
+		if iso == "" {
+			continue
+		}
+		// Coverage fills / non-numeric levels sort below any real level (-1 here, but
+		// numeric levels are >= 2), so a real local unit always outranks them; among
+		// fills the first non-empty still wins.
+		level, _ := strconv.Atoi(containing[i].GetStringProperty(s.manifest.LevelColumn))
+		if best == "" || level > bestLevel {
+			best, bestLevel = iso, level
+		}
+	}
+	return best
 }
 
 // containsAdminUnit reports whether the query point's containing admin polygons
@@ -180,7 +215,13 @@ func (s *Service) placeFromFeature(f *domain.Feature) (domain.Place, bool) {
 		NameSource: s.resolveNameSource(f.GetStringProperty(s.manifest.NameSourceColumn)),
 		Class:      class,
 		AdminID:    int64(f.GetIntProperty(s.manifest.AdminFKColumn)),
+		CountryISO: f.GetStringProperty(s.manifest.CountryColumn),
 		At:         coord,
+		// Prominence signals (CompositeSalience). Columns are optional: an unset manifest
+		// column name reads back as zero/empty and the strategy treats it as unknown.
+		Population: int64(f.GetIntProperty(s.manifest.PopulationColumn)),
+		Capital:    f.GetStringProperty(s.manifest.CapitalColumn),
+		Wikidata:   f.GetStringProperty(s.manifest.NotabilityColumn),
 	}, true
 }
 

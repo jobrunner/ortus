@@ -43,6 +43,9 @@ maps layer/column *roles*. The GeoPackage MUST provide:
 - `place` — rank: `village | town | city`
 - `admin_id` — FK → `admin_levels.fid` of the most-local containing unit
 - `country_iso` — ISO 3166-1 alpha-2
+- `population`, `capital`, `wikidata` — *optional* prominence signals (from `make enrich-places`)
+  that drive the ortus bearing anchor salience (`CompositeSalience`); a package without them
+  falls back to rank-only selection
 
 **`admin_levels` layer** (MULTIPOLYGON, EPSG:4326):
 - `admin_level` — OSM admin level (text; numeric values used, coverage fills carry NULL)
@@ -85,9 +88,10 @@ make link-hierarchy       # 4. add places.admin_id + admin_levels.parent_id (RTr
 make srid-metadata        # 5. add native SpatiaLite spatial_ref_sys (SRID 4326)
 make romanize             # 6. name/name_native/name_source (scripts/romanize.py)
 make romanize-gazetteers  # 7. upgrade Arabic/Hebrew via NGA GNS + GeoNames (scripts/romanize_gazetteers.py; network)
-make metadata             # 8. embed ODbL + OSM + NE + GeoNames attribution in gpkg_metadata
-make provenance           # 9. write PROVENANCE.txt (source timestamps + SHA-256)
-make verify               # 10. QA harness — MUST exit 0
+make enrich-places        # 8. places.population/capital/wikidata + GeoNames pop backfill (scripts/enrich_places.py; network)
+make metadata             # 9. embed ODbL + OSM + NE + GeoNames attribution in gpkg_metadata
+make provenance           # 10. write PROVENANCE.txt (source timestamps + SHA-256)
+make verify               # 11. QA harness — MUST exit 0
 ```
 
 **Ordering invariants (do not reorder):**
@@ -95,7 +99,8 @@ make verify               # 10. QA harness — MUST exit 0
    numeric `admin_level`, final `country_iso`).
 2. `link-hierarchy` before `romanize` (romanize expects the final schema).
 3. `romanize` before `romanize-gazetteers` (the latter upgrades rows the former tagged).
-4. All of these steps are idempotent and safe to re-run.
+4. `romanize` before `enrich-places` (the `--geonames` population backfill matches on `name_native`).
+5. All of these steps are idempotent and safe to re-run.
 
 **Performance trap:** `link-hierarchy` drops `idx_admin_country_lvl` before the
 point-in-polygon passes and recreates it after. Keeping it would make the planner
@@ -118,7 +123,12 @@ the GeoPackage in place (idempotent, guarded by `ADD COLUMN IF NOT EXISTS`):
 - **`romanize_gazetteers.py`** — `python3 romanize_gazetteers.py --apply --gpkg <gpkg>`.
   Network step (caches under `temp/gazetteers/`). Upgrades residual machine-transliterated
   Arabic/Hebrew rows with NGA GNS (`gns-bgn`) then GeoNames (`geonames`). Imports `gazetteers.py`.
-- **`gazetteers.py`** — GNS (ArcGIS REST) + GeoNames dump fetch/cache/index. Used by the above.
+- **`enrich_places.py`** — `python3 enrich_places.py --apply --geonames --gpkg <gpkg>`. Adds
+  `places.population`/`capital`/`wikidata` (prominence signals for the ortus bearing anchor
+  salience) by re-reading the place PBFs and joining by `osm_id`; `--geonames` backfills the
+  sparse MENA village population tail from GeoNames. `--check` reports fill + asserts sanity.
+- **`gazetteers.py`** — GNS (ArcGIS REST) + GeoNames dump fetch/cache/index. Used by the above
+  (incl. `build_geonames_population_index` for the enrich backfill).
 - **`build_admin_level_reference.py`** — regenerates `admin_levels_west_palearctic.yaml`
   (the level sidecar) from the GeoPackage + OSM Wiki tiers. Run when admin coverage changes.
 - **`script_census.py`** — QA: counts names by Unicode script. Informational.

@@ -7,6 +7,7 @@ import (
 
 	"github.com/jobrunner/ortus/internal/adapters/geopackage"
 	"github.com/jobrunner/ortus/internal/application/gazetteer"
+	"github.com/jobrunner/ortus/internal/config"
 	"github.com/jobrunner/ortus/internal/domain"
 	"github.com/jobrunner/ortus/internal/ports/input"
 )
@@ -73,7 +74,8 @@ func (a *App) buildGazetteer(ctx context.Context) error {
 		a.Logger.Warn("gazetteer SRID check failed — bearings may return nothing", "error", err)
 	}
 
-	a.Gazetteer = gazetteer.NewService(idx, manifest, levels, nil, true)
+	strategy, candidateRadiusKM := bearingStrategy(cfg.Bearing)
+	a.Gazetteer = gazetteer.NewService(idx, manifest, levels, strategy, true)
 	if nameSources != nil {
 		a.Gazetteer.SetNameSources(nameSources)
 	}
@@ -88,17 +90,57 @@ func (a *App) buildGazetteer(ctx context.Context) error {
 			domain.ClassTown:    b.ReachTownKM,
 			domain.ClassCity:    b.ReachCityKM,
 		},
-		PreferNearestKM: b.PreferNearestKM,
-		ConstraintTier:  manifest.ConstraintTier,
-		InsideLabelKM:   b.InsideLabelKM,
-		CompassPoints:   b.CompassPoints,
+		PreferNearestKM:   b.PreferNearestKM,
+		ConstraintTier:    manifest.ConstraintTier,
+		InsideLabelKM:     b.InsideLabelKM,
+		CompassPoints:     b.CompassPoints,
+		CandidateRadiusKM: candidateRadiusKM, // > 0 only for composite; widens the candidate pool
 	}
 	a.Logger.Info("gazetteer enabled",
 		"geopackage", cfg.GeoPackagePath,
 		"level_reference", cfg.LevelReferencePath != "",
 		"name_sources", cfg.NameSourceManifestPath != "",
+		"salience", strategyName(cfg.Bearing.Salience),
 	)
 	return nil
+}
+
+// bearingStrategy builds the salience strategy from config. It returns the strategy
+// and the flat candidate-gather radius the policy should use (> 0 only for composite,
+// so RankedSalience keeps its per-class reach). Composite is the default; "rank"
+// selects the original class-then-distance behaviour. Zero composite knobs fall back
+// to the calibrated defaults, so a partial config still yields a sane strategy.
+func bearingStrategy(b config.GazetteerBearingConfig) (gazetteer.SalienceStrategy, float64) {
+	if b.Salience == "rank" {
+		return gazetteer.RankedSalience{}, 0
+	}
+	cs := gazetteer.DefaultCompositeSalience()
+	c := b.Composite
+	if c.PopWeight > 0 {
+		cs.PopWeight = c.PopWeight
+	}
+	if c.WikiWeight > 0 {
+		cs.WikiWeight = c.WikiWeight
+	}
+	if c.DecayPerKM > 0 {
+		cs.DecayPerKM = c.DecayPerKM
+	}
+	if c.CapitalScale > 0 {
+		cs.CapitalScale = c.CapitalScale
+	}
+	radius := c.CandidateRadiusKM
+	if radius <= 0 {
+		radius = gazetteer.DefaultCandidateRadiusKM
+	}
+	return cs, radius
+}
+
+// strategyName normalizes the configured salience name for logging.
+func strategyName(s string) string {
+	if s == "rank" {
+		return "rank"
+	}
+	return "composite"
 }
 
 // gazetteerPort returns the gazetteer as its input port, guarding the typed-nil

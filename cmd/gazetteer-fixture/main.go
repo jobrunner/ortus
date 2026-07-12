@@ -61,9 +61,23 @@ var namedPoints = []point{
 // uses their interior point, to cover local-script names (Greek/Hebrew/Arabic/Cyrillic).
 var languageL8 = map[string]int{"GR": 5, "IL": 5, "AE": 5, "RU": 5}
 
-// reachKM mirrors DefaultBearingPolicy so extraction captures every candidate the
-// bearing could pick.
-var reachKM = map[string]float64{"city": 60, "town": 18, "village": 5}
+// reachKM is the per-class extraction radius: the flat composite candidate radius
+// for every class, so the fixture captures every candidate CompositeSalience (the
+// production default) could pick — not just those within the narrower rank reach.
+var reachKM = map[string]float64{
+	"city":    gazetteer.DefaultCandidateRadiusKM,
+	"town":    gazetteer.DefaultCandidateRadiusKM,
+	"village": gazetteer.DefaultCandidateRadiusKM,
+}
+
+// fixtureBearingPolicy mirrors the production composite default (see app wiring):
+// DefaultBearingPolicy plus the flat candidate radius that switches gathering to the
+// composite pool. Used for both golden generation and fixture verification.
+func fixtureBearingPolicy() domain.BearingPolicy {
+	pol := domain.DefaultBearingPolicy()
+	pol.CandidateRadiusKM = gazetteer.DefaultCandidateRadiusKM
+	return pol
+}
 
 func main() {
 	src := flag.String("src", "data/gazetteer/osm-admin-places.gpkg", "source GeoPackage")
@@ -441,7 +455,7 @@ func goldenValues(ctx context.Context, gpkg, manifestPath, sidecarPath, nameSour
 				EquivalentDesc: u.EquivalentDesc,
 			})
 		}
-		fix, err := svc.Bearing(ctx, coord, domain.DefaultBearingPolicy())
+		fix, err := svc.Bearing(ctx, coord, fixtureBearingPolicy())
 		if err != nil {
 			return nil, fmt.Errorf("%s Bearing: %w", p.Label, err)
 		}
@@ -484,7 +498,7 @@ func verifyFixture(ctx context.Context, fixture, manifestPath, sidecarPath, name
 		if got != exp {
 			return fmt.Errorf("%s chain mismatch:\n got %s\nwant %s", e.Point.Label, got, exp)
 		}
-		fix, err := svc.Bearing(ctx, coord, domain.DefaultBearingPolicy())
+		fix, err := svc.Bearing(ctx, coord, fixtureBearingPolicy())
 		if err != nil {
 			return fmt.Errorf("%s Bearing: %w", e.Point.Label, err)
 		}
@@ -518,7 +532,7 @@ func openService(ctx context.Context, gpkg, manifestPath, sidecarPath, nameSourc
 	if err != nil {
 		return nil, nil, err
 	}
-	svc := gazetteer.NewService(idx, manifest, levels, nil, true)
+	svc := gazetteer.NewService(idx, manifest, levels, gazetteer.DefaultCompositeSalience(), true)
 	if nameSourcePath != "" {
 		nsdata, err := os.ReadFile(nameSourcePath)
 		if err != nil {

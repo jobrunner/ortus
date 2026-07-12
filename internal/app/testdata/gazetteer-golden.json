@@ -838,9 +838,9 @@
       }
     ],
     "bearing": {
-      "label": "4 km N Peiraias",
-      "reference": "Peiraias",
-      "name_native": "Πειραιάς",
+      "label": "8.5 km W Athina",
+      "reference": "Athina",
+      "name_native": "Αθήνα",
       "name_source": "translit-el-843",
       "inside": false
     }
@@ -982,9 +982,9 @@
       }
     ],
     "bearing": {
-      "label": "4 km NW Peiraias",
-      "reference": "Peiraias",
-      "name_native": "Πειραιάς",
+      "label": "10 km W Athina",
+      "reference": "Athina",
+      "name_native": "Αθήνα",
       "name_source": "translit-el-843",
       "inside": false
     }
@@ -1054,9 +1054,9 @@
       }
     ],
     "bearing": {
-      "label": "2 km W Peiraias",
-      "reference": "Peiraias",
-      "name_native": "Πειραιάς",
+      "label": "10 km W Athina",
+      "reference": "Athina",
+      "name_native": "Αθήνα",
       "name_source": "translit-el-843",
       "inside": false
     }
@@ -1108,11 +1108,11 @@
       }
     ],
     "bearing": {
-      "label": "in Ness Ziona",
-      "reference": "Ness Ziona",
-      "name_native": "נס ציונה",
+      "label": "44 km W Jerusalem",
+      "reference": "Jerusalem",
+      "name_native": "ירושלים",
       "name_source": "osm-en",
-      "inside": true
+      "inside": false
     }
   },
   {
@@ -1162,11 +1162,11 @@
       }
     ],
     "bearing": {
-      "label": "in Rehovot",
-      "reference": "Rehovot",
-      "name_native": "רחובות",
+      "label": "42 km W Jerusalem",
+      "reference": "Jerusalem",
+      "name_native": "ירושלים",
       "name_source": "osm-en",
-      "inside": true
+      "inside": false
     }
   },
   {
@@ -1216,9 +1216,9 @@
       }
     ],
     "bearing": {
-      "label": "17 km N Al-Quneitra",
-      "reference": "Al-Quneitra",
-      "name_native": "القنيطرة",
+      "label": "20 km E Kiryat Shmona",
+      "reference": "Kiryat Shmona",
+      "name_native": "קרית שמונה",
       "name_source": "osm-en",
       "inside": false
     }
@@ -1270,11 +1270,11 @@
       }
     ],
     "bearing": {
-      "label": "10 km N Al-Quneitra",
-      "reference": "Al-Quneitra",
-      "name_native": "القنيطرة",
+      "label": "in Buq'atha",
+      "reference": "Buq'atha",
+      "name_native": "بقعاثا",
       "name_source": "osm-en",
-      "inside": false
+      "inside": true
     }
   },
   {
@@ -1324,9 +1324,9 @@
       }
     ],
     "bearing": {
-      "label": "13 km N Al-Quneitra",
-      "reference": "Al-Quneitra",
-      "name_native": "القنيطرة",
+      "label": "3.5 km N Buq'atha",
+      "reference": "Buq'atha",
+      "name_native": "بقعاثا",
       "name_source": "osm-en",
       "inside": false
     }
@@ -1459,11 +1459,11 @@
       }
     ],
     "bearing": {
-      "label": "49 km NE Vyborg",
-      "reference": "Vyborg",
-      "name_native": "Выборг",
+      "label": "in Kamennogorsk",
+      "reference": "Kamennogorsk",
+      "name_native": "Каменногорск",
       "name_source": "translit-ru-bgn",
-      "inside": false
+      "inside": true
     }
   },
   {

@@ -248,6 +248,24 @@ type GazetteerBearingConfig struct {
 	PreferNearestKM float64 `mapstructure:"prefer_nearest_km"` // a town-or-larger anchor within this radius wins outright
 	InsideLabelKM   float64 `mapstructure:"inside_label_km"`
 	CompassPoints   int     `mapstructure:"compass_points"` // 8 or 16
+	// Salience selects the anchor-selection strategy: "composite" (default —
+	// prominence-vs-proximity score; uses the enriched population/capital/wikidata
+	// columns, falls back to class where they are absent) or "rank" (the original
+	// class-then-distance behaviour). Unknown/empty ⇒ composite.
+	Salience string `mapstructure:"salience"`
+	// Composite holds the composite-strategy knobs (used only when Salience is
+	// "composite"). A zero field takes the calibrated default.
+	Composite GazetteerCompositeConfig `mapstructure:"composite"`
+}
+
+// GazetteerCompositeConfig tunes CompositeSalience. Defaults (the calibrated
+// "balanced" profile) apply per-field when left zero.
+type GazetteerCompositeConfig struct {
+	CandidateRadiusKM float64 `mapstructure:"candidate_radius_km"` // flat gather radius for all classes
+	PopWeight         float64 `mapstructure:"pop_weight"`          // multiplier on log10(1+population)
+	WikiWeight        float64 `mapstructure:"wiki_weight"`         // bonus when a wikidata QID is present
+	DecayPerKM        float64 `mapstructure:"decay_per_km"`        // score subtracted per km (prominence↔proximity slope)
+	CapitalScale      float64 `mapstructure:"capital_scale"`       // scales the capital-rank bonus
 }
 
 // TracingTransport selects the OTLP transport (http/protobuf or grpc).
@@ -354,6 +372,14 @@ func Defaults() {
 	viper.SetDefault("gazetteer.bearing.prefer_nearest_km", 5.0)
 	viper.SetDefault("gazetteer.bearing.inside_label_km", 1.0)
 	viper.SetDefault("gazetteer.bearing.compass_points", 8)
+	// Anchor salience: composite (prominence-vs-proximity) by default; per-field
+	// composite knobs default to the calibrated "balanced" profile in app wiring.
+	viper.SetDefault("gazetteer.bearing.salience", "composite")
+	viper.SetDefault("gazetteer.bearing.composite.candidate_radius_km", 120.0)
+	viper.SetDefault("gazetteer.bearing.composite.pop_weight", 1.0)
+	viper.SetDefault("gazetteer.bearing.composite.wiki_weight", 0.3)
+	viper.SetDefault("gazetteer.bearing.composite.decay_per_km", 0.04)
+	viper.SetDefault("gazetteer.bearing.composite.capital_scale", 0.8)
 }
 
 // Load loads configuration from environment and config file.

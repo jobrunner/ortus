@@ -36,9 +36,18 @@ Geometry: `POINT`. Settlements only: `place` ∈ {`village`, `town`, `city`}.
 | `name_native` | TEXT | original-script endonym (verbatim OSM `name`); **NULL** where `name` was already Latin |
 | `name_source` | TEXT | per-row provenance of `name` (controlled code; see [manifest](../../name_source_manifest.yaml)) |
 | `name_de`, `name_en`, `name_fr`, `name_el` | TEXT | localized names (sparse) |
+| `population` | INTEGER | OSM `population` (parsed to a non-negative int); sparse MENA village tail backfilled from GeoNames; **NULL** if unknown. Fill: city ~97 %, town ~84 %, village ~50 %. |
+| `capital` | TEXT | OSM `capital` rank of the unit this place is the seat of (`2`=country … `8`=municipality, or `yes`); **NULL** if not a seat |
+| `wikidata` | TEXT | OSM `wikidata` QID; presence is a notability proxy (~71 % filled); **NULL** if untagged |
 | `country_iso` | TEXT | **ISO 3166-1 alpha-2**, 100 % populated |
 | `admin_id` | INTEGER | `fid` of the most-local `admin_levels` unit containing the point (same country); **NULL** in coverage holes. See [Hierarchy](#hierarchy). |
 | `geom` | POINT | EPSG:4326 |
+
+> **Prominence columns** (`population`, `capital`, `wikidata`) are added by
+> `make enrich-places` (after romanize). They exist only on `places` and drive the ortus
+> bearing anchor salience (`CompositeSalience`). Values are as-tagged in OSM (garbage-in:
+> the odd node carries a wrong population); the log-scaled salience damps outliers. See
+> [Field provenance](#field-provenance-source-of-each-field).
 
 > **Dropped from `places`:** the denormalized country *name* columns
 > (`country`, `country_de/en/fr/el`) were removed — they are fully derivable from
@@ -79,6 +88,9 @@ OSM is.
 | `osm_id` | OSM | object id of the boundary relation / place node |
 | `admin_level` *(admin)* | OSM | tag `admin_level`; forced numeric in `normalize-schema` (non-numeric → NULL) |
 | `place` *(places)* | OSM | tag `place` (filtered to `village`/`town`/`city`) |
+| `population` *(places)* | OSM + GeoNames | OSM tag `population` (re-read from the place PBFs by `make enrich-places`); sparse MENA village tail backfilled from GeoNames (CC BY 4.0), matched by folded native name + nearest populated-place coordinate |
+| `capital` *(places)* | OSM | tag `capital` verbatim (admin rank of the seat) |
+| `wikidata` *(places)* | OSM | tag `wikidata` (QID) |
 | `name` | OSM + derived | OSM tag `name`, then romanized to Latin by `make romanize` / `romanize-gazetteers` (documented standard per script; curated OSM/gazetteer forms for Arabic/Hebrew) |
 | `name_native` | OSM | verbatim OSM `name` before romanization; NULL if `name` was already Latin |
 | `name_source` | derived | controlled code identifying the romanization method/standard/source for `name` |

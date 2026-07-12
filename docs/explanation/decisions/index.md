@@ -20,4 +20,5 @@ Each ADR captures one significant decision, its context, and consequences.
 | [0014](0014-gazetteer-internal-capability.md) | Gazetteer as an internal capability |
 | [0015](0015-salience-rank-stratified-reach.md) | Salience: rank-stratified reach radii |
 | [0016](0016-bearing-convention-compass.md) | Bearing convention, boundary constraint & compass |
-| [0017](0017-prominence-source-rank.md) | Prominence source: OSM rank vs GeoNames |
+| [0017](0017-prominence-source-rank.md) | Prominence source: OSM rank vs GeoNames (superseded by 0018) |
+| [0018](0018-composite-salience-prominence.md) | Composite salience: prominence-weighted anchor selection |

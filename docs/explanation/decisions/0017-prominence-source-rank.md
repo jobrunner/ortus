@@ -2,7 +2,11 @@
 
 ## Status
 
-Akzeptiert (durch die Daten entschieden)
+Akzeptiert (durch die Daten entschieden) — **abgelöst durch
+[ADR-0018](0018-composite-salience-prominence.md)**: die hier reservierte
+`population_column`-Naht wurde realisiert; der Datensatz trägt nun `population`/`capital`/
+`wikidata` (via `make enrich-places` + GeoNames-Backfill), und die Salience ist standardmäßig
+prominenz-gewichtet statt rein rang-basiert.
 
 ## Kontext
 

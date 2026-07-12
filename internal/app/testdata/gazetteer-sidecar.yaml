@@ -214,6 +214,26 @@ countries:
             9:
                 name: Subdivision (uncertain)
                 equivalent: other
+    LT:
+        levels:
+            2:
+                name: Lietuva (Lithuania)
+                equivalent: country
+            4:
+                name: Apskritys (Counties)
+                equivalent: county
+            5:
+                name: Savivaldybės / Rajonai (Municipalities)
+                equivalent: municipality
+            6:
+                name: Seniūnijos (Elderships)
+                equivalent: district
+            8:
+                name: Miestai / miesteliai / kaimai (Cities / towns / villages)
+                equivalent: municipality
+            10:
+                name: Miesto / miestelio dalys / miesto seniūnijos (City/town suburbs)
+                equivalent: submunicipality
     OM:
         levels:
             2:
@@ -230,6 +250,38 @@ countries:
                 equivalent: municipality
             10:
                 name: Blocks/Subdivisions of Villages and Towns (مجمع او تقسيمات قرى/مدن)
+                equivalent: submunicipality
+    PL:
+        levels:
+            2:
+                name: Polska
+                equivalent: country
+            4:
+                name: województwa (voivodeships)
+                equivalent: state
+            5:
+                name: metropolis / metropolitan association (e.g. Górnośląsko-Zagłębiowska Metropolia)
+                equivalent: region
+            6:
+                name: powiaty (counties)
+                equivalent: county
+            7:
+                name: gminy (municipalities)
+                equivalent: municipality
+            8:
+                name: miasta, miasteczka i wsie (cities, towns and villages)
+                equivalent: municipality
+            9:
+                name: dzielnice (city districts)
+                equivalent: borough
+            10:
+                name: przysiółki (isolated parts of villages)
+                equivalent: submunicipality
+            11:
+                name: osiedla (neighbourhoods)
+                equivalent: submunicipality
+            12:
+                name: osiedla / sub-neighbourhood units
                 equivalent: submunicipality
     PS:
         levels:

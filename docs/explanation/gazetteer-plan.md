@@ -105,7 +105,9 @@ country-name columns** come from an agreed rebuild of the GeoPackage project —
 
 - **`places`** (Point, 422,557 features):
   - `place` — class, **exactly three values**: `village` (400,910 ≈ 95%), `town` (19,787), `city` (1,860).
-  - **No `population` column.** Prominence = the `place` class only.
+  - `population`, `capital`, `wikidata` — prominence signals added by `make enrich-places`
+    (OSM tags, GeoNames-backfilled population tail); drive the composite anchor salience.
+    See [ADR-0018](decisions/0018-composite-salience-prominence.md). (Originally absent — [ADR-0017](decisions/0017-prominence-source-rank.md).)
   - `name` (99.4% populated — the reliable label field), plus *sparse* localized
     `name_de`/`name_en`/`name_fr`/`name_el` (`name_de` ~88% empty → use only when present), `osm_id`.
   - `country_iso` — **kept** as the reliable country anchor (Natural-Earth-derived, 100%).
@@ -149,7 +151,7 @@ places:
   rank_column: place         # village | town | city
   admin_fk: admin_id         # → admin_levels.fid (most-local containing unit)
   country_column: country_iso
-  # no population_column — this dataset has none
+  population_column: population   # + capital_column, notability_column (make enrich-places)
 admin:
   layer: admin_levels
   level_column: admin_level

@@ -21,6 +21,9 @@ type manifestYAML struct {
 		RankColumn       string `yaml:"rank_column"`
 		AdminFK          string `yaml:"admin_fk"`
 		CountryColumn    string `yaml:"country_column"`
+		PopulationColumn string `yaml:"population_column"`
+		CapitalColumn    string `yaml:"capital_column"`
+		NotabilityColumn string `yaml:"notability_column"`
 	} `yaml:"places"`
 	Admin struct {
 		Layer          string `yaml:"layer"`
@@ -67,6 +70,9 @@ func ParseManifest(data []byte) (Manifest, error) {
 		CountryColumn:    country,
 		NameNativeColumn: y.Places.NameNativeColumn,
 		NameSourceColumn: y.Places.NameSourceColumn,
+		PopulationColumn: y.Places.PopulationColumn,
+		CapitalColumn:    y.Places.CapitalColumn,
+		NotabilityColumn: y.Places.NotabilityColumn,
 		ConstraintTier:   tier,
 		License: domain.License{
 			Name:        y.License.Name,
