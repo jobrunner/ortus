@@ -22,7 +22,7 @@ Ortus ist ein Go-basierter REST-Service für Punktabfragen auf GeoPackage-Dateie
 ## Kern-Features
 
 - **REST-API:** OpenAPI-konforme Punktabfragen
-- **GeoPackage:** Geometriebasierte ST_Contains-Abfragen
+- **GeoPackage:** Geometriebasierte, randinklusive Punkt-in-Polygon-Abfragen (ST_Covers)
 - **Koordinatentransformation:** Automatische Projektion in Layer-SRID
 - **Hot-Reload:** Automatische Erkennung neuer/entfernter GeoPackages
 - **Object Storage:** Laden von GeoPackages aus S3/Azure beim Start

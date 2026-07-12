@@ -133,8 +133,12 @@ func (g *GazetteerIndex) QueryKNN(ctx context.Context, layer string, p domain.Co
 	return g.runFeatureQuery(ctx, layer, geom, query, args...)
 }
 
-// PointInPolygon returns the features of a polygon layer that contain p. It uses
-// the R-tree bbox pre-filter when present, else a full-table ST_Contains scan.
+// PointInPolygon returns the features of a polygon layer that cover p. It uses
+// the R-tree bbox pre-filter when present, else a full-table ST_Covers scan.
+// ST_Covers is boundary-inclusive (a point exactly on a polygon boundary is
+// matched), so an ST_Subdivide-tiled layer returns the same features as its
+// un-tiled original. Because a boundary point can be covered by several fragments
+// of one feature, the assembled results are deduped by attribute identity.
 func (g *GazetteerIndex) PointInPolygon(ctx context.Context, layer string, p domain.Coordinate) ([]domain.Feature, error) {
 	geom, err := geomColumn(ctx, g.db, layer)
 	if err != nil {
@@ -150,9 +154,16 @@ func (g *GazetteerIndex) PointInPolygon(ctx context.Context, layer string, p dom
 	} else {
 		b.WriteString(` WHERE `)
 	}
-	fmt.Fprintf(&b, `ST_Contains(CastAutomagic(t."%s"), GeomFromText(?, ?))`, geom)
+	fmt.Fprintf(&b, `ST_Covers(CastAutomagic(t."%s"), GeomFromText(?, ?))`, geom)
 	args = append(args, p.WKT(), p.SRID)
-	return g.runFeatureQuery(ctx, layer, geom, b.String(), args...)
+	features, err := g.runFeatureQuery(ctx, layer, geom, b.String(), args...)
+	if err != nil {
+		return nil, err
+	}
+	// Collapse ST_Subdivide fragments of the same feature (boundary-inclusive
+	// ST_Covers can match >1 fragment on a shared cut edge); keeps genuine matches
+	// on a border between two distinct features.
+	return dedupFeaturesByProperties(features), nil
 }
 
 // ResolveChain walks a layer's parent-FK links from a starting feature id up to

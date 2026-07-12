@@ -207,6 +207,44 @@ func TestGazetteerIndex_PointInPolygonNested(t *testing.T) {
 	}
 }
 
+// TestGazetteerIndex_PointInPolygonBoundaryInclusive checks that a point exactly
+// on a polygon boundary is matched (ST_Covers semantics). The point (9, 50) lies
+// on Bavaria's western edge (POLYGON((9 49 ...))) and inside the Country polygon,
+// so both enclosing regions must be returned; strict ST_Contains would drop
+// Bavaria. This is the same effect that makes ST_Subdivide-tiled packages lossless.
+func TestGazetteerIndex_PointInPolygonBoundaryInclusive(t *testing.T) {
+	for _, withRtree := range []bool{true, false} {
+		name := "rtree"
+		if !withRtree {
+			name = "fullscan"
+		}
+		t.Run(name, func(t *testing.T) {
+			idx := openFixtureIndex(t, withRtree)
+			got, err := idx.PointInPolygon(context.Background(), "admin_levels", domain.NewWGS84Coordinate(9.0, 50.0))
+			if err != nil {
+				t.Fatalf("PointInPolygon: %v", err)
+			}
+			// Assert each expected region appears exactly once and nothing else —
+			// a set+length check would pass on ["Country","Country"] (a duplicate
+			// masking a missing Bavaria).
+			counts := map[string]int{}
+			for _, n := range names(got) {
+				counts[n]++
+			}
+			for _, w := range []string{"Country", "Bavaria"} {
+				if counts[w] != 1 {
+					t.Errorf("region %q appears %d time(s), want exactly 1 (got %v)", w, counts[w], names(got))
+				}
+			}
+			for n := range counts {
+				if n != "Country" && n != "Bavaria" {
+					t.Errorf("unexpected region %q on boundary; want only Country+Bavaria (got %v)", n, names(got))
+				}
+			}
+		})
+	}
+}
+
 func TestGazetteerIndex_ResolveChain(t *testing.T) {
 	idx := openFixtureIndex(t, true)
 	chain, err := idx.ResolveChain(context.Background(), "admin_levels", 3, output.AdminColumns{

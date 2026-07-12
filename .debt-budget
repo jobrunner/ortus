@@ -4,4 +4,4 @@
 # (reviewed in the PR). Enforced by scripts/debt-guard.sh.
 #
 # When you remove suppressions, lower this number to lock the gain in.
-26
+25

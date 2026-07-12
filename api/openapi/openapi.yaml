@@ -54,6 +54,19 @@ paths:
 
         Koordinaten können entweder als `lon/lat` (für WGS84) oder als `x/y`
         (für andere Koordinatensysteme) angegeben werden.
+
+        Die Punkt-in-Polygon-Prüfung ist randinklusiv (ST_Covers): ein Punkt, der
+        exakt auf der Grenze eines Polygons liegt, gehört zu diesem Polygon. Liegt
+        ein Punkt genau auf der Grenze zwischen zwei verschiedenen Regionen, werden
+        beide zurückgegeben. Fragmente derselben Region (z. B. durch ST_Subdivide
+        gekachelte Quellen) werden anhand ihrer Attribute dedupliziert, sodass eine
+        gekachelte Quelle dieselben Treffer liefert wie ihre ungekachelte Vorlage.
+        Bei aktivem `query.with_geometry` liefert eine gekachelte Quelle das
+        jeweilige Teil-Polygon (Subdivision-Fragment), nicht das ursprüngliche
+        Gesamtpolygon; ebenso ist die zurückgegebene `id` die fid des behaltenen
+        Fragments (nach Deduplizierung) und entspricht nicht zwingend der
+        Feature-ID einer ungekachelten Quelle — Kacheln bleibt eine optionale
+        Packaging-Entscheidung.
       operationId: queryAllSources
       parameters:
         - $ref: '#/components/parameters/LonParam'
@@ -154,7 +167,11 @@ paths:
       tags:
         - Query
       summary: Spezifische Datenquelle abfragen
-      description: Führt eine Punktabfrage auf einer bestimmten Datenquelle durch.
+      description: |
+        Führt eine Punktabfrage auf einer bestimmten Datenquelle durch.
+
+        Die Punkt-in-Polygon-Prüfung ist randinklusiv (ST_Covers) und dedupliziert
+        Fragmente derselben Region; siehe die Beschreibung von `GET /api/v1/query`.
       operationId: querySource
       parameters:
         - $ref: '#/components/parameters/SourceIdParam'

@@ -10,11 +10,23 @@ import (
 )
 
 // buildFixtureGPKG creates a minimal but functionally valid GeoPackage at path
-// with one polygon layer "regions" (geometry column "geom", SRID 4326) holding
-// two disjoint squares:
+// with one polygon layer "regions" (geometry column "geom", SRID 4326).
 //
-//	west: (0,0)-(4,4)   name="west" pop=100
-//	east: (6,0)-(10,4)  name="east" pop=200
+// The rows model three situations relevant to boundary-inclusive matching:
+//
+//	west: (0,0)-(4,4)    name="west"  pop=100   disjoint square
+//	east: (6,0)-(10,4)   name="east"  pop=200   disjoint square
+//
+// A single feature "tiled" that has been ST_Subdivide-split into two
+// edge-sharing fragments (identical properties, different fid) along x=13:
+//
+//	(12,0)-(13,4)  name="tiled" pop=300
+//	(13,0)-(14,4)  name="tiled" pop=300
+//
+// Two *different* regions "borderA"/"borderB" that share the edge x=17:
+//
+//	(16,0)-(17,4)  name="borderA" pop=400
+//	(17,0)-(18,4)  name="borderB" pop=500
 //
 // It exercises exactly the metadata tables (gpkg_contents, gpkg_geometry_columns)
 // and the CastAutomagic-readable geometry blobs the adapter relies on. If the
@@ -53,7 +65,7 @@ func buildFixtureGPKG(t *testing.T, path string) {
 		`CREATE TABLE regions (fid INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, pop INTEGER, geom BLOB)`,
 		`INSERT INTO gpkg_contents
 			(table_name, data_type, identifier, description, min_x, min_y, max_x, max_y, srs_id)
-			VALUES ('regions','features','regions','test regions',0,0,10,4,4326)`,
+			VALUES ('regions','features','regions','test regions',0,0,18,4,4326)`,
 		`INSERT INTO gpkg_geometry_columns
 			(table_name, column_name, geometry_type_name, srs_id, z, m)
 			VALUES ('regions','geom','POLYGON',4326,0,0)`,
@@ -72,6 +84,12 @@ func buildFixtureGPKG(t *testing.T, path string) {
 	}{
 		{"west", 100, "POLYGON((0 0, 4 0, 4 4, 0 4, 0 0))"},
 		{"east", 200, "POLYGON((6 0, 10 0, 10 4, 6 4, 6 0))"},
+		// Two ST_Subdivide fragments of one feature (same props), sharing x=13.
+		{"tiled", 300, "POLYGON((12 0, 13 0, 13 4, 12 4, 12 0))"},
+		{"tiled", 300, "POLYGON((13 0, 14 0, 14 4, 13 4, 13 0))"},
+		// Two distinct regions sharing the border x=17.
+		{"borderA", 400, "POLYGON((16 0, 17 0, 17 4, 16 4, 16 0))"},
+		{"borderB", 500, "POLYGON((17 0, 18 0, 18 4, 17 4, 17 0))"},
 	}
 	for _, r := range rows {
 		if _, err := db.ExecContext(ctx, insert, r.name, r.pop, r.wkt); err != nil {
@@ -118,8 +136,8 @@ func TestIntegration_OpenReadsLayerMetadata(t *testing.T) {
 	if l.SRID != 4326 {
 		t.Errorf("SRID = %d, want 4326", l.SRID)
 	}
-	if l.FeatureCount != 2 {
-		t.Errorf("FeatureCount = %d, want 2", l.FeatureCount)
+	if l.FeatureCount != 6 {
+		t.Errorf("FeatureCount = %d, want 6", l.FeatureCount)
 	}
 	if l.Extent == nil || !l.Extent.IsValid() {
 		t.Errorf("Extent = %+v, want a valid bbox", l.Extent)
@@ -127,22 +145,26 @@ func TestIntegration_OpenReadsLayerMetadata(t *testing.T) {
 }
 
 func TestIntegration_PointInPolygon_FallbackScan(t *testing.T) {
-	// No spatial index created → exercises the full-table-scan ST_Contains path.
+	// No spatial index created → exercises the full-table-scan ST_Covers path.
 	repo, _ := newFixtureRepo(t)
 	ctx := context.Background()
 
 	cases := []struct {
 		name      string
 		coord     domain.Coordinate
-		wantName  string // "" => expect no feature
-		wantCount int
+		wantNames []string // expected feature "name" values (order-insensitive)
 	}{
-		{"inside west", domain.NewWGS84Coordinate(2, 2), "west", 1},
-		{"inside east", domain.NewWGS84Coordinate(8, 2), "east", 1},
-		{"in the gap", domain.NewWGS84Coordinate(5, 2), "", 0},
-		{"outside all", domain.NewWGS84Coordinate(20, 20), "", 0},
-		// ST_Contains is strict: a point on the boundary is not contained.
-		{"on boundary", domain.NewWGS84Coordinate(0, 2), "", 0},
+		{"inside west", domain.NewWGS84Coordinate(2, 2), []string{"west"}},
+		{"inside east", domain.NewWGS84Coordinate(8, 2), []string{"east"}},
+		{"in the gap", domain.NewWGS84Coordinate(5, 2), nil},
+		{"outside all", domain.NewWGS84Coordinate(20, 20), nil},
+		// ST_Covers is boundary-inclusive: a point on a region edge returns that region.
+		{"on boundary", domain.NewWGS84Coordinate(0, 2), []string{"west"}},
+		// A point on the shared cut edge of two ST_Subdivide fragments of the SAME
+		// feature is covered by both fragments; dedup collapses them to one result.
+		{"on internal cut edge dedups", domain.NewWGS84Coordinate(13, 2), []string{"tiled"}},
+		// A point on the border between two DIFFERENT regions returns both.
+		{"on border between two regions", domain.NewWGS84Coordinate(17, 2), []string{"borderA", "borderB"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -150,16 +172,33 @@ func TestIntegration_PointInPolygon_FallbackScan(t *testing.T) {
 			if err != nil {
 				t.Fatalf("QueryPoint: %v", err)
 			}
-			if len(features) != tc.wantCount {
-				t.Fatalf("got %d features, want %d", len(features), tc.wantCount)
-			}
-			if tc.wantCount > 0 {
-				got, _ := features[0].GetProperty("name")
-				if got != tc.wantName {
-					t.Errorf("name = %v, want %q", got, tc.wantName)
-				}
-			}
+			assertFeatureNames(t, features, tc.wantNames)
 		})
+	}
+}
+
+// assertFeatureNames checks that the "name" properties of features match want
+// as a multiset (order-insensitive). A nil/empty want means no features.
+func assertFeatureNames(t *testing.T, features []domain.Feature, want []string) {
+	t.Helper()
+	if len(features) != len(want) {
+		got := make([]string, 0, len(features))
+		for _, f := range features {
+			got = append(got, f.GetStringProperty("name"))
+		}
+		t.Fatalf("got %d features %v, want %d %v", len(features), got, len(want), want)
+	}
+	counts := map[string]int{}
+	for _, w := range want {
+		counts[w]++
+	}
+	for _, f := range features {
+		counts[f.GetStringProperty("name")]--
+	}
+	for name, c := range counts {
+		if c != 0 {
+			t.Errorf("feature name %q count off by %d; want %v", name, c, want)
+		}
 	}
 }
 
@@ -233,6 +272,19 @@ func TestIntegration_SpatialIndexCreateProbeAndQuery(t *testing.T) {
 	if len(features) != 1 || features[0].GetStringProperty("name") != "east" {
 		t.Fatalf("rtree query = %+v, want one 'east'", features)
 	}
+
+	// Boundary-inclusive + dedup must also hold on the R-tree JOIN path.
+	frags, err := repo.QueryPoint(ctx, "regions", "regions", domain.NewWGS84Coordinate(13, 2))
+	if err != nil {
+		t.Fatalf("QueryPoint on cut edge via rtree: %v", err)
+	}
+	assertFeatureNames(t, frags, []string{"tiled"})
+
+	both, err := repo.QueryPoint(ctx, "regions", "regions", domain.NewWGS84Coordinate(17, 2))
+	if err != nil {
+		t.Fatalf("QueryPoint on shared border via rtree: %v", err)
+	}
+	assertFeatureNames(t, both, []string{"borderA", "borderB"})
 
 	// Idempotent: creating again hits the pre-existing branch without error.
 	if err := repo.CreateSpatialIndex(ctx, "regions", "regions"); err != nil {

@@ -17,7 +17,10 @@ type SpatialIndex interface {
 	// both for the place-class query and the admin boundary constraint.
 	QueryKNN(ctx context.Context, layer string, p domain.Coordinate, k int, maxKM float64, f *Filter) ([]domain.Feature, error)
 
-	// PointInPolygon returns the features of a polygon layer that contain p.
+	// PointInPolygon returns the features of a polygon layer that cover p
+	// (boundary-inclusive: a point on a polygon edge is a match). Results are
+	// deduplicated by attribute identity, so ST_Subdivide-tiled sources match
+	// their un-tiled originals.
 	PointInPolygon(ctx context.Context, layer string, p domain.Coordinate) ([]domain.Feature, error)
 
 	// ResolveChain walks a layer's parent_id links from a starting feature id up
