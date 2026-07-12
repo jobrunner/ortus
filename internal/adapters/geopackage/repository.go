@@ -664,7 +664,8 @@ func (r *Repository) readMetadata(ctx context.Context, db *sql.DB, src *domain.S
 // packages return the same results as their un-tiled originals, since a point on
 // an internal cut edge is covered by the adjoining fragment(s) rather than being
 // missed by strict ST_Contains. Because a boundary point can be covered by more
-// than one fragment of the same feature, callers dedup the assembled results.
+// than one fragment of the same feature, this function deduplicates the assembled
+// results for polygon layers (see dedupFeaturesByProperties).
 // The coordinate must already be transformed to the layer's SRID before calling this function.
 // Uses R-tree spatial index for fast bounding box filtering when available.
 func (r *Repository) executePointQuery(ctx context.Context, db *sql.DB, layer *domain.Layer, coord domain.Coordinate) ([]domain.Feature, error) {
@@ -792,36 +793,52 @@ func (r *Repository) executePointQuery(ctx context.Context, db *sql.DB, layer *d
 		return nil, err
 	}
 
-	// Dedup fragments of the same feature. ST_Covers is boundary-inclusive, so a
-	// point on an internal cut edge of an ST_Subdivide-tiled feature is covered by
-	// two or more adjoining fragments that carry identical attributes (only fid and
-	// the returned geometry fragment differ). Collapsing on the non-fid, non-geometry
-	// properties removes those duplicates while preserving genuine matches on a
-	// border between two *different* features.
-	features = dedupFeaturesByProperties(features)
+	// Dedup fragments of the same feature — polygon layers only. ST_Covers is
+	// boundary-inclusive, so a point on an internal cut edge of an ST_Subdivide-tiled
+	// polygon is covered by two or more adjoining fragments that carry identical
+	// attributes (only fid and the returned geometry fragment differ). Collapsing on
+	// the non-fid, non-geometry properties removes those duplicates while preserving
+	// genuine matches on a border between two *different* features. It is restricted
+	// to polygon layers because the key ignores geometry: on point/line layers two
+	// genuinely distinct features that share all attributes must NOT be collapsed
+	// (there is no ST_Subdivide fragmentation to undo there).
+	if layer.IsPolygonLayer() {
+		features = dedupFeaturesByProperties(features)
+	}
 
 	span.SetAttributes(output.Int("ortus.features.count", len(features)))
 	return features, nil
 }
 
 // dedupFeaturesByProperties collapses features that are identical across all of
-// their non-geometry, non-fid properties, keeping the first occurrence in input
-// order. It is used to remove duplicate rows produced by boundary-inclusive
-// (ST_Covers) matching against ST_Subdivide fragments of a single feature; two
-// distinct features that happen to share a border are kept because their
-// properties differ. It does not rely on any magic column name.
+// their non-geometry, non-fid properties. It is used to remove duplicate rows
+// produced by boundary-inclusive (ST_Covers) matching against ST_Subdivide
+// fragments of a single feature; two distinct features that happen to share a
+// border are kept because their properties differ.
+//
+// The fid is excluded from the key because scanFeature routes the GeoPackage
+// feature-id column ("fid", the ogr convention) into Feature.ID rather than
+// Properties; geometry is excluded because each fragment carries a different
+// piece. Since the SQL has no ORDER BY, the input row order is not guaranteed, so
+// the representative kept per key is made deterministic by preferring the smallest
+// non-zero fid (which also keeps the returned geometry fragment stable). Order of
+// distinct kept features follows first appearance.
 func dedupFeaturesByProperties(features []domain.Feature) []domain.Feature {
 	if len(features) < 2 {
 		return features
 	}
-	seen := make(map[string]struct{}, len(features))
-	out := features[:0:0]
+	pos := make(map[string]int, len(features))
+	out := make([]domain.Feature, 0, len(features))
 	for _, f := range features {
 		key := featurePropertyKey(f)
-		if _, dup := seen[key]; dup {
+		if i, dup := pos[key]; dup {
+			// Deterministic representative: prefer the smallest non-zero fid.
+			if f.ID != 0 && (out[i].ID == 0 || f.ID < out[i].ID) {
+				out[i] = f
+			}
 			continue
 		}
-		seen[key] = struct{}{}
+		pos[key] = len(out)
 		out = append(out, f)
 	}
 	return out
@@ -829,8 +846,15 @@ func dedupFeaturesByProperties(features []domain.Feature) []domain.Feature {
 
 // featurePropertyKey builds a stable identity key from a feature's properties,
 // excluding the geometry (which differs per fragment) and the fid (already
-// excluded from Properties by scanFeature). Keys are sorted so ordering in the
-// map does not affect the result.
+// excluded from Properties by scanFeature). Property names are sorted so map
+// ordering does not affect the result.
+//
+// Each field is length-prefixed ("<len>:<bytes>") so the encoding is injective —
+// no combination of embedded delimiters or NUL bytes in a TEXT value can make two
+// distinct property sets produce the same key. Each value is additionally tagged
+// with its Go type ("%T=%v") so that values which stringify identically across
+// types (e.g. int64(1) vs "1") do not collide. Fragments of one source feature
+// scan identically, so this never over-splits a genuine duplicate.
 func featurePropertyKey(f domain.Feature) string {
 	keys := make([]string, 0, len(f.Properties))
 	for k := range f.Properties {
@@ -838,10 +862,13 @@ func featurePropertyKey(f domain.Feature) string {
 	}
 	sort.Strings(keys)
 	var b strings.Builder
-	b.WriteString(f.LayerName)
-	b.WriteByte('\x00')
+	writeField := func(s string) {
+		fmt.Fprintf(&b, "%d:%s", len(s), s)
+	}
+	writeField(f.LayerName)
 	for _, k := range keys {
-		fmt.Fprintf(&b, "%s\x00%v\x00", k, f.Properties[k])
+		writeField(k)
+		writeField(fmt.Sprintf("%T=%v", f.Properties[k], f.Properties[k]))
 	}
 	return b.String()
 }
