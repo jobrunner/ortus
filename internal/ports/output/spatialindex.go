@@ -12,10 +12,12 @@ import (
 // cgo/SpatiaLite dependency behind this contract so the application core stays
 // cgo-free.
 type SpatialIndex interface {
-	// QueryKNN returns up to k nearest features in a layer within maxKM of p.
-	// An optional Filter restricts candidates by an attribute predicate — used
-	// both for the place-class query and the admin boundary constraint.
-	QueryKNN(ctx context.Context, layer string, p domain.Coordinate, k int, maxKM float64, f *Filter) ([]domain.Feature, error)
+	// QueryKNN returns up to k nearest features in a layer within maxKM of p,
+	// each paired with its ellipsoidal distance from p (computed by the same query,
+	// so callers need no follow-up DistanceKM round-trip). An optional Filter
+	// restricts candidates by an attribute predicate — used both for the
+	// place-class query and the admin boundary constraint.
+	QueryKNN(ctx context.Context, layer string, p domain.Coordinate, k int, maxKM float64, f *Filter) ([]NearFeature, error)
 
 	// PointInPolygon returns the features of a polygon layer that cover p
 	// (boundary-inclusive: a point on a polygon edge is a match). Results are
@@ -35,6 +37,13 @@ type SpatialIndex interface {
 	// Azimuth returns the initial bearing from one coordinate to another in
 	// degrees (0=N, 90=E, clockwise).
 	Azimuth(ctx context.Context, from, to domain.Coordinate) (float64, error)
+}
+
+// NearFeature is a QueryKNN result: a feature paired with its ellipsoidal
+// distance from the query point (km), computed by the KNN query itself.
+type NearFeature struct {
+	Feature    domain.Feature
+	DistanceKM float64
 }
 
 // Filter is an optional attribute predicate for QueryKNN: Column IN Values.

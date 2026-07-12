@@ -138,6 +138,15 @@ func names(features []domain.Feature) []string {
 	return out
 }
 
+// knnNames extracts the place names from QueryKNN's NearFeature results.
+func knnNames(near []output.NearFeature) []string {
+	out := make([]string, len(near))
+	for i, n := range near {
+		out[i] = n.Feature.GetStringProperty("name")
+	}
+	return out
+}
+
 func TestGazetteerIndex_QueryKNN(t *testing.T) {
 	idx := openFixtureIndex(t, true)
 	ctx := context.Background()
@@ -149,8 +158,16 @@ func TestGazetteerIndex_QueryKNN(t *testing.T) {
 			t.Fatalf("QueryKNN: %v", err)
 		}
 		want := []string{"Metropolis", "Hamlet", "Townsville"}
-		if g := names(got); !equalStrings(g, want) {
+		if g := knnNames(got); !equalStrings(g, want) {
 			t.Errorf("order = %v, want %v", g, want)
+		}
+		// The projected distance is populated and ascending (nearest first);
+		// Townsville sits ~7.2 km away (cross-checks the DistanceKM integration test).
+		if !(got[0].DistanceKM <= got[1].DistanceKM && got[1].DistanceKM <= got[2].DistanceKM) {
+			t.Errorf("distances not ascending: %.3f, %.3f, %.3f", got[0].DistanceKM, got[1].DistanceKM, got[2].DistanceKM)
+		}
+		if got[2].DistanceKM < 6.5 || got[2].DistanceKM > 8 {
+			t.Errorf("farthest distance = %.3f km, want ~7.2", got[2].DistanceKM)
 		}
 	})
 
@@ -159,7 +176,7 @@ func TestGazetteerIndex_QueryKNN(t *testing.T) {
 		if err != nil {
 			t.Fatalf("QueryKNN: %v", err)
 		}
-		if g := names(got); len(g) != 1 || g[0] != "Metropolis" {
+		if g := knnNames(got); len(g) != 1 || g[0] != "Metropolis" {
 			t.Errorf("city filter = %v, want [Metropolis]", g)
 		}
 	})
@@ -169,7 +186,7 @@ func TestGazetteerIndex_QueryKNN(t *testing.T) {
 		if err != nil {
 			t.Fatalf("QueryKNN: %v", err)
 		}
-		if g := names(got); len(g) != 1 || g[0] != "Hamlet" {
+		if g := knnNames(got); len(g) != 1 || g[0] != "Hamlet" {
 			t.Errorf("village filter = %v, want [Hamlet]", g)
 		}
 	})
@@ -180,7 +197,7 @@ func TestGazetteerIndex_QueryKNN(t *testing.T) {
 			t.Fatalf("QueryKNN: %v", err)
 		}
 		want := []string{"Metropolis", "Hamlet"} // Townsville has admin_id 99, excluded
-		if g := names(got); !equalStrings(g, want) {
+		if g := knnNames(got); !equalStrings(g, want) {
 			t.Errorf("admin filter = %v, want %v", g, want)
 		}
 	})
@@ -191,7 +208,7 @@ func TestGazetteerIndex_QueryKNN(t *testing.T) {
 			t.Fatalf("QueryKNN: %v", err)
 		}
 		if len(got) != 0 {
-			t.Errorf("town within 1km = %v, want none (Townsville ~7km)", names(got))
+			t.Errorf("town within 1km = %v, want none (Townsville ~7km)", knnNames(got))
 		}
 	})
 }
@@ -303,7 +320,7 @@ func TestGazetteerIndex_FallbackScanNoRtree(t *testing.T) {
 	if err != nil {
 		t.Fatalf("QueryKNN (no rtree): %v", err)
 	}
-	if g := names(got); len(g) != 1 || g[0] != "Metropolis" {
+	if g := knnNames(got); len(g) != 1 || g[0] != "Metropolis" {
 		t.Errorf("no-rtree KNN = %v, want [Metropolis]", g)
 	}
 

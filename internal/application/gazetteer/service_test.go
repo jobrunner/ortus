@@ -23,7 +23,7 @@ type fakeIndex struct {
 	chainErr error
 }
 
-func (f fakeIndex) QueryKNN(_ context.Context, _ string, _ domain.Coordinate, _ int, _ float64, filter *output.Filter) ([]domain.Feature, error) {
+func (f fakeIndex) QueryKNN(_ context.Context, _ string, p domain.Coordinate, _ int, _ float64, filter *output.Filter) ([]output.NearFeature, error) {
 	if f.knnErr != nil {
 		return nil, f.knnErr
 	}
@@ -31,7 +31,13 @@ func (f fakeIndex) QueryKNN(_ context.Context, _ string, _ domain.Coordinate, _ 
 		return nil, nil
 	}
 	key, _ := filter.Values[0].(string)
-	return f.knn[key], nil
+	feats := f.knn[key]
+	out := make([]output.NearFeature, 0, len(feats))
+	for i := range feats {
+		coord, _ := parsePointWKT(feats[i].Geometry.WKT)
+		out = append(out, output.NearFeature{Feature: feats[i], DistanceKM: equirectKM(p, coord)})
+	}
+	return out, nil
 }
 func (f fakeIndex) PointInPolygon(context.Context, string, domain.Coordinate) ([]domain.Feature, error) {
 	return f.pip, f.pipErr
@@ -43,9 +49,15 @@ func (f fakeIndex) ResolveChain(_ context.Context, _ string, fromFID int64, _ ou
 	return f.chains[fromFID], nil
 }
 func (f fakeIndex) DistanceKM(_ context.Context, a, b domain.Coordinate) (float64, error) {
+	return equirectKM(a, b), nil
+}
+
+// equirectKM is the equirectangular approximation shared by the fake DistanceKM
+// and QueryKNN so both track the fed coordinates identically.
+func equirectKM(a, b domain.Coordinate) float64 {
 	dx := (b.X - a.X) * 111.32 * math.Cos(a.Y*math.Pi/180)
 	dy := (b.Y - a.Y) * 111.32
-	return math.Hypot(dx, dy), nil
+	return math.Hypot(dx, dy)
 }
 func (f fakeIndex) Azimuth(_ context.Context, from, to domain.Coordinate) (float64, error) {
 	dx := (to.X - from.X) * math.Cos(from.Y*math.Pi/180)
