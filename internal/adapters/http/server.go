@@ -78,6 +78,14 @@ func NewServer(
 		version = "dev"
 	}
 
+	// Pre-render the frontend once, but only when the route is actually served —
+	// an API-only deployment (frontend_enabled: false) shouldn't hold a copy of
+	// the embedded HTML.
+	var frontendPage []byte
+	if cfg.FrontendEnabled {
+		frontendPage = renderFrontend(version)
+	}
+
 	var httpM *httpMetrics
 	if opts.MeterProvider != nil {
 		httpM = newHTTPMetrics(opts.MeterProvider.Meter("github.com/jobrunner/ortus/http"))
@@ -98,7 +106,7 @@ func NewServer(
 		serviceName:      serviceName,
 		httpMetrics:      httpM,
 		version:          version,
-		frontendPage:     renderFrontend(version),
+		frontendPage:     frontendPage,
 	}
 
 	// Opt-in per-IP rate limiting (off by default). Only the /api/v1 surface is
