@@ -51,10 +51,11 @@ func (s *Service) Bearing(ctx context.Context, p domain.Coordinate, pol domain.B
 	return s.buildFix(ctx, p, best, pol, inside), nil
 }
 
-// gatherCandidates collects the constraint-satisfying candidates of each class within
-// that class's gather radius. RankedSalience gets the nearest per class (its per-class
-// reach as the radius); CompositeSalience gets a wider pool (a flat CandidateRadiusKM)
-// and lets its score decide. Either way the salience strategy picks the winner.
+// gatherCandidates collects the constraint-satisfying candidates of each class, up to
+// CandidateLimit per class. RankedSalience uses each class's per-class reach as the
+// gather radius (and later selects the nearest eligible); CompositeSalience uses a wider
+// flat CandidateRadiusKM and lets its score decide. Either way the salience strategy
+// picks the winner.
 func (s *Service) gatherCandidates(ctx context.Context, p domain.Coordinate, pol domain.BearingPolicy, ancestor int64, constrained bool, country string) ([]Candidate, error) {
 	var cands []Candidate
 	for _, class := range salienceClasses {

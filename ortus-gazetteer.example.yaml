@@ -8,8 +8,8 @@ places:
   rank_column: place                # village | town | city
   admin_fk: admin_id                # → admin_levels.fid of the most-local containing unit
   country_column: country_iso
-  # Prominence signals for bearing anchor salience (CompositeSalience). Optional: a package
-  # without these columns falls back to rank-only RankedSalience.
+  # Prominence signals for bearing anchor salience (CompositeSalience). Optional: without
+  # these columns CompositeSalience still runs, scoring by class prior (no strategy switch).
   population_column: population      # OSM population (integer), GeoNames-backfilled tail; NULL if unknown
   capital_column: capital           # OSM capital= rank (2=country … 8=municipality); admin rank of the seat
   notability_column: wikidata       # OSM wikidata QID; presence is a notability proxy

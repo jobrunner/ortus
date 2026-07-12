@@ -60,8 +60,8 @@ type Place struct {
 	CountryISO string // ISO 3166-1 alpha-2 of the place (bearing anchors must share the query's country)
 	At         Coordinate
 	// Prominence signals for CompositeSalience (from the enriched osm-admin-places
-	// package; all zero/empty when the package predates enrichment, so selection
-	// degrades gracefully to rank-only).
+	// package; all zero/empty when the package predates enrichment — CompositeSalience
+	// then scores by class prior + distance, no strategy switch).
 	Population int64  // OSM population; <= 0 means unknown (fall back to class prior)
 	Capital    string // OSM `capital` rank of the seat (2=country … 8=municipality, or "yes"); "" if none
 	Wikidata   string // OSM `wikidata` QID; presence is a notability proxy

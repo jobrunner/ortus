@@ -31,7 +31,8 @@ type Manifest struct {
 	AdminFKColumn string // e.g. "admin_id" → admin_levels.fid
 
 	// places prominence signals for CompositeSalience — all optional (empty when the
-	// package predates enrichment; selection then degrades to rank-only).
+	// package predates enrichment; CompositeSalience then scores by class prior, not
+	// a switch to RankedSalience).
 	PopulationColumn string // e.g. "population" (integer)
 	CapitalColumn    string // e.g. "capital" (OSM capital= rank of the seat)
 	NotabilityColumn string // e.g. "wikidata" (QID; presence = notable)

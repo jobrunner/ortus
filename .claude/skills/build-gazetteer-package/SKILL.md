@@ -44,8 +44,8 @@ maps layer/column *roles*. The GeoPackage MUST provide:
 - `admin_id` — FK → `admin_levels.fid` of the most-local containing unit
 - `country_iso` — ISO 3166-1 alpha-2
 - `population`, `capital`, `wikidata` — *optional* prominence signals (from `make enrich-places`)
-  that drive the ortus bearing anchor salience (`CompositeSalience`); a package without them
-  falls back to rank-only selection
+  that drive the ortus bearing anchor salience (`CompositeSalience`); without them
+  `CompositeSalience` still runs, scoring by class prior (no strategy switch)
 
 **`admin_levels` layer** (MULTIPOLYGON, EPSG:4326):
 - `admin_level` — OSM admin level (text; numeric values used, coverage fills carry NULL)
