@@ -228,7 +228,7 @@ jobs:
         run: uvx --with mkdocs-material mkdocs build --strict
 
   # =============================================================================
-  # Secret scanning. gitleaks-action@v2 scans the git history of the event's
+  # Secret scanning. gitleaks-action scans the git history of the event's
   # commit range (the PR commits on a PR, github.event.before..after on push) —
   # so a secret added and removed within the range is still caught. Config +
   # allowlist live in .gitleaks.toml. Free for this personal repo (no license).
@@ -340,6 +340,29 @@ jobs:
           curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash \
             | bash -s -- 1.7.12
           ./actionlint -color -shellcheck="-S error"
+
+      # Drift guard: an action version tag written into a *comment* silently goes
+      # stale when Dependabot bumps the real `uses:` line (as a stale gitleaks
+      # comment once did). The version belongs only on the `uses:` line Dependabot
+      # manages — never in prose. Fail if any comment pins one.
+      - name: No action versions in workflow comments
+        run: |
+          # A version tag in a comment is a pin Dependabot won't update (it only
+          # touches the real `uses:` line), so it silently drifts. Best-effort
+          # heuristic (not a YAML/shell parser): flag a version tag that follows a
+          # '#' at line start or after whitespace. This catches full-line and
+          # inline comments and ignores a bare `uses:` ref (no '#'); a '#' inside
+          # a whitespace-preceded string could still match, which is acceptable
+          # for a lint. Distinguish "no match" (ok) from a grep error.
+          matches=$(grep -rnE '(^|[[:space:]])#.*@v[0-9]' .github/workflows/) && rc=0 || rc=$?
+          if [ "$rc" = 0 ]; then
+            echo "$matches"
+            echo "::error::Action version pinned in a comment above — it will drift on the next bump. Drop the version tag from the comment (keep it only on the 'uses:' line)."
+            exit 1
+          elif [ "$rc" != 1 ]; then
+            echo "::error::drift guard: grep failed with status $rc"
+            exit "$rc"
+          fi
 
   # =============================================================================
   # Docker Build (without push)
