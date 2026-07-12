@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.21.0](https://github.com/jobrunner/ortus/compare/v0.20.3...v0.21.0) (2026-07-12)
+
+
+### Features
+
+* **gazetteer:** prominence-weighted bearing anchor selection ([c2b98b2](https://github.com/jobrunner/ortus/commit/c2b98b25f87cbfea1ff11fed207137ea08b1c737))
+* **gazetteer:** prominence-weighted bearing anchor selection (CompositeSalience) ([9c1b977](https://github.com/jobrunner/ortus/commit/9c1b97731989cce97eaf73a63cbadd3c72187a80))
+* **query:** boundary-inclusive point-in-polygon with fragment dedup ([39ac6cb](https://github.com/jobrunner/ortus/commit/39ac6cbcc0c236410ca66537f1bbb7ec5c3c7b9e))
+* **query:** boundary-inclusive point-in-polygon with fragment dedup ([f8f8090](https://github.com/jobrunner/ortus/commit/f8f80905a1884517c11bf5231c38352143af24b4))
+
+
+### Bug Fixes
+
+* **gazetteer:** address critical-review findings (comment accuracy, enrich robustness) ([5191fdb](https://github.com/jobrunner/ortus/commit/5191fdbf3b49e49f3dc8f52cfdcbda0279b178d0))
+* **gazetteer:** deterministic countryOf tie-break; coverage; doc ordering ([4fe036a](https://github.com/jobrunner/ortus/commit/4fe036aaedb8b56b0142b55e7a7642def17f51a1))
+* **gazetteer:** harden enrich osmium handling; correct country-guard docs ([920c297](https://github.com/jobrunner/ortus/commit/920c2974ff9652335d22693731180aad13e1dc64))
+* **gazetteer:** widen composite candidate pool; fix CI (lint, docs) ([a36c927](https://github.com/jobrunner/ortus/commit/a36c9272b2342c9d33f2997f8738468705ae3779))
+
 ## [0.20.3](https://github.com/jobrunner/ortus/compare/v0.20.2...v0.20.3) (2026-07-12)
 
 
