@@ -111,8 +111,11 @@ def apply(con, gpkg, use_geonames=False):
             continue
         pop, cap, wd = rec
         updates.append((pop, cap or None, wd or None, fid))
+    # COALESCE population: a re-run where OSM has no population must not wipe a value a
+    # prior --geonames backfill supplied (keeps the documented idempotency). capital and
+    # wikidata are OSM-authoritative, so they refresh outright.
     con.executemany(
-        "UPDATE places SET population=?, capital=?, wikidata=? WHERE fid=?", updates)
+        "UPDATE places SET population=COALESCE(?, population), capital=?, wikidata=? WHERE fid=?", updates)
     con.commit()
     print(f"applied OSM tags to {len(updates)} places")
 
@@ -135,17 +138,19 @@ def backfill_population_geonames(con, gpkg, cache=None, log=print):
 
     # NULL-population places with a native (non-Latin) name + representative coordinate, via
     # the spatialite CLI (same approach as romanize_gazetteers.export_rows).
+    # name_native goes LAST so the pipe-delimited CLI output survives a '|' inside the
+    # name: splitting with maxsplit=4 keeps everything after the 4th '|' as the name.
     sql = (
-        "SELECT fid, name_native, country_iso, "
-        "ST_Y(GeomFromGPB(geom)), ST_X(GeomFromGPB(geom)) "
+        "SELECT fid, country_iso, "
+        "ST_Y(GeomFromGPB(geom)), ST_X(GeomFromGPB(geom)), name_native "
         "FROM places WHERE population IS NULL AND name_native IS NOT NULL AND name_native<>'';")
     out = subprocess.run(["spatialite", gpkg, sql], capture_output=True, text=True, check=True).stdout
     by_cc = collections.defaultdict(list)
     for line in out.splitlines():
-        p = line.split("|")
+        p = line.split("|", 4)
         if len(p) != 5:
             continue
-        fid, native, cc, lat, lon = p
+        fid, cc, lat, lon, native = p
         if cc not in countries:
             continue
         try:
@@ -166,7 +171,9 @@ def backfill_population_geonames(con, gpkg, cache=None, log=print):
             # tight radius (~5 km): a same-name GeoNames feature farther away is more likely a
             # different place, and an inflated population would wrongly promote a village anchor
             pop = idx.lookup(native, lat, lon, max_deg=0.05)
-            if pop:
+            # Same sanity clamp as the OSM path (parse_population): reject absurd/negative
+            # values so a bad GeoNames row can't promote a village to the top anchor.
+            if pop and 0 <= int(pop) < 100_000_000:
                 updates.append((int(pop), fid))
                 hits += 1
         log(f"  [{cc}] backfilled {hits}/{len(by_cc[cc])} NULL-population places")
@@ -180,6 +187,9 @@ def backfill_population_geonames(con, gpkg, cache=None, log=print):
 def report(con):
     total = con.execute("SELECT count(*) FROM places").fetchone()[0]
     print(f"\nplaces: {total}")
+    if total == 0:
+        print("  (empty places layer — nothing to report)")
+        return
     for col in ("population", "capital", "wikidata"):
         n = con.execute(
             f"SELECT count(*) FROM places WHERE {col} IS NOT NULL AND {col}<>''").fetchone()[0]
@@ -218,13 +228,15 @@ def main():
     a = ap.parse_args()
     sys.path.insert(0, "scripts")
     con = sqlite3.connect(a.gpkg)
-    if a.check:
-        sys.exit(check(con))
-    elif a.apply:
-        apply(con, a.gpkg, use_geonames=a.geonames)
-    else:
-        ap.print_help()
-    con.close()
+    try:
+        if a.check:
+            sys.exit(check(con))
+        elif a.apply:
+            apply(con, a.gpkg, use_geonames=a.geonames)
+        else:
+            ap.print_help()
+    finally:
+        con.close()  # runs even on the --check sys.exit / any exception
 
 
 if __name__ == "__main__":

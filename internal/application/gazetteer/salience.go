@@ -111,7 +111,8 @@ var _ SalienceStrategy = RankedSalience{}
 //	      − DecayPerKM·distance_km                  (nearer is better; slope tunes prominence-vs-proximity)
 //
 // The score is in log10 units, so DecayPerKM is "log-population-decades traded per km":
-// at the calibrated 0.04, ~33 km of extra distance offsets a 10× smaller population.
+// at the calibrated 0.04, ~25 km of extra distance (1.0 / 0.04) offsets a 10× smaller
+// population.
 // Unlike RankedSalience it applies NO proximity override — that override is exactly
 // what makes today's bearing pick the nearest small town; here the score decides.
 type CompositeSalience struct {
