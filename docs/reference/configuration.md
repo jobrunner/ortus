@@ -159,6 +159,8 @@ gazetteer:
       wiki_weight: 0.3
       decay_per_km: 0.04
       capital_scale: 0.8
+      # class_prior: { city: 4.3, town: 3.3, village: 2.3 }          # base score when population is unknown
+      # capital_bonus: { "2": 2.0, "3": 1.5, "4": 1.2, "5": 0.6, "6": 0.4, "7": 0.2, yes: 2.0 }
 ```
 
 - `geopackage_path` and `manifest_path` are **required** when `enabled: true`;
@@ -174,7 +176,9 @@ gazetteer:
   and lets the distance decay, not a hard per-class cap, shape the result. Both strategies
   constrain anchors to the query point's country when it can be determined (skipped only
   where the point lies in no polygon, e.g. open sea), and to its state-equivalent unit when
-  the manifest's `bearing_constraint_tier` resolves.
+  the manifest's `bearing_constraint_tier` resolves. `class_prior` and `capital_bonus`
+  optionally override the calibrated tables (base score for places without population, and
+  the per-OSM-capital-rank bonus); each is a *partial* override — only the listed keys change.
 - `level_reference_path` (optional) enriches each admin level with its semantic
   `equivalent`, country-specific `local_term`, and `equivalent_description`.
   Without it, Locate still returns the raw hierarchy.

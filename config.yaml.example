@@ -136,6 +136,11 @@ gazetteer:
       wiki_weight: 0.3          # bonus when a place has a wikidata QID
       decay_per_km: 0.04        # score subtracted per km (prominence↔proximity slope)
       capital_scale: 0.8        # scales the capital-rank bonus (national/regional seat)
+      # class_prior/capital_bonus override the calibrated tables (partial: only the
+      # listed keys change). class_prior = base score for places with no population;
+      # capital_bonus = per-OSM-capital-rank bonus (before capital_scale).
+      # class_prior: { city: 4.3, town: 3.3, village: 2.3 }
+      # capital_bonus: { "2": 2.0, "3": 1.5, "4": 1.2, "5": 0.6, "6": 0.4, "7": 0.2, yes: 2.0 }
 
 # OpenTelemetry tracing configuration.
 # When enabled, spans are kept in an in-memory ring buffer (for the MCP server

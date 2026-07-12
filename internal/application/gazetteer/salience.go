@@ -119,8 +119,12 @@ type CompositeSalience struct {
 	PopWeight    float64                       // multiplier on log10(1+population)
 	WikiWeight   float64                       // additive bonus when a wikidata QID is present
 	DecayPerKM   float64                       // score subtracted per km of distance
-	CapitalScale float64                       // scales the capitalBonus table
+	CapitalScale float64                       // scales the CapitalBonus table
 	ClassPrior   map[domain.PlaceClass]float64 // base score when population is unknown
+	// CapitalBonus maps the OSM `capital` value (rank of the seat's unit) to a
+	// log10-unit bonus before CapitalScale. Keys are the OSM capital= convention
+	// (2=country … 8=municipality) plus "yes" (national). A missing key scores 0.
+	CapitalBonus map[string]float64
 }
 
 // DefaultCandidateRadiusKM is the flat gather radius CompositeSalience uses (all
@@ -143,6 +147,11 @@ func DefaultCompositeSalience() CompositeSalience {
 			domain.ClassCity:    4.3,
 			domain.ClassTown:    3.3,
 			domain.ClassVillage: 2.3,
+		},
+		// A national/regional capital is a far better anchor than a municipal seat.
+		// "yes" is treated as a national capital; low-rank (8+) values add nothing.
+		CapitalBonus: map[string]float64{
+			"yes": 2.0, "2": 2.0, "3": 1.5, "4": 1.2, "5": 0.6, "6": 0.4, "7": 0.2,
 		},
 	}
 }
@@ -170,35 +179,11 @@ func (c CompositeSalience) score(cand Candidate) float64 {
 	} else {
 		base = c.ClassPrior[p.Class]
 	}
-	base += c.CapitalScale * capitalBonus(p.Capital)
+	base += c.CapitalScale * c.CapitalBonus[p.Capital] // nil/missing key → 0
 	if p.Wikidata != "" {
 		base += c.WikiWeight
 	}
 	return base - c.DecayPerKM*cand.DistanceKM
-}
-
-// capitalBonus maps the OSM `capital` value (the admin rank of the unit this place is
-// the seat of) to a log10-unit bonus: a national/regional capital is a far better
-// bearing anchor than a municipal seat. Values are the OSM capital= convention
-// (2=country … 8=municipality); "yes" is treated as a national capital. Unknown or
-// low-rank (8+) values add nothing.
-func capitalBonus(capital string) float64 {
-	switch capital {
-	case "yes", "2":
-		return 2.0
-	case "3":
-		return 1.5
-	case "4":
-		return 1.2
-	case "5":
-		return 0.6
-	case "6":
-		return 0.4
-	case "7":
-		return 0.2
-	default:
-		return 0.0
-	}
 }
 
 // Compile-time assertion that CompositeSalience satisfies the strategy interface.
