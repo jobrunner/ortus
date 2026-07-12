@@ -106,7 +106,7 @@ var _ SalienceStrategy = RankedSalience{}
 // Kleinkleckersdorf"). Pure function of the candidate's own fields.
 //
 //	score = PopWeight·log10(1+population)          (or ClassPrior[class] if population unknown)
-//	      + CapitalScale·capitalBonus(capital)     (seat of a broader admin unit → more notable)
+//	      + CapitalScale·CapitalBonus[capital]     (seat of a broader admin unit → more notable)
 //	      + WikiWeight   if the place has a wikidata QID
 //	      − DecayPerKM·distance_km                  (nearer is better; slope tunes prominence-vs-proximity)
 //

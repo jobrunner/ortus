@@ -143,27 +143,14 @@ func (g *GazetteerIndex) QueryKNN(ctx context.Context, layer string, p domain.Co
 	}
 	out := make([]output.NearFeature, 0, len(feats))
 	for i := range feats {
-		var km float64
-		if v, ok := feats[i].Properties[knnDistColumn]; ok {
-			km = toFloatMeters(v) / 1000 // Distance() returns meters
-			delete(feats[i].Properties, knnDistColumn)
-		}
+		// The projected distance rides back as a synthetic property; read it with the
+		// shared numeric coercion, then strip it so it never leaks to callers. A miss
+		// yields 0 (GetFloatProperty) and delete is a no-op, so this stays safe.
+		km := feats[i].GetFloatProperty(knnDistColumn) / 1000 // Distance() returns meters
+		delete(feats[i].Properties, knnDistColumn)
 		out = append(out, output.NearFeature{Feature: feats[i], DistanceKM: km})
 	}
 	return out, nil
-}
-
-// toFloatMeters coerces the projected distance value (a SpatiaLite REAL, normally
-// scanned as float64) to a float64, tolerating an int64 form.
-func toFloatMeters(v any) float64 {
-	switch n := v.(type) {
-	case float64:
-		return n
-	case int64:
-		return float64(n)
-	default:
-		return 0
-	}
 }
 
 // PointInPolygon returns the features of a polygon layer that cover p. It uses
