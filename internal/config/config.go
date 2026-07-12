@@ -251,7 +251,7 @@ type GazetteerBearingConfig struct {
 	// Salience selects the anchor-selection strategy: "composite" (default —
 	// prominence-vs-proximity score; uses the enriched population/capital/wikidata
 	// columns, falls back to class where they are absent) or "rank" (the original
-	// class-then-distance behaviour). Unknown/empty ⇒ composite.
+	// class-then-distance behavior). Unknown/empty ⇒ composite.
 	Salience string `mapstructure:"salience"`
 	// Composite holds the composite-strategy knobs (used only when Salience is
 	// "composite"). A zero field takes the calibrated default.

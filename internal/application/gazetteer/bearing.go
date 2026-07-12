@@ -10,11 +10,6 @@ import (
 	"github.com/jobrunner/ortus/internal/ports/output"
 )
 
-// knnPerClass is how many nearest places per class the bearing query fetches. A
-// small k > 1 leaves room to skip candidates that fail the boundary constraint
-// (the nearest of a class may be across the tier boundary).
-const knnPerClass = 10
-
 // salienceClasses is the fixed iteration order over settlement classes. Order is
 // irrelevant to the outcome (the salience strategy decides), but fixing it keeps
 // candidate gathering deterministic.
@@ -79,7 +74,7 @@ func (s *Service) gatherCandidates(ctx context.Context, p domain.Coordinate, pol
 // satisfy the boundary constraint (when in force), each paired with its distance,
 // nearest first. Empty when none qualify.
 func (s *Service) candidatesInClass(ctx context.Context, p domain.Coordinate, class domain.PlaceClass, pol domain.BearingPolicy, ancestor int64, constrained bool, country string) ([]Candidate, error) {
-	feats, err := s.index.QueryKNN(ctx, s.manifest.PlacesLayer, p, knnPerClass, pol.GatherRadiusKM(class),
+	feats, err := s.index.QueryKNN(ctx, s.manifest.PlacesLayer, p, pol.CandidateLimit(), pol.GatherRadiusKM(class),
 		&output.Filter{Column: s.manifest.RankColumn, Values: []any{class.String()}})
 	if err != nil {
 		return nil, err
@@ -148,10 +143,13 @@ func (s *Service) countryOf(containing []domain.Feature) string {
 		if iso == "" {
 			continue
 		}
-		// Coverage fills / non-numeric levels sort below any real level (-1 here, but
-		// numeric levels are >= 2), so a real local unit always outranks them; among
-		// fills the first non-empty still wins.
-		level, _ := strconv.Atoi(containing[i].GetStringProperty(s.manifest.LevelColumn))
+		// Coverage fills / non-numeric levels sort below any real level (mapped to
+		// -1 here; numeric levels are >= 2), so a real local unit always outranks
+		// them; among fills the first non-empty still wins.
+		level, atoiErr := strconv.Atoi(containing[i].GetStringProperty(s.manifest.LevelColumn))
+		if atoiErr != nil {
+			level = -1
+		}
 		if best == "" || level > bestLevel {
 			best, bestLevel = iso, level
 		}

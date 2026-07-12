@@ -126,8 +126,32 @@ type BearingPolicy struct {
 	// CandidateRadiusKM, when > 0, makes candidate gathering use this one flat radius
 	// for every class instead of the per-class Reach. CompositeSalience sets it: it
 	// wants a wide candidate pool and lets its distance decay (not a hard per-class
-	// cap) shape the outcome. Zero keeps the per-class Reach behaviour (RankedSalience).
+	// cap) shape the outcome. Zero keeps the per-class Reach behavior (RankedSalience).
 	CandidateRadiusKM float64
+}
+
+// Candidate-gather limits: how many nearest places per class candidate-gathering
+// fetches before the salience strategy scores them.
+const (
+	// rankedCandidateLimit is enough for class-then-distance: a small k > 1 leaves
+	// room to skip the nearest few that fail the boundary constraint.
+	rankedCandidateLimit = 10
+	// compositeCandidateLimit covers the wide CandidateRadiusKM pool. A prominent
+	// city that wins on score can be far beyond the nearest few, so gather enough
+	// that scoring sees every city/town in range (there are only tens of those
+	// within ~120 km); far villages truncated by this cap never win the score.
+	compositeCandidateLimit = 250
+)
+
+// CandidateLimit is how many nearest places per class candidate-gathering fetches.
+// CompositeSalience (CandidateRadiusKM > 0) scores a wide pool where the winner may
+// lie well beyond the nearest few, so it fetches many; RankedSalience needs only the
+// nearest few.
+func (p BearingPolicy) CandidateLimit() int {
+	if p.CandidateRadiusKM > 0 {
+		return compositeCandidateLimit
+	}
+	return rankedCandidateLimit
 }
 
 // DefaultBearingPolicy returns the recommended defaults for the osm-admin-places

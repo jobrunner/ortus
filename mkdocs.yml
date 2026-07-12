@@ -88,3 +88,4 @@ nav:
           - ADR-0015 Salience reach radii: explanation/decisions/0015-salience-rank-stratified-reach.md
           - ADR-0016 Bearing convention: explanation/decisions/0016-bearing-convention-compass.md
           - ADR-0017 Prominence source: explanation/decisions/0017-prominence-source-rank.md
+          - ADR-0018 Composite salience: explanation/decisions/0018-composite-salience-prominence.md

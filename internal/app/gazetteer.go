@@ -105,13 +105,16 @@ func (a *App) buildGazetteer(ctx context.Context) error {
 	return nil
 }
 
+// salienceRank is the config value for the legacy class-then-distance strategy.
+const salienceRank = "rank"
+
 // bearingStrategy builds the salience strategy from config. It returns the strategy
 // and the flat candidate-gather radius the policy should use (> 0 only for composite,
 // so RankedSalience keeps its per-class reach). Composite is the default; "rank"
-// selects the original class-then-distance behaviour. Zero composite knobs fall back
+// selects the original class-then-distance behavior. Zero composite knobs fall back
 // to the calibrated defaults, so a partial config still yields a sane strategy.
-func bearingStrategy(b config.GazetteerBearingConfig) (gazetteer.SalienceStrategy, float64) {
-	if b.Salience == "rank" {
+func bearingStrategy(b config.GazetteerBearingConfig) (strategy gazetteer.SalienceStrategy, candidateRadiusKM float64) {
+	if b.Salience == salienceRank {
 		return gazetteer.RankedSalience{}, 0
 	}
 	cs := gazetteer.DefaultCompositeSalience()
@@ -137,8 +140,8 @@ func bearingStrategy(b config.GazetteerBearingConfig) (gazetteer.SalienceStrateg
 
 // strategyName normalizes the configured salience name for logging.
 func strategyName(s string) string {
-	if s == "rank" {
-		return "rank"
+	if s == salienceRank {
+		return salienceRank
 	}
 	return "composite"
 }
