@@ -28,6 +28,28 @@ func TestDedupFeaturesByProperties(t *testing.T) {
 		}
 	})
 
+	t.Run("no fid: deterministic representative by smallest geometry WKT", func(t *testing.T) {
+		// All duplicates have ID 0 (layer without an fid column). Regardless of input
+		// order, the kept representative must be the smallest WKT.
+		mk := func(wkt string) domain.Feature {
+			f := feat(0, map[string]interface{}{"tzid": "Etc/GMT+10"})
+			f.Geometry.WKT = wkt
+			return f
+		}
+		for _, order := range [][]domain.Feature{
+			{mk("POLYGON((2 0))"), mk("POLYGON((1 0))"), mk("POLYGON((3 0))")},
+			{mk("POLYGON((3 0))"), mk("POLYGON((2 0))"), mk("POLYGON((1 0))")},
+		} {
+			out := dedupFeaturesByProperties(order)
+			if len(out) != 1 {
+				t.Fatalf("got %d features, want 1", len(out))
+			}
+			if out[0].Geometry.WKT != "POLYGON((1 0))" {
+				t.Errorf("representative WKT = %q, want smallest POLYGON((1 0))", out[0].Geometry.WKT)
+			}
+		}
+	})
+
 	t.Run("keeps distinct features that differ in properties", func(t *testing.T) {
 		in := []domain.Feature{
 			feat(1, map[string]interface{}{"tzid": "Europe/Berlin"}),

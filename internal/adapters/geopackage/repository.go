@@ -820,9 +820,10 @@ func (r *Repository) executePointQuery(ctx context.Context, db *sql.DB, layer *d
 // feature-id column ("fid", the ogr convention) into Feature.ID rather than
 // Properties; geometry is excluded because each fragment carries a different
 // piece. Since the SQL has no ORDER BY, the input row order is not guaranteed, so
-// the representative kept per key is made deterministic by preferring the smallest
-// non-zero fid (which also keeps the returned geometry fragment stable). Order of
-// distinct kept features follows first appearance.
+// the representative kept per key is chosen by betterRepresentative (smallest
+// non-zero fid, falling back to smallest geometry WKT when the layer has no fid),
+// which keeps the returned fid/geometry stable across runs. Order of distinct kept
+// features follows first appearance.
 func dedupFeaturesByProperties(features []domain.Feature) []domain.Feature {
 	if len(features) < 2 {
 		return features
@@ -832,8 +833,7 @@ func dedupFeaturesByProperties(features []domain.Feature) []domain.Feature {
 	for _, f := range features {
 		key := featurePropertyKey(f)
 		if i, dup := pos[key]; dup {
-			// Deterministic representative: prefer the smallest non-zero fid.
-			if f.ID != 0 && (out[i].ID == 0 || f.ID < out[i].ID) {
+			if betterRepresentative(f, out[i]) {
 				out[i] = f
 			}
 			continue
@@ -842,6 +842,25 @@ func dedupFeaturesByProperties(features []domain.Feature) []domain.Feature {
 		out = append(out, f)
 	}
 	return out
+}
+
+// betterRepresentative reports whether candidate c should replace the currently
+// kept feature k for the same dedup key. It is a deterministic total order that
+// does not depend on SQL row order: prefer the smallest non-zero fid; if neither
+// feature has an fid (ID == 0, e.g. a layer with no integer primary key), fall
+// back to the smallest geometry WKT so the choice is still stable across runs.
+func betterRepresentative(c, k domain.Feature) bool {
+	if c.ID != 0 || k.ID != 0 {
+		switch {
+		case c.ID == 0:
+			return false
+		case k.ID == 0:
+			return true
+		default:
+			return c.ID < k.ID
+		}
+	}
+	return c.Geometry.WKT < k.Geometry.WKT
 }
 
 // featurePropertyKey builds a stable identity key from a feature's properties,
