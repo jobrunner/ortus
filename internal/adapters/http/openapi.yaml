@@ -63,7 +63,10 @@ paths:
         gekachelte Quelle dieselben Treffer liefert wie ihre ungekachelte Vorlage.
         Bei aktivem `query.with_geometry` liefert eine gekachelte Quelle das
         jeweilige Teil-Polygon (Subdivision-Fragment), nicht das ursprüngliche
-        Gesamtpolygon — Kacheln bleibt eine optionale Packaging-Entscheidung.
+        Gesamtpolygon; ebenso ist die zurückgegebene `id` die fid des behaltenen
+        Fragments (nach Deduplizierung) und entspricht nicht zwingend der
+        Feature-ID einer ungekachelten Quelle — Kacheln bleibt eine optionale
+        Packaging-Entscheidung.
       operationId: queryAllSources
       parameters:
         - $ref: '#/components/parameters/LonParam'

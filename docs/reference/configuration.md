@@ -119,7 +119,8 @@ different regions returns both. Fragments of the same region (e.g. from an
 source returns the same features as its un-tiled original — tiling stays an
 opt-in packaging choice. One caveat: with `query.with_geometry: true`, a tiled
 source returns the matched subdivision fragment's geometry, not the original
-whole polygon.
+whole polygon; likewise the returned `id` is the kept fragment's fid (post-dedup)
+and may not match an un-tiled package's feature id.
 
 ## SQLite tuning
 
