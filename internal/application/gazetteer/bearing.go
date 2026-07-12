@@ -75,14 +75,14 @@ func (s *Service) gatherCandidates(ctx context.Context, p domain.Coordinate, pol
 // satisfy the boundary constraint (when in force), each paired with its distance,
 // nearest first. Empty when none qualify.
 func (s *Service) candidatesInClass(ctx context.Context, p domain.Coordinate, class domain.PlaceClass, pol domain.BearingPolicy, ancestor int64, constrained bool, country string) ([]Candidate, error) {
-	feats, err := s.index.QueryKNN(ctx, s.manifest.PlacesLayer, p, pol.CandidateLimit(), pol.GatherRadiusKM(class),
+	near, err := s.index.QueryKNN(ctx, s.manifest.PlacesLayer, p, pol.CandidateLimit(), pol.GatherRadiusKM(class),
 		&output.Filter{Column: s.manifest.RankColumn, Values: []any{class.String()}})
 	if err != nil {
 		return nil, err
 	}
 	var out []Candidate
-	for i := range feats {
-		place, ok := s.placeFromFeature(&feats[i])
+	for i := range near {
+		place, ok := s.placeFromFeature(&near[i].Feature)
 		if !ok {
 			continue
 		}
@@ -100,11 +100,9 @@ func (s *Service) candidatesInClass(ctx context.Context, p domain.Coordinate, cl
 				continue
 			}
 		}
-		dist, err := s.index.DistanceKM(ctx, p, place.At)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, Candidate{Place: place, DistanceKM: dist})
+		// Distance is already computed by the KNN query (same ellipsoidal metric as
+		// DistanceKM), so no per-candidate distance round-trip is needed.
+		out = append(out, Candidate{Place: place, DistanceKM: near[i].DistanceKM})
 	}
 	return out, nil
 }

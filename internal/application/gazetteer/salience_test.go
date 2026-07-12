@@ -169,18 +169,34 @@ func TestCompositeSalienceSelect(t *testing.T) {
 }
 
 func TestCapitalBonusOrdering(t *testing.T) {
-	// Monotonic: national ≥ regional ≥ lower seats ≥ none; "yes" == national ("2").
-	if capitalBonus("yes") != capitalBonus("2") {
-		t.Errorf("capital yes (%.2f) should equal national 2 (%.2f)", capitalBonus("yes"), capitalBonus("2"))
+	// The default CapitalBonus table is monotonic: national ≥ regional ≥ lower
+	// seats ≥ none; "yes" == national ("2"); a missing key (8, "") scores 0.
+	cb := DefaultCompositeSalience().CapitalBonus
+	if cb["yes"] != cb["2"] {
+		t.Errorf("capital yes (%.2f) should equal national 2 (%.2f)", cb["yes"], cb["2"])
 	}
 	order := []string{"2", "3", "4", "5", "6", "7", "8", ""}
 	for i := 1; i < len(order); i++ {
-		if capitalBonus(order[i-1]) < capitalBonus(order[i]) {
-			t.Errorf("capitalBonus(%q)=%.2f should be >= capitalBonus(%q)=%.2f",
-				order[i-1], capitalBonus(order[i-1]), order[i], capitalBonus(order[i]))
+		if cb[order[i-1]] < cb[order[i]] {
+			t.Errorf("CapitalBonus[%q]=%.2f should be >= CapitalBonus[%q]=%.2f",
+				order[i-1], cb[order[i-1]], order[i], cb[order[i]])
 		}
 	}
-	if capitalBonus("8") != 0 || capitalBonus("") != 0 {
-		t.Errorf("municipal/none capital should add nothing")
+	if cb["8"] != 0 || cb[""] != 0 {
+		t.Errorf("municipal/none capital should add nothing (map miss → 0)")
+	}
+}
+
+func TestCompositeSalienceTunableCapitalBonus(t *testing.T) {
+	// A tuned CapitalBonus flows through score(): with a large national-capital
+	// bonus, a population-less capital village outscores a plain city at equal
+	// distance (default would pick the city on its higher class prior).
+	cs := DefaultCompositeSalience()
+	cs.CapitalBonus = map[string]float64{"2": 10}
+	city := Candidate{Place: domain.Place{Name: "City", Class: domain.ClassCity}, DistanceKM: 5}
+	capVillage := Candidate{Place: domain.Place{Name: "Capital", Class: domain.ClassVillage, Capital: "2"}, DistanceKM: 5}
+	best, ok := cs.Select([]Candidate{city, capVillage}, domain.BearingPolicy{})
+	if !ok || best.Place.Name != "Capital" {
+		t.Errorf("tuned capital bonus should make the capital village win, got %+v (ok=%v)", best.Place, ok)
 	}
 }

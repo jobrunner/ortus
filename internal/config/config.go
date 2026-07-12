@@ -266,6 +266,12 @@ type GazetteerCompositeConfig struct {
 	WikiWeight        float64 `mapstructure:"wiki_weight"`         // bonus when a wikidata QID is present
 	DecayPerKM        float64 `mapstructure:"decay_per_km"`        // score subtracted per km (prominence↔proximity slope)
 	CapitalScale      float64 `mapstructure:"capital_scale"`       // scales the capital-rank bonus
+	// ClassPrior overrides the base score used when a place has no population, keyed
+	// by class name ("city"/"town"/"village"). Empty ⇒ calibrated defaults.
+	ClassPrior map[string]float64 `mapstructure:"class_prior"`
+	// CapitalBonus overrides the per-rank capital bonus (before capital_scale), keyed
+	// by the OSM capital= value ("2".."7","yes"). Empty ⇒ calibrated defaults.
+	CapitalBonus map[string]float64 `mapstructure:"capital_bonus"`
 }
 
 // TracingTransport selects the OTLP transport (http/protobuf or grpc).

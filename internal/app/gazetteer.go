@@ -131,6 +131,21 @@ func bearingStrategy(b config.GazetteerBearingConfig) (strategy gazetteer.Salien
 	if c.CapitalScale > 0 {
 		cs.CapitalScale = c.CapitalScale
 	}
+	// ClassPrior / CapitalBonus are maps: start from the calibrated defaults and
+	// override only the keys the config names (so a partial map is a partial
+	// override, and an explicit 0 disables that entry).
+	if len(c.ClassPrior) > 0 {
+		for name, v := range c.ClassPrior {
+			if cls, ok := domain.ParsePlaceClass(name); ok {
+				cs.ClassPrior[cls] = v
+			}
+		}
+	}
+	if len(c.CapitalBonus) > 0 {
+		for rank, v := range c.CapitalBonus {
+			cs.CapitalBonus[rank] = v
+		}
+	}
 	radius := c.CandidateRadiusKM
 	if radius <= 0 {
 		radius = gazetteer.DefaultCandidateRadiusKM

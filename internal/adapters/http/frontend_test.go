@@ -42,6 +42,27 @@ func TestFrontendCoordinateInputWiring(t *testing.T) {
 	}
 }
 
+// TestRenderFrontendInjectsVersion checks the footer version substitution: the
+// placeholder is gone, the version is present, and an HTML-metachar version is
+// escaped rather than injected verbatim.
+func TestRenderFrontendInjectsVersion(t *testing.T) {
+	page := string(renderFrontend("v1.2.3"))
+	if strings.Contains(page, "__ORTUS_VERSION__") {
+		t.Error("version placeholder was not substituted")
+	}
+	if !strings.Contains(page, "ortus v1.2.3") {
+		t.Error("rendered page is missing the footer version")
+	}
+
+	escaped := string(renderFrontend("<script>x</script>"))
+	if strings.Contains(escaped, "<script>x</script>") {
+		t.Error("version was not HTML-escaped")
+	}
+	if !strings.Contains(escaped, "&lt;script&gt;x&lt;/script&gt;") {
+		t.Error("expected the escaped version in the rendered page")
+	}
+}
+
 // TestFrontendAccessibilityMarkers guards the accessibility affordances so they
 // aren't silently dropped: announced status/error regions, an accessible name on
 // the icon-only location button, keyboard-operable collapsible source headers, and

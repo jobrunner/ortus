@@ -120,7 +120,14 @@ func (g *GazetteerIndex) VerifySRID(ctx context.Context) error {
 // SpatiaLite's VirtualKNN2: KNN2 cannot push an attribute predicate (place-class
 // or admin membership) into the nearest search, and every gazetteer query is
 // class- and boundary-constrained, so a filtered radius search is the right tool.
-func (g *GazetteerIndex) QueryKNN(ctx context.Context, layer string, p domain.Coordinate, k int, maxKM float64, f *output.Filter) ([]domain.Feature, error) {
+// knnDistColumn is the alias under which buildKNNQuery projects the ellipsoidal
+// distance (meters) so QueryKNN returns it without a per-row DistanceKM call.
+const knnDistColumn = "__ortus_dist_m"
+
+// QueryKNN returns up to k nearest features within maxKM of p (optionally
+// attribute-filtered), each paired with its ellipsoidal distance projected by the
+// same query — so callers need no per-candidate DistanceKM round-trip.
+func (g *GazetteerIndex) QueryKNN(ctx context.Context, layer string, p domain.Coordinate, k int, maxKM float64, f *output.Filter) ([]output.NearFeature, error) {
 	geom, err := geomColumn(ctx, g.db, layer)
 	if err != nil {
 		return nil, err
@@ -130,7 +137,20 @@ func (g *GazetteerIndex) QueryKNN(ctx context.Context, layer string, p domain.Co
 	}
 	rtree := rtreeName(layer, geom)
 	query, args := buildKNNQuery(layer, geom, tableExists(ctx, g.db, rtree), p, k, maxKM, f)
-	return g.runFeatureQuery(ctx, layer, geom, query, args...)
+	feats, err := g.runFeatureQuery(ctx, layer, geom, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]output.NearFeature, 0, len(feats))
+	for i := range feats {
+		// The projected distance rides back as a synthetic property; read it with the
+		// shared numeric coercion, then strip it so it never leaks to callers. A miss
+		// yields 0 (GetFloatProperty) and delete is a no-op, so this stays safe.
+		km := feats[i].GetFloatProperty(knnDistColumn) / 1000 // Distance() returns meters
+		delete(feats[i].Properties, knnDistColumn)
+		out = append(out, output.NearFeature{Feature: feats[i], DistanceKM: km})
+	}
+	return out, nil
 }
 
 // PointInPolygon returns the features of a polygon layer that cover p. It uses
@@ -272,7 +292,11 @@ func (g *GazetteerIndex) runFeatureQuery(ctx context.Context, layer, geom, query
 func buildKNNQuery(layer, geom string, hasRtree bool, p domain.Coordinate, k int, maxKM float64, f *output.Filter) (query string, args []any) {
 	distExpr := fmt.Sprintf(`Distance(CastAutomagic(t.%q), MakePoint(?, ?, 4326), 1)`, geom)
 	var b strings.Builder
-	fmt.Fprintf(&b, `SELECT t.*, AsText(CastAutomagic(t."%s")) FROM "%s" t`, geom, layer)
+	// Project the exact distance (meters) alongside the row so QueryKNN returns it
+	// without a follow-up DistanceKM query per candidate. Its two placeholders come
+	// first in the SELECT clause, so their args lead the slice.
+	fmt.Fprintf(&b, `SELECT t.*, %s AS %q, AsText(CastAutomagic(t."%s")) FROM "%s" t`, distExpr, knnDistColumn, geom, layer)
+	args = append(args, p.X, p.Y)
 	if hasRtree {
 		minX, maxX, minY, maxY := knnBBox(p, maxKM)
 		fmt.Fprintf(&b, ` JOIN %q r ON t.rowid = r.id`, rtreeName(layer, geom))
@@ -288,8 +312,12 @@ func buildKNNQuery(layer, geom string, hasRtree bool, p domain.Coordinate, k int
 	}
 	fmt.Fprintf(&b, ` AND %s <= ?`, distExpr)
 	args = append(args, p.X, p.Y, maxKM*1000)
-	fmt.Fprintf(&b, ` ORDER BY %s ASC LIMIT ?`, distExpr)
-	args = append(args, p.X, p.Y, k)
+	// ORDER BY references the projected alias (SQLite resolves it to the SELECT
+	// column) rather than repeating distExpr — one fewer distance evaluation and
+	// two fewer placeholders. The WHERE radius above must keep the expression:
+	// SQLite does not allow output aliases in WHERE.
+	fmt.Fprintf(&b, ` ORDER BY %q ASC LIMIT ?`, knnDistColumn)
+	args = append(args, k)
 	return b.String(), args
 }
 
