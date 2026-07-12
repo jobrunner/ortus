@@ -224,13 +224,21 @@ func TestGazetteerIndex_PointInPolygonBoundaryInclusive(t *testing.T) {
 			if err != nil {
 				t.Fatalf("PointInPolygon: %v", err)
 			}
-			want := map[string]bool{"Country": true, "Bavaria": true}
-			if len(got) != len(want) {
-				t.Fatalf("got %d polygons %v, want Country+Bavaria (boundary-inclusive)", len(got), names(got))
-			}
+			// Assert each expected region appears exactly once and nothing else —
+			// a set+length check would pass on ["Country","Country"] (a duplicate
+			// masking a missing Bavaria).
+			counts := map[string]int{}
 			for _, n := range names(got) {
-				if !want[n] {
-					t.Errorf("unexpected region %q on boundary; want only %v", n, want)
+				counts[n]++
+			}
+			for _, w := range []string{"Country", "Bavaria"} {
+				if counts[w] != 1 {
+					t.Errorf("region %q appears %d time(s), want exactly 1 (got %v)", w, counts[w], names(got))
+				}
+			}
+			for n := range counts {
+				if n != "Country" && n != "Bavaria" {
+					t.Errorf("unexpected region %q on boundary; want only Country+Bavaria (got %v)", n, names(got))
 				}
 			}
 		})
