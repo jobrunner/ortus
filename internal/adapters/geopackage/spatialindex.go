@@ -312,8 +312,12 @@ func buildKNNQuery(layer, geom string, hasRtree bool, p domain.Coordinate, k int
 	}
 	fmt.Fprintf(&b, ` AND %s <= ?`, distExpr)
 	args = append(args, p.X, p.Y, maxKM*1000)
-	fmt.Fprintf(&b, ` ORDER BY %s ASC LIMIT ?`, distExpr)
-	args = append(args, p.X, p.Y, k)
+	// ORDER BY references the projected alias (SQLite resolves it to the SELECT
+	// column) rather than repeating distExpr — one fewer distance evaluation and
+	// two fewer placeholders. The WHERE radius above must keep the expression:
+	// SQLite does not allow output aliases in WHERE.
+	fmt.Fprintf(&b, ` ORDER BY %q ASC LIMIT ?`, knnDistColumn)
+	args = append(args, k)
 	return b.String(), args
 }
 
