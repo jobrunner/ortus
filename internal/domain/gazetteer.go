@@ -56,8 +56,15 @@ type Place struct {
 	NameNative string         // original-script name (empty if already Latin)
 	NameSource NameProvenance // how Name was romanized/sourced
 	Class      PlaceClass
-	AdminID    int64 // FK → the admin unit containing the place (0 = unknown)
+	AdminID    int64  // FK → the admin unit containing the place (0 = unknown)
+	CountryISO string // ISO 3166-1 alpha-2 of the place (bearing anchors must share the query's country)
 	At         Coordinate
+	// Prominence signals for CompositeSalience (from the enriched osm-admin-places
+	// package; all zero/empty when the package predates enrichment — CompositeSalience
+	// then scores by class prior + distance, no strategy switch).
+	Population int64  // OSM population; <= 0 means unknown (fall back to class prior)
+	Capital    string // OSM `capital` rank of the seat (2=country … 8=municipality, or "yes"); "" if none
+	Wikidata   string // OSM `wikidata` QID; presence is a notability proxy
 }
 
 // AdminUnit is one level of a resolved administrative hierarchy, enriched with its
@@ -116,6 +123,35 @@ type BearingPolicy struct {
 	ConstraintTier  string                 // semantic admin tier anchors must share (e.g. "state")
 	InsideLabelKM   float64                // below this, label as "in/prope {name}" without a bearing
 	CompassPoints   int                    // 8 or 16
+	// CandidateRadiusKM, when > 0, makes candidate gathering use this one flat radius
+	// for every class instead of the per-class Reach. CompositeSalience sets it: it
+	// wants a wide candidate pool and lets its distance decay (not a hard per-class
+	// cap) shape the outcome. Zero keeps the per-class Reach behavior (RankedSalience).
+	CandidateRadiusKM float64
+}
+
+// Candidate-gather limits: how many nearest places per class candidate-gathering
+// fetches before the salience strategy scores them.
+const (
+	// rankedCandidateLimit is enough for class-then-distance: a small k > 1 leaves
+	// room to skip the nearest few that fail the boundary constraint.
+	rankedCandidateLimit = 10
+	// compositeCandidateLimit covers the wide CandidateRadiusKM pool. A prominent
+	// city that wins on score can be far beyond the nearest few, so gather enough
+	// that scoring sees every city/town in range (there are only tens of those
+	// within ~120 km); far villages truncated by this cap never win the score.
+	compositeCandidateLimit = 250
+)
+
+// CandidateLimit is how many nearest places per class candidate-gathering fetches.
+// CompositeSalience (CandidateRadiusKM > 0) scores a wide pool where the winner may
+// lie well beyond the nearest few, so it fetches many; RankedSalience needs only the
+// nearest few.
+func (p BearingPolicy) CandidateLimit() int {
+	if p.CandidateRadiusKM > 0 {
+		return compositeCandidateLimit
+	}
+	return rankedCandidateLimit
 }
 
 // DefaultBearingPolicy returns the recommended defaults for the osm-admin-places
@@ -138,6 +174,16 @@ func DefaultBearingPolicy() BearingPolicy {
 // ReachKM returns the reach radius for a class, or 0 when the class has no entry
 // (a class with no reach never qualifies as an anchor).
 func (p BearingPolicy) ReachKM(c PlaceClass) float64 {
+	return p.Reach[c]
+}
+
+// GatherRadiusKM is the radius candidate gathering uses for a class: the flat
+// CandidateRadiusKM when set (CompositeSalience), else the per-class Reach
+// (RankedSalience). A class with neither configured yields 0 and is skipped.
+func (p BearingPolicy) GatherRadiusKM(c PlaceClass) float64 {
+	if p.CandidateRadiusKM > 0 {
+		return p.CandidateRadiusKM
+	}
 	return p.Reach[c]
 }
 

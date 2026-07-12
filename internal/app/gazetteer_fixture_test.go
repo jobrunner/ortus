@@ -72,8 +72,12 @@ func TestGazetteerFixtureGolden(t *testing.T) {
 	if err := idx.VerifySRID(ctx); err != nil {
 		t.Fatalf("VerifySRID on fixture: %v", err)
 	}
-	svc := gazetteer.NewService(idx, manifest, levels, nil, true)
+	// Exercise the production default: CompositeSalience with the composite candidate
+	// radius — the golden was generated the same way (see cmd/gazetteer-fixture).
+	svc := gazetteer.NewService(idx, manifest, levels, gazetteer.DefaultCompositeSalience(), true)
 	svc.SetNameSources(nameSources)
+	bearingPol := domain.DefaultBearingPolicy()
+	bearingPol.CandidateRadiusKM = gazetteer.DefaultCandidateRadiusKM
 
 	var golden []fixtureGolden
 	if err := json.Unmarshal(mustRead(t, "testdata/gazetteer-golden.json"), &golden); err != nil {
@@ -115,7 +119,7 @@ func TestGazetteerFixtureGolden(t *testing.T) {
 				}
 			}
 
-			fix, err := svc.Bearing(ctx, coord, domain.DefaultBearingPolicy())
+			fix, err := svc.Bearing(ctx, coord, bearingPol)
 			if err != nil {
 				t.Fatalf("Bearing: %v", err)
 			}

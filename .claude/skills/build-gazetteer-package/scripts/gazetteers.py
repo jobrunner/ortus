@@ -149,6 +149,33 @@ def build_gns_index(features):
             idx.add(nat, roman, lat, lon)
     return idx
 
+def build_geonames_population_index(path):
+    """From a GeoNames dump -> Index mapping native (non-Latin) name -> the nearest feature's
+    `population` (column 14) as its payload string. Features with unknown population (0) are
+    skipped. Used by enrich_places.py to backfill the sparse MENA village population tail."""
+    idx = Index("geonames-pop")
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            c = line.rstrip("\n").split("\t")
+            if len(c) < 15:
+                continue
+            # column 6 = feature_class; restrict to 'P' (populated place) so we never take the
+            # population of an enclosing admin area (class 'A') for a same-named settlement
+            if c[6] != "P":
+                continue
+            name, alt = c[1], c[3]
+            try:
+                lat, lon, pop = float(c[4]), float(c[5]), int(c[14])
+            except ValueError:
+                continue
+            if pop <= 0:
+                continue
+            natives = [n for n in ([name] + alt.split(",")) if n and script_of_name(n) != "Latin"]
+            for nat in natives:
+                idx.add(nat, str(pop), lat, lon)
+    return idx
+
+
 def build_geonames_index(path):
     """From a GeoNames dump -> Index. native names come from `alternatenames` (non-Latin ones);
     roman = `asciiname` (or `name` if Latin)."""

@@ -120,12 +120,22 @@ gazetteer:
   # anchor; prefer_nearest_km = a town-or-larger anchor within this radius wins
   # outright (villages excluded). Defaults shown.
   bearing:
-    reach_village_km: 5
+    reach_village_km: 5       # used by the "rank" strategy (per-class candidate reach)
     reach_town_km: 18
     reach_city_km: 60
-    prefer_nearest_km: 5
+    prefer_nearest_km: 5      # "rank": a town-or-larger within this radius wins outright
     inside_label_km: 1
-    compass_points: 8
+    compass_points: 8         # 8 or 16
+    # Anchor selection strategy: "composite" (default — prominence-vs-proximity, uses the
+    # enriched population/capital/wikidata columns; falls back to class where absent) or
+    # "rank" (the original class-then-distance behaviour).
+    salience: composite
+    composite:                # tuning for the composite strategy (calibrated "balanced" defaults)
+      candidate_radius_km: 120  # flat gather radius for all classes; decay shapes the outcome
+      pop_weight: 1.0           # multiplier on log10(1+population)
+      wiki_weight: 0.3          # bonus when a place has a wikidata QID
+      decay_per_km: 0.04        # score subtracted per km (prominence↔proximity slope)
+      capital_scale: 0.8        # scales the capital-rank bonus (national/regional seat)
 
 # OpenTelemetry tracing configuration.
 # When enabled, spans are kept in an in-memory ring buffer (for the MCP server

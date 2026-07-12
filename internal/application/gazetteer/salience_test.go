@@ -10,6 +10,17 @@ func cand(class domain.PlaceClass, name string, distKM float64) Candidate {
 	return Candidate{Place: domain.Place{Name: name, Class: class}, DistanceKM: distKM}
 }
 
+// pcand builds a candidate with prominence fields for CompositeSalience tests.
+func pcand(class domain.PlaceClass, name string, distKM float64, pop int64, capital, wikidata string) Candidate {
+	return Candidate{
+		Place: domain.Place{
+			Name: name, Class: class,
+			Population: pop, Capital: capital, Wikidata: wikidata,
+		},
+		DistanceKM: distKM,
+	}
+}
+
 func TestRankedSalienceSelect(t *testing.T) {
 	pol := domain.DefaultBearingPolicy() // village 5, town 18, city 60
 
@@ -81,5 +92,95 @@ func TestRankedSalienceSelect(t *testing.T) {
 				t.Errorf("best = %q, want %q", best.Place.Name, tc.wantName)
 			}
 		})
+	}
+}
+
+func TestCompositeSalienceSelect(t *testing.T) {
+	cs := DefaultCompositeSalience() // PopWeight 1, WikiWeight .3, DecayPerKM .04, CapitalScale .8
+	pol := domain.BearingPolicy{CandidateRadiusKM: 120}
+
+	cases := []struct {
+		name     string
+		cands    []Candidate
+		wantName string
+		wantOK   bool
+	}{
+		{name: "empty", cands: nil, wantOK: false},
+		{
+			// The point of the whole feature: a big city a moderate distance away
+			// beats an obscure town next door (today's bearing does the opposite).
+			name: "prominent city at distance beats near small town",
+			cands: []Candidate{
+				pcand(domain.ClassTown, "Suburb", 1.9, 8000, "", "Q1"),
+				pcand(domain.ClassCity, "Metropole", 15, 1_484_226, "4", "Q2"),
+			},
+			wantName: "Metropole", wantOK: true,
+		},
+		{
+			// Balanced decay: a nearby famous city beats a bigger city much farther.
+			name: "near famous city beats far bigger city",
+			cands: []Candidate{
+				pcand(domain.ClassCity, "Siena", 14, 53_903, "6", "Q1"),
+				pcand(domain.ClassCity, "Firenze", 64, 382_808, "4", "Q2"),
+			},
+			wantName: "Siena", wantOK: true,
+		},
+		{
+			// Capital bonus: equal population + distance, the higher-rank seat wins.
+			name: "capital rank breaks otherwise-equal",
+			cands: []Candidate{
+				pcand(domain.ClassTown, "Plain", 10, 20000, "8", ""),
+				pcand(domain.ClassTown, "Seat", 10, 20000, "4", ""),
+			},
+			wantName: "Seat", wantOK: true,
+		},
+		{
+			// Population unknown → class prior; a city with no population still
+			// outranks a village with no population at similar distance.
+			name: "class prior when population unknown",
+			cands: []Candidate{
+				pcand(domain.ClassVillage, "Vlg", 3, 0, "", ""),
+				pcand(domain.ClassCity, "Cty", 3, 0, "", ""),
+			},
+			wantName: "Cty", wantOK: true,
+		},
+		{
+			// No proximity override (unlike RankedSalience): the near small town does
+			// NOT automatically win — score decides, so the metropolis wins.
+			name: "no proximity override",
+			cands: []Candidate{
+				pcand(domain.ClassTown, "Near", 2, 5000, "", ""),
+				pcand(domain.ClassCity, "Big", 18, 800_000, "4", "Q9"),
+			},
+			wantName: "Big", wantOK: true,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			best, ok := cs.Select(tc.cands, pol)
+			if ok != tc.wantOK {
+				t.Fatalf("ok = %v, want %v", ok, tc.wantOK)
+			}
+			if ok && best.Place.Name != tc.wantName {
+				t.Errorf("best = %q, want %q", best.Place.Name, tc.wantName)
+			}
+		})
+	}
+}
+
+func TestCapitalBonusOrdering(t *testing.T) {
+	// Monotonic: national ≥ regional ≥ lower seats ≥ none; "yes" == national ("2").
+	if capitalBonus("yes") != capitalBonus("2") {
+		t.Errorf("capital yes (%.2f) should equal national 2 (%.2f)", capitalBonus("yes"), capitalBonus("2"))
+	}
+	order := []string{"2", "3", "4", "5", "6", "7", "8", ""}
+	for i := 1; i < len(order); i++ {
+		if capitalBonus(order[i-1]) < capitalBonus(order[i]) {
+			t.Errorf("capitalBonus(%q)=%.2f should be >= capitalBonus(%q)=%.2f",
+				order[i-1], capitalBonus(order[i-1]), order[i], capitalBonus(order[i]))
+		}
+	}
+	if capitalBonus("8") != 0 || capitalBonus("") != 0 {
+		t.Errorf("municipal/none capital should add nothing")
 	}
 }

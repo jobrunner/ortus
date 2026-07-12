@@ -1,6 +1,10 @@
 package gazetteer
 
-import "github.com/jobrunner/ortus/internal/domain"
+import (
+	"math"
+
+	"github.com/jobrunner/ortus/internal/domain"
+)
 
 // Candidate is a place under consideration as a bearing anchor, with its
 // ellipsoidal distance from the query point in kilometers.
@@ -94,3 +98,108 @@ func moreSalient(a, b Candidate) bool {
 
 // Compile-time assertion that RankedSalience satisfies the strategy interface.
 var _ SalienceStrategy = RankedSalience{}
+
+// CompositeSalience picks the anchor by a prominence-vs-proximity score rather than
+// by class-then-distance. It is the default for the enriched osm-admin-places dataset:
+// a genuinely prominent city a moderate distance away beats an obscure village next
+// door, which is what makes a bearing meaningful ("28 km NW München", not "2 km N
+// Kleinkleckersdorf"). Pure function of the candidate's own fields.
+//
+//	score = PopWeight·log10(1+population)          (or ClassPrior[class] if population unknown)
+//	      + CapitalScale·capitalBonus(capital)     (seat of a broader admin unit → more notable)
+//	      + WikiWeight   if the place has a wikidata QID
+//	      − DecayPerKM·distance_km                  (nearer is better; slope tunes prominence-vs-proximity)
+//
+// The score is in log10 units, so DecayPerKM is "log-population-decades traded per km":
+// at the calibrated 0.04, ~25 km of extra distance (1.0 / 0.04) offsets a 10× smaller
+// population.
+// Unlike RankedSalience it applies NO proximity override — that override is exactly
+// what makes today's bearing pick the nearest small town; here the score decides.
+type CompositeSalience struct {
+	PopWeight    float64                       // multiplier on log10(1+population)
+	WikiWeight   float64                       // additive bonus when a wikidata QID is present
+	DecayPerKM   float64                       // score subtracted per km of distance
+	CapitalScale float64                       // scales the capitalBonus table
+	ClassPrior   map[domain.PlaceClass]float64 // base score when population is unknown
+}
+
+// DefaultCandidateRadiusKM is the flat gather radius CompositeSalience uses (all
+// classes): wide enough that a prominent city a moderate distance away is in the
+// candidate pool, with the distance decay — not a hard per-class cap — doing the
+// shaping. Shared by the app wiring, the fixture generator and the fixture test so
+// they agree on what "composite" gathers.
+const DefaultCandidateRadiusKM = 120.0
+
+// DefaultCompositeSalience returns the calibrated "balanced" parameters (see
+// PLAN-bearing-salience.md): a prominent city stays selectable to ~80 km, a mid-size
+// city to ~30 km, a village only within a few km.
+func DefaultCompositeSalience() CompositeSalience {
+	return CompositeSalience{
+		PopWeight:    1.0,
+		WikiWeight:   0.3,
+		DecayPerKM:   0.04,
+		CapitalScale: 0.8,
+		ClassPrior: map[domain.PlaceClass]float64{
+			domain.ClassCity:    4.3,
+			domain.ClassTown:    3.3,
+			domain.ClassVillage: 2.3,
+		},
+	}
+}
+
+// Select implements SalienceStrategy: the highest-scoring candidate wins, ties broken
+// by distance then name (deterministic). Candidates are already within the gather
+// radius, so there is no further eligibility filter — the decay term does the shaping.
+func (c CompositeSalience) Select(cands []Candidate, _ domain.BearingPolicy) (best Candidate, ok bool) {
+	var bestScore float64
+	for _, cand := range cands {
+		sc := c.score(cand)
+		if !ok || sc > bestScore || (sc == bestScore && nearer(cand, best)) {
+			best, bestScore, ok = cand, sc, true
+		}
+	}
+	return best, ok
+}
+
+// score computes the composite salience of a candidate (higher = better anchor).
+func (c CompositeSalience) score(cand Candidate) float64 {
+	p := cand.Place
+	var base float64
+	if p.Population > 0 {
+		base = c.PopWeight * math.Log10(1+float64(p.Population))
+	} else {
+		base = c.ClassPrior[p.Class]
+	}
+	base += c.CapitalScale * capitalBonus(p.Capital)
+	if p.Wikidata != "" {
+		base += c.WikiWeight
+	}
+	return base - c.DecayPerKM*cand.DistanceKM
+}
+
+// capitalBonus maps the OSM `capital` value (the admin rank of the unit this place is
+// the seat of) to a log10-unit bonus: a national/regional capital is a far better
+// bearing anchor than a municipal seat. Values are the OSM capital= convention
+// (2=country … 8=municipality); "yes" is treated as a national capital. Unknown or
+// low-rank (8+) values add nothing.
+func capitalBonus(capital string) float64 {
+	switch capital {
+	case "yes", "2":
+		return 2.0
+	case "3":
+		return 1.5
+	case "4":
+		return 1.2
+	case "5":
+		return 0.6
+	case "6":
+		return 0.4
+	case "7":
+		return 0.2
+	default:
+		return 0.0
+	}
+}
+
+// Compile-time assertion that CompositeSalience satisfies the strategy interface.
+var _ SalienceStrategy = CompositeSalience{}

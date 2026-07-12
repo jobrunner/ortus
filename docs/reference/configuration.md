@@ -152,10 +152,29 @@ gazetteer:
     prefer_nearest_km: 5
     inside_label_km: 1
     compass_points: 8
+    salience: composite         # composite (default) | rank
+    composite:                  # composite-strategy tuning (calibrated defaults shown)
+      candidate_radius_km: 120
+      pop_weight: 1.0
+      wiki_weight: 0.3
+      decay_per_km: 0.04
+      capital_scale: 0.8
 ```
 
 - `geopackage_path` and `manifest_path` are **required** when `enabled: true`;
   startup fails fast otherwise.
+- `bearing.salience` picks the anchor-selection strategy. **`composite`** (default)
+  scores each candidate by prominence vs proximity —
+  `pop_weight·log10(1+population) + capital_scale·capitalBonus + wiki_weight·[wikidata] − decay_per_km·km` —
+  so a prominent city a moderate distance away beats an obscure village next door. It
+  needs the enriched `population`/`capital`/`wikidata` columns (from `make enrich-places`)
+  and falls back to the place class where they are absent. **`rank`** is the original
+  class-then-distance behaviour (uses `reach_*_km` + `prefer_nearest_km`). The composite
+  strategy gathers candidates within `candidate_radius_km` (a flat radius for all classes)
+  and lets the distance decay, not a hard per-class cap, shape the result. Both strategies
+  constrain anchors to the query point's country when it can be determined (skipped only
+  where the point lies in no polygon, e.g. open sea), and to its state-equivalent unit when
+  the manifest's `bearing_constraint_tier` resolves.
 - `level_reference_path` (optional) enriches each admin level with its semantic
   `equivalent`, country-specific `local_term`, and `equivalent_description`.
   Without it, Locate still returns the raw hierarchy.

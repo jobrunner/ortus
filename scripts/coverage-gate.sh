@@ -10,6 +10,12 @@
 # Usage: scripts/coverage-gate.sh [coverprofile]   (default: coverage.out)
 set -euo pipefail
 
+# Force a C numeric locale: awk's printf "%.1f" and numeric comparisons must use a
+# dot decimal separator. Under a comma-decimal locale (e.g. de_DE.UTF-8) "%.1f" yields
+# "100,0", which awk then compares as a STRING ("100,0" < "99" is true) → spurious
+# BELOW-FLOOR failures. CI runs under C; make local runs match it.
+export LC_ALL=C
+
 PROFILE="${1:-coverage.out}"
 FLOORS="$(dirname "$0")/../.coverage-floors"
 MODULE="github.com/jobrunner/ortus"

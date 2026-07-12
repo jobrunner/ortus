@@ -14,8 +14,10 @@ import (
 // since these tests vary only longitude to control the east-west bearing.
 func placeFeature(class, name string, adminID int, lon float64) domain.Feature {
 	f := domain.Feature{
-		LayerName:  "places",
-		Properties: map[string]any{"place": class, "name": name, "admin_id": adminID},
+		LayerName: "places",
+		// country_iso matches the mock admin polygons ("DE") so the same-country guard
+		// admits these candidates; tests exercising cross-country are explicit.
+		Properties: map[string]any{"place": class, "name": name, "admin_id": adminID, "country_iso": "DE"},
 	}
 	f.Geometry.WKT = fmt.Sprintf("POINT(%g 50)", lon)
 	return f
@@ -160,6 +162,29 @@ func TestBearingBoundaryConstraint(t *testing.T) {
 	}
 	if fix.Reference.Name != "SameState" {
 		t.Errorf("reference = %q, want SameState (nearer OtherState is across the boundary)", fix.Reference.Name)
+	}
+}
+
+func TestBearingSameCountryConstraint(t *testing.T) {
+	// Requirement #1: the anchor must be in the query point's country. A nearer city
+	// across the border (different country_iso) is skipped for the in-country one,
+	// even with the state constraint off (so only the country guard is in play).
+	foreign := placeFeature("city", "Foreign", 0, 10.03) // ~2.1 km, but abroad
+	foreign.Properties["country_iso"] = "FR"
+	idx := fakeIndex{
+		pip: []domain.Feature{adminFeatureID(2, "2", "Germany")}, // query point ∈ DE
+		knn: map[string][]domain.Feature{
+			"city": {foreign, placeFeature("city", "Domestic", 0, 10.1)}, // farther (~7.2 km), DE
+		},
+	}
+	svc := NewService(idx, testManifest(), nil, nil, true)
+
+	fix, err := svc.Bearing(context.Background(), domain.NewWGS84Coordinate(10.0, 50.0), noConstraint())
+	if err != nil {
+		t.Fatalf("Bearing: %v", err)
+	}
+	if fix.Reference.Name != "Domestic" {
+		t.Errorf("reference = %q, want Domestic (nearer Foreign is across the country border)", fix.Reference.Name)
 	}
 }
 
