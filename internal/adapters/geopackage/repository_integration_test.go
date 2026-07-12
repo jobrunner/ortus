@@ -182,7 +182,7 @@ func TestIntegration_PointInPolygon_FallbackScan(t *testing.T) {
 func assertFeatureNames(t *testing.T, features []domain.Feature, want []string) {
 	t.Helper()
 	if len(features) != len(want) {
-		var got []string
+		got := make([]string, 0, len(features))
 		for _, f := range features {
 			got = append(got, f.GetStringProperty("name"))
 		}
