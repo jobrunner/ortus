@@ -40,6 +40,7 @@ type Server struct {
 	httpMetrics      *httpMetrics         // HTTP-level instruments; nil when metrics disabled
 	rateLimiter      *ipRateLimiter       // per-IP limiter; nil unless server.rate_limit.enabled
 	trustedProxies   []*net.IPNet         // proxy CIDRs allowed to set X-Forwarded-For
+	version          string               // build version, shown in the frontend footer
 }
 
 // ServerOptions wraps optional dependencies the HTTP server can use, such as
@@ -52,6 +53,7 @@ type ServerOptions struct {
 	Gazetteer        input.Gazetteer      // optional; enables the /gazetteer route and the with-gazetteer flag
 	BearingPolicy    domain.BearingPolicy // optional bearing tuning; zero value falls back to DefaultBearingPolicy
 	GazetteerLicense domain.License       // optional dataset license/attribution surfaced in the gazetteer block
+	Version          string               // build version shown in the frontend footer (defaults to "dev")
 }
 
 // NewServer creates a new HTTP server.
@@ -68,6 +70,11 @@ func NewServer(
 	serviceName := opts.ServiceName
 	if serviceName == "" {
 		serviceName = "ortus"
+	}
+
+	version := opts.Version
+	if version == "" {
+		version = "dev"
 	}
 
 	var httpM *httpMetrics
@@ -89,6 +96,7 @@ func NewServer(
 		tracerProvider:   opts.TracerProvider,
 		serviceName:      serviceName,
 		httpMetrics:      httpM,
+		version:          version,
 	}
 
 	// Opt-in per-IP rate limiting (off by default). Only the /api/v1 surface is

@@ -325,6 +325,7 @@ func (a *App) buildHTTPServer(cfg *config.Config, logger *slog.Logger) *httpAdap
 			Gazetteer:        a.gazetteerPort(),
 			BearingPolicy:    a.gazetteerPolicy,
 			GazetteerLicense: a.gazetteerLicense,
+			Version:          cfg.Build.Version,
 		},
 	)
 }

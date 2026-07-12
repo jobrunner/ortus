@@ -1,7 +1,9 @@
 package http
 
 import (
+	"html"
 	"net/http"
+	"strings"
 )
 
 // frontendHTML is the embedded HTML for the coordinate query frontend.
@@ -587,6 +589,12 @@ const frontendHTML = `<!DOCTYPE html>
             text-decoration: underline;
         }
 
+        .footer-version {
+            margin-top: 0.4rem;
+            opacity: 0.65;
+            font-variant-numeric: tabular-nums;
+        }
+
         /* Tablet and up */
         @media (min-width: 640px) {
             .container {
@@ -695,6 +703,7 @@ const frontendHTML = `<!DOCTYPE html>
             <a href="/docs">API Dokumentation</a> &middot;
             <a href="/openapi.json">OpenAPI Spec</a> &middot;
             <a href="/health">Health Status</a>
+            <div class="footer-version">ortus __ORTUS_VERSION__</div>
         </footer>
     </div>
 
@@ -1170,8 +1179,11 @@ const frontendHTML = `<!DOCTYPE html>
 </body>
 </html>`
 
-// handleFrontend serves the coordinate query frontend.
+// handleFrontend serves the coordinate query frontend, rendering the build
+// version into the footer placeholder (HTML-escaped, though the version comes
+// from a trusted -ldflags value).
 func (s *Server) handleFrontend(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = w.Write([]byte(frontendHTML))
+	page := strings.Replace(frontendHTML, "__ORTUS_VERSION__", html.EscapeString(s.version), 1)
+	_, _ = w.Write([]byte(page))
 }
