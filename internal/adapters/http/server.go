@@ -41,6 +41,7 @@ type Server struct {
 	rateLimiter      *ipRateLimiter       // per-IP limiter; nil unless server.rate_limit.enabled
 	trustedProxies   []*net.IPNet         // proxy CIDRs allowed to set X-Forwarded-For
 	version          string               // build version, shown in the frontend footer
+	frontendPage     []byte               // frontend HTML pre-rendered with the version, built once in NewServer
 }
 
 // ServerOptions wraps optional dependencies the HTTP server can use, such as
@@ -97,6 +98,7 @@ func NewServer(
 		serviceName:      serviceName,
 		httpMetrics:      httpM,
 		version:          version,
+		frontendPage:     renderFrontend(version),
 	}
 
 	// Opt-in per-IP rate limiting (off by default). Only the /api/v1 surface is

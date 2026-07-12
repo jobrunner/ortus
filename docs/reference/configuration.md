@@ -160,7 +160,7 @@ gazetteer:
       decay_per_km: 0.04
       capital_scale: 0.8
       # class_prior: { city: 4.3, town: 3.3, village: 2.3 }          # base score when population is unknown
-      # capital_bonus: { "2": 2.0, "3": 1.5, "4": 1.2, "5": 0.6, "6": 0.4, "7": 0.2, yes: 2.0 }
+      # capital_bonus: { "2": 2.0, "3": 1.5, "4": 1.2, "5": 0.6, "6": 0.4, "7": 0.2, "yes": 2.0 }
 ```
 
 - `geopackage_path` and `manifest_path` are **required** when `enabled: true`;

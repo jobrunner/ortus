@@ -1179,11 +1179,17 @@ const frontendHTML = `<!DOCTYPE html>
 </body>
 </html>`
 
-// handleFrontend serves the coordinate query frontend, rendering the build
-// version into the footer placeholder (HTML-escaped, though the version comes
-// from a trusted -ldflags value).
+// renderFrontend substitutes the build version into the footer placeholder once,
+// at server construction. The version is HTML-escaped (it comes from a trusted
+// -ldflags value, but escaping keeps the template injection-safe regardless).
+func renderFrontend(version string) []byte {
+	return []byte(strings.Replace(frontendHTML, "__ORTUS_VERSION__", html.EscapeString(version), 1))
+}
+
+// handleFrontend serves the pre-rendered coordinate query frontend. The page is
+// built once in NewServer (the version is constant for the server's lifetime),
+// so each request only writes the cached bytes.
 func (s *Server) handleFrontend(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	page := strings.Replace(frontendHTML, "__ORTUS_VERSION__", html.EscapeString(s.version), 1)
-	_, _ = w.Write([]byte(page))
+	_, _ = w.Write(s.frontendPage)
 }
