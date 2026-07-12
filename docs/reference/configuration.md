@@ -112,6 +112,15 @@ query:
 A complete example lives in [`config.yaml.example`](https://github.com/jobrunner/ortus/blob/master/config.yaml.example);
 a test (`TestConfigExampleNoDrift`) keeps it in sync with the code.
 
+Point-in-polygon matching is boundary-inclusive (`ST_Covers`): a point exactly on
+a polygon edge belongs to that polygon, and a point on a border between two
+different regions returns both. Fragments of the same region (e.g. from an
+`ST_Subdivide`-tiled source) are deduplicated by their attributes, so a tiled
+source returns the same features as its un-tiled original — tiling stays an
+opt-in packaging choice. One caveat: with `query.with_geometry: true`, a tiled
+source returns the matched subdivision fragment's geometry, not the original
+whole polygon.
+
 ## SQLite tuning
 
 The `query.sqlite.*` keys tune how each GeoPackage is opened. Defaults favour

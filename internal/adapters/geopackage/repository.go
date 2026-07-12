@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 
@@ -657,7 +658,13 @@ func (r *Repository) readMetadata(ctx context.Context, db *sql.DB, src *domain.S
 	return rows.Err()
 }
 
-// executePointQuery performs the actual point query using ST_Contains.
+// executePointQuery performs the actual point query.
+// For polygon layers it uses ST_Covers, which is boundary-inclusive (a point
+// exactly on a polygon boundary is matched); this makes ST_Subdivide-tiled
+// packages return the same results as their un-tiled originals, since a point on
+// an internal cut edge is covered by the adjoining fragment(s) rather than being
+// missed by strict ST_Contains. Because a boundary point can be covered by more
+// than one fragment of the same feature, callers dedup the assembled results.
 // The coordinate must already be transformed to the layer's SRID before calling this function.
 // Uses R-tree spatial index for fast bounding box filtering when available.
 func (r *Repository) executePointQuery(ctx context.Context, db *sql.DB, layer *domain.Layer, coord domain.Coordinate) ([]domain.Feature, error) {
@@ -688,7 +695,8 @@ func (r *Repository) executePointQuery(ctx context.Context, db *sql.DB, layer *d
 		output.String("ortus.index.table", indexTable),
 	)
 
-	// Build query using ST_Contains for polygon layers, MbrContains for others
+	// Build query using ST_Covers for polygon layers (boundary-inclusive so
+	// tiled/subdivided packages match their originals), MbrContains for others.
 	// Note: GeoPackage uses GPKG binary format, so we use CastAutomagic() to convert
 	// the geometry to SpatiaLite format before spatial operations
 	var query string
@@ -700,7 +708,7 @@ func (r *Repository) executePointQuery(ctx context.Context, db *sql.DB, layer *d
 				FROM "%s" t
 				INNER JOIN "%s" r ON t.rowid = r.id
 				WHERE r.minx <= ? AND r.maxx >= ? AND r.miny <= ? AND r.maxy >= ?
-				  AND ST_Contains(CastAutomagic(t."%s"), GeomFromText(?, ?))
+				  AND ST_Covers(CastAutomagic(t."%s"), GeomFromText(?, ?))
 			`, layer.GeometryColumn, layer.Name, indexTable,
 				layer.GeometryColumn,
 			) //#nosec G201 -- table/column names from trusted database
@@ -719,7 +727,7 @@ func (r *Repository) executePointQuery(ctx context.Context, db *sql.DB, layer *d
 			query = fmt.Sprintf(`
 				SELECT *, AsText(CastAutomagic("%s"))
 				FROM "%s"
-				WHERE ST_Contains(CastAutomagic("%s"), GeomFromText(?, ?))
+				WHERE ST_Covers(CastAutomagic("%s"), GeomFromText(?, ?))
 			`, layer.GeometryColumn, layer.Name, layer.GeometryColumn) //#nosec G201 -- identifiers from layer metadata read from the gpkg catalog, double-quoted; SQLite can't parameterize identifiers
 		} else {
 			query = fmt.Sprintf(`
@@ -738,7 +746,7 @@ func (r *Repository) executePointQuery(ctx context.Context, db *sql.DB, layer *d
 		if layer.IsPolygonLayer() {
 			rows, err = db.QueryContext(ctx, query,
 				coord.X, coord.X, coord.Y, coord.Y, // R-tree bounds (point = minx=maxx, miny=maxy)
-				pointWKT, coord.SRID, // ST_Contains parameters
+				pointWKT, coord.SRID, // ST_Covers parameters
 			)
 		} else {
 			rows, err = db.QueryContext(ctx, query,
@@ -784,8 +792,58 @@ func (r *Repository) executePointQuery(ctx context.Context, db *sql.DB, layer *d
 		return nil, err
 	}
 
+	// Dedup fragments of the same feature. ST_Covers is boundary-inclusive, so a
+	// point on an internal cut edge of an ST_Subdivide-tiled feature is covered by
+	// two or more adjoining fragments that carry identical attributes (only fid and
+	// the returned geometry fragment differ). Collapsing on the non-fid, non-geometry
+	// properties removes those duplicates while preserving genuine matches on a
+	// border between two *different* features.
+	features = dedupFeaturesByProperties(features)
+
 	span.SetAttributes(output.Int("ortus.features.count", len(features)))
 	return features, nil
+}
+
+// dedupFeaturesByProperties collapses features that are identical across all of
+// their non-geometry, non-fid properties, keeping the first occurrence in input
+// order. It is used to remove duplicate rows produced by boundary-inclusive
+// (ST_Covers) matching against ST_Subdivide fragments of a single feature; two
+// distinct features that happen to share a border are kept because their
+// properties differ. It does not rely on any magic column name.
+func dedupFeaturesByProperties(features []domain.Feature) []domain.Feature {
+	if len(features) < 2 {
+		return features
+	}
+	seen := make(map[string]struct{}, len(features))
+	out := features[:0:0]
+	for _, f := range features {
+		key := featurePropertyKey(f)
+		if _, dup := seen[key]; dup {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, f)
+	}
+	return out
+}
+
+// featurePropertyKey builds a stable identity key from a feature's properties,
+// excluding the geometry (which differs per fragment) and the fid (already
+// excluded from Properties by scanFeature). Keys are sorted so ordering in the
+// map does not affect the result.
+func featurePropertyKey(f domain.Feature) string {
+	keys := make([]string, 0, len(f.Properties))
+	for k := range f.Properties {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var b strings.Builder
+	b.WriteString(f.LayerName)
+	b.WriteByte('\x00')
+	for _, k := range keys {
+		fmt.Fprintf(&b, "%s\x00%v\x00", k, f.Properties[k])
+	}
+	return b.String()
 }
 
 // scanFeature scans a row into a Feature.
