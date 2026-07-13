@@ -4,4 +4,9 @@
 # (reviewed in the PR). Enforced by scripts/debt-guard.sh.
 #
 # When you remove suppressions, lower this number to lock the gain in.
-25
+#
+# 2026-07: +1 for the raster continuous-value decode — sampleToFloat must call
+# math.Float32frombits(uint32(raw)) to reinterpret a float32 band's bit pattern;
+# the uint32 narrowing is intentional and unavoidable (gosec G115). Integer bands
+# are decoded by masking (no suppression) and the tile/COG open shares one G304.
+26

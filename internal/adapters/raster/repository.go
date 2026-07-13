@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -21,10 +22,11 @@ import (
 
 // Repository implements output.SpatialSource for raster bundles (*.zip).
 type Repository struct {
-	mu       sync.RWMutex
-	sources  map[string]*bundle
-	cacheDir string // parent dir for per-bundle unpack directories
-	tracer   output.Tracer
+	mu            sync.RWMutex
+	sources       map[string]*bundle
+	cacheDir      string // parent dir for per-bundle unpack directories
+	tracer        output.Tracer
+	tileCacheSize int // open-handle LRU bound for tiled layers (0 → default)
 }
 
 type bundle struct {
@@ -39,6 +41,21 @@ type rasterLayer struct {
 	band    int // 0-based band index into RasterData
 	nodata  *float64
 	mapping map[int64]map[string]interface{}
+
+	// Continuous layers (value_type: continuous) return the sampled pixel value
+	// directly as a float instead of looking it up in mapping. outputProp is the
+	// Feature property name (default "value"); the returned value is
+	// raw*scale + offset. dtype is cached from the COG so QueryPoint decodes the
+	// sample correctly (float bands come back as IEEE bit patterns).
+	continuous bool
+	outputProp string
+	scale      float64
+	offset     float64
+	dtype      gocog.DataType
+
+	// tiles is set for a multi-tile continuous layer. When non-nil, cog/file are
+	// nil and QueryPoint routes to the tile covering the point instead.
+	tiles *tileset
 }
 
 // NewRepository creates a raster bundle repository. cacheDir is where bundle
@@ -58,6 +75,11 @@ func (r *Repository) SetTracer(t output.Tracer) {
 	}
 	r.tracer = t
 }
+
+// SetTileCacheSize sets the open-handle LRU bound applied to tiled layers loaded
+// afterwards. A value <= 0 leaves the default. Applies at layer-open time, so set
+// it before sources load.
+func (r *Repository) SetTileCacheSize(n int) { r.tileCacheSize = n }
 
 // tempDirPrefix is the prefix of the per-bundle unpack directories. Kept in one
 // place so CleanupOrphaned can find them.
@@ -235,13 +257,72 @@ func (r *Repository) openBundle(path, sourceID, dir string) (*bundle, error) {
 	return b, nil
 }
 
+// openCOGFile opens a COG whose path was produced by safeJoin (so it is confined
+// to the bundle dir). One suppression covers both the single-COG and tiled paths.
+func openCOGFile(path string) (*os.File, error) {
+	return os.Open(path) //#nosec G304 -- path validated by safeJoin to stay within the bundle dir
+}
+
+// continuousParams resolves a continuous layer's output property name and linear
+// scale/offset, applying the defaults (property "value", scale 1, offset 0).
+func continuousParams(spec layerSpec) (outputProp string, scale, offset float64) {
+	outputProp = spec.OutputProperty
+	if outputProp == "" {
+		outputProp = "value"
+	}
+	scale = 1.0
+	if spec.Scale != nil {
+		scale = *spec.Scale
+	}
+	offset = 0.0
+	if spec.Offset != nil {
+		offset = *spec.Offset
+	}
+	return outputProp, scale, offset
+}
+
+// openTiledLayer builds a multi-tile continuous layer: it records the tile set
+// under the bundle's tile directory (no COGs opened yet; they are opened lazily
+// through the LRU on first query).
+func (r *Repository) openTiledLayer(dir string, spec layerSpec) (*rasterLayer, error) {
+	if !spec.isContinuous() {
+		return nil, fmt.Errorf("layer %q: tiles require value_type continuous", spec.ID)
+	}
+	band := spec.Band
+	if band == 0 {
+		band = 1
+	}
+	outputProp, scale, offset := continuousParams(spec)
+	tileDir, err := safeJoin(dir, spec.Tiles.Dir)
+	if err != nil {
+		return nil, err
+	}
+	ts, err := newTileset(tileDir, *spec.Tiles, band-1, spec.Nodata, outputProp, scale, offset, r.tileCacheSize)
+	if err != nil {
+		return nil, fmt.Errorf("layer %q: %w", spec.ID, err)
+	}
+	return &rasterLayer{
+		band:       band - 1,
+		nodata:     spec.Nodata,
+		continuous: true,
+		outputProp: outputProp,
+		scale:      scale,
+		offset:     offset,
+		tiles:      ts,
+	}, nil
+}
+
 // openLayer opens one COG and resolves its value mapping.
 func (r *Repository) openLayer(dir string, spec layerSpec) (*rasterLayer, error) {
+	if spec.Tiles != nil {
+		return r.openTiledLayer(dir, spec)
+	}
+
 	cogPath, err := safeJoin(dir, spec.File)
 	if err != nil {
 		return nil, err
 	}
-	f, err := os.Open(cogPath) //#nosec G304 -- path validated by safeJoin to stay within dir
+	f, err := openCOGFile(cogPath)
 	if err != nil {
 		return nil, fmt.Errorf("opening COG %q: %w", spec.File, err)
 	}
@@ -258,6 +339,25 @@ func (r *Repository) openLayer(dir string, spec layerSpec) (*rasterLayer, error)
 	if band > c.BandCount() {
 		_ = f.Close()
 		return nil, fmt.Errorf("layer %q: band %d out of range (COG has %d band(s))", spec.ID, band, c.BandCount())
+	}
+
+	if spec.isContinuous() {
+		if !isNumericDataType(c.DataType()) {
+			_ = f.Close()
+			return nil, fmt.Errorf("layer %q: value_type continuous requires a numeric COG band, got data type %d", spec.ID, c.DataType())
+		}
+		outputProp, scale, offset := continuousParams(spec)
+		return &rasterLayer{
+			cog:        c,
+			file:       f,
+			band:       band - 1,
+			nodata:     spec.Nodata,
+			continuous: true,
+			outputProp: outputProp,
+			scale:      scale,
+			offset:     offset,
+			dtype:      c.DataType(),
+		}, nil
 	}
 
 	mapping, err := resolveMapping(spec, func(name string) ([]byte, error) {
@@ -279,6 +379,68 @@ func (r *Repository) openLayer(dir string, spec layerSpec) (*rasterLayer, error)
 		nodata:  spec.Nodata,
 		mapping: mapping,
 	}, nil
+}
+
+// isNumericDataType reports whether a COG data type can be sampled as a
+// continuous numeric value. All integer and IEEE float types qualify; ASCII,
+// undefined, and rational types do not.
+func isNumericDataType(dt gocog.DataType) bool {
+	switch dt {
+	case gocog.DTByte, gocog.DTSByte,
+		gocog.DTSShort, gocog.DTSShortS,
+		gocog.DTSLong, gocog.DTSLongS,
+		gocog.DTFloat, gocog.DTDouble:
+		return true
+	default:
+		return false
+	}
+}
+
+// sampleToFloat decodes a raw sample (as returned by RasterData.At) to a float64
+// according to the band data type. Integer types come back as their true value;
+// IEEE float types come back as bit patterns and must be reinterpreted. The bool
+// is false for data types that cannot be sampled as a continuous value.
+func sampleToFloat(dt gocog.DataType, raw uint64) (float64, bool) {
+	// gocog packs the band value into the low bits of the uint64. Integer bands are
+	// decoded by masking to the band width (and sign-extending signed types) so no
+	// narrowing conversion is needed; float bands are IEEE bit patterns.
+	switch dt {
+	case gocog.DTFloat:
+		return float64(math.Float32frombits(uint32(raw))), true //#nosec G115 -- low 32 bits are the float32 pattern
+	case gocog.DTDouble:
+		return math.Float64frombits(raw), true
+	case gocog.DTByte:
+		return uintSample(raw, 8), true
+	case gocog.DTSShort:
+		return uintSample(raw, 16), true
+	case gocog.DTSLong:
+		return uintSample(raw, 32), true
+	case gocog.DTSByte:
+		return intSample(raw, 8), true
+	case gocog.DTSShortS:
+		return intSample(raw, 16), true
+	case gocog.DTSLongS:
+		return intSample(raw, 32), true
+	default:
+		return 0, false
+	}
+}
+
+// uintSample interprets the low `bits` of raw as an unsigned integer value.
+func uintSample(raw uint64, bits uint) float64 {
+	mask := uint64(1)<<bits - 1
+	return float64(raw & mask)
+}
+
+// intSample interprets the low `bits` of raw as a two's-complement signed integer
+// value, sign-extending via unsigned arithmetic (so no signed-narrowing cast).
+func intSample(raw uint64, bits uint) float64 {
+	mask := uint64(1)<<bits - 1
+	v := raw & mask
+	if v&(uint64(1)<<(bits-1)) != 0 { // sign bit set → negative
+		return -float64((^v + 1) & mask)
+	}
+	return float64(v)
 }
 
 // QueryPoint samples the layer at the coordinate (nearest-neighbor) and maps
@@ -304,6 +466,11 @@ func (r *Repository) QueryPoint(ctx context.Context, sourceID, layerName string,
 		return nil, domain.ErrLayerNotFound
 	}
 
+	// Multi-tile continuous layer: route to the tile covering the point.
+	if layer.tiles != nil {
+		return r.queryTiled(sourceID, layerName, coord, layer.tiles, span)
+	}
+
 	px, py := layer.cog.PixelFromPoint(orb.Point{coord.X, coord.Y}, 0)
 	if px < 0 || py < 0 || px >= layer.cog.Width() || py >= layer.cog.Height() {
 		// Outside the raster extent — no data, not an error.
@@ -316,7 +483,26 @@ func (r *Repository) QueryPoint(ctx context.Context, sourceID, layerName string,
 		span.SetStatus(output.StatusError, "sample failed")
 		return nil, &domain.QueryError{SourceID: sourceID, Layer: layerName, Err: err}
 	}
-	value := int64(rd.At(layer.band, 0, 0)) //#nosec G115 -- categorical pixel values fit int64
+	raw := rd.At(layer.band, 0, 0)
+
+	if layer.continuous {
+		f, ok := sampleToFloat(layer.dtype, raw)
+		if !ok {
+			err := fmt.Errorf("continuous layer %q: unsupported data type %d", layerName, layer.dtype)
+			span.RecordError(err)
+			span.SetStatus(output.StatusError, "bad data type")
+			return nil, &domain.QueryError{SourceID: sourceID, Layer: layerName, Err: err}
+		}
+		if layer.nodata != nil && f == *layer.nodata {
+			return nil, nil // nodata sample — no match
+		}
+		return []domain.Feature{{
+			LayerName:  layerName,
+			Properties: map[string]interface{}{layer.outputProp: f*layer.scale + layer.offset},
+		}}, nil
+	}
+
+	value := int64(raw) //#nosec G115 -- categorical pixel values fit int64
 
 	if layer.nodata != nil && float64(value) == *layer.nodata {
 		return nil, nil // nodata sample — no match
@@ -334,6 +520,49 @@ func (r *Repository) QueryPoint(ctx context.Context, sourceID, layerName string,
 		ID:         value,
 		LayerName:  layerName,
 		Properties: props,
+	}}, nil
+}
+
+// queryTiled samples a multi-tile continuous layer: it routes the point to its
+// grid cell, opens (via the LRU) the tile covering it, and decodes the sample. A
+// point over a missing tile or outside the tile extent yields no feature (the
+// ocean/no-coverage convention), not an error.
+func (r *Repository) queryTiled(sourceID, layerName string, coord domain.Coordinate, ts *tileset, span output.Span) ([]domain.Feature, error) {
+	latDeg, lonDeg := ts.cellFor(coord.X, coord.Y)
+	name := tileFileName(ts.pattern, latDeg, lonDeg)
+	if !ts.present(name) {
+		return nil, nil // no tile → sea level / no coverage
+	}
+	ot, err := ts.acquire([2]int{latDeg, lonDeg}, name)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(output.StatusError, "tile open failed")
+		return nil, &domain.QueryError{SourceID: sourceID, Layer: layerName, Err: err}
+	}
+
+	px, py := ot.cog.PixelFromPoint(orb.Point{coord.X, coord.Y}, 0)
+	if px < 0 || py < 0 || px >= ot.cog.Width() || py >= ot.cog.Height() {
+		return nil, nil // outside this tile's extent — no data
+	}
+	rd, err := ot.cog.ReadWindow(gocog.Rectangle{X: px, Y: py, Width: 1, Height: 1})
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(output.StatusError, "sample failed")
+		return nil, &domain.QueryError{SourceID: sourceID, Layer: layerName, Err: err}
+	}
+	f, ok := sampleToFloat(ot.dtype, rd.At(ts.band, 0, 0))
+	if !ok {
+		err := fmt.Errorf("continuous tile layer %q: unsupported data type %d", layerName, ot.dtype)
+		span.RecordError(err)
+		span.SetStatus(output.StatusError, "bad data type")
+		return nil, &domain.QueryError{SourceID: sourceID, Layer: layerName, Err: err}
+	}
+	if ts.nodata != nil && f == *ts.nodata {
+		return nil, nil // nodata sample — no match
+	}
+	return []domain.Feature{{
+		LayerName:  layerName,
+		Properties: map[string]interface{}{ts.outputProp: f*ts.scale + ts.offset},
 	}}, nil
 }
 
@@ -367,6 +596,9 @@ func (b *bundle) closeFiles() {
 	for _, l := range b.layers {
 		if l.file != nil {
 			_ = l.file.Close()
+		}
+		if l.tiles != nil {
+			l.tiles.close() // release the tile LRU's open handles
 		}
 	}
 }
