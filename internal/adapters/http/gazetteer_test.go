@@ -22,10 +22,12 @@ import (
 
 // fakeGazetteer is a canned input.Gazetteer for handler tests.
 type fakeGazetteer struct {
-	loc    *domain.Locality
-	locErr error
-	fix    *domain.Fix
-	fixErr error
+	loc     *domain.Locality
+	locErr  error
+	fix     *domain.Fix
+	fixErr  error
+	elev    *domain.Elevation
+	elevErr error
 }
 
 func (f fakeGazetteer) Locate(context.Context, domain.Coordinate) (*domain.Locality, error) {
@@ -33,6 +35,9 @@ func (f fakeGazetteer) Locate(context.Context, domain.Coordinate) (*domain.Local
 }
 func (f fakeGazetteer) Bearing(context.Context, domain.Coordinate, domain.BearingPolicy) (*domain.Fix, error) {
 	return f.fix, f.fixErr
+}
+func (f fakeGazetteer) Elevation(context.Context, domain.Coordinate) (*domain.Elevation, error) {
+	return f.elev, f.elevErr
 }
 
 func newGazetteerServer(t *testing.T, gaz input.Gazetteer) *Server {
@@ -166,6 +171,64 @@ func TestGazetteerSourcesBlock(t *testing.T) {
 	license, ok := body["license"].(map[string]any)
 	if !ok || license["name"] != "ODbL-1.0" || license["attribution"] != "© OpenStreetMap contributors (ODbL 1.0)" {
 		t.Errorf("license = %v, want ODbL attribution", body["license"])
+	}
+}
+
+func TestGazetteerElevationBlock(t *testing.T) {
+	elev := &domain.Elevation{
+		Meters: 177.0, AccuracyM: 4.0, AccuracyBasis: "GLO-30 LE90 (absolute)",
+		HorizontalM: 6.0, VerticalDatum: "EGM2008", SeaLevel: false, SurfaceModel: "DSM",
+		License: domain.License{Name: "Copernicus DEM GLO-30", URL: "https://example/glo30", Attribution: "© DLR/Airbus/ESA"},
+	}
+	srv := newGazetteerServer(t, fakeGazetteer{loc: sampleLocality(), fix: sampleFix(), elev: elev})
+	rec, body := doGET(t, srv, "/api/v1/gazetteer?lon=9.93&lat=49.79")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	e, ok := body["elevation"].(map[string]any)
+	if !ok {
+		t.Fatalf("elevation missing; got %v", body["elevation"])
+	}
+	if e["meters"] != 177.0 || e["vertical_datum"] != "EGM2008" || e["sea_level"] != false {
+		t.Errorf("elevation core = %v", e)
+	}
+	if e["accuracy_m"] != 4.0 || e["accuracy_basis"] != "GLO-30 LE90 (absolute)" || e["horizontal_accuracy_m"] != 6.0 {
+		t.Errorf("elevation accuracy = %v", e)
+	}
+	if e["surface_model"] != "DSM" {
+		t.Errorf("surface_model = %v, want DSM", e["surface_model"])
+	}
+	// The DEM source attribution is nested under "source", distinct from the
+	// response-wide gazetteer "license" (OSM/ODbL).
+	src, ok := e["source"].(map[string]any)
+	if !ok || src["name"] != "Copernicus DEM GLO-30" {
+		t.Fatalf("elevation.source = %v, want Copernicus", e["source"])
+	}
+	if lic, ok := body["license"].(map[string]any); ok && lic["name"] == src["name"] {
+		t.Errorf("DEM source must be distinct from gazetteer license, both = %v", lic["name"])
+	}
+}
+
+func TestGazetteerElevationSeaLevel(t *testing.T) {
+	// No DEM tile → sea-level convention: meters 0, sea_level true.
+	elev := &domain.Elevation{Meters: 0, SeaLevel: true, VerticalDatum: "EGM2008"}
+	srv := newGazetteerServer(t, fakeGazetteer{loc: sampleLocality(), fix: sampleFix(), elev: elev})
+	rec, body := doGET(t, srv, "/api/v1/gazetteer?lon=8.0&lat=54.0")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	e, ok := body["elevation"].(map[string]any)
+	if !ok || e["sea_level"] != true || e["meters"] != 0.0 {
+		t.Errorf("elevation = %v, want sea_level true / meters 0", body["elevation"])
+	}
+}
+
+func TestGazetteerElevationOmittedWhenUnwired(t *testing.T) {
+	// Elevation returns (nil, nil) when the feature is off → block absent.
+	srv := newGazetteerServer(t, fakeGazetteer{loc: sampleLocality(), fix: sampleFix()})
+	_, body := doGET(t, srv, "/api/v1/gazetteer?lon=9.93&lat=49.79")
+	if body["elevation"] != nil {
+		t.Errorf("elevation = %v, want null when unwired", body["elevation"])
 	}
 }
 

@@ -99,6 +99,23 @@ type Locality struct {
 	Chain      []AdminUnit // most-local first
 }
 
+// Elevation is the height above sea level at a queried coordinate, sampled from a
+// continuous raster DEM, plus the accuracy metadata a client needs to use it
+// responsibly. The accuracy fields matter for downstream terrain derivatives
+// (slope/aspect), where the *relative* error governs — see the elevation plan.
+type Elevation struct {
+	Meters        float64 // orthometric height above sea level
+	AccuracyM     float64 // vertical accuracy; dataset LE90 constant now, per-point HEM later
+	AccuracyBasis string  // human-readable basis, e.g. "GLO-30 LE90 (absolute)"
+	HorizontalM   float64 // horizontal accuracy (LE90)
+	VerticalDatum string  // e.g. "EGM2008"
+	// SeaLevel is true when no DEM tile covers the point (ocean / outside
+	// coverage); by convention Meters is then 0.
+	SeaLevel     bool
+	SurfaceModel string  // e.g. "DSM" (surface, not bare-earth)
+	License      License // DEM source license/attribution, distinct from the gazetteer's own
+}
+
 // Fix is a bearing result: a reference place plus the direction and distance from
 // it to the queried point, with a ready-to-render label ("4 km E Würzburg").
 type Fix struct {

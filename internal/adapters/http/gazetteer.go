@@ -44,7 +44,7 @@ func (s *Server) handleGazetteer(w http.ResponseWriter, r *http.Request) {
 // endpoint: each batch entry is {id, coordinate, admin, bearing} with a
 // caller-chosen echo id.
 func (s *Server) gazetteerSections(ctx context.Context, coord domain.Coordinate) (map[string]interface{}, error) {
-	out := map[string]interface{}{"admin": nil, "bearing": nil, "sources": []interface{}{}}
+	out := map[string]interface{}{"admin": nil, "bearing": nil, "elevation": nil, "sources": []interface{}{}}
 	prov := newProvenanceSet()
 
 	loc, err := s.gazetteer.Locate(ctx, coord)
@@ -65,6 +65,16 @@ func (s *Server) gazetteerSections(ctx context.Context, coord domain.Coordinate)
 		// no salient anchor within reach — leave bearing null
 	default:
 		return nil, err
+	}
+
+	// Elevation is optional: (nil, nil) means the feature is not wired, so leave
+	// the block null. A non-nil result is rendered even at sea level (meters 0).
+	elev, err := s.gazetteer.Elevation(ctx, coord)
+	switch {
+	case err != nil:
+		return nil, err
+	case elev != nil:
+		out["elevation"] = formatElevation(elev)
 	}
 	// Response-wide provenance excerpt: each distinct name_source code that appears
 	// above, described once (not repeated per record).
@@ -144,6 +154,29 @@ func formatFix(fix *domain.Fix, prov *provenanceSet) map[string]interface{} {
 		"label":       fix.Label,
 		"inside":      fix.Inside,
 	}
+}
+
+// formatElevation renders an elevation result for JSON output. The DEM source's
+// license/attribution is nested under "source", distinct from the response-wide
+// gazetteer "license" (a different dataset and license).
+func formatElevation(e *domain.Elevation) map[string]interface{} {
+	out := map[string]interface{}{
+		"meters":                e.Meters,
+		"accuracy_m":            e.AccuracyM,
+		"accuracy_basis":        e.AccuracyBasis,
+		"horizontal_accuracy_m": e.HorizontalM,
+		"vertical_datum":        e.VerticalDatum,
+		"sea_level":             e.SeaLevel,
+		"surface_model":         e.SurfaceModel,
+	}
+	if !e.License.IsEmpty() {
+		out["source"] = map[string]interface{}{
+			"name":        e.License.Name,
+			"url":         e.License.URL,
+			"attribution": e.License.Attribution,
+		}
+	}
+	return out
 }
 
 // gazetteerEnrichmentRequested reports whether /query should attach the gazetteer

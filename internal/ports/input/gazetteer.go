@@ -18,4 +18,8 @@ type Gazetteer interface {
 	// Bearing returns the most salient nearby place as a bearing fix
 	// ("4 km E Würzburg"), selected per the BearingPolicy.
 	Bearing(ctx context.Context, p domain.Coordinate, pol domain.BearingPolicy) (*domain.Fix, error)
+
+	// Elevation returns the height above sea level at the point, or (nil, nil)
+	// when the optional elevation feature is not wired (so the caller omits it).
+	Elevation(ctx context.Context, p domain.Coordinate) (*domain.Elevation, error)
 }

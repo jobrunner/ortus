@@ -63,8 +63,9 @@ GeoPackage ships that metadata.
 
 **Gazetteer enrichment (on by default).** When the [gazetteer feature](configuration.md)
 is enabled, the query response additionally carries a `gazetteer` block with the
-administrative hierarchy, bearing, name-source explanations and the dataset
-attribution — so a client gets everything to process the result in one call. It is
+administrative hierarchy, bearing, elevation (when a DEM is configured), name-source
+explanations and the dataset attribution — so a client gets everything to process
+the result in one call. It is
 the same structure as the [gazetteer endpoint](#gazetteer-endpoint) (minus
 `coordinate`). Opt out per request with `?with-gazetteer=0` (or `false`/`no`/`off`)
 to skip the extra spatial work; enrichment is best-effort and is omitted (never
@@ -79,6 +80,7 @@ errors the query) if it fails.
   "gazetteer": {
     "admin": { "country_iso": "DE", "hierarchy": [ /* … */ ] },
     "bearing": { /* … */ },
+    "elevation": { /* … or null when no DEM configured … */ },
     "sources": [ { "code": "latin-osm", "short": "…", "long": "…", "standard": "" } ],
     "license": { "name": "ODbL-1.0", "url": "…", "attribution": "© OpenStreetMap contributors …" }
   }
@@ -105,10 +107,12 @@ GET /api/v1/gazetteer?lon={longitude}&lat={latitude}
 GET /api/v1/gazetteer?x={x}&y={y}&srid={srid}
 ```
 
-Reverse-geocode a coordinate to its administrative hierarchy (`admin`) and compute
-a bearing to the most salient nearby place (`bearing`, e.g. "4 km E Würzburg").
-Either part is `null` when it has no result — no admin coverage, or no anchor
-within reach. The dataset is WGS84; a non-4326 `srid` is rejected.
+Reverse-geocode a coordinate to its administrative hierarchy (`admin`), compute
+a bearing to the most salient nearby place (`bearing`, e.g. "4 km E Würzburg"),
+and — when a DEM is configured — report the height above sea level at the point
+(`elevation`). Each part is `null` when it has no result — no admin coverage, no
+anchor within reach, or no elevation configured. The dataset is WGS84; a non-4326
+`srid` is rejected.
 
 **"in X" vs "prope X".** The bearing distinguishes being *inside* a place from
 being *near* it by **administrative containment**, not distance: when the query
@@ -138,6 +142,12 @@ bearing from a label — the find is *in* Würzburg).
     "class": "city", "distance_km": 4.0, "azimuth": 90.0, "compass": "E",
     "label": "4 km E Würzburg", "inside": false
   },
+  "elevation": {
+    "meters": 177.0, "accuracy_m": 4.0, "accuracy_basis": "GLO-30 LE90 (absolute)",
+    "horizontal_accuracy_m": 6.0, "vertical_datum": "EGM2008", "sea_level": false,
+    "surface_model": "DSM",
+    "source": { "name": "Copernicus DEM GLO-30", "url": "…", "attribution": "© DLR/Airbus/ESA …" }
+  },
   "sources": [
     { "code": "latin-osm", "short": "OSM name (already Latin)",
       "long": "Taken verbatim from the OpenStreetMap name tag; already Latin script, no transliteration applied.",
@@ -164,6 +174,16 @@ descriptions. The `license` block is the dataset-wide attribution (from the
 `license:` section of `ortus-gazetteer.yaml`); it is omitted when the manifest
 sets no license. This is the same block that appears under `gazetteer` in the
 [`/query`](#query-all-sources) response.
+
+The `elevation` block is present only when a DEM is configured
+(`gazetteer.elevation.source_id`); it is `null` otherwise. It reports the height
+above sea level (`meters`) at the query point, `vertical_datum` (e.g. `EGM2008`),
+the vertical `accuracy_m` with its `accuracy_basis` (a dataset constant, or a
+per-point value when an accuracy layer such as a Height Error Mask is configured),
+`horizontal_accuracy_m`, `surface_model` (e.g. `DSM`), and `sea_level: true` with
+`meters: 0` where no DEM tile covers the point (ocean / outside coverage). The DEM
+`source` (name/url/attribution) is carried separately from the gazetteer `license`
+because it is a distinct dataset — both attributions must be displayed.
 
 ## Source management
 

@@ -16,8 +16,9 @@ import (
 
 // fakeGazetteer is a canned input.Gazetteer for the MCP tool test.
 type fakeGazetteer struct {
-	loc *domain.Locality
-	fix *domain.Fix
+	loc  *domain.Locality
+	fix  *domain.Fix
+	elev *domain.Elevation
 }
 
 func (f fakeGazetteer) Locate(context.Context, domain.Coordinate) (*domain.Locality, error) {
@@ -25,6 +26,9 @@ func (f fakeGazetteer) Locate(context.Context, domain.Coordinate) (*domain.Local
 }
 func (f fakeGazetteer) Bearing(context.Context, domain.Coordinate, domain.BearingPolicy) (*domain.Fix, error) {
 	return f.fix, nil
+}
+func (f fakeGazetteer) Elevation(context.Context, domain.Coordinate) (*domain.Elevation, error) {
+	return f.elev, nil
 }
 
 func startGazetteerServer(t *testing.T) *httptest.Server {
@@ -40,6 +44,11 @@ func startGazetteerServer(t *testing.T) *httptest.Server {
 			Reference: domain.Place{Name: "Würzburg", NameNative: "Würzburg", Class: domain.ClassCity,
 				NameSource: domain.NameProvenance{Code: "latin-osm", Short: "OSM name", Long: "OSM name tag.", Standard: ""}},
 			DistanceKM: 4, Azimuth: 90, Compass: "E", Label: "4 km E Würzburg",
+		},
+		elev: &domain.Elevation{
+			Meters: 177.0, AccuracyM: 4.0, AccuracyBasis: "GLO-30 LE90 (absolute)",
+			HorizontalM: 6.0, VerticalDatum: "EGM2008", SeaLevel: false, SurfaceModel: "DSM",
+			License: domain.License{Name: "Copernicus DEM GLO-30", Attribution: "© DLR/Airbus/ESA"},
 		},
 	}
 	deps.GazetteerLicense = domain.License{
@@ -104,6 +113,15 @@ func TestGazetteerTool(t *testing.T) {
 			Label      string `json:"label"`
 			NameSource string `json:"name_source"`
 		} `json:"bearing"`
+		Elevation *struct {
+			Meters        float64 `json:"meters"`
+			VerticalDatum string  `json:"vertical_datum"`
+			SeaLevel      bool    `json:"sea_level"`
+			SurfaceModel  string  `json:"surface_model"`
+			Source        *struct {
+				Name string `json:"name"`
+			} `json:"source"`
+		} `json:"elevation"`
 		Sources []struct {
 			Code  string `json:"code"`
 			Short string `json:"short"`
@@ -125,6 +143,13 @@ func TestGazetteerTool(t *testing.T) {
 	}
 	if out.Bearing == nil || out.Bearing.Label != "4 km E Würzburg" {
 		t.Errorf("bearing = %+v, want label '4 km E Würzburg'", out.Bearing)
+	}
+	if out.Elevation == nil || out.Elevation.Meters != 177.0 || out.Elevation.VerticalDatum != "EGM2008" ||
+		out.Elevation.SeaLevel != false || out.Elevation.SurfaceModel != "DSM" {
+		t.Errorf("elevation = %+v, want 177m EGM2008 DSM", out.Elevation)
+	}
+	if out.Elevation != nil && (out.Elevation.Source == nil || out.Elevation.Source.Name != "Copernicus DEM GLO-30") {
+		t.Errorf("elevation.source = %+v, want Copernicus (distinct from gazetteer license)", out.Elevation.Source)
 	}
 	// Provenance: per-record code + native/local terms and the response-wide
 	// sources block (latin-osm appears on both records → listed once).

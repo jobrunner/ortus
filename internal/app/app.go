@@ -166,6 +166,12 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (app *App
 	// the watcher) and cleaned up on unload.
 	app.RasterRepository = raster.NewRepository("")
 	app.RasterRepository.SetTracer(app.Tracer)
+	// Multi-tile DEMs (the gazetteer elevation source) keep a bounded LRU of open
+	// tile handles; size it from config before sources load (0 → default).
+	app.RasterRepository.SetTileCacheSize(cfg.Gazetteer.Elevation.TileCacheSize)
+	// Raise the per-bundle extraction cap for large trusted bundles (continental
+	// DEM tile sets exceed the conservative 8 GiB default). 0 → keep the default.
+	app.RasterRepository.SetMaxBundleBytes(int64(cfg.Raster.MaxBundleExtractGiB) << 30)
 
 	// Initialize source registry with the available source adapters. The
 	// registry routes each file to the first adapter whose Supports matches
@@ -390,6 +396,12 @@ func (a *App) Start(ctx context.Context) error {
 		startupOK = false
 	}
 	startupSpan.SetAttributes(output.Int("ortus.sources.loaded", a.Registry.SourceCount()))
+
+	// Bind the gazetteer elevation sampler now that sources are loaded — the DEM
+	// bundle is a normal source in the pool, so it only exists after LoadAll.
+	if err := a.bindGazetteerElevation(); err != nil {
+		return fmt.Errorf("wiring gazetteer elevation: %w", err)
+	}
 
 	// Start file watcher. Pass the parent ctx (NOT startupCtx) — the
 	// watcher keeps the ctx for the life of the process and uses it as the

@@ -37,6 +37,7 @@ type Config struct {
 	Tracing   TracingConfig   `mapstructure:"tracing"`
 	MCP       MCPConfig       `mapstructure:"mcp"`
 	Gazetteer GazetteerConfig `mapstructure:"gazetteer"`
+	Raster    RasterConfig    `mapstructure:"raster"`
 
 	// Build is populated by main.go from -ldflags at startup; not loaded
 	// from config files. Used for the MCP Implementation.Version field
@@ -226,16 +227,44 @@ type MCPConfig struct {
 	Token string `mapstructure:"-"`
 }
 
+// RasterConfig holds settings for the raster-bundle adapter (COG *.zip sources).
+type RasterConfig struct {
+	// MaxBundleExtractGiB caps the total bytes extracted from one bundle (a
+	// decompression-bomb guard). Default 8. Raise it for large trusted bundles
+	// such as continental DEM tile sets (e.g. the West-Palearctic elevation
+	// bundle is ~40 GiB).
+	MaxBundleExtractGiB int `mapstructure:"max_bundle_extract_gib"`
+}
+
 // GazetteerConfig holds the reverse-geocoding / bearing ("Peilung") feature. It
 // is a dedicated, separately-loaded dataset (not part of the generic PiP source
 // pool); disabled by default so the feature is inert until explicitly wired.
 type GazetteerConfig struct {
-	Enabled                bool                   `mapstructure:"enabled"`
-	GeoPackagePath         string                 `mapstructure:"geopackage_path"`           // the places/admin GeoPackage
-	ManifestPath           string                 `mapstructure:"manifest_path"`             // ortus-gazetteer.yaml (layer/column mapping)
-	LevelReferencePath     string                 `mapstructure:"level_reference_path"`      // admin-level sidecar (optional; enriches Locate)
-	NameSourceManifestPath string                 `mapstructure:"name_source_manifest_path"` // name-source manifest (optional; name provenance)
-	Bearing                GazetteerBearingConfig `mapstructure:"bearing"`
+	Enabled                bool                     `mapstructure:"enabled"`
+	GeoPackagePath         string                   `mapstructure:"geopackage_path"`           // the places/admin GeoPackage
+	ManifestPath           string                   `mapstructure:"manifest_path"`             // ortus-gazetteer.yaml (layer/column mapping)
+	LevelReferencePath     string                   `mapstructure:"level_reference_path"`      // admin-level sidecar (optional; enriches Locate)
+	NameSourceManifestPath string                   `mapstructure:"name_source_manifest_path"` // name-source manifest (optional; name provenance)
+	Bearing                GazetteerBearingConfig   `mapstructure:"bearing"`
+	Elevation              GazetteerElevationConfig `mapstructure:"elevation"`
+}
+
+// GazetteerElevationConfig wires the optional elevation feature: the gazetteer
+// samples a continuous raster DEM source (loaded via the normal source pool) at
+// the query point and reports the height above sea level. Empty SourceID leaves
+// the feature off. The accuracy/datum/surface fields are dataset-wide constants
+// surfaced in the response so a client can use the value responsibly.
+type GazetteerElevationConfig struct {
+	SourceID              string  `mapstructure:"source_id"`                // raster source id of the DEM bundle (e.g. "copernicus-dem-unterfranken")
+	Layer                 string  `mapstructure:"layer"`                    // continuous elevation layer id (default "elevation")
+	AccuracyLayer         string  `mapstructure:"accuracy_layer"`           // optional continuous per-point accuracy layer (e.g. HEM); "" = off
+	TileCacheSize         int     `mapstructure:"tile_cache_size"`          // open-tile LRU bound for multi-tile DEMs (default 64)
+	VerticalDatum         string  `mapstructure:"vertical_datum"`           // e.g. "EGM2008"
+	AccuracyM             float64 `mapstructure:"accuracy_m"`               // vertical accuracy constant (dataset LE90), used when no accuracy_layer
+	AccuracyBasis         string  `mapstructure:"accuracy_basis"`           // basis for the constant, e.g. "GLO-30 LE90 (absolute)"
+	PerPointAccuracyBasis string  `mapstructure:"per_point_accuracy_basis"` // basis when accuracy_layer is set, e.g. "Copernicus HEM (per-pixel 1σ)"
+	HorizontalM           float64 `mapstructure:"horizontal_accuracy_m"`    // horizontal accuracy (LE90)
+	SurfaceModel          string  `mapstructure:"surface_model"`            // e.g. "DSM"
 }
 
 // GazetteerBearingConfig holds the tunable knobs of the bearing selection (the
@@ -386,6 +415,21 @@ func Defaults() {
 	viper.SetDefault("gazetteer.bearing.composite.wiki_weight", 0.3)
 	viper.SetDefault("gazetteer.bearing.composite.decay_per_km", 0.04)
 	viper.SetDefault("gazetteer.bearing.composite.capital_scale", 0.8)
+
+	// Raster adapter.
+	viper.SetDefault("raster.max_bundle_extract_gib", 8)
+
+	// Elevation feature (optional): off unless source_id is set.
+	viper.SetDefault("gazetteer.elevation.source_id", "")
+	viper.SetDefault("gazetteer.elevation.layer", "elevation")
+	viper.SetDefault("gazetteer.elevation.accuracy_layer", "")
+	viper.SetDefault("gazetteer.elevation.tile_cache_size", 64)
+	viper.SetDefault("gazetteer.elevation.vertical_datum", "EGM2008")
+	viper.SetDefault("gazetteer.elevation.accuracy_m", 0.0)
+	viper.SetDefault("gazetteer.elevation.accuracy_basis", "")
+	viper.SetDefault("gazetteer.elevation.per_point_accuracy_basis", "")
+	viper.SetDefault("gazetteer.elevation.horizontal_accuracy_m", 0.0)
+	viper.SetDefault("gazetteer.elevation.surface_model", "")
 }
 
 // Load loads configuration from environment and config file.

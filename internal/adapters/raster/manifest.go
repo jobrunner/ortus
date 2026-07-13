@@ -53,14 +53,41 @@ type licenseSpec struct {
 }
 
 type layerSpec struct {
-	ID           string                         `yaml:"id"`
-	Description  string                         `yaml:"description"`
-	File         string                         `yaml:"file"`
-	Band         int                            `yaml:"band"`
-	Nodata       *float64                       `yaml:"nodata"`
-	Sampling     string                         `yaml:"sampling"`
-	Mapping      map[int]map[string]interface{} `yaml:"mapping"`
-	ValueMapping string                         `yaml:"value_mapping"`
+	ID             string                         `yaml:"id"`
+	Description    string                         `yaml:"description"`
+	File           string                         `yaml:"file"`  // single-COG layer (mutually exclusive with tiles)
+	Tiles          *tilesSpec                     `yaml:"tiles"` // multi-tile layer (routed by a degree grid)
+	Band           int                            `yaml:"band"`
+	Nodata         *float64                       `yaml:"nodata"`
+	Sampling       string                         `yaml:"sampling"`
+	ValueType      string                         `yaml:"value_type"`      // "" or "categorical" (default) or "continuous"
+	OutputProperty string                         `yaml:"output_property"` // continuous only; default "value"
+	Scale          *float64                       `yaml:"scale"`           // continuous only; default 1
+	Offset         *float64                       `yaml:"offset"`          // continuous only; default 0
+	Mapping        map[int]map[string]interface{} `yaml:"mapping"`
+	ValueMapping   string                         `yaml:"value_mapping"`
+}
+
+// tilesSpec describes a multi-tile layer: many COGs on a regular degree grid,
+// each named after its SW corner (e.g. "N49_E010.tif"). ortus routes a query
+// point to its grid cell and samples that one tile. A point over a missing tile
+// yields no data (the ocean/no-coverage convention). Only continuous layers use
+// tiles.
+type tilesSpec struct {
+	Dir     string `yaml:"dir"`      // relative directory holding the tile COGs
+	Pattern string `yaml:"pattern"`  // filename template, e.g. "{ns}{lat}_{ew}{lon}.tif"
+	GridDeg int    `yaml:"grid_deg"` // grid spacing in degrees (default 1)
+}
+
+// continuousValueType is the layerSpec.ValueType selecting the continuous
+// (float passthrough) sampling mode. The empty string and "categorical" both
+// mean the default integer-value -> attribute lookup.
+const continuousValueType = "continuous"
+
+// isContinuous reports whether the layer samples a continuous float value
+// rather than looking an integer pixel value up in a mapping table.
+func (s layerSpec) isContinuous() bool {
+	return s.ValueType == continuousValueType
 }
 
 // parseAndValidateManifest schema-validates the raw manifest (against the

@@ -23,8 +23,11 @@ USER root
 
 WORKDIR /build
 
-# Copy go module files first (better layer caching)
+# Copy go module files first (better layer caching). The gocog fork is a local
+# module referenced via a replace directive, so its go.mod must be present before
+# `go mod download` can resolve modules.
 COPY go.mod go.sum ./
+COPY third_party/ ./third_party/
 RUN go mod download
 
 # Copy source code

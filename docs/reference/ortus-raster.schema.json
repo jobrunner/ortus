@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://ortus/spec/raster-bundle/ortus-raster.schema.json",
   "title": "Ortus Raster Bundle Manifest",
-  "description": "Manifest for an ortus raster bundle. Lives at the ZIP root under the fixed name 'ortus-raster.yaml'. Describes one categorical raster source (one or more COG layers) and the value -> attribute mapping that turns a sampled pixel value into Sachdaten.",
+  "description": "Manifest for an ortus raster bundle. Lives at the ZIP root under the fixed name 'ortus-raster.yaml'. Describes one raster source (one or more COG layers). A categorical layer maps a sampled integer pixel value to attributes (Sachdaten); a continuous layer returns the sampled value directly as a float (e.g. elevation in meters).",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_version", "id", "name", "license", "crs", "layers"],
@@ -54,12 +54,34 @@
     "layer": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "file"],
-      "$comment": "Exactly one of 'mapping' (inline) or 'value_mapping' (sidecar pointer) must be present. The oneOf below enforces this: if both are present, both subschemas match and oneOf fails; if neither is present, neither matches and oneOf fails.",
-      "oneOf": [
-        { "required": ["mapping"], "not": { "required": ["value_mapping"] } },
-        { "required": ["value_mapping"], "not": { "required": ["mapping"] } }
+      "required": ["id"],
+      "$comment": "A layer draws pixels from exactly one of 'file' (a single COG) or 'tiles' (a degree-grid of COGs) — the allOf/oneOf enforces this. Categorical layers (the default) additionally require exactly one of 'mapping' (inline) or 'value_mapping' (sidecar). Continuous layers (value_type: continuous) carry no mapping — the sampled pixel value is returned directly as a float, scaled by scale/offset. The if/then/else enforces the mapping rule per value_type.",
+      "allOf": [
+        {
+          "oneOf": [
+            { "required": ["file"], "not": { "required": ["tiles"] } },
+            { "required": ["tiles"], "not": { "required": ["file"] } }
+          ]
+        },
+        {
+          "$comment": "Tiled layers are continuous-only.",
+          "if": { "required": ["tiles"] },
+          "then": { "required": ["value_type"], "properties": { "value_type": { "const": "continuous" } } }
+        }
       ],
+      "if": {
+        "required": ["value_type"],
+        "properties": { "value_type": { "const": "continuous" } }
+      },
+      "then": {
+        "not": { "anyOf": [ { "required": ["mapping"] }, { "required": ["value_mapping"] } ] }
+      },
+      "else": {
+        "oneOf": [
+          { "required": ["mapping"], "not": { "required": ["value_mapping"] } },
+          { "required": ["value_mapping"], "not": { "required": ["mapping"] } }
+        ]
+      },
       "properties": {
         "id": {
           "description": "Layer id, kebab-case, unique within the bundle.",
@@ -70,10 +92,11 @@
         },
         "description": { "type": "string" },
         "file": {
-          "description": "Relative path to the COG inside the bundle. No leading slash; the ingest validator additionally rejects parent traversal ('..').",
+          "description": "Relative path to the single COG inside the bundle. No leading slash; the ingest validator additionally rejects parent traversal ('..'). Mutually exclusive with 'tiles'.",
           "type": "string",
           "pattern": "^[^/].*\\.tiff?$"
         },
+        "tiles": { "$ref": "#/$defs/tiles" },
         "band": {
           "description": "1-based band index to sample.",
           "type": "integer",
@@ -85,16 +108,62 @@
           "type": "number"
         },
         "sampling": {
-          "description": "Resampling at the query point. Only 'nearest' is supported — categorical rasters must not interpolate (it would invent classes).",
+          "description": "Resampling at the query point. Only 'nearest' is supported — categorical rasters must not interpolate (it would invent classes), and for continuous rasters nearest at native resolution is sufficient.",
           "type": "string",
           "enum": ["nearest"],
           "default": "nearest"
+        },
+        "value_type": {
+          "description": "How a sampled pixel value is interpreted. 'categorical' (default) looks the integer value up in mapping/value_mapping. 'continuous' returns the value directly as a float (scaled by scale/offset) — e.g. elevation in meters. Continuous requires a numeric COG band (int8/16/32, uint8/16/32, float32/64) and must not carry mapping/value_mapping.",
+          "type": "string",
+          "enum": ["categorical", "continuous"],
+          "default": "categorical"
+        },
+        "output_property": {
+          "description": "Continuous only. The Feature property name the sampled float lands in (e.g. 'meters'). Defaults to 'value'.",
+          "type": "string",
+          "minLength": 1,
+          "default": "value"
+        },
+        "scale": {
+          "description": "Continuous only. Linear scale applied to the raw sample: out = raw*scale + offset. Default 1. Use e.g. scale 0.01 for an Int16 band stored in centimeters.",
+          "type": "number",
+          "default": 1
+        },
+        "offset": {
+          "description": "Continuous only. Linear offset applied to the raw sample: out = raw*scale + offset. Default 0.",
+          "type": "number",
+          "default": 0
         },
         "mapping": { "$ref": "#/$defs/mapping" },
         "value_mapping": {
           "description": "Relative path to a sidecar mapping file (.json/.yaml/.yml) for large tables. Same logical shape as the inline 'mapping'. No leading slash; the ingest validator additionally rejects parent traversal.",
           "type": "string",
           "pattern": "^[^/].*\\.(ya?ml|json)$"
+        }
+      }
+    },
+    "tiles": {
+      "description": "A multi-tile layer: many COGs on a regular degree grid, each named after its SW corner. ortus routes a query point to its grid cell, derives the tile filename from 'pattern', and samples that one tile. A point over a missing tile yields no data (ocean / no coverage). Only continuous layers use tiles.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dir", "pattern"],
+      "properties": {
+        "dir": {
+          "description": "Relative directory inside the bundle holding the tile COGs. No leading slash; parent traversal is rejected.",
+          "type": "string",
+          "pattern": "^[^/].*$"
+        },
+        "pattern": {
+          "description": "Tile filename template. Tokens: {ns}=N|S, {ew}=E|W, {lat}=abs latitude zero-padded to 2 digits, {lon}=abs longitude zero-padded to 3 digits — all for the cell's SW corner. E.g. '{ns}{lat}_{ew}{lon}.tif' -> 'N49_E010.tif'.",
+          "type": "string",
+          "minLength": 1
+        },
+        "grid_deg": {
+          "description": "Grid spacing in whole degrees. Default 1 (Copernicus GLO-30 tiling).",
+          "type": "integer",
+          "minimum": 1,
+          "default": 1
         }
       }
     },

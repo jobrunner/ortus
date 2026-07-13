@@ -1,0 +1,11 @@
+*.test
+*.out
+*.exe
+*.prof
+coverage.txt
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+*.tif
