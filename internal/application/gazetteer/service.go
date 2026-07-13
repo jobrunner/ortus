@@ -7,6 +7,7 @@ package gazetteer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -228,6 +229,12 @@ func (s *Service) Elevation(ctx context.Context, p domain.Coordinate) (*domain.E
 	}
 	r, ok, err := s.elevation.ElevationAt(ctx, p)
 	if err != nil {
+		// A missing source/layer (e.g. the DEM bundle mid hot-reload, or removed)
+		// must not fail the whole gazetteer response — omit elevation, like
+		// Locate/Bearing treat ErrNotFound. Real I/O/decode errors still propagate.
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, nil
+		}
 		return nil, err
 	}
 	elev := &domain.Elevation{
@@ -238,12 +245,17 @@ func (s *Service) Elevation(ctx context.Context, p domain.Coordinate) (*domain.E
 		SurfaceModel:  s.elevMeta.SurfaceModel,
 		License:       s.elevation.License(),
 	}
-	// Prefer the per-point accuracy (e.g. HEM) when the sampler supplies it;
-	// otherwise fall back to the dataset accuracy constant.
-	if r.HasAccuracy {
+	switch {
+	case !ok:
+		// Sea-level convention: 0 m is a convention, not a measurement, so it
+		// carries no absolute accuracy figure.
+		elev.AccuracyBasis = "sea-level convention"
+	case r.HasAccuracy:
+		// Per-point accuracy (e.g. HEM) when the sampler supplies it.
 		elev.AccuracyM = r.AccuracyM
 		elev.AccuracyBasis = s.elevMeta.PerPointAccuracyBasis
-	} else {
+	default:
+		// Fall back to the dataset accuracy constant.
 		elev.AccuracyM = s.elevMeta.AccuracyM
 		elev.AccuracyBasis = s.elevMeta.AccuracyBasis
 	}

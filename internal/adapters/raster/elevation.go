@@ -107,11 +107,12 @@ func (e *ElevationSource) sampleLayer(ctx context.Context, layer, prop string, c
 	if len(feats) == 0 {
 		return 0, false, nil
 	}
-	v, ok := feats[0].Properties[prop].(float64)
-	if !ok {
-		return 0, false, fmt.Errorf("elevation source %q: property %q missing or not a float", e.sourceID, prop)
+	if _, present := feats[0].GetProperty(prop); !present {
+		return 0, false, fmt.Errorf("elevation source %q: property %q missing", e.sourceID, prop)
 	}
-	return v, true, nil
+	// GetFloatProperty coerces float32/int/int64/float64 (matches the codebase's
+	// KNN path); the continuous QueryPoint emits float64 today, but stay robust.
+	return feats[0].GetFloatProperty(prop), true, nil
 }
 
 // Compile-time assertion that the adapter satisfies its output port.
