@@ -37,6 +37,12 @@ func readPredictor(ifd *IFD) int {
 		if len(v) > 0 {
 			return int(v[0])
 		}
+	// Predictor is spec'd as an unsigned SHORT, but guard against a mis-typed
+	// (signed) tag so a real predictor is never silently skipped → corruption.
+	case int16:
+		return int(v)
+	case int32:
+		return int(v)
 	}
 	return predictorNone
 }

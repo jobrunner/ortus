@@ -80,6 +80,26 @@ func TestHorizontalRoundTripMultiBand(t *testing.T) {
 	}
 }
 
+// TestHorizontalGoldenVector uses a hand-computed differenced byte stream (NOT
+// produced by forwardHorizontal), so a bug present identically in both the test's
+// encoder and the code under test cannot hide. Two rows of 4 uint8 pixels, 1
+// band: row diffs {10,+2,+246(-10),+192(-64)} → {10,12,2,194}; wrap is modular.
+func TestHorizontalGoldenVector(t *testing.T) {
+	bo := binary.LittleEndian
+	// differenced input
+	buf := []byte{10, 2, 246, 192, 250, 1, 10, 1}
+	// expected cumulative sums per row (uint8 wrap)
+	want := []byte{10, 12, 2, 194, 250, 251, 5, 6}
+	if err := applyHorizontalPredictor(buf, 2, 4, 2, 1, 1, bo); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	for i := range want {
+		if buf[i] != want[i] {
+			t.Errorf("byte %d = %d, want %d", i, buf[i], want[i])
+		}
+	}
+}
+
 func TestPredictorNoneAndFloatingAndBadWidth(t *testing.T) {
 	bo := binary.LittleEndian
 	buf := []byte{1, 2, 3, 4}

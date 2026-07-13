@@ -275,6 +275,17 @@ func (c *COG) DataType() DataType {
 	return c.metadata[0].DataType
 }
 
+// PhotometricInterpretation returns the TIFF PhotometricInterpretation (tag 262)
+// of the full-resolution image: 0 = WhiteIsZero, 1 = BlackIsZero, 2 = RGB, etc.
+// (ortus-local addition: continuous-value consumers must reject WhiteIsZero,
+// which decodeBytesToFlat would otherwise invert.)
+func (c *COG) PhotometricInterpretation() uint16 {
+	if len(c.metadata) == 0 {
+		return 0
+	}
+	return c.metadata[0].PhotometricInterpretation
+}
+
 // OverviewCount returns the number of overview levels
 func (c *COG) OverviewCount() int {
 	if len(c.metadata) <= 1 {
@@ -424,7 +435,21 @@ func (c *COG) decompressTile(data []byte, compression uint16, ifd *IFD, tileWidt
 	if err != nil {
 		return nil, err
 	}
-	if err := applyHorizontalPredictor(raw, readPredictor(ifd), tileWidth, tileHeight, bands, c.getBytesPerSample(dataType), ifd.ByteOrder); err != nil {
+	pred := readPredictor(ifd)
+	if pred == predictorNone {
+		return raw, nil
+	}
+	// The horizontal integer predictor only applies to lossless integer sample
+	// data. JPEG output is already de-predicted, and float bands would use the
+	// (unsupported) floating-point predictor 3 — guard both rather than silently
+	// corrupt the decoded buffer.
+	if compression == CompressionJPEG {
+		return nil, fmt.Errorf("gocog: TIFF predictor %d is not valid with JPEG compression", pred)
+	}
+	if dataType == DTFloat || dataType == DTDouble {
+		return nil, fmt.Errorf("gocog: horizontal predictor not supported for float sample data (needs predictor 3)")
+	}
+	if err := applyHorizontalPredictor(raw, pred, tileWidth, tileHeight, bands, c.getBytesPerSample(dataType), ifd.ByteOrder); err != nil {
 		return nil, err
 	}
 	return raw, nil
