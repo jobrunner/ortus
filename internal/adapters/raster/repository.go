@@ -22,11 +22,12 @@ import (
 
 // Repository implements output.SpatialSource for raster bundles (*.zip).
 type Repository struct {
-	mu            sync.RWMutex
-	sources       map[string]*bundle
-	cacheDir      string // parent dir for per-bundle unpack directories
-	tracer        output.Tracer
-	tileCacheSize int // open-handle LRU bound for tiled layers (0 → default)
+	mu             sync.RWMutex
+	sources        map[string]*bundle
+	cacheDir       string // parent dir for per-bundle unpack directories
+	tracer         output.Tracer
+	tileCacheSize  int   // open-handle LRU bound for tiled layers (0 → default)
+	maxBundleBytes int64 // per-bundle extraction cap; 0 → defaultMaxBundleBytes
 }
 
 type bundle struct {
@@ -80,6 +81,19 @@ func (r *Repository) SetTracer(t output.Tracer) {
 // afterwards. A value <= 0 leaves the default. Applies at layer-open time, so set
 // it before sources load.
 func (r *Repository) SetTileCacheSize(n int) { r.tileCacheSize = n }
+
+// SetMaxBundleBytes sets the per-bundle extracted-size cap (a decompression-bomb
+// guard). A value <= 0 leaves the default (8 GiB). Raise it for large trusted
+// bundles such as continental DEM tile sets. Set before sources load.
+func (r *Repository) SetMaxBundleBytes(n int64) { r.maxBundleBytes = n }
+
+// bundleCap returns the effective per-bundle extraction cap.
+func (r *Repository) bundleCap() int64 {
+	if r.maxBundleBytes > 0 {
+		return r.maxBundleBytes
+	}
+	return defaultMaxBundleBytes
+}
 
 // tempDirPrefix is the prefix of the per-bundle unpack directories. Kept in one
 // place so CleanupOrphaned can find them.
@@ -184,7 +198,7 @@ func (r *Repository) Open(ctx context.Context, path string) (*domain.Source, err
 // openBundle does the heavy lifting of Open without touching r.sources, so a
 // failure leaves no partial registration behind.
 func (r *Repository) openBundle(path, sourceID, dir string) (*bundle, error) {
-	if err := unzip(path, dir); err != nil {
+	if err := unzip(path, dir, r.bundleCap()); err != nil {
 		return nil, fmt.Errorf("unpacking bundle: %w", err)
 	}
 
@@ -637,13 +651,13 @@ func safeJoin(base, rel string) (string, error) {
 // come from trusted storage, but a corrupt/hostile archive must not exhaust the
 // host's disk.
 const (
-	maxBundleBytes   = 8 << 30  // 8 GiB total extracted per bundle
-	maxManifestBytes = 16 << 20 // 16 MiB for the manifest itself
+	defaultMaxBundleBytes = 8 << 30  // 8 GiB total extracted per bundle (default)
+	maxManifestBytes      = 16 << 20 // 16 MiB for the manifest itself
 )
 
 // unzip extracts a ZIP archive into dest, guarding against zip-slip and bounding
 // the total extracted size.
-func unzip(src, dest string) error {
+func unzip(src, dest string, maxBundleBytes int64) error {
 	zr, err := zip.OpenReader(src)
 	if err != nil {
 		return err

@@ -37,6 +37,7 @@ type Config struct {
 	Tracing   TracingConfig   `mapstructure:"tracing"`
 	MCP       MCPConfig       `mapstructure:"mcp"`
 	Gazetteer GazetteerConfig `mapstructure:"gazetteer"`
+	Raster    RasterConfig    `mapstructure:"raster"`
 
 	// Build is populated by main.go from -ldflags at startup; not loaded
 	// from config files. Used for the MCP Implementation.Version field
@@ -226,6 +227,15 @@ type MCPConfig struct {
 	Token string `mapstructure:"-"`
 }
 
+// RasterConfig holds settings for the raster-bundle adapter (COG *.zip sources).
+type RasterConfig struct {
+	// MaxBundleExtractGiB caps the total bytes extracted from one bundle (a
+	// decompression-bomb guard). Default 8. Raise it for large trusted bundles
+	// such as continental DEM tile sets (e.g. the West-Palearctic elevation
+	// bundle is ~40 GiB).
+	MaxBundleExtractGiB int `mapstructure:"max_bundle_extract_gib"`
+}
+
 // GazetteerConfig holds the reverse-geocoding / bearing ("Peilung") feature. It
 // is a dedicated, separately-loaded dataset (not part of the generic PiP source
 // pool); disabled by default so the feature is inert until explicitly wired.
@@ -405,6 +415,9 @@ func Defaults() {
 	viper.SetDefault("gazetteer.bearing.composite.wiki_weight", 0.3)
 	viper.SetDefault("gazetteer.bearing.composite.decay_per_km", 0.04)
 	viper.SetDefault("gazetteer.bearing.composite.capital_scale", 0.8)
+
+	// Raster adapter.
+	viper.SetDefault("raster.max_bundle_extract_gib", 8)
 
 	// Elevation feature (optional): off unless source_id is set.
 	viper.SetDefault("gazetteer.elevation.source_id", "")

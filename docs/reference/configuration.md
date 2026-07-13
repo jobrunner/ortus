@@ -129,6 +129,22 @@ read concurrency (`private` cache) and are safe to leave as-is. To calibrate for
 your data and hardware, see **[Run a load test](../how-to/run-a-load-test.md)** —
 a setting that wins there maps one-to-one onto these keys.
 
+## Raster
+
+Settings for the raster-bundle adapter (COG `*.zip` sources):
+
+```yaml
+raster:
+  max_bundle_extract_gib: 8   # per-bundle extracted-size cap (decompression-bomb guard)
+```
+
+- `raster.max_bundle_extract_gib` bounds the total bytes extracted from one
+  bundle when it is unpacked. The default (8 GiB) protects the host from a
+  corrupt/hostile archive. Raise it for large **trusted** bundles such as
+  continental DEM tile sets — e.g. the West-Palearctic elevation bundle unpacks
+  to ~40 GiB, so set `40`–`64` there. A bundle that exceeds the cap fails to load
+  with a clear error rather than filling the disk.
+
 ## Gazetteer
 
 The gazetteer (reverse geocoding + bearing / "Peilung") is an optional feature,

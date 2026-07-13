@@ -163,6 +163,28 @@ func TestNewElevationSourceRejectsCategorical(t *testing.T) {
 	}
 }
 
+// TestBundleExtractionCap covers the configurable per-bundle extraction cap: a
+// tiny cap rejects the bundle (decompression-bomb guard), a generous one admits
+// it. This is what lets large trusted DEM bundles load.
+func TestBundleExtractionCap(t *testing.T) {
+	dir := t.TempDir()
+	zipPath := buildBundle(t, dir, "regions", validManifest)
+
+	tiny := NewRepository(t.TempDir())
+	tiny.SetMaxBundleBytes(1024) // 1 KiB — far below the fixture COG
+	t.Cleanup(func() { _ = tiny.Close(context.Background(), "regions") })
+	if _, err := tiny.Open(context.Background(), zipPath); err == nil {
+		t.Fatal("expected an extraction-cap error with a 1 KiB cap, got nil")
+	}
+
+	ok := NewRepository(t.TempDir())
+	ok.SetMaxBundleBytes(64 << 20) // 64 MiB — ample
+	t.Cleanup(func() { _ = ok.Close(context.Background(), "regions") })
+	if _, err := ok.Open(context.Background(), zipPath); err != nil {
+		t.Fatalf("open with a generous cap should succeed: %v", err)
+	}
+}
+
 // buildTiledBundle writes a bundle whose COG lives under tiles/<name> so the
 // tiles layer can route to it.
 func buildTiledBundle(t *testing.T, dir, id, manifestYAML string, tileNames []string) string {

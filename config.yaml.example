@@ -107,6 +107,13 @@ mcp:
   port: 9091
   path: "/mcp"
 
+# Raster-bundle adapter (COG *.zip sources).
+raster:
+  # Per-bundle extracted-size cap (decompression-bomb guard). Default 8 GiB.
+  # Raise it for large trusted bundles such as continental DEM tile sets — the
+  # West-Palearctic elevation bundle is ~40 GiB.
+  max_bundle_extract_gib: 8
+
 # Gazetteer (reverse geocoding + bearing / "Peilung"). A dedicated places/admin
 # GeoPackage, loaded separately from the generic query source pool. Disabled by
 # default — the feature is inert until enabled with the paths below.

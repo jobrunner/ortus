@@ -169,6 +169,9 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (app *App
 	// Multi-tile DEMs (the gazetteer elevation source) keep a bounded LRU of open
 	// tile handles; size it from config before sources load (0 → default).
 	app.RasterRepository.SetTileCacheSize(cfg.Gazetteer.Elevation.TileCacheSize)
+	// Raise the per-bundle extraction cap for large trusted bundles (continental
+	// DEM tile sets exceed the conservative 8 GiB default). 0 → keep the default.
+	app.RasterRepository.SetMaxBundleBytes(int64(cfg.Raster.MaxBundleExtractGiB) << 30)
 
 	// Initialize source registry with the available source adapters. The
 	// registry routes each file to the first adapter whose Supports matches
