@@ -161,6 +161,17 @@ gazetteer:
       capital_scale: 0.8
       # class_prior: { city: 4.3, town: 3.3, village: 2.3 }          # base score when population is unknown
       # capital_bonus: { "2": 2.0, "3": 1.5, "4": 1.2, "5": 0.6, "6": 0.4, "7": 0.2, "yes": 2.0 }
+  elevation:                    # optional: height above sea level at the query point
+    source_id: copernicus-dem-westpalearctic   # raster source id of the DEM bundle; "" = feature off
+    layer: elevation            # continuous elevation layer id in that source
+    accuracy_layer: accuracy    # optional per-point accuracy layer (e.g. HEM); "" = off
+    tile_cache_size: 64         # open-tile LRU bound for multi-tile DEMs
+    vertical_datum: EGM2008
+    accuracy_m: 4.0             # vertical accuracy constant (used when accuracy_layer is unset)
+    accuracy_basis: "GLO-30 LE90 (absolute)"
+    per_point_accuracy_basis: "Copernicus HEM (per-pixel 1σ)"
+    horizontal_accuracy_m: 6.0
+    surface_model: DSM
 ```
 
 - `geopackage_path` and `manifest_path` are **required** when `enabled: true`;
@@ -188,5 +199,15 @@ gazetteer:
 - The dataset attribution shown in the response comes from the optional `license:`
   block in `ortus-gazetteer.yaml` (name/url/attribution) — set it so clients get
   the attribution they must display.
+- `elevation` (optional) adds the height above sea level at the query point to the
+  gazetteer response. `source_id` names a **continuous** raster source loaded via
+  the normal storage path (a DEM bundle); empty leaves the feature off. `layer` is
+  its continuous layer (default `elevation`); an optional `accuracy_layer` (e.g. a
+  Copernicus Height Error Mask) supplies a *per-point* vertical accuracy, else the
+  `accuracy_m` constant is reported. `accuracy_basis`/`per_point_accuracy_basis`,
+  `horizontal_accuracy_m`, `vertical_datum` and `surface_model` are surfaced verbatim.
+  A configured-but-missing/non-continuous source fails startup fast. The DEM's own
+  license (from its bundle manifest) is reported separately from the gazetteer
+  dataset license.
 - The dataset and its sidecars are built by the `build-gazetteer-package` skill
   (see `.claude/skills/build-gazetteer-package/`).
