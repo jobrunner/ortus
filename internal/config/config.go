@@ -245,14 +245,16 @@ type GazetteerConfig struct {
 // the feature off. The accuracy/datum/surface fields are dataset-wide constants
 // surfaced in the response so a client can use the value responsibly.
 type GazetteerElevationConfig struct {
-	SourceID      string  `mapstructure:"source_id"`             // raster source id of the DEM bundle (e.g. "copernicus-dem-unterfranken")
-	Layer         string  `mapstructure:"layer"`                 // continuous layer id (default "elevation")
-	TileCacheSize int     `mapstructure:"tile_cache_size"`       // open-tile LRU bound for multi-tile DEMs (default 64)
-	VerticalDatum string  `mapstructure:"vertical_datum"`        // e.g. "EGM2008"
-	AccuracyM     float64 `mapstructure:"accuracy_m"`            // vertical accuracy constant (dataset LE90)
-	AccuracyBasis string  `mapstructure:"accuracy_basis"`        // e.g. "GLO-30 LE90 (absolute)"
-	HorizontalM   float64 `mapstructure:"horizontal_accuracy_m"` // horizontal accuracy (LE90)
-	SurfaceModel  string  `mapstructure:"surface_model"`         // e.g. "DSM"
+	SourceID              string  `mapstructure:"source_id"`                // raster source id of the DEM bundle (e.g. "copernicus-dem-unterfranken")
+	Layer                 string  `mapstructure:"layer"`                    // continuous elevation layer id (default "elevation")
+	AccuracyLayer         string  `mapstructure:"accuracy_layer"`           // optional continuous per-point accuracy layer (e.g. HEM); "" = off
+	TileCacheSize         int     `mapstructure:"tile_cache_size"`          // open-tile LRU bound for multi-tile DEMs (default 64)
+	VerticalDatum         string  `mapstructure:"vertical_datum"`           // e.g. "EGM2008"
+	AccuracyM             float64 `mapstructure:"accuracy_m"`               // vertical accuracy constant (dataset LE90), used when no accuracy_layer
+	AccuracyBasis         string  `mapstructure:"accuracy_basis"`           // basis for the constant, e.g. "GLO-30 LE90 (absolute)"
+	PerPointAccuracyBasis string  `mapstructure:"per_point_accuracy_basis"` // basis when accuracy_layer is set, e.g. "Copernicus HEM (per-pixel 1σ)"
+	HorizontalM           float64 `mapstructure:"horizontal_accuracy_m"`    // horizontal accuracy (LE90)
+	SurfaceModel          string  `mapstructure:"surface_model"`            // e.g. "DSM"
 }
 
 // GazetteerBearingConfig holds the tunable knobs of the bearing selection (the
@@ -407,10 +409,12 @@ func Defaults() {
 	// Elevation feature (optional): off unless source_id is set.
 	viper.SetDefault("gazetteer.elevation.source_id", "")
 	viper.SetDefault("gazetteer.elevation.layer", "elevation")
+	viper.SetDefault("gazetteer.elevation.accuracy_layer", "")
 	viper.SetDefault("gazetteer.elevation.tile_cache_size", 64)
 	viper.SetDefault("gazetteer.elevation.vertical_datum", "EGM2008")
 	viper.SetDefault("gazetteer.elevation.accuracy_m", 0.0)
 	viper.SetDefault("gazetteer.elevation.accuracy_basis", "")
+	viper.SetDefault("gazetteer.elevation.per_point_accuracy_basis", "")
 	viper.SetDefault("gazetteer.elevation.horizontal_accuracy_m", 0.0)
 	viper.SetDefault("gazetteer.elevation.surface_model", "")
 }

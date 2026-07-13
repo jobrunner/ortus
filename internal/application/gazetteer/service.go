@@ -86,10 +86,13 @@ func (noopLevelResolver) Resolve(string, int) (LevelMeaning, bool) { return Leve
 // license (which comes from the bound sampler).
 type ElevationMeta struct {
 	VerticalDatum string  // e.g. "EGM2008"
-	AccuracyM     float64 // vertical accuracy (dataset LE90 constant for now)
-	AccuracyBasis string  // e.g. "GLO-30 LE90 (absolute)"
-	HorizontalM   float64 // horizontal accuracy (LE90)
-	SurfaceModel  string  // e.g. "DSM"
+	AccuracyM     float64 // dataset vertical accuracy constant (LE90), used when no per-point value
+	AccuracyBasis string  // basis for the constant, e.g. "GLO-30 LE90 (absolute)"
+	// PerPointAccuracyBasis describes the accuracy when the sampler supplies a
+	// per-point value (e.g. "Copernicus HEM (per-pixel 1σ)").
+	PerPointAccuracyBasis string
+	HorizontalM           float64 // horizontal accuracy (LE90)
+	SurfaceModel          string  // e.g. "DSM"
 }
 
 // Service is the GazetteerService: reverse geocoding (Locate) and bearing.
@@ -223,20 +226,28 @@ func (s *Service) Elevation(ctx context.Context, p domain.Coordinate) (*domain.E
 	if s.elevation == nil {
 		return nil, nil // feature not wired — omit from the response
 	}
-	m, ok, err := s.elevation.ElevationAt(ctx, p)
+	r, ok, err := s.elevation.ElevationAt(ctx, p)
 	if err != nil {
 		return nil, err
 	}
-	return &domain.Elevation{
-		Meters:        m,
+	elev := &domain.Elevation{
+		Meters:        r.Meters,
 		SeaLevel:      !ok,
-		AccuracyM:     s.elevMeta.AccuracyM,
-		AccuracyBasis: s.elevMeta.AccuracyBasis,
 		HorizontalM:   s.elevMeta.HorizontalM,
 		VerticalDatum: s.elevMeta.VerticalDatum,
 		SurfaceModel:  s.elevMeta.SurfaceModel,
 		License:       s.elevation.License(),
-	}, nil
+	}
+	// Prefer the per-point accuracy (e.g. HEM) when the sampler supplies it;
+	// otherwise fall back to the dataset accuracy constant.
+	if r.HasAccuracy {
+		elev.AccuracyM = r.AccuracyM
+		elev.AccuracyBasis = s.elevMeta.PerPointAccuracyBasis
+	} else {
+		elev.AccuracyM = s.elevMeta.AccuracyM
+		elev.AccuracyBasis = s.elevMeta.AccuracyBasis
+	}
+	return elev, nil
 }
 
 // requireWGS84 rejects coordinates that are not WGS84 (EPSG:4326). The gazetteer

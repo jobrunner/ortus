@@ -91,21 +91,66 @@ layers:
 // continuous bundle and checks the sea-level convention + license passthrough.
 func TestElevationSourceIntegration(t *testing.T) {
 	repo, _ := openBundleForTest(t, continuousManifest)
-	es, err := repo.NewElevationSource("regions", "main")
+	es, err := repo.NewElevationSource("regions", "main", "")
 	if err != nil {
 		t.Fatalf("NewElevationSource: %v", err)
 	}
 	if es.License().Attribution != "© Test" {
 		t.Errorf("license = %+v, want '© Test'", es.License())
 	}
-	m, ok, err := es.ElevationAt(context.Background(), wgs84c(20, 20))
-	if err != nil || !ok || m != 100.0 {
-		t.Fatalf("ElevationAt(west) = (%v,%v,%v), want (100,true,nil)", m, ok, err)
+	r, ok, err := es.ElevationAt(context.Background(), wgs84c(20, 20))
+	if err != nil || !ok || r.Meters != 100.0 {
+		t.Fatalf("ElevationAt(west) = (%+v,%v,%v), want meters 100/true", r, ok, err)
+	}
+	if r.HasAccuracy {
+		t.Errorf("HasAccuracy = true without an accuracy layer, want false")
 	}
 	// nodata (0) → ok=false, the sea-level convention.
-	m, ok, err = es.ElevationAt(context.Background(), wgs84c(20, -20))
-	if err != nil || ok || m != 0 {
-		t.Fatalf("ElevationAt(nodata) = (%v,%v,%v), want (0,false,nil)", m, ok, err)
+	r, ok, err = es.ElevationAt(context.Background(), wgs84c(20, -20))
+	if err != nil || ok || r.Meters != 0 {
+		t.Fatalf("ElevationAt(nodata) = (%+v,%v,%v), want meters 0/false", r, ok, err)
+	}
+}
+
+// TestElevationSourceWithAccuracy binds a second continuous layer as the
+// per-point accuracy source and checks HasAccuracy + the sampled value.
+func TestElevationSourceWithAccuracy(t *testing.T) {
+	// Two layers off the same fixture: "main" as elevation, "acc" as accuracy
+	// (scaled so the sampled value differs and proves it's the accuracy layer).
+	manifest := `
+schema_version: 1
+id: regions
+name: DEM+acc
+license: { name: CC0-1.0 }
+crs: EPSG:4326
+layers:
+  - id: main
+    file: regions.cog.tif
+    band: 1
+    value_type: continuous
+    output_property: meters
+  - id: acc
+    file: regions.cog.tif
+    band: 1
+    value_type: continuous
+    output_property: accuracy_m
+    scale: 0.1
+`
+	repo, _ := openBundleForTest(t, manifest)
+	es, err := repo.NewElevationSource("regions", "main", "acc")
+	if err != nil {
+		t.Fatalf("NewElevationSource: %v", err)
+	}
+	r, ok, err := es.ElevationAt(context.Background(), wgs84c(20, 20))
+	if err != nil || !ok {
+		t.Fatalf("ElevationAt = (%+v,%v,%v)", r, ok, err)
+	}
+	if r.Meters != 100.0 {
+		t.Errorf("meters = %v, want 100", r.Meters)
+	}
+	// acc layer = 100 * 0.1 = 10.0
+	if !r.HasAccuracy || r.AccuracyM != 10.0 {
+		t.Errorf("accuracy = (%v, has=%v), want 10.0/true", r.AccuracyM, r.HasAccuracy)
 	}
 }
 
@@ -113,7 +158,7 @@ func TestElevationSourceIntegration(t *testing.T) {
 // categorical layer cannot be bound as an elevation source.
 func TestNewElevationSourceRejectsCategorical(t *testing.T) {
 	repo, _ := openBundleForTest(t, validManifest) // categorical mapping
-	if _, err := repo.NewElevationSource("regions", "main"); err == nil {
+	if _, err := repo.NewElevationSource("regions", "main", ""); err == nil {
 		t.Fatal("expected error binding a categorical layer as elevation, got nil")
 	}
 }

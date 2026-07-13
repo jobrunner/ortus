@@ -146,11 +146,13 @@ gazetteer:
   # source_id names a loaded raster bundle whose layer has value_type: continuous.
   elevation:
     source_id: ""             # e.g. "copernicus-dem-unterfranken"; empty = feature off
-    layer: elevation          # continuous layer id within that bundle
+    layer: elevation          # continuous elevation layer id within that bundle
+    accuracy_layer: ""        # optional continuous per-point accuracy layer (e.g. HEM); "" = off
     tile_cache_size: 64       # open-tile LRU bound for multi-tile DEMs
     vertical_datum: EGM2008   # surfaced in the response (Höhe über NN ≈ orthometric)
-    accuracy_m: 4.0           # vertical accuracy constant (dataset LE90) until per-point HEM
+    accuracy_m: 4.0           # vertical accuracy constant (dataset LE90); used when accuracy_layer is unset
     accuracy_basis: "GLO-30 LE90 (absolute)"
+    per_point_accuracy_basis: "Copernicus HEM (per-pixel 1σ)"  # basis reported when accuracy_layer is set
     horizontal_accuracy_m: 6.0
     surface_model: DSM        # GLO-30 is a surface model (incl. vegetation/buildings)
 

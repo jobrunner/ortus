@@ -122,20 +122,22 @@ func (a *App) bindGazetteerElevation() error {
 	if layer == "" {
 		layer = "elevation"
 	}
-	sampler, err := a.RasterRepository.NewElevationSource(ec.SourceID, layer)
+	sampler, err := a.RasterRepository.NewElevationSource(ec.SourceID, layer, ec.AccuracyLayer)
 	if err != nil {
 		return err
 	}
 	a.Gazetteer.SetElevationSampler(sampler, gazetteer.ElevationMeta{
-		VerticalDatum: ec.VerticalDatum,
-		AccuracyM:     ec.AccuracyM,
-		AccuracyBasis: ec.AccuracyBasis,
-		HorizontalM:   ec.HorizontalM,
-		SurfaceModel:  ec.SurfaceModel,
+		VerticalDatum:         ec.VerticalDatum,
+		AccuracyM:             ec.AccuracyM,
+		AccuracyBasis:         ec.AccuracyBasis,
+		PerPointAccuracyBasis: ec.PerPointAccuracyBasis,
+		HorizontalM:           ec.HorizontalM,
+		SurfaceModel:          ec.SurfaceModel,
 	})
 	a.Logger.Info("gazetteer elevation enabled",
 		"source_id", ec.SourceID,
 		"layer", layer,
+		"accuracy_layer", ec.AccuracyLayer,
 		"vertical_datum", ec.VerticalDatum,
 	)
 	return nil
