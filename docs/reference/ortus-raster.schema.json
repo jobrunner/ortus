@@ -62,6 +62,11 @@
             { "required": ["file"], "not": { "required": ["tiles"] } },
             { "required": ["tiles"], "not": { "required": ["file"] } }
           ]
+        },
+        {
+          "$comment": "Tiled layers are continuous-only.",
+          "if": { "required": ["tiles"] },
+          "then": { "required": ["value_type"], "properties": { "value_type": { "const": "continuous" } } }
         }
       ],
       "if": {

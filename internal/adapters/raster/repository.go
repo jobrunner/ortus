@@ -57,6 +57,10 @@ type rasterLayer struct {
 	// tiles is set for a multi-tile continuous layer. When non-nil, cog/file are
 	// nil and QueryPoint routes to the tile covering the point instead.
 	tiles *tileset
+
+	// readMu serializes reads on the single COG handle (gocog's reader is
+	// stateful). Unused for tiled layers, which lock per-tile in the tileset.
+	readMu sync.Mutex
 }
 
 // NewRepository creates a raster bundle repository. cacheDir is where bundle
@@ -356,9 +360,9 @@ func (r *Repository) openLayer(dir string, spec layerSpec) (*rasterLayer, error)
 	}
 
 	if spec.isContinuous() {
-		if !isNumericDataType(c.DataType()) {
+		if err := checkContinuous(c, fmt.Sprintf("layer %q", spec.ID)); err != nil {
 			_ = f.Close()
-			return nil, fmt.Errorf("layer %q: value_type continuous requires a numeric COG band, got data type %d", spec.ID, c.DataType())
+			return nil, err
 		}
 		outputProp, scale, offset := continuousParams(spec)
 		return &rasterLayer{
@@ -393,6 +397,20 @@ func (r *Repository) openLayer(dir string, spec layerSpec) (*rasterLayer, error)
 		nodata:  spec.Nodata,
 		mapping: mapping,
 	}, nil
+}
+
+// checkContinuous validates that a COG is safe to sample as a continuous value:
+// a numeric band, and NOT WhiteIsZero — gocog's decoder inverts WhiteIsZero
+// (photometric 0) single-band data (value → max-value), which would silently
+// corrupt elevations. `what` is a label for the error (e.g. `layer "elevation"`).
+func checkContinuous(c *gocog.COG, what string) error {
+	if !isNumericDataType(c.DataType()) {
+		return fmt.Errorf("%s: value_type continuous requires a numeric COG band, got data type %d", what, c.DataType())
+	}
+	if c.PhotometricInterpretation() == 0 { // WhiteIsZero
+		return fmt.Errorf("%s: WhiteIsZero photometric interpretation is not supported for continuous layers (would invert values)", what)
+	}
+	return nil
 }
 
 // isNumericDataType reports whether a COG data type can be sampled as a
@@ -491,7 +509,11 @@ func (r *Repository) QueryPoint(ctx context.Context, sourceID, layerName string,
 		return nil, nil
 	}
 
+	// gocog's COG has a single stateful reader; serialize reads to it so
+	// concurrent queries don't interleave Seek/Read on the same handle.
+	layer.readMu.Lock()
 	rd, err := layer.cog.ReadWindow(gocog.Rectangle{X: px, Y: py, Width: 1, Height: 1})
+	layer.readMu.Unlock()
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(output.StatusError, "sample failed")
@@ -547,18 +569,23 @@ func (r *Repository) queryTiled(sourceID, layerName string, coord domain.Coordin
 	if !ts.present(name) {
 		return nil, nil // no tile → sea level / no coverage
 	}
-	ot, err := ts.acquire([2]int{latDeg, lonDeg}, name)
+	key := [2]int{latDeg, lonDeg}
+	ot, err := ts.acquire(key, name)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(output.StatusError, "tile open failed")
 		return nil, &domain.QueryError{SourceID: sourceID, Layer: layerName, Err: err}
 	}
+	defer ts.release(key) // keep the tile pinned (uncloseable) until the read is done
 
 	px, py := ot.cog.PixelFromPoint(orb.Point{coord.X, coord.Y}, 0)
 	if px < 0 || py < 0 || px >= ot.cog.Width() || py >= ot.cog.Height() {
 		return nil, nil // outside this tile's extent — no data
 	}
+	// Serialize reads on this tile's stateful reader.
+	ot.mu.Lock()
 	rd, err := ot.cog.ReadWindow(gocog.Rectangle{X: px, Y: py, Width: 1, Height: 1})
+	ot.mu.Unlock()
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(output.StatusError, "sample failed")
@@ -684,7 +711,7 @@ func unzip(src, dest string, maxBundleBytes int64) error {
 			return err
 		}
 		total += n
-		if total >= maxBundleBytes {
+		if total > maxBundleBytes {
 			return fmt.Errorf("bundle exceeds maximum extracted size of %d bytes", maxBundleBytes)
 		}
 	}

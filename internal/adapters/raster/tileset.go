@@ -40,16 +40,20 @@ type tileset struct {
 	byKey map[[2]int]*list.Element
 }
 
-// openTile is one open tile COG plus its file handle and cached data type.
+// openTile is one open tile COG plus its file handle and cached data type. mu
+// serializes reads: gocog's COG holds a single stateful io.ReadSeeker (Seek then
+// ReadFull), so concurrent reads on the same tile would interleave and corrupt.
 type openTile struct {
 	cog   *gocog.COG
 	file  *os.File
 	dtype gocog.DataType
+	mu    sync.Mutex
 }
 
 type lruEntry struct {
 	key  [2]int
 	tile *openTile
+	refs int // in-flight readers; eviction never closes an entry with refs>0
 }
 
 // defaultTileCacheSize bounds the open-handle LRU when the config leaves it zero.
@@ -125,24 +129,38 @@ func tileFileName(pattern string, latDeg, lonDeg int) string {
 func (t *tileset) present(name string) bool { return t.files[name] }
 
 // acquire returns the open handle for a cell, opening (and LRU-caching) it on a
-// miss. The caller must hold no lock; acquire serializes opens/evictions.
+// miss, and pins it (refs++) so eviction cannot close it mid-read. The caller
+// MUST call release(key) when done reading. The caller holds no lock.
 func (t *tileset) acquire(key [2]int, name string) (*openTile, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
 	if el, ok := t.byKey[key]; ok {
 		t.ll.MoveToFront(el)
-		return el.Value.(*lruEntry).tile, nil
+		e := el.Value.(*lruEntry)
+		e.refs++
+		return e.tile, nil
 	}
 
 	ot, err := t.openTile(name)
 	if err != nil {
 		return nil, err
 	}
-	el := t.ll.PushFront(&lruEntry{key: key, tile: ot})
+	el := t.ll.PushFront(&lruEntry{key: key, tile: ot, refs: 1})
 	t.byKey[key] = el
 	t.evictLocked()
 	return ot, nil
+}
+
+// release drops one reference taken by acquire, letting the tile become evictable.
+func (t *tileset) release(key [2]int) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if el, ok := t.byKey[key]; ok {
+		if e := el.Value.(*lruEntry); e.refs > 0 {
+			e.refs--
+		}
+	}
 }
 
 // openTile opens one tile COG and validates it is a numeric band (continuous).
@@ -160,9 +178,9 @@ func (t *tileset) openTile(name string) (*openTile, error) {
 		_ = f.Close()
 		return nil, fmt.Errorf("reading tile %q: %w", name, err)
 	}
-	if !isNumericDataType(c.DataType()) {
+	if err := checkContinuous(c, fmt.Sprintf("tile %q", name)); err != nil {
 		_ = f.Close()
-		return nil, fmt.Errorf("tile %q: continuous layer requires a numeric band, got data type %d", name, c.DataType())
+		return nil, err
 	}
 	if t.band >= c.BandCount() {
 		_ = f.Close()
@@ -171,18 +189,21 @@ func (t *tileset) openTile(name string) (*openTile, error) {
 	return &openTile{cog: c, file: f, dtype: c.DataType()}, nil
 }
 
-// evictLocked closes the least-recently-used handles until the cache is within
-// cap. Caller must hold t.mu.
+// evictLocked closes least-recently-used, NOT-in-use handles until the cache is
+// within cap (or only in-use handles remain — the cache may briefly exceed cap
+// under heavy concurrency, bounded by the number of in-flight readers). Scans
+// oldest-first and skips pinned (refs>0) entries so a handle is never closed
+// while a reader holds it. Caller must hold t.mu.
 func (t *tileset) evictLocked() {
-	for t.ll.Len() > t.cap {
-		el := t.ll.Back()
-		if el == nil {
-			return
-		}
+	for el := t.ll.Back(); el != nil && t.ll.Len() > t.cap; {
+		prev := el.Prev()
 		ent := el.Value.(*lruEntry)
-		t.ll.Remove(el)
-		delete(t.byKey, ent.key)
-		_ = ent.tile.file.Close()
+		if ent.refs == 0 {
+			t.ll.Remove(el)
+			delete(t.byKey, ent.key)
+			_ = ent.tile.file.Close()
+		}
+		el = prev
 	}
 }
 

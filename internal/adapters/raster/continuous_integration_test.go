@@ -3,8 +3,10 @@ package raster
 import (
 	"archive/zip"
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/jobrunner/ortus/internal/domain"
@@ -272,4 +274,59 @@ func TestTiledLayerRouting(t *testing.T) {
 // wgs84c is a WGS84 coordinate helper for raster tests.
 func wgs84c(lon, lat float64) domain.Coordinate {
 	return domain.Coordinate{X: lon, Y: lat, SRID: domain.SRIDWGS84}
+}
+
+// TestTiledConcurrentQueries fans out concurrent QueryPoints across more tiles
+// than the open-handle cache can hold, so eviction races reads. With the tile
+// LRU's refcount + per-tile lock, this must be race-free (run under -race) and
+// never read a closed/wrong handle. All four cells sample the fixture's west
+// square (value 100).
+func TestTiledConcurrentQueries(t *testing.T) {
+	dir := t.TempDir()
+	// Two distinct present cells with known, DIFFERENT fixture values: the west
+	// square (100) at N20_E020 and the east square (200) at N20_E080. Distinct
+	// values mean a wrong-tile read (use-after-close / fd reuse) shows up as a
+	// value mismatch, not just a race-detector hit.
+	zipPath := buildTiledBundle(t, dir, "dem", tiledManifest, []string{"N20_E020.tif", "N20_E080.tif"})
+
+	repo := NewRepository(t.TempDir())
+	repo.SetTileCacheSize(1) // 1 < 2 tiles → eviction races reads under load
+	t.Cleanup(func() { _ = repo.Close(context.Background(), "dem") })
+	if _, err := repo.Open(context.Background(), zipPath); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	type want struct {
+		p domain.Coordinate
+		m float64
+	}
+	cases := []want{{wgs84c(20, 20), 100}, {wgs84c(80, 20), 200}}
+	for _, c := range cases { // sequential sanity
+		feats, err := repo.QueryPoint(context.Background(), "dem", "elevation", c.p)
+		if err != nil || len(feats) != 1 || feats[0].Properties["meters"] != c.m {
+			t.Fatalf("sequential %v: feats=%+v err=%v (want %v)", c.p, feats, err, c.m)
+		}
+	}
+
+	var wg sync.WaitGroup
+	errCh := make(chan error, 400)
+	for i := 0; i < 400; i++ {
+		wg.Add(1)
+		go func(c want) {
+			defer wg.Done()
+			feats, err := repo.QueryPoint(context.Background(), "dem", "elevation", c.p)
+			if err != nil {
+				errCh <- err
+				return
+			}
+			if len(feats) != 1 || feats[0].Properties["meters"] != c.m {
+				errCh <- fmt.Errorf("point %v got %+v, want meters %v", c.p, feats, c.m)
+			}
+		}(cases[i%len(cases)])
+	}
+	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		t.Error(err)
+	}
 }
