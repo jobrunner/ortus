@@ -80,6 +80,18 @@ type noopLevelResolver struct{}
 
 func (noopLevelResolver) Resolve(string, int) (LevelMeaning, bool) { return LevelMeaning{}, false }
 
+// ElevationMeta is the constant metadata attached to every elevation result:
+// the vertical datum, the accuracy figures, and the surface-model note. It is
+// config-provided (dataset-wide), distinct from the per-point Meters and the DEM
+// license (which comes from the bound sampler).
+type ElevationMeta struct {
+	VerticalDatum string  // e.g. "EGM2008"
+	AccuracyM     float64 // vertical accuracy (dataset LE90 constant for now)
+	AccuracyBasis string  // e.g. "GLO-30 LE90 (absolute)"
+	HorizontalM   float64 // horizontal accuracy (LE90)
+	SurfaceModel  string  // e.g. "DSM"
+}
+
 // Service is the GazetteerService: reverse geocoding (Locate) and bearing.
 type Service struct {
 	index       output.SpatialIndex
@@ -88,12 +100,23 @@ type Service struct {
 	nameSources NameSourceResolver // optional; nil ⇒ names carry only their code
 	salience    SalienceStrategy
 	enabled     bool
+
+	elevation output.ElevationSampler // optional; nil ⇒ no elevation in responses
+	elevMeta  ElevationMeta
 }
 
 // SetNameSources wires the optional name-source resolver so resolved name
 // provenance (short/long/standard) is attached to each name. Without it, names
 // still carry their raw provenance code.
 func (s *Service) SetNameSources(r NameSourceResolver) { s.nameSources = r }
+
+// SetElevationSampler wires the optional elevation sampler and its constant
+// metadata. Until it is called, Elevation returns (nil, nil) so the response
+// simply omits the elevation block.
+func (s *Service) SetElevationSampler(sampler output.ElevationSampler, meta ElevationMeta) {
+	s.elevation = sampler
+	s.elevMeta = meta
+}
 
 // resolveNameSource turns a raw provenance code into a NameProvenance, enriched
 // from the manifest when one is wired and the code is known.
@@ -184,6 +207,36 @@ func (s *Service) Locate(ctx context.Context, p domain.Coordinate) (*domain.Loca
 	})
 
 	return &domain.Locality{CountryISO: countryISO, Chain: chain}, nil
+}
+
+// Elevation samples the height above sea level at the query point. It returns
+// (nil, nil) when no elevation sampler is wired, so the handler omits the block
+// rather than erroring. A point with no DEM coverage yields SeaLevel=true with
+// Meters=0 (the ocean/no-tile convention), not an error.
+func (s *Service) Elevation(ctx context.Context, p domain.Coordinate) (*domain.Elevation, error) {
+	if err := s.ready(); err != nil {
+		return nil, err
+	}
+	if err := requireWGS84(p); err != nil {
+		return nil, err
+	}
+	if s.elevation == nil {
+		return nil, nil // feature not wired — omit from the response
+	}
+	m, ok, err := s.elevation.ElevationAt(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	return &domain.Elevation{
+		Meters:        m,
+		SeaLevel:      !ok,
+		AccuracyM:     s.elevMeta.AccuracyM,
+		AccuracyBasis: s.elevMeta.AccuracyBasis,
+		HorizontalM:   s.elevMeta.HorizontalM,
+		VerticalDatum: s.elevMeta.VerticalDatum,
+		SurfaceModel:  s.elevMeta.SurfaceModel,
+		License:       s.elevation.License(),
+	}, nil
 }
 
 // requireWGS84 rejects coordinates that are not WGS84 (EPSG:4326). The gazetteer

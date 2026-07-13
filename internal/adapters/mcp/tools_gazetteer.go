@@ -67,15 +67,31 @@ type licenseOut struct {
 	Attribution string `json:"attribution"`
 }
 
+// elevationOut is the height above sea level at the coordinate, with accuracy
+// metadata. Source carries the DEM's own license/attribution, distinct from the
+// gazetteer License. Null when the elevation feature is not wired.
+type elevationOut struct {
+	Meters              float64     `json:"meters"`
+	AccuracyM           float64     `json:"accuracy_m"`
+	AccuracyBasis       string      `json:"accuracy_basis"`
+	HorizontalAccuracyM float64     `json:"horizontal_accuracy_m"`
+	VerticalDatum       string      `json:"vertical_datum"`
+	SeaLevel            bool        `json:"sea_level"`
+	SurfaceModel        string      `json:"surface_model"`
+	Source              *licenseOut `json:"source"`
+}
+
 // gazetteerOut is the tool result: admin and/or bearing, either of which is null
-// when it has no result for the coordinate. Sources is the response-wide
-// provenance excerpt describing each name_source code that appears above; License
-// is the dataset attribution (null when unset).
+// when it has no result for the coordinate. Elevation is null unless the DEM
+// feature is wired. Sources is the response-wide provenance excerpt describing
+// each name_source code that appears above; License is the dataset attribution
+// (null when unset).
 type gazetteerOut struct {
-	Admin   *adminOut   `json:"admin"`
-	Bearing *bearingOut `json:"bearing"`
-	Sources []sourceOut `json:"sources"`
-	License *licenseOut `json:"license"`
+	Admin     *adminOut     `json:"admin"`
+	Bearing   *bearingOut   `json:"bearing"`
+	Elevation *elevationOut `json:"elevation"`
+	Sources   []sourceOut   `json:"sources"`
+	License   *licenseOut   `json:"license"`
 }
 
 // provenanceSet collects the distinct name-source provenances seen in a
@@ -108,10 +124,11 @@ func addGazetteer(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 	mcp.AddTool(srv, &mcp.Tool{
 		Name: "gazetteer",
 		Description: "Reverse-geocode a coordinate to its administrative hierarchy " +
-			"(admin) and compute a bearing to the most salient nearby place " +
-			"(bearing, e.g. '4 km E Würzburg'). Either part is null when it has no " +
-			"result — no admin coverage, or no anchor within reach. Equivalent to " +
-			"GET /api/v1/gazetteer.",
+			"(admin), compute a bearing to the most salient nearby place (bearing, " +
+			"e.g. '4 km E Würzburg'), and report the height above sea level " +
+			"(elevation, meters; when a DEM is configured). Any part is null when it " +
+			"has no result — no admin coverage, no anchor within reach, or no " +
+			"elevation configured. Equivalent to GET /api/v1/gazetteer.",
 	}, func(ctx toolCtx, _ *callRequest, in gazetteerIn) (*callResult, gazetteerOut, error) {
 		coord, err := selectCoordinate(in.Lon, in.Lat, in.X, in.Y, in.SRID)
 		if err != nil {
@@ -161,6 +178,26 @@ func addGazetteer(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 			// no anchor within reach — leave nil
 		default:
 			return nil, gazetteerOut{}, err
+		}
+
+		elev, err := deps.Gazetteer.Elevation(ctx, coord)
+		switch {
+		case err != nil:
+			return nil, gazetteerOut{}, err
+		case elev != nil:
+			eo := &elevationOut{
+				Meters:              elev.Meters,
+				AccuracyM:           elev.AccuracyM,
+				AccuracyBasis:       elev.AccuracyBasis,
+				HorizontalAccuracyM: elev.HorizontalM,
+				VerticalDatum:       elev.VerticalDatum,
+				SeaLevel:            elev.SeaLevel,
+				SurfaceModel:        elev.SurfaceModel,
+			}
+			if !elev.License.IsEmpty() {
+				eo.Source = &licenseOut{Name: elev.License.Name, URL: elev.License.URL, Attribution: elev.License.Attribution}
+			}
+			out.Elevation = eo
 		}
 
 		out.Sources = prov.list()

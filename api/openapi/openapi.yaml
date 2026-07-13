@@ -266,6 +266,18 @@ paths:
                   compass: E
                   label: "4 km E Würzburg"
                   inside: false
+                elevation:                # null when no DEM is configured
+                  meters: 177.0
+                  accuracy_m: 4.0
+                  accuracy_basis: "GLO-30 LE90 (absolute)"
+                  horizontal_accuracy_m: 6.0
+                  vertical_datum: "EGM2008"
+                  sea_level: false
+                  surface_model: "DSM"
+                  source:
+                    name: "Copernicus DEM GLO-30"
+                    url: "https://doi.org/10.5270/ESA-c5d3d65"
+                    attribution: "© DLR e.V. 2010-2014 und © Airbus Defence and Space GmbH 2014-2018 provided under COPERNICUS by the European Union and ESA; all rights reserved."
                 sources:
                   - code: latin-osm
                     short: OSM name (already Latin)
@@ -603,9 +615,10 @@ components:
       type: object
       description: >-
         Gazetteer-Anreicherung für eine Koordinate: Verwaltungshierarchie (admin),
-        Peilung (bearing), name_source-Erläuterungen (sources) und Datensatz-Lizenz/
-        Attribution (license). Geliefert von GET /api/v1/gazetteer und — standardmäßig
-        — im `gazetteer`-Block von GET /api/v1/query.
+        Peilung (bearing), Höhe über NN (elevation), name_source-Erläuterungen
+        (sources) und Datensatz-Lizenz/Attribution (license). Geliefert von
+        GET /api/v1/gazetteer und — standardmäßig — im `gazetteer`-Block von
+        GET /api/v1/query.
       properties:
         admin:
           nullable: true
@@ -687,6 +700,64 @@ components:
                 Per Containment bestimmt (nicht per Distanz), gilt also auch weit vom
                 Ortsmittelpunkt großer Städte. Ein Client kann bei `true` die Peilung
                 weglassen (der Fund liegt direkt im Ort).
+        elevation:
+          nullable: true
+          type: object
+          description: >-
+            Höhe über NN am Abfragepunkt, aus einem kontinuierlichen Höhen-Raster
+            (DEM). null, wenn kein DEM konfiguriert ist. `sea_level: true` bedeutet,
+            dass keine DEM-Kachel den Punkt abdeckt (Ozean/außerhalb der Abdeckung);
+            `meters` ist dann 0. Für abgeleitete Größen (Hangneigung/Exposition) ist
+            der *relative* Fehler maßgeblich — siehe accuracy_basis.
+          properties:
+            meters:
+              type: number
+              format: double
+              description: Orthometrische Höhe über NN in Metern.
+            accuracy_m:
+              type: number
+              format: double
+              description: >-
+                Vertikale Genauigkeit in Metern. Aktuell eine datensatzweite
+                Konstante (LE90); künftig per-Punkt aus der Height Error Mask (HEM).
+            accuracy_basis:
+              type: string
+              description: >-
+                Grundlage von accuracy_m, z. B. "GLO-30 LE90 (absolute)" oder
+                "Copernicus HEM (per-pixel 1σ)".
+            horizontal_accuracy_m:
+              type: number
+              format: double
+              description: Horizontale Genauigkeit in Metern (LE90).
+            vertical_datum:
+              type: string
+              description: Vertikaler Bezug, z. B. "EGM2008".
+            sea_level:
+              type: boolean
+              description: >-
+                true, wenn keine DEM-Kachel den Punkt abdeckt; meters ist dann 0
+                (Meeresspiegel-Konvention).
+            surface_model:
+              type: string
+              description: >-
+                Oberflächenmodell-Hinweis, z. B. "DSM" (Oberfläche inkl.
+                Vegetation/Bebauung, nicht bare-earth).
+            source:
+              type: object
+              nullable: true
+              description: >-
+                Lizenz/Attribution der DEM-Quelle (z. B. Copernicus GLO-30),
+                getrennt von der Gazetteer-license. Muss ein Client anzeigen.
+              properties:
+                name:
+                  type: string
+                  description: Lizenzname (SPDX-Id oder Bezeichnung).
+                url:
+                  type: string
+                  description: Link zum Lizenztext bzw. zur Quelle.
+                attribution:
+                  type: string
+                  description: Anzuzeigender Attributionstext.
         sources:
           type: array
           description: >-

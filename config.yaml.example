@@ -141,6 +141,18 @@ gazetteer:
       # capital_bonus = per-OSM-capital-rank bonus (before capital_scale).
       # class_prior: { city: 4.3, town: 3.3, village: 2.3 }
       # capital_bonus: { "2": 2.0, "3": 1.5, "4": 1.2, "5": 0.6, "6": 0.4, "7": 0.2, "yes": 2.0 }
+  # Elevation (Höhe über NN) at the query point, sampled from a continuous raster
+  # DEM source loaded via the normal source pool (storage.local_path). Off unless
+  # source_id names a loaded raster bundle whose layer has value_type: continuous.
+  elevation:
+    source_id: ""             # e.g. "copernicus-dem-unterfranken"; empty = feature off
+    layer: elevation          # continuous layer id within that bundle
+    tile_cache_size: 64       # open-tile LRU bound for multi-tile DEMs
+    vertical_datum: EGM2008   # surfaced in the response (Höhe über NN ≈ orthometric)
+    accuracy_m: 4.0           # vertical accuracy constant (dataset LE90) until per-point HEM
+    accuracy_basis: "GLO-30 LE90 (absolute)"
+    horizontal_accuracy_m: 6.0
+    surface_model: DSM        # GLO-30 is a surface model (incl. vegetation/buildings)
 
 # OpenTelemetry tracing configuration.
 # When enabled, spans are kept in an in-memory ring buffer (for the MCP server
