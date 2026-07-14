@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.23.0](https://github.com/jobrunner/ortus/compare/v0.22.0...v0.23.0) (2026-07-13)
+
+
+### Features
+
+* **gazetteer:** Höhe über NN (elevation) am Abfragepunkt ([130fd34](https://github.com/jobrunner/ortus/commit/130fd3490d7859ad98346a88fce4614244e4f35b))
+* **gazetteer:** per-point elevation accuracy from a second raster layer ([a530968](https://github.com/jobrunner/ortus/commit/a530968aaad941d3d5499e11f32d119975e1d9eb))
+* **gazetteer:** return elevation (Höhe über NN) at the query point ([e6b69a2](https://github.com/jobrunner/ortus/commit/e6b69a249f607fb398cb8fca5cc7bc392b0b90e0))
+* **raster:** make the per-bundle extraction cap configurable ([54d2aff](https://github.com/jobrunner/ortus/commit/54d2affa083ed7f8db147d1883343132f217d5d6))
+* **raster:** support continuous-value and multi-tile COG layers ([797f838](https://github.com/jobrunner/ortus/commit/797f838328d037d706e06bf62d6f2f01c34b4d4f))
+* **raster:** vendor gocog fork with TIFF integer-predictor support ([0cc026e](https://github.com/jobrunner/ortus/commit/0cc026e27c61e8b9235350f3b4d6c3a6b800a9d7))
+
+
+### Bug Fixes
+
+* **docker:** copy third_party before go mod download ([5232d2d](https://github.com/jobrunner/ortus/commit/5232d2d5ada18796db53a591737d34ed2dca14e5))
+* **gazetteer:** soften elevation errors and fix sea-level accuracy ([2b989b3](https://github.com/jobrunner/ortus/commit/2b989b3f54c9a95d3c26d69c1169586e9023ad65))
+* **gocog:** guard the TIFF predictor against misuse ([ebda098](https://github.com/jobrunner/ortus/commit/ebda098a186442e89b353f84b8efe630728f18c4))
+* **raster:** concurrency-safe reads and continuous-layer hardening ([be6a8b1](https://github.com/jobrunner/ortus/commit/be6a8b1d9629aba44221c62dfb218d842666b94f))
+
 ## [0.22.0](https://github.com/jobrunner/ortus/compare/v0.21.0...v0.22.0) (2026-07-12)
 
 
