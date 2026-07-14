@@ -14,10 +14,11 @@ die Ticket-Container nicht → **keine Port-Kollisionen**. Die großen Datenpake
 1. **DNS** (`*.ortus.local` → 127.0.0.1) via dnsmasq:
    ```sh
    brew install dnsmasq
-   echo 'address=/ortus.local/127.0.0.1' >> "$(brew --prefix)/etc/dnsmasq.conf"
+   # Listen on the unprivileged port 5353 so dnsmasq needs no root (no `sudo brew`).
+   printf 'port=5353\naddress=/ortus.local/127.0.0.1\n' >> "$(brew --prefix)/etc/dnsmasq.conf"
    sudo mkdir -p /etc/resolver
-   echo 'nameserver 127.0.0.1' | sudo tee /etc/resolver/ortus.local
-   sudo brew services restart dnsmasq
+   printf 'nameserver 127.0.0.1\nport 5353\n' | sudo tee /etc/resolver/ortus.local
+   brew services restart dnsmasq
    dscacheutil -q host -a name probe.ortus.local   # -> 127.0.0.1
    ```
    (`make dev-dns-setup` zeigt diese Schritte.)

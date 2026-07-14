@@ -112,10 +112,11 @@ dev-destroy: ## Dev: Ticket-Umgebung + Worktree + Branch entfernen (TICKET=<name
 dev-dns-setup: ## Dev: Anleitung fuer einmalige dnsmasq-Einrichtung (*.ortus.local -> 127.0.0.1)
 	@echo "Einmalig auf dem Mac (siehe deploy/dev/README.md):"
 	@echo "  brew install dnsmasq"
-	@echo "  echo 'address=/ortus.local/127.0.0.1' >> \$$(brew --prefix)/etc/dnsmasq.conf"
+	@echo "  # Port 5353 (unprivilegiert) -> kein root/sudo fuer brew noetig"
+	@echo "  printf 'port=5353\\naddress=/ortus.local/127.0.0.1\\n' >> \$$(brew --prefix)/etc/dnsmasq.conf"
 	@echo "  sudo mkdir -p /etc/resolver"
-	@echo "  echo 'nameserver 127.0.0.1' | sudo tee /etc/resolver/ortus.local"
-	@echo "  sudo brew services restart dnsmasq"
+	@echo "  printf 'nameserver 127.0.0.1\\nport 5353\\n' | sudo tee /etc/resolver/ortus.local"
+	@echo "  brew services restart dnsmasq"
 	@echo "  # pruefen: dscacheutil -q host -a name probe.ortus.local  -> 127.0.0.1"
 
 dev-doctor: ## Dev: DNS + Netzwerk + Traefik + Dozzle + Auth-Volume pruefen
