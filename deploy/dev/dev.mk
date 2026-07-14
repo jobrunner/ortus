@@ -51,12 +51,14 @@ dev-login: ## Dev: einmaliger Claude-OAuth-Login ins claude-auth Volume (fuer Re
 	@docker volume inspect $(DEV_AUTH_VOL) >/dev/null 2>&1 || docker volume create $(DEV_AUTH_VOL)
 	@echo "Claude startet interaktiv - fuehre den Login (/login) aus, danach mit Ctrl-D beenden."
 	docker run --rm -it -e HOME=/root -v $(DEV_AUTH_VOL):/root/.claude \
-		node:22-alpine sh -lc "npm i -g @anthropic-ai/claude-code@$(CLAUDE_CODE_VERSION) && claude"
+		node:22.23.1-alpine sh -lc "npm i -g @anthropic-ai/claude-code@$(CLAUDE_CODE_VERSION) && claude"
 	@echo "Login im Volume $(DEV_AUTH_VOL) gespeichert. Remote Control ist jetzt moeglich."
 
 dev-new: ## Dev: isolierte Ticket-Umgebung erstellen (TICKET=<name> [DEV_BASE=master])
 	@$(DEV_VARS); \
-	 docker network inspect $(DEV_NET) >/dev/null 2>&1 || { echo "ERROR: Netz $(DEV_NET) fehlt - zuerst 'make dev-up' ausfuehren."; exit 1; }; \
+	 for res in "network $(DEV_NET)" "volume $(DEV_GOMOD_VOL)" "volume $(DEV_AUTH_VOL)"; do \
+	   docker $${res%% *} inspect $${res##* } >/dev/null 2>&1 || { echo "ERROR: $$res fehlt - zuerst 'make dev-up' ausfuehren."; exit 1; }; \
+	 done; \
 	 if git show-ref --verify --quiet "refs/heads/dev/$$TICKET_SAFE"; then \
 	   git worktree add "$$WT" "dev/$$TICKET_SAFE"; \
 	 else \
@@ -64,7 +66,7 @@ dev-new: ## Dev: isolierte Ticket-Umgebung erstellen (TICKET=<name> [DEV_BASE=ma
 	 fi; \
 	 if [ ! -f "$$WT/deploy/dev/Dockerfile.dev" ]; then \
 	   echo "Hinweis: deploy/dev fehlt im Worktree (Base-Branch aelter als dieses Feature) - kopiere aus dem Hauptcheckout."; \
-	   mkdir -p "$$WT/deploy"; cp -R "$(DEV_DIR)" "$$WT/deploy/dev"; \
+	   mkdir -p "$$WT/deploy/dev"; cp -R "$(DEV_DIR)/." "$$WT/deploy/dev/"; \
 	 fi; \
 	 cp "$(DEV_DIR)/mcp.json.tmpl" "$$WT/.mcp.json"; \
 	 excl=$$(git -C "$$WT" rev-parse --git-path info/exclude); \
