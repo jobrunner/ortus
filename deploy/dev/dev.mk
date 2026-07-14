@@ -68,7 +68,7 @@ dev-new: ## Dev: isolierte Ticket-Umgebung erstellen (TICKET=<name> [DEV_BASE=ma
 	   echo "Hinweis: deploy/dev fehlt im Worktree (Base-Branch aelter als dieses Feature) - kopiere aus dem Hauptcheckout."; \
 	   mkdir -p "$$WT/deploy/dev"; cp -R "$(DEV_DIR)/." "$$WT/deploy/dev/"; \
 	 fi; \
-	 cp "$(DEV_DIR)/mcp.json.tmpl" "$$WT/.mcp.json"; \
+	 [ -f "$$WT/.mcp.json" ] || cp "$(DEV_DIR)/mcp.json.tmpl" "$$WT/.mcp.json"; \
 	 excl=$$(git -C "$$WT" rev-parse --git-path info/exclude); \
 	 grep -qxF '.mcp.json' "$$excl" 2>/dev/null || echo '.mcp.json' >> "$$excl"; \
 	 TOKEN=$$(openssl rand -hex 24); export ORTUS_MCP_TOKEN="$$TOKEN"; \
