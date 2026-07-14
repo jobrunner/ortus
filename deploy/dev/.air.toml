@@ -1,0 +1,28 @@
+# air live-reload config for the ortus dev container (deploy/dev/Dockerfile.dev).
+# Runs from the bind-mounted worktree at /workspace. CGO + mod_spatialite required.
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  # Reuses the mounted module cache (/go/pkg/mod) and per-ticket build cache
+  # (/root/.cache/go-build) so only the first build is slow.
+  cmd = "go build -o ./tmp/ortus ./cmd/ortus"
+  bin = "./tmp/ortus"
+  # ortus config comes from the container ENV (ORTUS_*); this just ensures the
+  # SpatiaLite path is present when air launches the binary.
+  full_bin = "SPATIALITE_LIBRARY_PATH=/usr/lib/mod_spatialite.so ./tmp/ortus"
+  include_ext = ["go", "yaml", "yml", "json"]
+  # Don't watch big/irrelevant trees (data, caches, vendored fork, docs, web).
+  exclude_dir = ["tmp", "data", ".go", "coverage", "deploy", "docs", "site", "third_party", "web", "node_modules"]
+  exclude_regex = ["_test\\.go"]
+  # CGO+SpatiaLite links are slow; debounce and stop on build error rather than thrash.
+  delay = 1500
+  stop_on_error = true
+  send_interrupt = true
+  kill_delay = 3000
+
+[log]
+  time = true
+
+[misc]
+  clean_on_exit = true

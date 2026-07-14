@@ -1,0 +1,21 @@
+# Live-reload ortus dev image. The source is bind-mounted at runtime (see
+# deploy/dev/docker-compose.dev.yaml); `air` rebuilds on change. Built on the same
+# SpatiaLite dev base as the production builder so CGO + mod_spatialite work, and
+# with GOPATH/caches placed so the compose volume mounts line up.
+FROM ghcr.io/jobrunner/spatialite-base-image:alpine-dev-1.5.0
+
+ENV CGO_ENABLED=1 \
+    GOFLAGS=-mod=mod \
+    GOPATH=/go \
+    GOBIN=/usr/local/bin \
+    GOMODCACHE=/go/pkg/mod \
+    GOCACHE=/root/.cache/go-build \
+    HOME=/root \
+    SPATIALITE_LIBRARY_PATH=/usr/lib/mod_spatialite.so
+
+# air for live-reload (installed to /usr/local/bin via GOBIN, so it's on PATH).
+RUN go install github.com/air-verse/air@v1.61.7
+
+WORKDIR /workspace
+EXPOSE 8080 9090 9091
+ENTRYPOINT ["air", "-c", "deploy/dev/.air.toml"]
