@@ -51,7 +51,7 @@ dev-login: ## Dev: einmaliger Claude-OAuth-Login ins claude-auth Volume (fuer Re
 	@docker volume inspect $(DEV_AUTH_VOL) >/dev/null 2>&1 || docker volume create $(DEV_AUTH_VOL)
 	@echo "Claude startet interaktiv - fuehre den Login (/login) aus, danach mit Ctrl-D beenden."
 	docker run --rm -it -e HOME=/root -v $(DEV_AUTH_VOL):/root/.claude \
-		node:22-alpine sh -lc "npm i -g @anthropic-ai/claude-code@$(CLAUDE_CODE_VERSION) >/dev/null 2>&1 && claude"
+		node:22-alpine sh -lc "npm i -g @anthropic-ai/claude-code@$(CLAUDE_CODE_VERSION) && claude"
 	@echo "Login im Volume $(DEV_AUTH_VOL) gespeichert. Remote Control ist jetzt moeglich."
 
 dev-new: ## Dev: isolierte Ticket-Umgebung erstellen (TICKET=<name> [DEV_BASE=master])
@@ -120,7 +120,11 @@ dev-dns-setup: ## Dev: Anleitung fuer einmalige dnsmasq-Einrichtung (*.ortus.loc
 
 dev-doctor: ## Dev: DNS + Netzwerk + Traefik + Dozzle + Auth-Volume pruefen
 	@printf 'DNS *.ortus.local -> 127.0.0.1 ... '; \
-	 dscacheutil -q host -a name probe.ortus.local 2>/dev/null | grep -q '127.0.0.1' && echo OK || echo "FAIL (make dev-dns-setup)"
+	 if command -v dscacheutil >/dev/null 2>&1; then \
+	   dscacheutil -q host -a name probe.ortus.local 2>/dev/null | grep -q '127.0.0.1' && echo OK || echo "FAIL (make dev-dns-setup)"; \
+	 elif command -v getent >/dev/null 2>&1; then \
+	   getent hosts probe.ortus.local 2>/dev/null | grep -q '127.0.0.1' && echo OK || echo "FAIL (make dev-dns-setup)"; \
+	 else echo "SKIP (weder dscacheutil noch getent vorhanden)"; fi
 	@printf 'network %s ............... ' "$(DEV_NET)"; docker network inspect $(DEV_NET) >/dev/null 2>&1 && echo OK || echo "FAIL (make dev-up)"
 	@printf 'traefik ...................... '; docker ps --filter name=ortus-dev-infra --format '{{.Names}}' | grep -q traefik && echo OK || echo "FAIL (make dev-up)"
 	@printf 'dozzle ....................... '; docker ps --filter name=ortus-dev-infra --format '{{.Names}}' | grep -q dozzle && echo OK || echo "FAIL (make dev-up)"
