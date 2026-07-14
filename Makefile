@@ -305,6 +305,10 @@ ci-check: ## Validiere GitHub Actions Workflows (actionlint)
 ## Hilfe
 help: ## Zeige diese Hilfe
 	@echo "ortus - Verfügbare Make-Targets:\n"
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
+	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 	@echo ""
+
+# Per-ticket isolierte Dev-Umgebungen (make dev-*). Am Ende eingebunden, damit
+# `build` das Default-Target bleibt. Targets erscheinen automatisch in `make help`.
+include deploy/dev/dev.mk

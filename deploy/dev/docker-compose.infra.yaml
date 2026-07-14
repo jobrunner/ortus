@@ -1,0 +1,57 @@
+# Shared dev infrastructure for per-ticket ortus environments.
+# Started once via `make dev-up`. Provides:
+#   - Traefik: the ONLY container that binds a host port (:80). Routes
+#     <ticket>.ortus.local / mcp.<ticket>.ortus.local / metrics.<ticket>.ortus.local
+#     to the per-ticket containers by Docker labels on the shared `ortus-dev` network.
+#   - Dozzle: a lightweight log viewer at http://logs.ortus.local.
+# Dashboard: http://traefik.ortus.local
+#
+# DEV ONLY: Traefik + Dozzle mount the Docker socket. The `:ro` bind does NOT
+# meaningfully reduce privilege — any client of the socket API is root-equivalent
+# on the host. Keep this bound to localhost; do not run on a shared/remote host
+# without hardening (e.g. a docker-socket-proxy).
+name: ortus-dev-infra
+
+services:
+  traefik:
+    image: traefik:v3.7.7
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=ortus-dev
+      - --entrypoints.web.address=:80
+      - --api.dashboard=true
+      - --log.level=INFO
+      - --accesslog=true
+    ports:
+      - "127.0.0.1:80:80"                              # localhost only (dev); do not expose to the LAN
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - ortus-dev
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.rule=Host(`traefik.ortus.local`)"
+      - "traefik.http.routers.traefik.entrypoints=web"
+      - "traefik.http.routers.traefik.service=api@internal"
+
+  dozzle:
+    image: amir20/dozzle:v10.6.9
+    environment:
+      - DOZZLE_NO_ANALYTICS=true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - ortus-dev
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dozzle.rule=Host(`logs.ortus.local`)"
+      - "traefik.http.routers.dozzle.entrypoints=web"
+      - "traefik.http.services.dozzle.loadbalancer.server.port=8080"
+
+networks:
+  ortus-dev:
+    name: ortus-dev
+    external: true

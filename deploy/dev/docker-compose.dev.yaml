@@ -1,0 +1,94 @@
+# Per-ticket ortus dev stack — ONE reusable template, parameterized by env vars
+# set by `make dev-new` (deploy/dev/dev.mk):
+#   COMPOSE_PROJECT_NAME=ortus-dev-<ticket>, TICKET=<safe>, ORTUS_WORKTREE=<abs path>,
+#   ORTUS_SHARED_DATA=<abs path>, ORTUS_MCP_TOKEN=<generated>.
+# No host ports are published — Traefik (shared infra) routes by hostname:
+#   <ticket>.ortus.local -> 8080, metrics.<ticket>.ortus.local -> 9090,
+#   mcp.<ticket>.ortus.local -> 9091.
+services:
+  ortus:
+    build:
+      # Small context (deploy/dev only): the dev image has no COPY — source is
+      # bind-mounted at runtime — so the whole worktree (incl. any large ./data)
+      # must not be sent to the daemon.
+      context: ${ORTUS_WORKTREE}/deploy/dev
+      dockerfile: Dockerfile.dev
+    working_dir: /workspace
+    volumes:
+      - ${ORTUS_WORKTREE}:/workspace                 # live source (air watches)
+      - ${ORTUS_SHARED_DATA}:/app/data:ro            # big packages, read-only, shared, never duplicated
+      - gomod:/go/pkg/mod                            # shared module cache (content-addressed)
+      - gobuild:/root/.cache/go-build                # per-ticket build cache (project-scoped)
+    environment:
+      ORTUS_SERVER_HOST: "0.0.0.0"
+      ORTUS_SERVER_PORT: "8080"
+      ORTUS_STORAGE_TYPE: "local"
+      ORTUS_STORAGE_LOCAL_PATH: "/app/data"
+      ORTUS_LOGGING_LEVEL: "debug"
+      ORTUS_LOGGING_FORMAT: "json"
+      ORTUS_METRICS_ENABLED: "true"
+      ORTUS_METRICS_PORT: "9090"
+      ORTUS_METRICS_PATH: "/metrics"
+      ORTUS_MCP_ENABLED: "true"
+      ORTUS_MCP_HOST: "0.0.0.0"                       # non-loopback -> token required
+      ORTUS_MCP_PORT: "9091"
+      ORTUS_MCP_PATH: "/mcp"
+      ORTUS_MCP_TOKEN: "${ORTUS_MCP_TOKEN}"
+      ORTUS_RASTER_MAX_BUNDLE_EXTRACT_GIB: "64"       # large DEM bundles
+      SPATIALITE_LIBRARY_PATH: "/usr/lib/mod_spatialite.so"
+      CGO_ENABLED: "1"
+    networks: [ortus-dev]
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=ortus-dev"
+      # API + frontend + /health + /docs  (8080)
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-api.rule=Host(`${TICKET}.ortus.local`)"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-api.entrypoints=web"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-api.service=${COMPOSE_PROJECT_NAME}-api"
+      - "traefik.http.services.${COMPOSE_PROJECT_NAME}-api.loadbalancer.server.port=8080"
+      # Metrics (9090)
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-metrics.rule=Host(`metrics.${TICKET}.ortus.local`)"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-metrics.entrypoints=web"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-metrics.service=${COMPOSE_PROJECT_NAME}-metrics"
+      - "traefik.http.services.${COMPOSE_PROJECT_NAME}-metrics.loadbalancer.server.port=9090"
+      # MCP (9091, bearer-protected)
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-mcp.rule=Host(`mcp.${TICKET}.ortus.local`)"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-mcp.entrypoints=web"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-mcp.service=${COMPOSE_PROJECT_NAME}-mcp"
+      - "traefik.http.services.${COMPOSE_PROJECT_NAME}-mcp.loadbalancer.server.port=9091"
+
+  claude:
+    build:
+      context: ${ORTUS_WORKTREE}/deploy/dev
+      dockerfile: Dockerfile.claude
+      args:
+        CLAUDE_CODE_VERSION: "${CLAUDE_CODE_VERSION:-2.1.209}"
+    working_dir: /workspace
+    volumes:
+      - ${ORTUS_WORKTREE}:/workspace
+      - claude-auth:/root/.claude                    # OAuth creds (seeded by `make dev-login`)
+      - gomod:/go/pkg/mod
+      - gobuild:/root/.cache/go-build
+    environment:
+      ORTUS_MCP_TOKEN: "${ORTUS_MCP_TOKEN}"           # expanded by Claude Code into .mcp.json header
+      CLAUDE_CLIENT_PRESENCE_FILE: "/tmp/presence"    # suppress mobile push while working locally
+      TICKET: "${TICKET}"
+      SPATIALITE_LIBRARY_PATH: "/usr/lib/mod_spatialite.so"
+    networks: [ortus-dev]
+    restart: unless-stopped
+    tty: true
+    stdin_open: true
+
+networks:
+  ortus-dev:
+    external: true
+
+volumes:
+  gobuild: {}                                         # project-scoped: unique per ticket, removed by `down -v`
+  gomod:
+    external: true
+    name: ortus-dev-gomod                             # shared across tickets (created by `make dev-up`)
+  claude-auth:
+    external: true
+    name: ortus-dev-claude-auth                       # shared OAuth (created by `dev-up`, seeded by `dev-login`)

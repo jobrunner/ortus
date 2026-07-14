@@ -1,0 +1,28 @@
+# Per-ticket Claude Code dev container. Built on the SpatiaLite dev base so the
+# agent can also run `make build` / `make test` (CGO + mod_spatialite) inside the
+# same box. Node + the Claude Code CLI are added on top.
+#
+# Auth for Remote Control is OAuth (Claude subscription), NOT an API key — the
+# credentials live in the `claude-auth` volume, seeded once by `make dev-login`
+# and mounted at $HOME/.claude by the compose file.
+FROM ghcr.io/jobrunner/spatialite-base-image:alpine-dev-1.5.0
+
+ENV CGO_ENABLED=1 \
+    GOPATH=/go \
+    GOMODCACHE=/go/pkg/mod \
+    GOCACHE=/root/.cache/go-build \
+    HOME=/root \
+    SPATIALITE_LIBRARY_PATH=/usr/lib/mod_spatialite.so
+
+# Pin the Claude Code CLI for reproducible images. Override at build time with
+# --build-arg CLAUDE_CODE_VERSION=... (compose passes it through from dev.mk).
+ARG CLAUDE_CODE_VERSION=2.1.209
+
+RUN apk add --no-cache nodejs npm git ripgrep bash \
+ && npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
+ && npm cache clean --force
+
+WORKDIR /workspace
+# Stays up; sessions are started via `make dev-attach` / `make dev-remote`
+# (docker exec into this container).
+CMD ["sleep", "infinity"]
