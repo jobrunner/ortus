@@ -6,8 +6,10 @@
 #   - Dozzle: a lightweight log viewer at http://logs.ortus.local.
 # Dashboard: http://traefik.ortus.local
 #
-# DEV ONLY: Traefik + Dozzle mount the Docker socket (root-equivalent). Keep this
-# bound to localhost; do not run on a shared/remote host without hardening.
+# DEV ONLY: Traefik + Dozzle mount the Docker socket. The `:ro` bind does NOT
+# meaningfully reduce privilege — any client of the socket API is root-equivalent
+# on the host. Keep this bound to localhost; do not run on a shared/remote host
+# without hardening (e.g. a docker-socket-proxy).
 name: ortus-dev-infra
 
 services:

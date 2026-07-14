@@ -94,7 +94,7 @@ dev-logs: ## Dev: ortus-Logs des Tickets folgen (TICKET=<name>)
 	 $(DEV_COMPOSE) logs -f ortus
 
 dev-list: ## Dev: laufende Ticket-Umgebungen + Worktrees auflisten
-	@docker ps --filter "name=ortus-dev-" --format 'table {{.Names}}\t{{.Status}}'
+	@docker ps --filter "name=ortus-dev-" --format 'table {{.Names}}\t{{.Status}}' | grep -v 'ortus-dev-infra' || true
 	@echo "--- worktrees ---"; git worktree list | grep -F "$(WORKTREE_ABS)" || true
 
 dev-destroy: ## Dev: Ticket-Umgebung + Worktree + Branch entfernen (TICKET=<name>)
