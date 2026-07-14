@@ -59,6 +59,8 @@ services:
     build:
       context: ${ORTUS_WORKTREE}/deploy/dev
       dockerfile: Dockerfile.claude
+      args:
+        CLAUDE_CODE_VERSION: "${CLAUDE_CODE_VERSION:-2.1.209}"
     working_dir: /workspace
     volumes:
       - ${ORTUS_WORKTREE}:/workspace

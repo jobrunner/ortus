@@ -12,7 +12,7 @@ name: ortus-dev-infra
 
 services:
   traefik:
-    image: traefik:v3.3
+    image: traefik:v3.7.7
     command:
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
@@ -22,7 +22,7 @@ services:
       - --log.level=INFO
       - --accesslog=true
     ports:
-      - "80:80"
+      - "127.0.0.1:80:80"                              # localhost only (dev); do not expose to the LAN
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:

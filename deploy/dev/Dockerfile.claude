@@ -14,8 +14,12 @@ ENV CGO_ENABLED=1 \
     HOME=/root \
     SPATIALITE_LIBRARY_PATH=/usr/lib/mod_spatialite.so
 
+# Pin the Claude Code CLI for reproducible images. Override at build time with
+# --build-arg CLAUDE_CODE_VERSION=... (compose passes it through from dev.mk).
+ARG CLAUDE_CODE_VERSION=2.1.209
+
 RUN apk add --no-cache nodejs npm git ripgrep bash \
- && npm install -g @anthropic-ai/claude-code \
+ && npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
  && npm cache clean --force
 
 WORKDIR /workspace

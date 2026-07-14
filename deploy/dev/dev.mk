@@ -13,6 +13,10 @@ WORKTREE_ROOT ?= ../ortus-worktrees
 WORKTREE_ABS  := $(abspath $(WORKTREE_ROOT))
 SHARED_DATA   ?= $(abspath ./data)
 DEV_BASE      ?= master
+# Single source of truth for the Claude Code CLI version (keeps dev-login and the
+# claude image in sync). Bump here; overridable on the command line.
+CLAUDE_CODE_VERSION ?= 2.1.209
+export CLAUDE_CODE_VERSION
 
 # TICKET is provided on the command line (e.g. `make dev-new TICKET=ORT-123`).
 # Export it so recipes sanitize it at RUN-time via the environment ($$TICKET),
@@ -26,6 +30,7 @@ export TICKET
 # ORTUS_MCP_TOKEN defaults to "-" so compose interpolation doesn't warn on
 # lifecycle ops; dev-new overrides it with a freshly generated token.
 define DEV_VARS
+	set -e; \
 	TICKET_SAFE=$$(printf '%s' "$$TICKET" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9-' '-' | sed 's/^-*//; s/-*$$//'); \
 	if [ -z "$$TICKET_SAFE" ]; then echo "ERROR: TICKET=<name> erforderlich (saniert zu [a-z0-9-]), z.B. make dev-new TICKET=ORT-123"; exit 1; fi; \
 	PROJECT="ortus-dev-$$TICKET_SAFE"; \
@@ -46,7 +51,7 @@ dev-login: ## Dev: einmaliger Claude-OAuth-Login ins claude-auth Volume (fuer Re
 	@docker volume inspect $(DEV_AUTH_VOL) >/dev/null 2>&1 || docker volume create $(DEV_AUTH_VOL)
 	@echo "Claude startet interaktiv - fuehre den Login (/login) aus, danach mit Ctrl-D beenden."
 	docker run --rm -it -e HOME=/root -v $(DEV_AUTH_VOL):/root/.claude \
-		node:22-alpine sh -lc "npm i -g @anthropic-ai/claude-code >/dev/null 2>&1 && claude"
+		node:22-alpine sh -lc "npm i -g @anthropic-ai/claude-code@$(CLAUDE_CODE_VERSION) >/dev/null 2>&1 && claude"
 	@echo "Login im Volume $(DEV_AUTH_VOL) gespeichert. Remote Control ist jetzt moeglich."
 
 dev-new: ## Dev: isolierte Ticket-Umgebung erstellen (TICKET=<name> [DEV_BASE=master])
