@@ -31,7 +31,7 @@ export TICKET
 # lifecycle ops; dev-new overrides it with a freshly generated token.
 define DEV_VARS
 	set -e; \
-	TICKET_SAFE=$$(printf '%s' "$$TICKET" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9-' '-' | sed 's/^-*//; s/-*$$//'); \
+	TICKET_SAFE=$$(export LC_ALL=C; printf '%s' "$$TICKET" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9-' '-' | sed 's/^-*//; s/-*$$//'); \
 	if [ -z "$$TICKET_SAFE" ]; then echo "ERROR: TICKET=<name> erforderlich (saniert zu [a-z0-9-]), z.B. make dev-new TICKET=ORT-123"; exit 1; fi; \
 	PROJECT="ortus-dev-$$TICKET_SAFE"; \
 	WT="$(WORKTREE_ABS)/$$TICKET_SAFE"; \

@@ -8,8 +8,11 @@
 services:
   ortus:
     build:
-      context: ${ORTUS_WORKTREE}
-      dockerfile: deploy/dev/Dockerfile.dev
+      # Small context (deploy/dev only): the dev image has no COPY — source is
+      # bind-mounted at runtime — so the whole worktree (incl. any large ./data)
+      # must not be sent to the daemon.
+      context: ${ORTUS_WORKTREE}/deploy/dev
+      dockerfile: Dockerfile.dev
     working_dir: /workspace
     volumes:
       - ${ORTUS_WORKTREE}:/workspace                 # live source (air watches)
