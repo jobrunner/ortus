@@ -8,9 +8,10 @@ tmp_dir = "tmp"
   # (/root/.cache/go-build) so only the first build is slow.
   cmd = "go build -o ./tmp/ortus ./cmd/ortus"
   bin = "./tmp/ortus"
-  # ortus config comes from the container ENV (ORTUS_*); this just ensures the
-  # SpatiaLite path is present when air launches the binary.
-  full_bin = "SPATIALITE_LIBRARY_PATH=/usr/lib/mod_spatialite.so ./tmp/ortus"
+  # ortus config + SPATIALITE_LIBRARY_PATH come from the container ENV (set in
+  # Dockerfile.dev / compose), so air just runs the binary. (full_bin does not
+  # parse a `VAR=val` prefix — it execs the string as argv — so keep it bare.)
+  full_bin = "./tmp/ortus"
   include_ext = ["go", "yaml", "yml", "json"]
   # Don't watch big/irrelevant trees (data, caches, vendored fork, docs, web).
   exclude_dir = ["tmp", "data", ".go", "coverage", "deploy", "docs", "site", "third_party", "web", "node_modules"]

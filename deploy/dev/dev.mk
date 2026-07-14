@@ -10,22 +10,30 @@ DEV_NET       := ortus-dev
 DEV_GOMOD_VOL := ortus-dev-gomod
 DEV_AUTH_VOL  := ortus-dev-claude-auth
 WORKTREE_ROOT ?= ../ortus-worktrees
+WORKTREE_ABS  := $(abspath $(WORKTREE_ROOT))
 SHARED_DATA   ?= $(abspath ./data)
 DEV_BASE      ?= master
 
-# Sanitize TICKET to a DNS/compose-safe label (lowercase, [a-z0-9-], trimmed).
-TICKET_SAFE := $(shell printf '%s' '$(TICKET)' | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9-' '-' | sed 's/^-*//; s/-*$$//')
-PROJECT     := ortus-dev-$(TICKET_SAFE)
-WT          := $(abspath $(WORKTREE_ROOT)/$(TICKET_SAFE))
-# Env the per-ticket compose template needs. ORTUS_MCP_TOKEN is only meaningful for
-# dev-new; lifecycle ops pass a dummy so compose interpolation doesn't warn.
-DEV_ENV      = COMPOSE_PROJECT_NAME=$(PROJECT) TICKET=$(TICKET_SAFE) ORTUS_WORKTREE="$(WT)" ORTUS_SHARED_DATA="$(SHARED_DATA)" ORTUS_MCP_TOKEN=$(or $(ORTUS_MCP_TOKEN),-)
+# TICKET is provided on the command line (e.g. `make dev-new TICKET=ORT-123`).
+# Export it so recipes sanitize it at RUN-time via the environment ($$TICKET),
+# instead of make-level string interpolation into a shell command — the latter
+# would allow shell injection and would run on every make invocation.
+export TICKET
+
+# Runtime prelude sourced at the top of every dev-* recipe. Derives the safe
+# ticket label and the compose env from $TICKET, and exports them for all compose
+# calls in the same recipe shell. Fails if TICKET is empty or sanitizes to "".
+# ORTUS_MCP_TOKEN defaults to "-" so compose interpolation doesn't warn on
+# lifecycle ops; dev-new overrides it with a freshly generated token.
+define DEV_VARS
+	TICKET_SAFE=$$(printf '%s' "$$TICKET" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9-' '-' | sed 's/^-*//; s/-*$$//'); \
+	if [ -z "$$TICKET_SAFE" ]; then echo "ERROR: TICKET=<name> erforderlich (saniert zu [a-z0-9-]), z.B. make dev-new TICKET=ORT-123"; exit 1; fi; \
+	PROJECT="ortus-dev-$$TICKET_SAFE"; \
+	WT="$(WORKTREE_ABS)/$$TICKET_SAFE"; \
+	export COMPOSE_PROJECT_NAME="$$PROJECT" TICKET="$$TICKET_SAFE" ORTUS_WORKTREE="$$WT" ORTUS_SHARED_DATA="$(SHARED_DATA)" ORTUS_MCP_TOKEN="$${ORTUS_MCP_TOKEN:--}"
+endef
 
 .PHONY: dev-up dev-login dev-new dev-attach dev-remote dev-logs dev-list dev-destroy dev-dns-setup dev-doctor
-
-define require_ticket
-	@if [ -z "$(TICKET)" ]; then echo "ERROR: TICKET=<name> erforderlich, z.B. make dev-new TICKET=ORT-123"; exit 1; fi
-endef
 
 dev-up: ## Dev: geteilte Infra (Traefik+Dozzle) + Netz/Volumes starten
 	@docker network inspect $(DEV_NET) >/dev/null 2>&1 || docker network create $(DEV_NET)
@@ -42,48 +50,59 @@ dev-login: ## Dev: einmaliger Claude-OAuth-Login ins claude-auth Volume (fuer Re
 	@echo "Login im Volume $(DEV_AUTH_VOL) gespeichert. Remote Control ist jetzt moeglich."
 
 dev-new: ## Dev: isolierte Ticket-Umgebung erstellen (TICKET=<name> [DEV_BASE=master])
-	$(call require_ticket)
-	@git show-ref --verify --quiet refs/heads/dev/$(TICKET_SAFE) \
-		&& git worktree add "$(WT)" dev/$(TICKET_SAFE) \
-		|| git worktree add -b dev/$(TICKET_SAFE) "$(WT)" $(DEV_BASE)
-	@cp $(DEV_DIR)/mcp.json.tmpl "$(WT)/.mcp.json"
-	@grep -qxF '.mcp.json' "$(WT)/.git/info/exclude" 2>/dev/null || echo '.mcp.json' >> "$(WT)/.git/info/exclude"
-	@TOKEN=$$(openssl rand -hex 24); \
-	 COMPOSE_PROJECT_NAME=$(PROJECT) TICKET=$(TICKET_SAFE) ORTUS_WORKTREE="$(WT)" \
-	   ORTUS_SHARED_DATA="$(SHARED_DATA)" ORTUS_MCP_TOKEN=$$TOKEN $(DEV_COMPOSE) up -d --build
-	@echo ""
-	@echo "Ticket '$(TICKET_SAFE)' laeuft:"
-	@echo "  API/Frontend : http://$(TICKET_SAFE).ortus.local"
-	@echo "  Metrics      : http://metrics.$(TICKET_SAFE).ortus.local/metrics"
-	@echo "  MCP          : http://mcp.$(TICKET_SAFE).ortus.local/mcp  (Bearer-Token generiert)"
-	@echo "  Logs         : http://logs.ortus.local"
-	@echo "  Claude lokal : make dev-attach TICKET=$(TICKET_SAFE)"
-	@echo "  Claude Handy : make dev-remote TICKET=$(TICKET_SAFE)  -> erscheint in der Claude-App unter 'Code'"
+	@$(DEV_VARS); \
+	 docker network inspect $(DEV_NET) >/dev/null 2>&1 || { echo "ERROR: Netz $(DEV_NET) fehlt - zuerst 'make dev-up' ausfuehren."; exit 1; }; \
+	 if git show-ref --verify --quiet "refs/heads/dev/$$TICKET_SAFE"; then \
+	   git worktree add "$$WT" "dev/$$TICKET_SAFE"; \
+	 else \
+	   git worktree add -b "dev/$$TICKET_SAFE" "$$WT" "$(DEV_BASE)"; \
+	 fi; \
+	 if [ ! -f "$$WT/deploy/dev/Dockerfile.dev" ]; then \
+	   echo "Hinweis: deploy/dev fehlt im Worktree (Base-Branch aelter als dieses Feature) - kopiere aus dem Hauptcheckout."; \
+	   mkdir -p "$$WT/deploy"; cp -R "$(DEV_DIR)" "$$WT/deploy/dev"; \
+	 fi; \
+	 cp "$(DEV_DIR)/mcp.json.tmpl" "$$WT/.mcp.json"; \
+	 excl=$$(git -C "$$WT" rev-parse --git-path info/exclude); \
+	 grep -qxF '.mcp.json' "$$excl" 2>/dev/null || echo '.mcp.json' >> "$$excl"; \
+	 TOKEN=$$(openssl rand -hex 24); export ORTUS_MCP_TOKEN="$$TOKEN"; \
+	 $(DEV_COMPOSE) up -d --build; \
+	 printf '\n%s\n' "Ticket '$$TICKET_SAFE' laeuft:"; \
+	 echo "  API/Frontend : http://$$TICKET_SAFE.ortus.local"; \
+	 echo "  Metrics      : http://metrics.$$TICKET_SAFE.ortus.local/metrics"; \
+	 echo "  MCP          : http://mcp.$$TICKET_SAFE.ortus.local/mcp"; \
+	 echo "  MCP-Token    : $$TOKEN  (auch als \$$ORTUS_MCP_TOKEN in den Containern)"; \
+	 echo "  Logs         : http://logs.ortus.local"; \
+	 echo "  Claude lokal : make dev-attach TICKET=$$TICKET_SAFE"; \
+	 echo "  Claude Handy : make dev-remote TICKET=$$TICKET_SAFE  -> erscheint in der Claude-App unter 'Code'"
 
 dev-attach: ## Dev: lokale interaktive Claude-Code-Session im Ticket-Container (TICKET=<name>)
-	$(call require_ticket)
-	$(DEV_ENV) $(DEV_COMPOSE) exec claude claude
+	@$(DEV_VARS); \
+	 $(DEV_COMPOSE) exec claude claude
 
 dev-remote: ## Dev: Claude-Code mit Remote Control starten -> Claude Mobile App (TICKET=<name>)
-	$(call require_ticket)
-	@echo "Falls das Flag abweicht, in-Container 'claude --help' pruefen."
-	$(DEV_ENV) $(DEV_COMPOSE) exec claude claude --remote-control --name "$(TICKET_SAFE)"
+	@$(DEV_VARS); \
+	 echo "Falls das Flag abweicht, in-Container 'claude --help' pruefen."; \
+	 $(DEV_COMPOSE) exec claude claude --remote-control --name "$$TICKET_SAFE"
 
 dev-logs: ## Dev: ortus-Logs des Tickets folgen (TICKET=<name>)
-	$(call require_ticket)
-	$(DEV_ENV) $(DEV_COMPOSE) logs -f ortus
+	@$(DEV_VARS); \
+	 $(DEV_COMPOSE) logs -f ortus
 
 dev-list: ## Dev: laufende Ticket-Umgebungen + Worktrees auflisten
 	@docker ps --filter "name=ortus-dev-" --format 'table {{.Names}}\t{{.Status}}'
-	@echo "--- worktrees ---"; git worktree list | grep -i ortus-worktrees || true
+	@echo "--- worktrees ---"; git worktree list | grep -F "$(WORKTREE_ABS)" || true
 
 dev-destroy: ## Dev: Ticket-Umgebung + Worktree + Branch entfernen (TICKET=<name>)
-	$(call require_ticket)
-	-$(DEV_ENV) $(DEV_COMPOSE) down -v
-	-git worktree remove --force "$(WT)"
-	-git branch -D dev/$(TICKET_SAFE)
-	@git worktree prune
-	@echo "Entfernt: $(TICKET_SAFE) (Container, per-Ticket Build-Volume, Worktree, Branch)."
+	@$(DEV_VARS); \
+	 $(DEV_COMPOSE) down -v || true; \
+	 git worktree remove --force "$$WT" || true; \
+	 git worktree prune; \
+	 if git show-ref --verify --quiet "refs/heads/dev/$$TICKET_SAFE"; then \
+	   if ! git branch -d "dev/$$TICKET_SAFE" 2>/dev/null; then \
+	     echo "WARN: Branch dev/$$TICKET_SAFE ist nicht gemergt - NICHT geloescht. Manuell: git branch -D dev/$$TICKET_SAFE"; \
+	   fi; \
+	 fi; \
+	 echo "Entfernt: $$TICKET_SAFE (Container, per-Ticket Build-Volume, Worktree; Branch nur wenn gemergt)."
 
 dev-dns-setup: ## Dev: Anleitung fuer einmalige dnsmasq-Einrichtung (*.ortus.local -> 127.0.0.1)
 	@echo "Einmalig auf dem Mac (siehe deploy/dev/README.md):"
