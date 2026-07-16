@@ -35,6 +35,15 @@ services:
       ORTUS_MCP_PATH: "/mcp"
       ORTUS_MCP_TOKEN: "${ORTUS_MCP_TOKEN}"
       ORTUS_RASTER_MAX_BUNDLE_EXTRACT_GIB: "64"       # large DEM bundles
+      # Tracing -> Tempo (shared obs stack on ortus-dev). Off by default; the
+      # obs/perf flow re-ups with ORTUS_TRACING_ENABLED=true. service_name is
+      # per-ticket so traces are separable in Grafana/Tempo.
+      ORTUS_TRACING_ENABLED: "${ORTUS_TRACING_ENABLED:-false}"
+      ORTUS_TRACING_ENDPOINT: "${ORTUS_TRACING_ENDPOINT:-tempo:4318}"
+      ORTUS_TRACING_TRANSPORT: "http"
+      ORTUS_TRACING_INSECURE: "true"
+      ORTUS_TRACING_SERVICE_NAME: "${TICKET}"
+      ORTUS_TRACING_SAMPLE_RATIO: "${ORTUS_TRACING_SAMPLE_RATIO:-1.0}"
       SPATIALITE_LIBRARY_PATH: "/usr/lib/mod_spatialite.so"
       CGO_ENABLED: "1"
     networks: [ortus-dev]
@@ -42,6 +51,11 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=ortus-dev"
+      # Prometheus (shared obs stack) auto-discovers this container by these
+      # labels and scrapes its metrics port on the ortus-dev network.
+      - "ortus.metrics.scrape=true"
+      - "ortus.metrics.port=9090"
+      - "ortus.metrics.ticket=${TICKET}"
       # API + frontend + /health + /docs  (8080)
       - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-api.rule=Host(`${TICKET}.ortus.local`)"
       - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-api.entrypoints=web"

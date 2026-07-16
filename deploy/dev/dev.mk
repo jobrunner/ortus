@@ -18,11 +18,18 @@ DEV_BASE      ?= master
 CLAUDE_CODE_VERSION ?= 2.1.209
 export CLAUDE_CODE_VERSION
 
-# TICKET is provided on the command line (e.g. `make dev-new TICKET=ORT-123`).
-# Export it so recipes sanitize it at RUN-time via the environment ($$TICKET),
-# instead of make-level string interpolation into a shell command — the latter
-# would allow shell injection and would run on every make invocation.
+# The environment label is provided on the command line. NAME is the friendly
+# alias (no ticket system needed): `make dev NAME=elevation-cache`. TICKET is kept
+# as an equivalent alias for backwards-compat. If neither is given, dev/dev-new
+# auto-generate one. Export TICKET so recipes sanitize it at RUN-time via the
+# environment ($$TICKET) instead of make-level string interpolation (which would
+# allow shell injection and would run on every make invocation).
+TICKET ?= $(NAME)
 export TICKET
+
+# Vegeta load driver image (digest-pinned; matches deploy/loadtest).
+DEV_VEGETA_IMAGE := peterevans/vegeta@sha256:eb65f499cd1b0f1402a56794d7711c49121db6ff8ea7d878513d76601ee0d502
+OBS_COMPOSE      := docker compose -f $(DEV_DIR)/docker-compose.obs.yaml
 
 # Runtime prelude sourced at the top of every dev-* recipe. Derives the safe
 # ticket label and the compose env from $TICKET, and exports them for all compose
@@ -38,7 +45,23 @@ define DEV_VARS
 	export COMPOSE_PROJECT_NAME="$$PROJECT" TICKET="$$TICKET_SAFE" ORTUS_WORKTREE="$$WT" ORTUS_SHARED_DATA="$(SHARED_DATA)" ORTUS_MCP_TOKEN="$${ORTUS_MCP_TOKEN:--}"
 endef
 
-.PHONY: dev-up dev-login dev-new dev-attach dev-remote dev-logs dev-list dev-destroy dev-dns-setup dev-doctor
+# Auto-generate a name when neither NAME nor TICKET is given (only dev/dev-new).
+# Used inside a recipe shell before $(DEV_VARS); exports TICKET so DEV_VARS sees it.
+define AUTONAME
+	if [ -z "$$TICKET" ]; then TICKET="feat-$$(date +%Y%m%d-%H%M%S)"; export TICKET; \
+	  echo "Kein NAME/TICKET angegeben -> generiere '$$TICKET'"; fi
+endef
+
+.PHONY: dev dev-up dev-obs dev-login dev-new dev-attach dev-remote dev-perf dev-logs dev-list dev-destroy dev-dns-setup dev-doctor
+
+dev: ## Dev: Env anlegen/aktualisieren + Claude-Container betreten & Plan-Skill starten (NAME=<slug>)
+	@$(AUTONAME); \
+	 $(DEV_VARS); \
+	 if [ -z "$$($(DEV_COMPOSE) ps -q ortus 2>/dev/null)" ]; then \
+	   $(MAKE) --no-print-directory dev-new TICKET="$$TICKET_SAFE"; \
+	 fi; \
+	 echo "Starte Claude im Container (Plan-Skill fuer '$$TICKET_SAFE') ..."; \
+	 $(DEV_COMPOSE) exec claude claude "/plan-feature $$TICKET_SAFE"
 
 dev-up: ## Dev: geteilte Infra (Traefik+Dozzle) + Netz/Volumes starten
 	@docker network inspect $(DEV_NET) >/dev/null 2>&1 || docker network create $(DEV_NET)
@@ -46,6 +69,12 @@ dev-up: ## Dev: geteilte Infra (Traefik+Dozzle) + Netz/Volumes starten
 	@docker volume inspect $(DEV_AUTH_VOL) >/dev/null 2>&1 || docker volume create $(DEV_AUTH_VOL)
 	$(INFRA_COMPOSE) up -d
 	@echo "Infra up.  Dashboard: http://traefik.ortus.local   Logs: http://logs.ortus.local"
+
+dev-obs: ## Dev: Observability-Stack (Grafana/Tempo/Loki/Prometheus) am ortus-dev-Netz starten
+	@docker network inspect $(DEV_NET) >/dev/null 2>&1 || { echo "ERROR: Netz $(DEV_NET) fehlt - zuerst 'make dev-up'."; exit 1; }
+	$(OBS_COMPOSE) up -d
+	@echo "Observability up.  Grafana: http://grafana.ortus.local"
+	@echo "Traces erscheinen, sobald ein Ticket mit Tracing laeuft (make dev-perf aktiviert es automatisch)."
 
 dev-login: ## Dev: einmaliger Claude-OAuth-Login ins claude-auth Volume (fuer Remote Control)
 	@docker volume inspect $(DEV_AUTH_VOL) >/dev/null 2>&1 || docker volume create $(DEV_AUTH_VOL)
@@ -55,11 +84,14 @@ dev-login: ## Dev: einmaliger Claude-OAuth-Login ins claude-auth Volume (fuer Re
 	@echo "Login im Volume $(DEV_AUTH_VOL) gespeichert. Remote Control ist jetzt moeglich."
 
 dev-new: ## Dev: isolierte Ticket-Umgebung erstellen (TICKET=<name> [DEV_BASE=master])
-	@$(DEV_VARS); \
+	@$(AUTONAME); \
+	 $(DEV_VARS); \
 	 for res in "network $(DEV_NET)" "volume $(DEV_GOMOD_VOL)" "volume $(DEV_AUTH_VOL)"; do \
 	   docker $${res%% *} inspect $${res##* } >/dev/null 2>&1 || { echo "ERROR: $$res fehlt - zuerst 'make dev-up' ausfuehren."; exit 1; }; \
 	 done; \
-	 if git show-ref --verify --quiet "refs/heads/dev/$$TICKET_SAFE"; then \
+	 if git worktree list --porcelain 2>/dev/null | grep -qxF "worktree $$WT"; then \
+	   echo "Worktree existiert bereits: $$WT"; \
+	 elif git show-ref --verify --quiet "refs/heads/dev/$$TICKET_SAFE"; then \
 	   git worktree add "$$WT" "dev/$$TICKET_SAFE"; \
 	 else \
 	   git worktree add -b "dev/$$TICKET_SAFE" "$$WT" "$(DEV_BASE)"; \
@@ -71,7 +103,9 @@ dev-new: ## Dev: isolierte Ticket-Umgebung erstellen (TICKET=<name> [DEV_BASE=ma
 	 [ -f "$$WT/.mcp.json" ] || cp "$(DEV_DIR)/mcp.json.tmpl" "$$WT/.mcp.json"; \
 	 excl=$$(git -C "$$WT" rev-parse --git-path info/exclude); \
 	 grep -qxF '.mcp.json' "$$excl" 2>/dev/null || echo '.mcp.json' >> "$$excl"; \
-	 TOKEN=$$(openssl rand -hex 24); export ORTUS_MCP_TOKEN="$$TOKEN"; \
+	 TOKEN=$$($(DEV_COMPOSE) exec -T ortus printenv ORTUS_MCP_TOKEN 2>/dev/null || true); \
+	 if [ -z "$$TOKEN" ] || [ "$$TOKEN" = "-" ]; then TOKEN=$$(openssl rand -hex 24); fi; \
+	 export ORTUS_MCP_TOKEN="$$TOKEN"; \
 	 $(DEV_COMPOSE) up -d --build; \
 	 printf '\n%s\n' "Ticket '$$TICKET_SAFE' laeuft:"; \
 	 echo "  API/Frontend : http://$$TICKET_SAFE.ortus.local"; \
@@ -79,8 +113,10 @@ dev-new: ## Dev: isolierte Ticket-Umgebung erstellen (TICKET=<name> [DEV_BASE=ma
 	 echo "  MCP          : http://mcp.$$TICKET_SAFE.ortus.local/mcp"; \
 	 echo "  MCP-Token    : $$TOKEN  (auch als \$$ORTUS_MCP_TOKEN in den Containern)"; \
 	 echo "  Logs         : http://logs.ortus.local"; \
-	 echo "  Claude lokal : make dev-attach TICKET=$$TICKET_SAFE"; \
-	 echo "  Claude Handy : make dev-remote TICKET=$$TICKET_SAFE  -> erscheint in der Claude-App unter 'Code'"
+	 echo "  Grafana      : http://grafana.ortus.local  (nach 'make dev-obs')"; \
+	 echo "  Claude lokal : make dev NAME=$$TICKET_SAFE   (oder: make dev-attach TICKET=$$TICKET_SAFE)"; \
+	 echo "  Claude Handy : make dev-remote TICKET=$$TICKET_SAFE  -> erscheint in der Claude-App unter 'Code'"; \
+	 echo "  Perf-Test    : make dev-perf TICKET=$$TICKET_SAFE"
 
 dev-attach: ## Dev: lokale interaktive Claude-Code-Session im Ticket-Container (TICKET=<name>)
 	@$(DEV_VARS); \
@@ -90,6 +126,22 @@ dev-remote: ## Dev: Claude-Code mit Remote Control starten -> Claude Mobile App 
 	@$(DEV_VARS); \
 	 echo "Falls das Flag abweicht, in-Container 'claude --help' pruefen."; \
 	 $(DEV_COMPOSE) exec claude claude --remote-control --name "$$TICKET_SAFE"
+
+dev-perf: ## Dev: Vegeta-Lasttest gegen das Ticket + Traces/Metriken in Grafana (TICKET=<name> [RATE=200 DURATION=30s])
+	@$(DEV_VARS); \
+	 if [ -z "$$($(DEV_COMPOSE) ps -q ortus 2>/dev/null)" ]; then echo "ERROR: Ticket '$$TICKET_SAFE' laeuft nicht - zuerst 'make dev-new' oder 'make dev'."; exit 1; fi; \
+	 docker ps --filter name=ortus-dev-obs --format '{{.Names}}' | grep -q . || echo "Hinweis: Observability nicht aktiv - 'make dev-obs' fuer Traces/Dashboards."; \
+	 TOKEN=$$($(DEV_COMPOSE) exec -T ortus printenv ORTUS_MCP_TOKEN 2>/dev/null || true); [ -n "$$TOKEN" ] || TOKEN=-; \
+	 echo "Aktiviere Tracing fuer '$$TICKET_SAFE' (service_name=$$TICKET_SAFE) ..."; \
+	 ORTUS_MCP_TOKEN="$$TOKEN" ORTUS_TRACING_ENABLED=true $(DEV_COMPOSE) up -d ortus >/dev/null; \
+	 sleep 3; \
+	 RATE=$(if $(RATE),$(RATE),200); DURATION=$(if $(DURATION),$(DURATION),30s); \
+	 echo "Vegeta: rate=$$RATE duration=$$DURATION -> http://$$TICKET_SAFE.ortus.local"; \
+	 docker run --rm --platform linux/amd64 --network $(DEV_NET) \
+	   -v "$(abspath $(DEV_DIR)/vegeta-targets.txt)":/targets.txt:ro $(DEV_VEGETA_IMAGE) \
+	   sh -c "vegeta attack -targets=/targets.txt -header 'Host: $$TICKET_SAFE.ortus.local' -rate=$$RATE -duration=$$DURATION | vegeta report"; \
+	 echo ""; \
+	 echo "Traces/Dashboards: http://grafana.ortus.local  (Explore -> Tempo, service.name=\"$$TICKET_SAFE\")"
 
 dev-logs: ## Dev: ortus-Logs des Tickets folgen (TICKET=<name>)
 	@$(DEV_VARS); \

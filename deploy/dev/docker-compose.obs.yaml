@@ -1,0 +1,80 @@
+# Shared observability stack for the per-ticket dev environments, on the same
+# `ortus-dev` network as the ticket containers. Started via `make dev-obs`.
+#
+#   Grafana     grafana.ortus.local  single pane — metrics + traces (+ logs via Dozzle)
+#   Prometheus                        Docker service-discovery, scrapes every ticket's :9090
+#   Tempo       tempo:4318 (OTLP)     receives traces from ticket ortus (service_name=<ticket>)
+#   Loki        loki:3100             log store (optional; Dozzle also shows live logs)
+#
+# Tempo/Loki/Grafana configs are REUSED from deploy/loadtest (single source of
+# truth); only the Prometheus config differs (docker SD instead of host scrape).
+#
+# DEV ONLY: Prometheus mounts the Docker socket (read-only) for discovery. Keep
+# this on localhost.
+name: ortus-dev-obs
+
+services:
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    volumes:
+      - ./prometheus.dev.yaml:/etc/prometheus/prometheus.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - prometheus-data:/prometheus
+    networks: [ortus-dev]
+    restart: unless-stopped
+
+  tempo:
+    image: grafana/tempo:2.7.0
+    command: ['-config.file=/etc/tempo.yaml']
+    volumes:
+      - ../loadtest/tempo.yaml:/etc/tempo.yaml:ro
+      - tempo-data:/var/tempo
+    networks: [ortus-dev]
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:3.3.2
+    command: ['-config.file=/etc/loki/loki-config.yaml']
+    volumes:
+      - ../loadtest/loki-config.yaml:/etc/loki/loki-config.yaml:ro
+      - loki-data:/loki
+    networks: [ortus-dev]
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    environment:
+      # Dev-only: anonymous admin, no login. Never expose this stack publicly.
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
+      - GF_FEATURE_TOGGLES_ENABLE=traceqlEditor
+      - GF_SERVER_ROOT_URL=http://grafana.ortus.local
+    volumes:
+      - ../loadtest/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../loadtest/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+      - tempo
+      - loki
+    networks: [ortus-dev]
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=ortus-dev"
+      - "traefik.http.routers.ortus-dev-grafana.rule=Host(`grafana.ortus.local`)"
+      - "traefik.http.routers.ortus-dev-grafana.entrypoints=web"
+      - "traefik.http.services.ortus-dev-grafana.loadbalancer.server.port=3000"
+
+networks:
+  ortus-dev:
+    name: ortus-dev
+    external: true
+
+volumes:
+  prometheus-data:
+  tempo-data:
+  loki-data:

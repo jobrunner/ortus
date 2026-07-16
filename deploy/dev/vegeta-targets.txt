@@ -1,0 +1,9 @@
+# Vegeta targets for `make dev-perf` — one HTTP request per line.
+#
+# The URL host is `traefik` (the shared proxy, reachable on the ortus-dev
+# network). `make dev-perf` adds `-header "Host: <ticket>.ortus.local"` so Traefik
+# routes the load to the right ticket's ortus. Adjust the coordinates to fall
+# inside your data's extent; mix several so you don't always hit one R-tree node.
+GET http://traefik/api/v1/query?lon=11.5820&lat=48.1351
+GET http://traefik/api/v1/query?lon=11.5760&lat=48.1372
+GET http://traefik/api/v1/query?lon=11.5900&lat=48.1300
