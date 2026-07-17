@@ -10,6 +10,11 @@
 # baked plugins/settings into that volume on start without touching credentials.
 FROM ghcr.io/jobrunner/spatialite-base-image:alpine-dev-1.5.0
 
+# The base image runs as the non-root `spatialite` user; installing packages and
+# writing to /usr/local, /opt, and the config dir needs root. This is a dev-only
+# container, so it stays root (also lets the agent run apk/build freely).
+USER root
+
 # Pin the Claude Code CLI for reproducible images. Override at build time with
 # --build-arg CLAUDE_CODE_VERSION=... (compose passes it through from dev.mk).
 ARG CLAUDE_CODE_VERSION=2.1.209
