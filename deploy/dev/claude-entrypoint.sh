@@ -26,4 +26,15 @@ if [ -f "$PRELOAD/settings.json" ]; then
 	cp -a "$PRELOAD/settings.json" "$DEST/settings.json"
 fi
 
+# The main config (~/.claude.json) normally lives OUTSIDE ~/.claude, so it isn't
+# in the volume and would be lost on every start (re-triggering the folder-trust
+# prompt and printing a "config not found" warning). Symlink it into the volume so
+# trust/onboarding state persists deterministically across restarts.
+CONFIG_HOME="${HOME:-/root}/.claude.json"
+if [ ! -L "$CONFIG_HOME" ]; then
+	rm -f "$CONFIG_HOME"
+	ln -s "$DEST/.claude.json" "$CONFIG_HOME"
+fi
+[ -f "$DEST/.claude.json" ] || echo '{}' > "$DEST/.claude.json"
+
 exec "$@"
