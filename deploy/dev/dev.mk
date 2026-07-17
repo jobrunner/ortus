@@ -9,6 +9,7 @@ INFRA_COMPOSE := docker compose -f $(DEV_DIR)/docker-compose.infra.yaml
 DEV_NET       := ortus-dev
 DEV_GOMOD_VOL := ortus-dev-gomod
 DEV_AUTH_VOL  := ortus-dev-claude-auth
+DEV_GH_VOL    := ortus-dev-gh-auth
 WORKTREE_ROOT ?= ../ortus-worktrees
 WORKTREE_ABS  := $(abspath $(WORKTREE_ROOT))
 SHARED_DATA   ?= $(abspath ./data)
@@ -42,7 +43,9 @@ define DEV_VARS
 	if [ -z "$$TICKET_SAFE" ]; then echo "ERROR: TICKET=<name> erforderlich (saniert zu [a-z0-9-]), z.B. make dev-new TICKET=ORT-123"; exit 1; fi; \
 	PROJECT="ortus-dev-$$TICKET_SAFE"; \
 	WT="$(WORKTREE_ABS)/$$TICKET_SAFE"; \
-	export COMPOSE_PROJECT_NAME="$$PROJECT" TICKET="$$TICKET_SAFE" ORTUS_WORKTREE="$$WT" ORTUS_SHARED_DATA="$(SHARED_DATA)" ORTUS_MCP_TOKEN="$${ORTUS_MCP_TOKEN:--}"
+	MAIN_GITDIR=$$(git rev-parse --git-common-dir 2>/dev/null || echo .git); \
+	case "$$MAIN_GITDIR" in /*) ;; *) MAIN_GITDIR="$(CURDIR)/$$MAIN_GITDIR";; esac; \
+	export COMPOSE_PROJECT_NAME="$$PROJECT" TICKET="$$TICKET_SAFE" ORTUS_WORKTREE="$$WT" ORTUS_SHARED_DATA="$(SHARED_DATA)" ORTUS_MAIN_GITDIR="$$MAIN_GITDIR" ORTUS_MCP_TOKEN="$${ORTUS_MCP_TOKEN:--}"
 endef
 
 # Auto-generate a name when neither NAME nor TICKET is given (only dev/dev-new).
@@ -52,7 +55,7 @@ define AUTONAME
 	  echo "Kein NAME/TICKET angegeben -> generiere '$$TICKET'"; fi
 endef
 
-.PHONY: dev dev-up dev-obs dev-login dev-new dev-attach dev-remote dev-remote-persist dev-remote-stop dev-perf dev-logs dev-list dev-destroy dev-dns-setup dev-doctor
+.PHONY: dev dev-up dev-obs dev-login dev-gh-login dev-new dev-attach dev-remote dev-remote-persist dev-remote-stop dev-perf dev-logs dev-list dev-destroy dev-dns-setup dev-doctor
 
 dev: ## Dev: Env anlegen/aktualisieren + Claude-Container betreten & Plan-Skill starten (NAME=<slug>)
 	@$(AUTONAME); \
@@ -67,6 +70,7 @@ dev-up: ## Dev: geteilte Infra (Traefik+Dozzle) + Netz/Volumes starten
 	@docker network inspect $(DEV_NET) >/dev/null 2>&1 || docker network create $(DEV_NET)
 	@docker volume inspect $(DEV_GOMOD_VOL) >/dev/null 2>&1 || docker volume create $(DEV_GOMOD_VOL)
 	@docker volume inspect $(DEV_AUTH_VOL) >/dev/null 2>&1 || docker volume create $(DEV_AUTH_VOL)
+	@docker volume inspect $(DEV_GH_VOL) >/dev/null 2>&1 || docker volume create $(DEV_GH_VOL)
 	$(INFRA_COMPOSE) up -d
 	@echo "Infra up.  Dashboard: http://traefik.ortus.local   Logs: http://logs.ortus.local"
 
@@ -83,10 +87,18 @@ dev-login: ## Dev: einmaliger Claude-OAuth-Login ins claude-auth Volume (fuer Re
 		node:22.23.1-alpine sh -lc "npm i -g @anthropic-ai/claude-code@$(CLAUDE_CODE_VERSION) && claude"
 	@echo "Login im Volume $(DEV_AUTH_VOL) gespeichert. Remote Control ist jetzt moeglich."
 
+dev-gh-login: ## Dev: einmaliger GitHub-Login ins gh-auth Volume (fuer gh CLI + GitHub-MCP)
+	@docker volume inspect $(DEV_GH_VOL) >/dev/null 2>&1 || docker volume create $(DEV_GH_VOL)
+	@echo "gh startet interaktiv - fuehre 'gh auth login' aus (danach sind gh + GitHub-MCP nutzbar)."
+	docker run --rm -it --user root -e HOME=/root -v $(DEV_GH_VOL):/root/.config/gh \
+		ghcr.io/jobrunner/spatialite-base-image:alpine-dev-1.5.0 \
+		sh -lc "apk add --no-cache github-cli >/dev/null 2>&1 && gh auth login && gh auth setup-git"
+	@echo "GitHub-Login im Volume $(DEV_GH_VOL) gespeichert (gilt fuer alle Tickets)."
+
 dev-new: ## Dev: isolierte Ticket-Umgebung erstellen (TICKET=<name> [DEV_BASE=master])
 	@$(AUTONAME); \
 	 $(DEV_VARS); \
-	 for res in "network $(DEV_NET)" "volume $(DEV_GOMOD_VOL)" "volume $(DEV_AUTH_VOL)"; do \
+	 for res in "network $(DEV_NET)" "volume $(DEV_GOMOD_VOL)" "volume $(DEV_AUTH_VOL)" "volume $(DEV_GH_VOL)"; do \
 	   docker $${res%% *} inspect $${res##* } >/dev/null 2>&1 || { echo "ERROR: $$res fehlt - zuerst 'make dev-up' ausfuehren."; exit 1; }; \
 	 done; \
 	 if git worktree list --porcelain 2>/dev/null | grep -qxF "worktree $$WT"; then \

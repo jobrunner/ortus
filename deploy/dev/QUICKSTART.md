@@ -62,7 +62,15 @@ make dev-login
 Es öffnet sich Claude im Terminal. Tippe `/login`, folge dem Browser-Login, und
 beende danach mit `Ctrl-D`. Das gilt **für alle Features** und hält ein paar Tage.
 
-> Fertig. Teil 1 machst du nie wieder — außer der Login läuft ab (dann nur 1c).
+### 1d) Bei GitHub anmelden (optional, für `gh` + GitHub-MCP + Pushes/PRs)
+
+```sh
+make dev-gh-login
+```
+Führe `gh auth login` aus (Browser/Device-Flow). Gilt für alle Features. Danach
+funktionieren im Container `gh`, `git push` und der GitHub-MCP.
+
+> Fertig. Teil 1 machst du nie wieder — außer ein Login läuft ab (dann nur 1c/1d).
 
 ---
 

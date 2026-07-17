@@ -37,6 +37,10 @@ Die großen Datenpakete werden **read-only geteilt** (nie pro Feature dupliziert
    Volume `ortus-dev-claude-auth` und gilt für alle Features. OAuth-Token laufen
    nach einigen Tagen ab → dann erneut `make dev-login`.
 
+4. **GitHub-Login** (optional, kontobezogen, für `gh` + GitHub-MCP + Pushes/PRs
+   aus dem Container): `make dev-gh-login`, im Container `gh auth login` ausführen.
+   Landet im Volume `ortus-dev-gh-auth`, gilt für alle Features.
+
 Optional: `make dev-doctor` prüft DNS, Netz, Traefik, Dozzle, Auth-Volume.
 
 ## Feature-Lebenszyklus (ohne Tickets)
@@ -74,7 +78,13 @@ Nach `make dev`/`make dev-new`:
 - **Skills**: die Repo-Skills (`.claude/skills/`, gemountet) — u.a. `plan-feature`,
   `perf-test`, `doc-drift-check`, die Package-Build-Skills.
 - **MCP**: `ortus` (live-reloadende Instanz über `.mcp.json`, Bearer aus
-  `$ORTUS_MCP_TOKEN` — **kein Token auf Platte**) + `context7` (Library-Docs).
+  `$ORTUS_MCP_TOKEN` — **kein Token auf Platte**), `context7` (Library-Docs) und
+  `github` (offizieller GitHub-MCP-Server, Token zur Laufzeit aus `gh auth token`
+  — ebenfalls kein Token auf Platte).
+- **git + gh**: git + GitHub CLI installiert; das Haupt-Repo-`.git` ist gemountet,
+  sodass git im Worktree funktioniert. Der Entrypoint verdrahtet git↔gh
+  (Credential-Helper + Commit-Identität aus dem GitHub-Konto). Auth via
+  `make dev-gh-login` (einmalig, kontobezogen).
 - **Toolchain**: Go + CGO + SpatiaLite (kann `make build`/`make test`/`make verify`).
 
 Aktualisierung = Image neu bauen (`make dev-new` baut mit); der Entrypoint

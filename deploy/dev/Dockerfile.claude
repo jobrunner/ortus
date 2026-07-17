@@ -20,6 +20,7 @@ USER root
 ARG CLAUDE_CODE_VERSION=2.1.209
 # Pinned toolset versions.
 ARG GOPLS_VERSION=v0.23.0
+ARG GITHUB_MCP_VERSION=v1.6.0
 
 ENV CGO_ENABLED=1 \
     GOPATH=/go \
@@ -35,14 +36,16 @@ ENV CGO_ENABLED=1 \
     CHROME_BIN=/usr/bin/chromium-browser \
     PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
-# Runtime deps: node/npm (Claude Code CLI + playwright MCP), git/ripgrep/bash for
-# the agent, chromium + fonts for the playwright plugin's headless browser.
-RUN apk add --no-cache nodejs npm git ripgrep bash chromium nss freetype harfbuzz ttf-freefont \
+# Runtime deps: node/npm (Claude Code CLI + playwright MCP), git + gh (GitHub CLI)
+# for the agent, ripgrep/bash, chromium + fonts for the playwright headless browser.
+RUN apk add --no-cache nodejs npm git github-cli ripgrep bash chromium nss freetype harfbuzz ttf-freefont \
  && npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
  && npm cache clean --force
 
-# Go language server for the gopls-lsp plugin (pinned).
-RUN go install "golang.org/x/tools/gopls@${GOPLS_VERSION}"
+# Go language server for the gopls-lsp plugin, and the official GitHub MCP server
+# (both pinned, installed to GOBIN=/usr/local/bin so they're on PATH).
+RUN go install "golang.org/x/tools/gopls@${GOPLS_VERSION}" \
+ && go install "github.com/github/github-mcp-server/cmd/github-mcp-server@${GITHUB_MCP_VERSION}"
 
 # Preload the pinned Claude Code plugins into a stash the entrypoint copies into
 # the (volume-backed) config dir at start. Plugins come from the official

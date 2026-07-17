@@ -37,6 +37,20 @@ if [ ! -L "$CONFIG_HOME" ]; then
 fi
 [ -f "$DEST/.claude.json" ] || echo '{}' > "$DEST/.claude.json"
 
+# Wire git <-> gh so pushes/PRs work from inside the container (credential helper),
+# and set a best-effort commit identity from the authenticated GitHub account when
+# none is configured. All best-effort: skipped cleanly when gh isn't logged in.
+if command -v gh >/dev/null 2>&1; then
+	gh auth setup-git >/dev/null 2>&1 || true
+	if [ -z "$(git config --global user.email 2>/dev/null)" ] && gh auth status >/dev/null 2>&1; then
+		_login=$(gh api user -q .login 2>/dev/null || true)
+		if [ -n "$_login" ]; then
+			git config --global user.name "$(gh api user -q '.name // .login' 2>/dev/null || echo "$_login")"
+			git config --global user.email "$(gh api user -q '.email // empty' 2>/dev/null || echo "${_login}@users.noreply.github.com")"
+		fi
+	fi
+fi
+
 # Stufe 2 — optional: run Remote Control as the container's MAIN process so
 # `restart: unless-stopped` revives it after a Docker/Mac restart (session stays
 # available in the mobile app without any terminal open). Guarded on credentials

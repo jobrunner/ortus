@@ -81,7 +81,12 @@ services:
     working_dir: /workspace
     volumes:
       - ${ORTUS_WORKTREE}:/workspace
+      # The worktree's .git is a file pointing at the main repo's git dir; mount it
+      # at the SAME absolute path so `git` works inside the container (shared object
+      # store, like any linked worktree on the host).
+      - ${ORTUS_MAIN_GITDIR:-/tmp/ortus-main-git}:${ORTUS_MAIN_GITDIR:-/tmp/ortus-main-git}
       - claude-auth:/root/.claude                    # OAuth creds (seeded by `make dev-login`)
+      - gh-auth:/root/.config/gh                     # GitHub CLI/MCP auth (seeded by `make dev-gh-login`)
       - gomod:/go/pkg/mod
       - gobuild:/root/.cache/go-build
     environment:
@@ -109,3 +114,6 @@ volumes:
   claude-auth:
     external: true
     name: ortus-dev-claude-auth                       # shared OAuth (created by `dev-up`, seeded by `dev-login`)
+  gh-auth:
+    external: true
+    name: ortus-dev-gh-auth                            # shared GitHub CLI/MCP auth (created by `dev-up`, seeded by `dev-gh-login`)
