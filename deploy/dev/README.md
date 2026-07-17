@@ -1,5 +1,8 @@
 # Per-Feature Dev-Umgebungen (`make dev-*`)
 
+> **Neu hier? → [QUICKSTART.md](QUICKSTART.md)** (Schritt-für-Schritt, ohne Vorwissen).
+> Dieses Dokument ist die Referenz.
+
 Isolierte ortus-Entwicklungsumgebungen pro Feature — **kein Ticketsystem nötig**:
 eigener Git-Worktree/Branch, eigener Live-Reload-ortus-Container **und** ein
 Container mit Claude Code, erreichbar über `http://<name>.ortus.local`, mit MCP,
