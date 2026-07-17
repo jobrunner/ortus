@@ -87,11 +87,19 @@ Ersetze `mein-feature` durch einen kurzen Namen (Kleinbuchstaben/Bindestriche).
 **Raus aus der Claude-Session:** `Ctrl-D` (die Container laufen weiter).
 **Wieder rein:** `make dev NAME=mein-feature` (startet nicht neu, verbindet nur).
 
+### Terminal schließen? Kein Problem
+Die Container laufen **detached** weiter — dein ortus, der Build, dein Code bleiben
+oben (und kommen nach einem Mac-Neustart automatisch zurück). Nur deine *lokale*
+Claude-Session (das Fenster) endet. Wieder rein: `make dev NAME=mein-feature`;
+das laufende Gespräch holst du mit `/resume` (oder Start mit `claude --continue`) zurück.
+
 ### Vom Handy aus weiterarbeiten (optional)
 ```sh
-make dev-remote NAME=mein-feature
+make dev-remote NAME=mein-feature          # detached -> läuft weiter, auch wenn du das Terminal schließt
+make dev-remote-persist NAME=mein-feature  # zusätzlich neustart-fest (kommt nach Reboot zurück in die App)
 ```
-Die Session taucht in der Claude-App unter **„Code"** auf.
+Die Session taucht in der Claude-App unter **„Code"** auf. `make dev-remote-persist`
+setzt einen einmaligen `make dev-login` voraus. Abschalten: `make dev-remote-stop NAME=…`.
 
 ---
 

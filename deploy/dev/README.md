@@ -81,12 +81,34 @@ Aktualisierung = Image neu bauen (`make dev-new` baut mit); der Entrypoint
 (`claude-entrypoint.sh`) seedet die gebackenen Plugins/Settings bei jedem Start
 neu ins Auth-Volume, **ohne** die OAuth-Credentials anzufassen.
 
-## Remote Control (Claude Mobile App)
+## Remote Control (Claude Mobile App) & Persistenz
 
-`make dev-remote NAME=<slug>` → die Session erscheint in der Claude-App unter
-**Code** (und claude.ai/code). Nur **ausgehende** HTTPS-Verbindung zu Anthropic —
-keine eingehenden Ports/Tunnel/VPN. Voraussetzung: `make dev-login` (OAuth). Das
-exakte Flag ggf. mit `claude --help` im Container abgleichen (die CLI entwickelt sich).
+Die Session erscheint in der Claude-App unter **Code** (und claude.ai/code). Nur
+**ausgehende** HTTPS-Verbindung zu Anthropic — keine eingehenden Ports/Tunnel/VPN.
+Voraussetzung: `make dev-login` (OAuth). Das exakte Flag ggf. mit `claude --help`
+im Container abgleichen (die CLI entwickelt sich).
+
+**Was das Schliessen des Terminals überlebt** (Container laufen detached mit
+`restart: unless-stopped`):
+
+| | Terminal zu | Docker-/Mac-Neustart |
+|---|---|---|
+| Container (ortus, obs, traefik), Worktree, Commits | ✅ bleibt | ✅ kommt zurück |
+| lokale Session (`make dev`/`dev-attach`) | ❌ endet — neu verbinden, `claude --continue`/`/resume` | ❌ — neu verbinden |
+| `make dev-remote` (detached, `exec -d`) | ✅ bleibt in der App | ❌ endet |
+| `make dev-remote-persist` (Hauptprozess) | ✅ bleibt in der App | ✅ kommt automatisch zurück |
+
+- **`make dev-remote NAME=<slug>`** startet Remote Control **detached** → läuft
+  weiter, auch wenn du das Terminal schliesst.
+- **`make dev-remote-persist NAME=<slug>`** macht Remote Control zum
+  **Hauptprozess** des Claude-Containers → kommt nach Docker-/Mac-Neustart
+  automatisch zurück in die App (setzt `make dev-login` voraus; ohne Login bleibt
+  der Container idle statt in einer Crash-Loop). Abschalten: `make dev-remote-stop`.
+- **Lokale Session** (`make dev`/`dev-attach`) hängt am Terminal; nach dem
+  Schliessen läuft der Container weiter, das Gespräch setzt du mit
+  `claude --continue` bzw. `/resume` fort.
+- Caveats: OAuth-Token laufen nach einigen Tagen ab (→ `make dev-login`); ein
+  Netzausfall >10 min beendet die Remote-Control-Session (Reconnect via Neustart).
 
 ## Observability & Performance
 

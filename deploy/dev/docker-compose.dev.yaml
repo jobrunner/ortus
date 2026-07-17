@@ -88,6 +88,9 @@ services:
       ORTUS_MCP_TOKEN: "${ORTUS_MCP_TOKEN}"           # expanded by Claude Code into .mcp.json header
       CLAUDE_CLIENT_PRESENCE_FILE: "/tmp/presence"    # suppress mobile push while working locally
       TICKET: "${TICKET}"
+      # When true, the entrypoint runs Remote Control as the main process so it
+      # survives Docker/Mac restarts (toggled by make dev-remote-persist/-stop).
+      CLAUDE_REMOTE_PERSIST: "${CLAUDE_REMOTE_PERSIST:-false}"
       SPATIALITE_LIBRARY_PATH: "/usr/lib/mod_spatialite.so"
     networks: [ortus-dev]
     restart: unless-stopped

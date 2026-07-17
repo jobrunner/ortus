@@ -52,7 +52,7 @@ define AUTONAME
 	  echo "Kein NAME/TICKET angegeben -> generiere '$$TICKET'"; fi
 endef
 
-.PHONY: dev dev-up dev-obs dev-login dev-new dev-attach dev-remote dev-perf dev-logs dev-list dev-destroy dev-dns-setup dev-doctor
+.PHONY: dev dev-up dev-obs dev-login dev-new dev-attach dev-remote dev-remote-persist dev-remote-stop dev-perf dev-logs dev-list dev-destroy dev-dns-setup dev-doctor
 
 dev: ## Dev: Env anlegen/aktualisieren + Claude-Container betreten & Plan-Skill starten (NAME=<slug>)
 	@$(AUTONAME); \
@@ -122,10 +122,28 @@ dev-attach: ## Dev: lokale interaktive Claude-Code-Session im Ticket-Container (
 	@$(DEV_VARS); \
 	 $(DEV_COMPOSE) exec claude claude
 
-dev-remote: ## Dev: Claude-Code mit Remote Control starten -> Claude Mobile App (TICKET=<name>)
+dev-remote: ## Dev: Remote Control detached starten -> ueberlebt Terminal-Schliessen (TICKET=<name>)
 	@$(DEV_VARS); \
-	 echo "Falls das Flag abweicht, in-Container 'claude --help' pruefen."; \
-	 $(DEV_COMPOSE) exec claude claude --remote-control --name "$$TICKET_SAFE"
+	 $(DEV_COMPOSE) exec -d claude claude --remote-control --name "$$TICKET_SAFE"; \
+	 echo "Remote Control (detached) fuer '$$TICKET_SAFE' gestartet - erscheint in der Claude-App unter 'Code'."; \
+	 echo "Ueberlebt das Schliessen des Terminals; fuer Docker-/Mac-Neustart: make dev-remote-persist TICKET=$$TICKET_SAFE"
+
+dev-remote-persist: ## Dev: Remote Control als Container-Hauptprozess (ueberlebt Docker-/Mac-Neustart) (TICKET=<name>)
+	@$(DEV_VARS); \
+	 if [ -z "$$($(DEV_COMPOSE) ps -q claude 2>/dev/null)" ]; then echo "ERROR: Ticket '$$TICKET_SAFE' laeuft nicht - zuerst 'make dev-new' oder 'make dev'."; exit 1; fi; \
+	 if ! $(DEV_COMPOSE) exec -T claude test -f /root/.claude/.credentials.json 2>/dev/null; then echo "ERROR: Kein Claude-Login im Volume - zuerst 'make dev-login'."; exit 1; fi; \
+	 TOKEN=$$($(DEV_COMPOSE) exec -T ortus printenv ORTUS_MCP_TOKEN 2>/dev/null || true); [ -n "$$TOKEN" ] || TOKEN=-; \
+	 echo "Aktiviere persistente Remote Control fuer '$$TICKET_SAFE' ..."; \
+	 ORTUS_MCP_TOKEN="$$TOKEN" CLAUDE_REMOTE_PERSIST=true $(DEV_COMPOSE) up -d claude; \
+	 echo "Remote Control laeuft als Hauptprozess (restart: unless-stopped) - kommt nach Neustart automatisch zurueck in die App als '$$TICKET_SAFE'."; \
+	 echo "Abschalten: make dev-remote-stop TICKET=$$TICKET_SAFE"
+
+dev-remote-stop: ## Dev: persistente Remote Control abschalten, Container zurueck auf idle (TICKET=<name>)
+	@$(DEV_VARS); \
+	 if [ -z "$$($(DEV_COMPOSE) ps -q claude 2>/dev/null)" ]; then echo "ERROR: Ticket '$$TICKET_SAFE' laeuft nicht."; exit 1; fi; \
+	 TOKEN=$$($(DEV_COMPOSE) exec -T ortus printenv ORTUS_MCP_TOKEN 2>/dev/null || true); [ -n "$$TOKEN" ] || TOKEN=-; \
+	 ORTUS_MCP_TOKEN="$$TOKEN" CLAUDE_REMOTE_PERSIST=false $(DEV_COMPOSE) up -d claude; \
+	 echo "Persistente Remote Control aus. Container idle; lokal: make dev-attach; ad-hoc remote: make dev-remote."
 
 dev-perf: ## Dev: Vegeta-Lasttest gegen das Ticket + Traces/Metriken in Grafana (TICKET=<name> [RATE=200 DURATION=30s])
 	@$(DEV_VARS); \

@@ -37,4 +37,20 @@ if [ ! -L "$CONFIG_HOME" ]; then
 fi
 [ -f "$DEST/.claude.json" ] || echo '{}' > "$DEST/.claude.json"
 
+# Stufe 2 — optional: run Remote Control as the container's MAIN process so
+# `restart: unless-stopped` revives it after a Docker/Mac restart (session stays
+# available in the mobile app without any terminal open). Guarded on credentials
+# to avoid a crash loop when not logged in; if it exits (e.g. token expired), the
+# container stays up idle so you can re-login and restart, rather than loop.
+# Toggled by `make dev-remote-persist` / `make dev-remote-stop`.
+if [ "${CLAUDE_REMOTE_PERSIST:-false}" = "true" ]; then
+	if [ -f "$DEST/.credentials.json" ]; then
+		echo "Starte persistente Remote Control fuer '${TICKET:-dev}' ..."
+		claude --remote-control --name "${TICKET:-dev}" || echo "Remote Control beendet ($?); Container bleibt idle (make dev-login + Neustart)."
+		exec sleep infinity
+	else
+		echo "CLAUDE_REMOTE_PERSIST=true, aber kein Login im Volume (make dev-login); bleibe idle."
+	fi
+fi
+
 exec "$@"
