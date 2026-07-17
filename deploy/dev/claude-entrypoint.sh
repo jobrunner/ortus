@@ -41,7 +41,11 @@ fi
 # and set a best-effort commit identity from the authenticated GitHub account when
 # none is configured. All best-effort: skipped cleanly when gh isn't logged in.
 if command -v gh >/dev/null 2>&1; then
-	gh auth setup-git >/dev/null 2>&1 || true
+	# Route git HTTPS auth through gh. Set statically (not via `gh auth setup-git`,
+	# which needs an active login) so it also works when `gh auth login` happens
+	# after this container started.
+	git config --global credential."https://github.com".helper "!gh auth git-credential" 2>/dev/null || true
+	git config --global credential."https://gist.github.com".helper "!gh auth git-credential" 2>/dev/null || true
 	if [ -z "$(git config --global user.email 2>/dev/null)" ] && gh auth status >/dev/null 2>&1; then
 		_login=$(gh api user -q .login 2>/dev/null || true)
 		if [ -n "$_login" ]; then
