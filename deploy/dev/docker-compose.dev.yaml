@@ -1,10 +1,11 @@
-# Per-ticket ortus dev stack — ONE reusable template, parameterized by env vars
-# set by `make dev-new` (deploy/dev/dev.mk):
-#   COMPOSE_PROJECT_NAME=ortus-dev-<ticket>, TICKET=<safe>, ORTUS_WORKTREE=<abs path>,
+# Per-feature ortus dev stack — ONE reusable template, parameterized by env vars
+# set by `make dev-new` (deploy/dev/dev.mk). TICKET holds the sanitized feature
+# slug (the env var name is kept for backwards-compat):
+#   COMPOSE_PROJECT_NAME=ortus-dev-<name>, TICKET=<safe>, ORTUS_WORKTREE=<abs path>,
 #   ORTUS_SHARED_DATA=<abs path>, ORTUS_MCP_TOKEN=<generated>.
 # No host ports are published — Traefik (shared infra) routes by hostname:
-#   <ticket>.ortus.local -> 8080, metrics.<ticket>.ortus.local -> 9090,
-#   mcp.<ticket>.ortus.local -> 9091.
+#   <name>.ortus.local -> 8080, metrics.<name>.ortus.local -> 9090,
+#   mcp.<name>.ortus.local -> 9091.
 services:
   ortus:
     build:
@@ -18,7 +19,7 @@ services:
       - ${ORTUS_WORKTREE}:/workspace                 # live source (air watches)
       - ${ORTUS_SHARED_DATA}:/app/data:ro            # big packages, read-only, shared, never duplicated
       - gomod:/go/pkg/mod                            # shared module cache (content-addressed)
-      - gobuild:/root/.cache/go-build                # per-ticket build cache (project-scoped)
+      - gobuild:/root/.cache/go-build                # per-feature build cache (project-scoped)
     environment:
       ORTUS_SERVER_HOST: "0.0.0.0"
       ORTUS_SERVER_PORT: "8080"
@@ -37,7 +38,7 @@ services:
       ORTUS_RASTER_MAX_BUNDLE_EXTRACT_GIB: "64"       # large DEM bundles
       # Tracing -> Tempo (shared obs stack on ortus-dev). Off by default; the
       # obs/perf flow re-ups with ORTUS_TRACING_ENABLED=true. service_name is
-      # per-ticket so traces are separable in Grafana/Tempo.
+      # per-feature so traces are separable in Grafana/Tempo.
       ORTUS_TRACING_ENABLED: "${ORTUS_TRACING_ENABLED:-false}"
       ORTUS_TRACING_ENDPOINT: "${ORTUS_TRACING_ENDPOINT:-tempo:4318}"
       ORTUS_TRACING_TRANSPORT: "http"
@@ -107,10 +108,10 @@ networks:
     external: true
 
 volumes:
-  gobuild: {}                                         # project-scoped: unique per ticket, removed by `down -v`
+  gobuild: {}                                         # project-scoped: unique per feature, removed by `down -v`
   gomod:
     external: true
-    name: ortus-dev-gomod                             # shared across tickets (created by `make dev-up`)
+    name: ortus-dev-gomod                             # shared across features (created by `make dev-up`)
   claude-auth:
     external: true
     name: ortus-dev-claude-auth                       # shared OAuth (created by `dev-up`, seeded by `dev-login`)
