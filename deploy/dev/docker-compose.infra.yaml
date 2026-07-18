@@ -1,8 +1,8 @@
-# Shared dev infrastructure for per-ticket ortus environments.
+# Shared dev infrastructure for per-feature ortus environments.
 # Started once via `make dev-up`. Provides:
 #   - Traefik: the ONLY container that binds a host port (:80). Routes
-#     <ticket>.ortus.local / mcp.<ticket>.ortus.local / metrics.<ticket>.ortus.local
-#     to the per-ticket containers by Docker labels on the shared `ortus-dev` network.
+#     <name>.ortus.local / mcp.<name>.ortus.local / metrics.<name>.ortus.local
+#     to the per-feature containers by Docker labels on the shared `ortus-dev` network.
 #   - Dozzle: a lightweight log viewer at http://logs.ortus.local.
 # Dashboard: http://traefik.ortus.local
 #

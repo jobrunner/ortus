@@ -3,7 +3,7 @@ name: plan-feature
 description: >-
   Plan a new ortus feature from scratch and review that plan against the real
   code BEFORE any implementation. Use at the very start of a feature — especially
-  inside a per-ticket dev container (`make dev NAME=<slug>` drops you here). Runs
+  inside a per-feature dev container (`make dev NAME=<slug>` drops you here). Runs
   a short interview, writes a plan to .claude/plans/, then adversarially checks
   the plan against the actual architecture (hexagonal ports/adapters, depguard/
   gomodguard import boundaries, config.go env keys, the HTTP/MCP surface, OpenAPI
@@ -20,7 +20,7 @@ implementation cycle. This skill is deliberately two-phase: **plan**, then
 
 ## When to use
 - Starting any non-trivial feature. `make dev NAME=<slug>` launches Claude in the
-  ticket container and invokes this skill automatically.
+  feature container and invokes this skill automatically.
 - The environment already has: the ortus MCP server (live instance), context7
   (library docs), gopls (Go LSP), superpowers, and the repo's skills — use them.
 

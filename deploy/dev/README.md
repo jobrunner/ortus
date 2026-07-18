@@ -130,7 +130,7 @@ und gibt Report + Grafana-Hinweis aus. Details: Skill `perf-test`.
 
 ## Live-Reload
 
-Der `ortus`-Container läuft `air` (`.air.toml`) auf dem gemounteten Worktree:
+Der `ortus`-Container läuft `air` (`air -c deploy/dev/.air.toml`) auf dem gemounteten Worktree:
 Code ändern → air baut neu (CGO + SpatiaLite) und startet neu. Erster Build ist der
 langsamste; Modul-/Build-Cache sind Volumes.
 

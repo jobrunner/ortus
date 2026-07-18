@@ -1,4 +1,4 @@
-# Per-ticket Claude Code dev container. Built on the SpatiaLite dev base so the
+# Per-feature Claude Code dev container. Built on the SpatiaLite dev base so the
 # agent can also run `make build` / `make test` (CGO + mod_spatialite) inside the
 # same box. Node + the Claude Code CLI + a pinned toolset (gopls, plugins) are
 # added on top so the environment is fully DETERMINISTIC from this image — nothing

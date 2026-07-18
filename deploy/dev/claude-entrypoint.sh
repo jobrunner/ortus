@@ -1,5 +1,5 @@
 #!/bin/sh
-# Entrypoint for the per-ticket Claude Code container.
+# Entrypoint for the per-feature Claude Code container.
 #
 # The claude-auth volume is mounted at $HOME/.claude so OAuth credentials persist
 # across restarts. That volume shadows anything baked into the image at that path,

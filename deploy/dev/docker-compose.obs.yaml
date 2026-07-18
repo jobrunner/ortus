@@ -1,9 +1,9 @@
-# Shared observability stack for the per-ticket dev environments, on the same
-# `ortus-dev` network as the ticket containers. Started via `make dev-obs`.
+# Shared observability stack for the per-feature dev environments, on the same
+# `ortus-dev` network as the feature containers. Started via `make dev-obs`.
 #
 #   Grafana     grafana.ortus.local  single pane — metrics + traces (+ logs via Dozzle)
-#   Prometheus                        Docker service-discovery, scrapes every ticket's :9090
-#   Tempo       tempo:4318 (OTLP)     receives traces from ticket ortus (service_name=<ticket>)
+#   Prometheus                        Docker service-discovery, scrapes every feature's :9090
+#   Tempo       tempo:4318 (OTLP)     receives traces from feature ortus (service_name=<name>)
 #   Loki        loki:3100             log store (optional; Dozzle also shows live logs)
 #
 # Tempo/Loki/Grafana configs are REUSED from deploy/loadtest (single source of

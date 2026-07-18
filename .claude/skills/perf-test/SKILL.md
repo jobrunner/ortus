@@ -1,21 +1,21 @@
 ---
 name: perf-test
 description: >-
-  Run a local load test against the current ticket's ortus instance and interpret
+  Run a local load test against the current feature's ortus instance and interpret
   the results — latency percentiles, throughput, error rate — plus the traces and
   metrics in Grafana/Tempo. Use when a change is performance-sensitive or you want
   a before/after comparison. Wraps `make dev-perf` (Vegeta through Traefik with a
-  per-ticket service_name) and the shared observability stack (`make dev-obs`).
-  Runs from the dev container against http://<ticket>.ortus.local.
+  per-feature service_name) and the shared observability stack (`make dev-obs`).
+  Runs against http://<name>.ortus.local.
 ---
 
 # Local performance test (Vegeta + Tempo/Prometheus/Grafana)
 
-Measure the running ticket instance under HTTP load and use traces/metrics to
+Measure the running feature instance under HTTP load and use traces/metrics to
 find *where* time goes — not just that it's slow.
 
 ## Prerequisites
-- The ticket stack is running (`make dev-new` / `make dev`).
+- The feature stack is running (`make dev-new` / `make dev`).
 - Observability up: `make dev-obs` (Grafana at http://grafana.ortus.local). Skip
   it and you still get the Vegeta report, just no traces/dashboards.
 
@@ -24,10 +24,10 @@ find *where* time goes — not just that it's slow.
    and note the numbers before you optimize.
 2. **Run the load test:**
    ```sh
-   make dev-perf TICKET=<slug>                 # defaults: RATE=200 DURATION=30s
-   make dev-perf TICKET=<slug> RATE=500 DURATION=1m
+   make dev-perf NAME=<slug>                   # defaults: RATE=200 DURATION=30s
+   make dev-perf NAME=<slug> RATE=500 DURATION=1m
    ```
-   `dev-perf` turns on tracing for the ticket (`service_name=<slug>`), fires
+   `dev-perf` turns on tracing for the feature (`service_name=<slug>`), fires
    Vegeta at `http://<slug>.ortus.local` via Traefik, and prints the report.
 3. **Read the Vegeta report:** focus on p50/p95/p99 latency, throughput
    (requests/s actually served vs. requested rate), and **Success ratio** — any

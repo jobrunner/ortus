@@ -4,7 +4,7 @@ root = "."
 tmp_dir = "tmp"
 
 [build]
-  # Reuses the mounted module cache (/go/pkg/mod) and per-ticket build cache
+  # Reuses the mounted module cache (/go/pkg/mod) and per-feature build cache
   # (/root/.cache/go-build) so only the first build is slow.
   cmd = "go build -o ./tmp/ortus ./cmd/ortus"
   bin = "./tmp/ortus"
