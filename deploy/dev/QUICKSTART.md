@@ -21,9 +21,9 @@ Terminal offen. Copy-paste die Befehle der Reihe nach. Details/Referenz stehen i
    docker ps
    ```
    Zeigt das eine (evtl. leere) Tabelle statt eines Fehlers? Gut.
-2. Du bist im Projektordner:
+2. Du bist im Projektordner (ersetze den Pfad durch deinen Klon):
    ```sh
-   cd /Users/jbrunner/work/projects/ortus
+   cd /pfad/zu/ortus
    ```
 
 ---

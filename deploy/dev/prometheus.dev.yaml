@@ -18,11 +18,10 @@ scrape_configs:
       - source_labels: [__meta_docker_container_label_ortus_metrics_scrape]
         regex: "true"
         action: keep
-      # One target per container: pick the metrics port (9090), drop the others.
-      - source_labels: [__meta_docker_port_private_number]
-        regex: "9090"
-        action: keep
-      # Scrape <container-ip>:<metrics-port> on the ortus-dev network.
+      # Scrape <container-ip>:<metrics-port> built from the ortus-dev IP and the
+      # ortus.metrics.port label (NOT a hardcoded port or EXPOSE — self-documenting
+      # and robust). Docker SD emits one candidate per exposed port; they all
+      # rewrite to the same address + labels, and Prometheus dedupes to one target.
       - source_labels: [__meta_docker_network_ip, __meta_docker_container_label_ortus_metrics_port]
         separator: ":"
         target_label: __address__

@@ -18,7 +18,7 @@ Alles läuft über einen geteilten **Traefik**-Proxy; nur Traefik bindet einen
 Host-Port (`127.0.0.1:80`), die Feature-Container nicht → **keine Port-Kollisionen**.
 Die großen Datenpakete werden **read-only geteilt** (nie pro Feature dupliziert).
 
-## Einmalige Einrichtung (Mac) — nur diese drei Dinge
+## Einmalige Einrichtung (Mac) — kontobezogen, nicht pro Feature
 
 1. **DNS** (`*.ortus.local` → 127.0.0.1) via dnsmasq auf dem unprivilegierten
    Port 5353 (kein `sudo brew`):
@@ -143,6 +143,11 @@ langsamste; Modul-/Build-Cache sind Volumes.
   Traefik-`websecure:443`.
 - Grafana läuft anonym mit Admin-Rolle (Dev). Alle Features teilen ein
   `claude-auth`-Volume (dasselbe Konto); Sessions per `--name` unterschieden.
+- Das Haupt-Repo-`.git` ist **read-write** in jeden Feature-Container gemountet
+  (nötig, damit git im Linked-Worktree funktioniert — geteilter Object-Store wie
+  bei git-Worktrees üblich). Blast-Radius: alle Feature-Container **und** der Host
+  teilen denselben Object-Store/Locks. Vermeide daher parallele `git gc` /
+  `git worktree prune` auf dem Host, während Feature-Container laufen.
 
 ## Dateien
 
