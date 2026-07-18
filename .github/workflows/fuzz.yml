@@ -40,7 +40,11 @@ jobs:
           echo "SPATIALITE_LIBRARY_PATH=$(dpkg -L libsqlite3-mod-spatialite | grep -m1 'mod_spatialite\.so')" >> "$GITHUB_ENV"
 
       - name: Fuzz
-        run: make fuzz FUZZTIME=${{ github.event.inputs.fuzztime || '3m' }}
+        # Inject the dispatch input via env (not inline ${{ }}) so it can't
+        # expand into attacker-controllable shell code (zizmor template-injection).
+        env:
+          FUZZTIME: ${{ github.event.inputs.fuzztime || '3m' }}
+        run: make fuzz FUZZTIME="$FUZZTIME"
 
       - name: Upload crashers
         if: failure()
