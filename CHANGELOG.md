@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.24.0](https://github.com/jobrunner/ortus/compare/v0.23.0...v0.24.0) (2026-07-18)
+
+
+### Features
+
+* **dev:** git + gh + GitHub MCP in the Claude container ([9315f42](https://github.com/jobrunner/ortus/commit/9315f42b559e372db5989e7e093924ed1d7e494c))
+* **dev:** per-ticket isolated dev environments (make dev-*) ([6aeefd3](https://github.com/jobrunner/ortus/commit/6aeefd3afa792cdd0634b0e1b7c15e19148d9b27))
+* **dev:** terminal-safe and reboot-safe Remote Control ([66f2912](https://github.com/jobrunner/ortus/commit/66f2912565e7307c48b131345e6a7fb267bc615c))
+* **dev:** ticketless feature workflow, deterministic Claude container, perf/obs ([f357a0f](https://github.com/jobrunner/ortus/commit/f357a0f544efd8d8e1a19f900cf6d5bfa06790c2))
+
+
+### Bug Fixes
+
+* **dev:** do not overwrite an existing .mcp.json on dev-new re-run ([8f23eef](https://github.com/jobrunner/ortus/commit/8f23eefce4f9f68a7657043c13173113b13eeeb3))
+* **dev:** harden dev.mk against injection and worktree pitfalls ([32aadb4](https://github.com/jobrunner/ortus/commit/32aadb43be1ea8bcca4ef050ce502f6be71d19ee))
+* **dev:** persist ~/.claude.json via volume symlink ([9598410](https://github.com/jobrunner/ortus/commit/9598410163c563113b62b491131a367aeaa4f13e))
+* **dev:** pin images/CLI, bind Traefik to localhost, set -e in recipes ([55b1046](https://github.com/jobrunner/ortus/commit/55b10466c1e3b179378b5d143635e6fa89361e2e))
+* **dev:** pin node helper image; guard volumes; robust deploy/dev copy ([76a61e6](https://github.com/jobrunner/ortus/commit/76a61e68b695103592d0f3fb3ef1332ddf9cce65))
+* **dev:** review fixes — perf injection, dev robustness, terminology ([54efa4e](https://github.com/jobrunner/ortus/commit/54efa4ece780223fbf848e9b2d372c4ac3a50eeb))
+* **dev:** run dev images as root for package/tool install ([f2b47a1](https://github.com/jobrunner/ortus/commit/f2b47a159a287faf0301b2b6d32fdf4100247da5))
+* **dev:** run dnsmasq on unprivileged port 5353 (no sudo brew) ([2767beb](https://github.com/jobrunner/ortus/commit/2767beb2934bc2349aa280017508223db9ab5c44))
+* **dev:** scope dev-list to tickets; clarify docker socket note ([3d7bdcb](https://github.com/jobrunner/ortus/commit/3d7bdcb2230b681afccdc92dc000f1589352e38a))
+* **dev:** set gh git credential helper statically ([5ab104b](https://github.com/jobrunner/ortus/commit/5ab104b0177509f916748ad3bdaaac85db53925b))
+* **dev:** surface dev-login install errors; portable dev-doctor DNS check ([914d581](https://github.com/jobrunner/ortus/commit/914d5811ab7debebdfc945528cb28daeb29f3be4))
+* **dev:** use C locale for sanitization; minimal ortus build context ([b19beb0](https://github.com/jobrunner/ortus/commit/b19beb055cb6d136632ad30566f9c39a5e88726c))
+
 ## [0.23.0](https://github.com/jobrunner/ortus/compare/v0.22.0...v0.23.0) (2026-07-13)
 
 
