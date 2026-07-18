@@ -96,11 +96,13 @@ FUZZ_TARGETS := internal/domain:FuzzDeriveSourceID \
 	internal/adapters/http:FuzzParseQueryParams
 
 fuzz: ## Fuzz alle Parse-Boundaries (FUZZTIME je Target überschreibbar, default 30s)
-	@set -e; ft=$(if $(FUZZTIME),$(FUZZTIME),30s); \
+	@set -e; \
+	ft="$${FUZZTIME:-30s}"; \
+	case "$$ft" in ''|*[!0-9smhun]*) echo "FUZZTIME ungueltig (z.B. 30s, 3m)"; exit 1;; esac; \
 	for tgt in $(FUZZ_TARGETS); do \
 		pkg=$${tgt%%:*}; fn=$${tgt##*:}; \
 		echo "==> fuzz $${fn} ($${pkg}) for $${ft}"; \
-		$(GO) test "./$${pkg}/" -run='^$$' -fuzz="^$${fn}$$" -fuzztime=$${ft}; \
+		$(GO) test "./$${pkg}/" -run='^$$' -fuzz="^$${fn}$$" -fuzztime="$${ft}"; \
 	done
 
 load-test: ## Lokaler Lasttest auf großen Quellen (setze ORTUS_LOADTEST_GPKG; siehe doc/load-test.md)

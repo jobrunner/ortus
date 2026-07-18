@@ -40,11 +40,12 @@ jobs:
           echo "SPATIALITE_LIBRARY_PATH=$(dpkg -L libsqlite3-mod-spatialite | grep -m1 'mod_spatialite\.so')" >> "$GITHUB_ENV"
 
       - name: Fuzz
-        # Inject the dispatch input via env (not inline ${{ }}) so it can't
-        # expand into attacker-controllable shell code (zizmor template-injection).
+        # Pass the dispatch input via env (not inline ${{ }}), and let the Makefile
+        # read + validate $FUZZTIME from the environment. Avoids template-injection
+        # in this run block (zizmor) AND make-level `$(FUZZTIME)` expansion.
         env:
           FUZZTIME: ${{ github.event.inputs.fuzztime || '3m' }}
-        run: make fuzz FUZZTIME="$FUZZTIME"
+        run: make fuzz
 
       - name: Upload crashers
         if: failure()
