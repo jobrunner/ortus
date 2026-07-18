@@ -1,10 +1,11 @@
-# Per-ticket ortus dev stack — ONE reusable template, parameterized by env vars
-# set by `make dev-new` (deploy/dev/dev.mk):
-#   COMPOSE_PROJECT_NAME=ortus-dev-<ticket>, TICKET=<safe>, ORTUS_WORKTREE=<abs path>,
+# Per-feature ortus dev stack — ONE reusable template, parameterized by env vars
+# set by `make dev-new` (deploy/dev/dev.mk). TICKET holds the sanitized feature
+# slug (the env var name is kept for backwards-compat):
+#   COMPOSE_PROJECT_NAME=ortus-dev-<name>, TICKET=<safe>, ORTUS_WORKTREE=<abs path>,
 #   ORTUS_SHARED_DATA=<abs path>, ORTUS_MCP_TOKEN=<generated>.
 # No host ports are published — Traefik (shared infra) routes by hostname:
-#   <ticket>.ortus.local -> 8080, metrics.<ticket>.ortus.local -> 9090,
-#   mcp.<ticket>.ortus.local -> 9091.
+#   <name>.ortus.local -> 8080, metrics.<name>.ortus.local -> 9090,
+#   mcp.<name>.ortus.local -> 9091.
 services:
   ortus:
     build:
@@ -18,7 +19,7 @@ services:
       - ${ORTUS_WORKTREE}:/workspace                 # live source (air watches)
       - ${ORTUS_SHARED_DATA}:/app/data:ro            # big packages, read-only, shared, never duplicated
       - gomod:/go/pkg/mod                            # shared module cache (content-addressed)
-      - gobuild:/root/.cache/go-build                # per-ticket build cache (project-scoped)
+      - gobuild:/root/.cache/go-build                # per-feature build cache (project-scoped)
     environment:
       ORTUS_SERVER_HOST: "0.0.0.0"
       ORTUS_SERVER_PORT: "8080"
@@ -35,6 +36,15 @@ services:
       ORTUS_MCP_PATH: "/mcp"
       ORTUS_MCP_TOKEN: "${ORTUS_MCP_TOKEN}"
       ORTUS_RASTER_MAX_BUNDLE_EXTRACT_GIB: "64"       # large DEM bundles
+      # Tracing -> Tempo (shared obs stack on ortus-dev). Off by default; the
+      # obs/perf flow re-ups with ORTUS_TRACING_ENABLED=true. service_name is
+      # per-feature so traces are separable in Grafana/Tempo.
+      ORTUS_TRACING_ENABLED: "${ORTUS_TRACING_ENABLED:-false}"
+      ORTUS_TRACING_ENDPOINT: "${ORTUS_TRACING_ENDPOINT:-tempo:4318}"
+      ORTUS_TRACING_TRANSPORT: "http"
+      ORTUS_TRACING_INSECURE: "true"
+      ORTUS_TRACING_SERVICE_NAME: "${TICKET}"
+      ORTUS_TRACING_SAMPLE_RATIO: "${ORTUS_TRACING_SAMPLE_RATIO:-1.0}"
       SPATIALITE_LIBRARY_PATH: "/usr/lib/mod_spatialite.so"
       CGO_ENABLED: "1"
     networks: [ortus-dev]
@@ -42,6 +52,11 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=ortus-dev"
+      # Prometheus (shared obs stack) auto-discovers this container by these
+      # labels and scrapes its metrics port on the ortus-dev network.
+      - "ortus.metrics.scrape=true"
+      - "ortus.metrics.port=9090"
+      - "ortus.metrics.ticket=${TICKET}"
       # API + frontend + /health + /docs  (8080)
       - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-api.rule=Host(`${TICKET}.ortus.local`)"
       - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-api.entrypoints=web"
@@ -67,13 +82,21 @@ services:
     working_dir: /workspace
     volumes:
       - ${ORTUS_WORKTREE}:/workspace
+      # The worktree's .git is a file pointing at the main repo's git dir; mount it
+      # at the SAME absolute path so `git` works inside the container (shared object
+      # store, like any linked worktree on the host).
+      - ${ORTUS_MAIN_GITDIR:-/tmp/ortus-main-git}:${ORTUS_MAIN_GITDIR:-/tmp/ortus-main-git}
       - claude-auth:/root/.claude                    # OAuth creds (seeded by `make dev-login`)
+      - gh-auth:/root/.config/gh                     # GitHub CLI/MCP auth (seeded by `make dev-gh-login`)
       - gomod:/go/pkg/mod
       - gobuild:/root/.cache/go-build
     environment:
       ORTUS_MCP_TOKEN: "${ORTUS_MCP_TOKEN}"           # expanded by Claude Code into .mcp.json header
       CLAUDE_CLIENT_PRESENCE_FILE: "/tmp/presence"    # suppress mobile push while working locally
       TICKET: "${TICKET}"
+      # When true, the entrypoint runs Remote Control as the main process so it
+      # survives Docker/Mac restarts (toggled by make dev-remote-persist/-stop).
+      CLAUDE_REMOTE_PERSIST: "${CLAUDE_REMOTE_PERSIST:-false}"
       SPATIALITE_LIBRARY_PATH: "/usr/lib/mod_spatialite.so"
     networks: [ortus-dev]
     restart: unless-stopped
@@ -85,10 +108,13 @@ networks:
     external: true
 
 volumes:
-  gobuild: {}                                         # project-scoped: unique per ticket, removed by `down -v`
+  gobuild: {}                                         # project-scoped: unique per feature, removed by `down -v`
   gomod:
     external: true
-    name: ortus-dev-gomod                             # shared across tickets (created by `make dev-up`)
+    name: ortus-dev-gomod                             # shared across features (created by `make dev-up`)
   claude-auth:
     external: true
     name: ortus-dev-claude-auth                       # shared OAuth (created by `dev-up`, seeded by `dev-login`)
+  gh-auth:
+    external: true
+    name: ortus-dev-gh-auth                            # shared GitHub CLI/MCP auth (created by `dev-up`, seeded by `dev-gh-login`)

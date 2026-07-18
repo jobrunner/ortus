@@ -4,6 +4,10 @@
 # with GOPATH/caches placed so the compose volume mounts line up.
 FROM ghcr.io/jobrunner/spatialite-base-image:alpine-dev-1.5.0
 
+# The base image runs as the non-root `spatialite` user; `go install` (to
+# /usr/local/bin) and air writing tmp/ + the build cache need root. Dev-only.
+USER root
+
 ENV CGO_ENABLED=1 \
     GOFLAGS=-mod=mod \
     GOPATH=/go \

@@ -1,0 +1,35 @@
+# Prometheus for the per-feature dev stack. Unlike the loadtest config (which
+# scrapes one native ortus on the host), this auto-discovers every feature's ortus
+# container on the ortus-dev network via the Docker API and scrapes its metrics
+# port. New `make dev-new` environments appear automatically; destroyed ones drop.
+global:
+  scrape_interval: 2s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: 'ortus-features'
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        filters:
+          - name: label
+            values: ["ortus.metrics.scrape=true"]
+    relabel_configs:
+      # Keep only containers that opted in via the compose label.
+      - source_labels: [__meta_docker_container_label_ortus_metrics_scrape]
+        regex: "true"
+        action: keep
+      # Scrape <container-ip>:<metrics-port> built from the ortus-dev IP and the
+      # ortus.metrics.port label (NOT a hardcoded port or EXPOSE — self-documenting
+      # and robust). Docker SD emits one candidate per exposed port; they all
+      # rewrite to the same address + labels, and Prometheus dedupes to one target.
+      - source_labels: [__meta_docker_network_ip, __meta_docker_container_label_ortus_metrics_port]
+        separator: ":"
+        target_label: __address__
+      # Human-friendly labels: which feature / container the series belongs to.
+      # (The label key stays `ticket` to match the compose label ortus.metrics.ticket.)
+      - source_labels: [__meta_docker_container_label_ortus_metrics_ticket]
+        target_label: ticket
+      - source_labels: [__meta_docker_container_name]
+        regex: "/(.*)"
+        target_label: container
+    metrics_path: /metrics

@@ -1,28 +1,67 @@
-# Per-ticket Claude Code dev container. Built on the SpatiaLite dev base so the
+# Per-feature Claude Code dev container. Built on the SpatiaLite dev base so the
 # agent can also run `make build` / `make test` (CGO + mod_spatialite) inside the
-# same box. Node + the Claude Code CLI are added on top.
+# same box. Node + the Claude Code CLI + a pinned toolset (gopls, plugins) are
+# added on top so the environment is fully DETERMINISTIC from this image — nothing
+# about this project needs to be installed or maintained on the host.
 #
 # Auth for Remote Control is OAuth (Claude subscription), NOT an API key — the
 # credentials live in the `claude-auth` volume, seeded once by `make dev-login`
-# and mounted at $HOME/.claude by the compose file.
+# and mounted at $HOME/.claude. The entrypoint (claude-entrypoint.sh) seeds the
+# baked plugins/settings into that volume on start without touching credentials.
 FROM ghcr.io/jobrunner/spatialite-base-image:alpine-dev-1.5.0
 
-ENV CGO_ENABLED=1 \
-    GOPATH=/go \
-    GOMODCACHE=/go/pkg/mod \
-    GOCACHE=/root/.cache/go-build \
-    HOME=/root \
-    SPATIALITE_LIBRARY_PATH=/usr/lib/mod_spatialite.so
+# The base image runs as the non-root `spatialite` user; installing packages and
+# writing to /usr/local, /opt, and the config dir needs root. This is a dev-only
+# container, so it stays root (also lets the agent run apk/build freely).
+USER root
 
 # Pin the Claude Code CLI for reproducible images. Override at build time with
 # --build-arg CLAUDE_CODE_VERSION=... (compose passes it through from dev.mk).
 ARG CLAUDE_CODE_VERSION=2.1.209
+# Pinned toolset versions.
+ARG GOPLS_VERSION=v0.23.0
+ARG GITHUB_MCP_VERSION=v1.6.0
 
-RUN apk add --no-cache nodejs npm git ripgrep bash \
+ENV CGO_ENABLED=1 \
+    GOPATH=/go \
+    GOBIN=/usr/local/bin \
+    GOMODCACHE=/go/pkg/mod \
+    GOCACHE=/root/.cache/go-build \
+    HOME=/root \
+    SPATIALITE_LIBRARY_PATH=/usr/lib/mod_spatialite.so \
+    CLAUDE_PRELOAD=/opt/claude-preload \
+    # Playwright MCP uses the system Chromium (no per-run browser download).
+    PLAYWRIGHT_BROWSERS_PATH=0 \
+    PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
+    CHROME_BIN=/usr/bin/chromium-browser \
+    PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser
+
+# Runtime deps: node/npm (Claude Code CLI + playwright MCP), git + gh (GitHub CLI)
+# for the agent, ripgrep/bash, chromium + fonts for the playwright headless browser.
+RUN apk add --no-cache nodejs npm git github-cli ripgrep bash chromium nss freetype harfbuzz ttf-freefont \
  && npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
  && npm cache clean --force
 
+# Go language server for the gopls-lsp plugin, and the official GitHub MCP server
+# (both pinned, installed to GOBIN=/usr/local/bin so they're on PATH).
+RUN go install "golang.org/x/tools/gopls@${GOPLS_VERSION}" \
+ && go install "github.com/github/github-mcp-server/cmd/github-mcp-server@${GITHUB_MCP_VERSION}"
+
+# Preload the pinned Claude Code plugins into a stash the entrypoint copies into
+# the (volume-backed) config dir at start. Plugins come from the official
+# marketplace: superpowers, playwright, context7, gopls-lsp. Installing writes to
+# $CLAUDE_PRELOAD/plugins; the enabledPlugins settings are baked alongside.
+COPY claude-settings.json ${CLAUDE_PRELOAD}/settings.json
+RUN CLAUDE_CONFIG_DIR="${CLAUDE_PRELOAD}" claude plugin marketplace add anthropics/claude-plugins-official \
+ && for p in superpowers playwright context7 gopls-lsp; do \
+      CLAUDE_CONFIG_DIR="${CLAUDE_PRELOAD}" claude plugin install "$p@claude-plugins-official"; \
+    done
+
+COPY claude-entrypoint.sh /usr/local/bin/claude-entrypoint.sh
+RUN chmod +x /usr/local/bin/claude-entrypoint.sh
+
 WORKDIR /workspace
-# Stays up; sessions are started via `make dev-attach` / `make dev-remote`
-# (docker exec into this container).
+# The entrypoint seeds plugins/settings, then the container stays up; interactive
+# sessions attach via `make dev-attach` / `make dev-remote` (docker exec).
+ENTRYPOINT ["claude-entrypoint.sh"]
 CMD ["sleep", "infinity"]
