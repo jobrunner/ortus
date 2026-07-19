@@ -1,0 +1,4 @@
+[submodule "third_party/claude-skills"]
+	path = third_party/claude-skills
+	url = https://github.com/jobrunner/claude-skills.git
+	branch = main
