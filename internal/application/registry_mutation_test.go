@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/jobrunner/ortus/internal/domain"
@@ -171,7 +172,7 @@ func TestSyncDeletesLocalCacheFile(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 
 	// A real file on disk that Sync should remove once the source leaves remote.
-	cacheFile := dir + "/gone.gpkg"
+	cacheFile := filepath.Join(dir, "gone.gpkg")
 	if err := os.WriteFile(cacheFile, []byte("x"), 0o600); err != nil {
 		t.Fatalf("seed cache file: %v", err)
 	}
