@@ -46,7 +46,12 @@ def main():
     cfg_path = sys.argv[2] if len(sys.argv) > 2 else ".codecharta-ratchet.json"
     doc = load_json(map_path)
     cfg = load_json(cfg_path)
-    nodes = doc.get("nodes") or doc["data"]["nodes"]
+    nodes = doc.get("nodes")
+    if not nodes:
+        nodes = (doc.get("data") or {}).get("nodes")
+    if not nodes:
+        print(f"::error::{map_path}: no nodes in map — cannot run the ratchet", file=sys.stderr)
+        return 2
     files = dict(leaves(nodes[0], []))
 
     cx = cfg["complexity"]
@@ -66,7 +71,7 @@ def main():
             where = "baseline" if rel in baseline else f"default_cap {default_cap}"
             violations.append(f"complexity: {rel} = {val:.0f} > {cap} ({where})")
         elif rel in baseline and val < cap:
-            hints.append(f"ratchet down: {rel} complexity {cap} -> {val:.0f} in .codecharta-ratchet.json")
+            hints.append(f"ratchet down: {rel} complexity {cap} -> {val:.0f} in {cfg_path}")
 
     # 2. Hotspots (complex AND under-tested). Files without coverage data are skipped
     # (can't assess — e.g. cmd tools not exercised by unit tests).
@@ -89,7 +94,7 @@ def main():
         print(f"\n❌ CodeCharta ratchet: {len(violations)} regression(s):")
         for v in violations:
             print(f"  - {v}")
-        print("\nAdd tests / simplify the file, or (with justification) adjust .codecharta-ratchet.json.")
+        print(f"\nAdd tests / simplify the file, or (with justification) adjust {cfg_path}.")
         return 1
     print(f"✅ CodeCharta ratchet OK — {len(files)} files within complexity caps + hotspot gate.")
     return 0
