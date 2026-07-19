@@ -37,6 +37,7 @@ func TestFrontendCoordinateInputWiring(t *testing.T) {
 		"Datenlizenz",                         // dataset attribution rendered
 		"gaz-elevation",                       // elevation rendered in the gazetteer block
 		"gaz.islands",                         // islands rendered in the gazetteer block
+		"function httpUrl",                    // scheme guard for source links
 	} {
 		if !strings.Contains(html, marker) {
 			t.Errorf("frontend is missing expected marker %q", marker)

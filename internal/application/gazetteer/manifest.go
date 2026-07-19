@@ -34,8 +34,9 @@ type manifestYAML struct {
 		ConstraintTier string `yaml:"bearing_constraint_tier"`
 	} `yaml:"admin"`
 	// Islands is optional: an added layer of named island polygons. When omitted,
-	// the gazetteer simply reports no island block. name_column defaults to the
-	// admin layer's when unset (the dataset shares column names across layers).
+	// no island lookup runs and the response's islands field is null. name_column
+	// defaults to the admin layer's when unset (the dataset shares column names
+	// across layers).
 	Islands struct {
 		Layer      string `yaml:"layer"`
 		NameColumn string `yaml:"name_column"`

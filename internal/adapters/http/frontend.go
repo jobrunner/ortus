@@ -1147,8 +1147,9 @@ const frontendHTML = `<!DOCTYPE html>
                     }
                     if (e.source && e.source.name) {
                         html += '<div class="gaz-attribution">Quelle: ';
-                        if (e.source.url) {
-                            html += '<a href="' + escapeHtml(e.source.url) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(e.source.name) + '</a>';
+                        const srcUrl = httpUrl(e.source.url);
+                        if (srcUrl) {
+                            html += '<a href="' + escapeHtml(srcUrl) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(e.source.name) + '</a>';
                         } else {
                             html += escapeHtml(e.source.name);
                         }
@@ -1226,6 +1227,13 @@ const frontendHTML = `<!DOCTYPE html>
                     .replace(/>/g, '&gt;')
                     .replace(/"/g, '&quot;')
                     .replace(/'/g, '&#39;');
+            }
+
+            // Returns the URL only when it is an explicit http(s) URL, else ''. Guards
+            // against non-http schemes (e.g. javascript:) becoming clickable links,
+            // even though these URLs come from trusted dataset config.
+            function httpUrl(u) {
+                return /^https?:\/\//i.test(String(u || '')) ? u : '';
             }
         })();
     </script>
