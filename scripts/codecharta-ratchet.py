@@ -14,7 +14,8 @@ merged map into two ratchets over metrics that aren't already gated elsewhere
      existing ones get tests.
 
 Usage: codecharta-ratchet.py <map.cc.json[.gz]> [config.json]
-Exit code 0 = within ratchet, 1 = a metric regressed (with a per-file report).
+Exit codes: 0 = within ratchet, 1 = a metric regressed (per-file report),
+2 = usage / unreadable input / malformed map.
 """
 import gzip
 import json
@@ -44,8 +45,12 @@ def main():
         return 2
     map_path = sys.argv[1]
     cfg_path = sys.argv[2] if len(sys.argv) > 2 else ".codecharta-ratchet.json"
-    doc = load_json(map_path)
-    cfg = load_json(cfg_path)
+    try:
+        doc = load_json(map_path)
+        cfg = load_json(cfg_path)
+    except (OSError, ValueError) as e:  # missing/unreadable file or invalid JSON
+        print(f"::error::cannot read input ({e})", file=sys.stderr)
+        return 2
     nodes = doc.get("nodes")
     if not nodes:
         nodes = (doc.get("data") or {}).get("nodes")
@@ -83,7 +88,10 @@ def main():
         if val >= min_cx and cov < min_cov and rel not in allow:
             violations.append(f"hotspot: {rel} complexity {val:.0f} >= {min_cx} AND coverage {cov:.1f}% < {min_cov}%")
     for rel in sorted(allow):
-        attrs = files.get(rel, {})
+        attrs = files.get(rel)
+        if attrs is None:
+            hints.append(f"allowlist: {rel} is not in the map (renamed/deleted?) — remove it from hotspot.allow")
+            continue
         cov, val = attrs.get("line_coverage"), attrs.get(metric)
         if val is not None and cov is not None and not (val >= min_cx and cov < min_cov):
             hints.append(f"allowlist: {rel} is no longer a hotspot — remove it from hotspot.allow")
