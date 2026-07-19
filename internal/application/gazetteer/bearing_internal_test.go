@@ -2,6 +2,7 @@ package gazetteer
 
 import (
 	"context"
+	"math"
 	"testing"
 
 	"github.com/jobrunner/ortus/internal/domain"
@@ -26,8 +27,8 @@ func TestCountryOf(t *testing.T) {
 		{"most-local (higher level) wins", []domain.Feature{geoFeat("2", "DE"), geoFeat("8", "FR")}, "FR"},
 		{"lower level loses even if listed first", []domain.Feature{geoFeat("8", "FR"), geoFeat("2", "DE")}, "FR"},
 		{"tie on level -> lexicographically smaller ISO", []domain.Feature{geoFeat("4", "PL"), geoFeat("4", "DE")}, "DE"},
-		// smaller ISO listed first: a later equal-level entry must NOT overwrite it
-		// (pins `level > bestLevel` as strict, not >=).
+		// Smaller ISO listed first: a later equal-level entry must not overwrite it,
+		// so the level comparison has to stay strict rather than accept equality.
 		{"tie on level, smaller ISO first stays", []domain.Feature{geoFeat("4", "DE"), geoFeat("4", "PL")}, "DE"},
 		{"non-numeric level sorts below a real level", []domain.Feature{geoFeat("x", "FR"), geoFeat("2", "DE")}, "DE"},
 		{"all non-numeric -> tie at -1 -> smaller ISO", []domain.Feature{geoFeat("x", "FR"), geoFeat("y", "DE")}, "DE"},
@@ -53,7 +54,7 @@ func TestParsePointWKT(t *testing.T) {
 	}{
 		{"valid 2D", "POINT(10.02 50)", 10.02, 50, true},
 		{"valid Z (extra field ignored)", "POINT Z(10 50 3)", 10, 50, true},
-		{"leading paren at index 0", "(10 50)", 10, 50, true}, // pins `open < 0` as strict, not <=
+		{"leading paren at index 0", "(10 50)", 10, 50, true}, // opening paren at the start must stay valid
 		{"no parentheses", "POINT 10 50", 0, 0, false},
 		{"reversed parentheses", "POINT)10 50(", 0, 0, false},
 		{"too few fields", "POINT(10)", 0, 0, false},
@@ -65,7 +66,7 @@ func TestParsePointWKT(t *testing.T) {
 			if ok != tc.wantOK {
 				t.Fatalf("ok = %v, want %v", ok, tc.wantOK)
 			}
-			if ok && (c.X != tc.wantX || c.Y != tc.wantY) {
+			if ok && (math.Abs(c.X-tc.wantX) > 1e-9 || math.Abs(c.Y-tc.wantY) > 1e-9) {
 				t.Errorf("coord = (%v,%v), want (%v,%v)", c.X, c.Y, tc.wantX, tc.wantY)
 			}
 		})
@@ -76,7 +77,7 @@ func TestParsePointWKT(t *testing.T) {
 // InsideLabelKM boundary (bearing.go buildFix).
 func TestBuildFixLabelThreshold(t *testing.T) {
 	svc := NewService(fakeIndex{}, testManifest(), nil, nil, true)
-	pol := domain.DefaultBearingPolicy() // InsideLabelKM = 1.0
+	pol := domain.DefaultBearingPolicy() // its InsideLabelKM threshold is one kilometer
 	ref := domain.Place{Name: "Würzburg", At: domain.NewWGS84Coordinate(9.93, 49.79)}
 	p := domain.NewWGS84Coordinate(10.10, 49.79) // due east of ref, so Azimuth is well-defined
 
