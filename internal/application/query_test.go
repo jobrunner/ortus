@@ -2,6 +2,8 @@ package application
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"testing"
@@ -330,6 +332,27 @@ func TestQueryServiceTransformCoordinate(t *testing.T) {
 			_, ok := svc.transformCoordinate(context.Background(), coord, layer)
 			if ok != tt.wantOK {
 				t.Errorf("transformCoordinate() ok = %v, want %v", ok, tt.wantOK)
+			}
+		})
+	}
+}
+
+func TestIsCanceled(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"client canceled", context.Canceled, true},
+		{"wrapped canceled", fmt.Errorf("layer query: %w", context.Canceled), true},
+		{"server deadline (not a client abort)", context.DeadlineExceeded, false},
+		{"other error", errors.New("boom"), false},
+		{"nil", nil, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isCanceled(tt.err); got != tt.want {
+				t.Errorf("isCanceled(%v) = %v, want %v", tt.err, got, tt.want)
 			}
 		})
 	}
