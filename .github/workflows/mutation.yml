@@ -75,10 +75,11 @@ jobs:
       - name: Summary
         if: always()
         run: |
+          summary=$(grep -iE 'gremlins:|Killed:|Test efficacy:|Mutator coverage:|LIVED|NOT COVERED' mutation.log 2>/dev/null | tail -60)
           {
             echo '### Mutation testing (gremlins) — internal/domain, internal/application'
             echo '```'
-            grep -iE 'gremlins:|Killed:|Test efficacy:|Mutator coverage:|LIVED|NOT COVERED' mutation.log 2>/dev/null | tail -60 || echo "no summary captured"
+            echo "${summary:-no summary captured}"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
