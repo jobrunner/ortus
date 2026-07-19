@@ -27,6 +27,29 @@ func newRegistryWithStorage(storage output.ObjectStorage, providers ...output.Sp
 	)
 }
 
+// TestNewSourceRegistryNilMeterAndTracer pins the nil-guard defaulting in the
+// constructor: with a nil meter and nil tracer it must substitute the no-op
+// implementations rather than storing nil. Flipping either guard leaves a nil
+// field, so constructing the gauges (meter) or the first traced call (tracer)
+// would panic — asserted here by building with nils and running a traced load.
+func TestNewSourceRegistryNilMeterAndTracer(t *testing.T) {
+	reg := NewSourceRegistry(
+		[]output.SpatialSource{&mockRepository{}},
+		&mockStorage{},
+		nil, // meter — must default to a no-op meter (else gauge setup panics)
+		nil, // tracer — must default to NoOpTracer (else the first Start panics)
+		slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError})),
+		"/tmp",
+	)
+	// LoadSource opens a span via r.tracer — a nil tracer would panic here.
+	if err := reg.LoadSource(context.Background(), "/data/nilguard.gpkg"); err != nil {
+		t.Fatalf("LoadSource with defaulted meter/tracer: %v", err)
+	}
+	if reg.SourceCount() != 1 {
+		t.Errorf("SourceCount = %d, want 1", reg.SourceCount())
+	}
+}
+
 // TestLoadAllCountsLoadedAndFailed drives LoadAll over a listing that mixes
 // loadable objects with an unsafe (traversal) key. It pins the loaded/failed
 // tallies AND the latch, killing the increment/store/latch mutants in LoadAll

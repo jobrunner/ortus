@@ -12,7 +12,7 @@
 # informational and never applies one package's threshold to another.
 # Per-package baselines the gate enforces (raise them as tests improve):
 #   internal/domain       efficacy >= 90 %, mutator-coverage >= 95 %  (last: 95 / 100)
-#   internal/application  efficacy >= 74 %, mutator-coverage >= 88 %  (last: 76 / 92)
+#   internal/application  efficacy >= 77 %, mutator-coverage >= 94 %  (last: 79 / 97)
 unleash:
   threshold-efficacy: 0
   threshold-mcover: 0

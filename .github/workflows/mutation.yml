@@ -65,10 +65,11 @@ jobs:
             fi
           }
           # Baselines (ratchet up as tests improve). Last measured: domain 95/100,
-          # application 76/92 — thresholds sit a few points below to absorb the
-          # small run-to-run variance from timed-out mutants.
+          # application 79/97 (after the registry LoadAll/metrics killing tests) —
+          # thresholds sit a few points below to absorb the small run-to-run
+          # variance from timed-out mutants.
           run_pkg ./internal/domain 90 95
-          run_pkg ./internal/application 74 88
+          run_pkg ./internal/application 77 94
           exit "$fail"
 
       - name: Summary
