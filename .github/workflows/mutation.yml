@@ -61,7 +61,7 @@ jobs:
             local pkg="$1" eff="$2" mcov="$3"
             echo "===== gremlins: $pkg (min efficacy ${eff}%, min mutator-coverage ${mcov}%) =====" | tee -a mutation.log
             if ! gremlins unleash --threshold-efficacy "$eff" --threshold-mcover "$mcov" "$pkg" 2>&1 | tee -a mutation.log; then
-              echo "::error::Mutation gate FAILED for $pkg — score below baseline (efficacy ${eff}% / mcover ${mcov}%). Add tests that kill the LIVED mutants in mutation.log, or (last resort) adjust the baseline in mutation.yml with justification."
+              echo "::error::Mutation gate FAILED for $pkg — score below baseline (efficacy ${eff}% / mcover ${mcov}%). Add tests that kill the LIVED mutants in mutation.log, or (last resort) adjust the baseline in .github/workflows/mutation.yml (and make mutation) with justification."
               fail=1
             fi
           }

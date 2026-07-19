@@ -5,11 +5,14 @@
 # baseline. Coverage says a line ran; mutation says a test would have caught a
 # bug in it.
 #
-# The values below are a conservative GLOBAL FLOOR, used for ad-hoc local
-# `gremlins unleash` and as the default when the workflow doesn't pass a flag.
-# The per-package baselines the workflow enforces (raise them as tests improve):
+# These globals stay 0 on purpose: the gate's thresholds are PER PACKAGE and
+# live in the CI workflow (.github/workflows/mutation.yml) and `make mutation`,
+# which pass explicit --threshold-efficacy / --threshold-mcover flags. Keeping
+# the globals at 0 means a bare, ad-hoc `gremlins unleash <pkg>` stays
+# informational and never applies one package's threshold to another.
+# Per-package baselines the gate enforces (raise them as tests improve):
 #   internal/domain       efficacy >= 90 %, mutator-coverage >= 95 %  (last: 95 / 100)
-#   internal/application  efficacy >= 65 %, mutator-coverage >= 88 %  (last: 69 / 90)
+#   internal/application  efficacy >= 65 %, mutator-coverage >= 88 %  (last: 70 / 91)
 unleash:
-  threshold-efficacy: 65
-  threshold-mcover: 88
+  threshold-efficacy: 0
+  threshold-mcover: 0
