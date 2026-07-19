@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -52,7 +53,14 @@ func (s *Server) handleQuery(w http.ResponseWriter, r *http.Request) {
 	// logged and omitted so it never breaks the core query result.
 	if s.gazetteer != nil && gazetteerEnrichmentRequested(r) && isWGS84(req.Coordinate) {
 		if g, gerr := s.gazetteerSections(r.Context(), req.Coordinate); gerr != nil {
-			s.logger.Warn("gazetteer enrichment failed", "error", gerr)
+			if errors.Is(gerr, context.Canceled) {
+				// Client aborted the request (e.g. a new map click supersedes the
+				// previous query) — expected, not a failure. A server-side deadline
+				// (query.timeout) is NOT hidden: it still warns via the else branch.
+				s.logger.Debug("gazetteer enrichment canceled", "error", gerr)
+			} else {
+				s.logger.Warn("gazetteer enrichment failed", "error", gerr)
+			}
 		} else {
 			out["gazetteer"] = g
 		}
