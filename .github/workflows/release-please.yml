@@ -44,7 +44,14 @@ jobs:
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
-          token: ${{ secrets.GITHUB_TOKEN }}
+          # Prefer a PAT so release-please's commits on the release PR TRIGGER
+          # required-status-check workflows — commits pushed with the default
+          # GITHUB_TOKEN do NOT (GitHub's workflow loop-prevention), which leaves
+          # the release PR permanently BLOCKED once checks are required. Falls back
+          # to GITHUB_TOKEN when the secret is unset. To activate, create the
+          # RELEASE_PLEASE_TOKEN secret from a PAT: classic → `repo` + `workflow`
+          # scopes; fine-grained → Contents + Pull requests, both read/write.
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
 
   # Build + upload binaries only when a release was actually cut.
   goreleaser:
