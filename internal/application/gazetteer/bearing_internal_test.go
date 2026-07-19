@@ -26,6 +26,9 @@ func TestCountryOf(t *testing.T) {
 		{"most-local (higher level) wins", []domain.Feature{geoFeat("2", "DE"), geoFeat("8", "FR")}, "FR"},
 		{"lower level loses even if listed first", []domain.Feature{geoFeat("8", "FR"), geoFeat("2", "DE")}, "FR"},
 		{"tie on level -> lexicographically smaller ISO", []domain.Feature{geoFeat("4", "PL"), geoFeat("4", "DE")}, "DE"},
+		// smaller ISO listed first: a later equal-level entry must NOT overwrite it
+		// (pins `level > bestLevel` as strict, not >=).
+		{"tie on level, smaller ISO first stays", []domain.Feature{geoFeat("4", "DE"), geoFeat("4", "PL")}, "DE"},
 		{"non-numeric level sorts below a real level", []domain.Feature{geoFeat("x", "FR"), geoFeat("2", "DE")}, "DE"},
 		{"all non-numeric -> tie at -1 -> smaller ISO", []domain.Feature{geoFeat("x", "FR"), geoFeat("y", "DE")}, "DE"},
 		{"empty ISO skipped despite higher level", []domain.Feature{geoFeat("8", ""), geoFeat("2", "DE")}, "DE"},
@@ -50,6 +53,7 @@ func TestParsePointWKT(t *testing.T) {
 	}{
 		{"valid 2D", "POINT(10.02 50)", 10.02, 50, true},
 		{"valid Z (extra field ignored)", "POINT Z(10 50 3)", 10, 50, true},
+		{"leading paren at index 0", "(10 50)", 10, 50, true}, // pins `open < 0` as strict, not <=
 		{"no parentheses", "POINT 10 50", 0, 0, false},
 		{"reversed parentheses", "POINT)10 50(", 0, 0, false},
 		{"too few fields", "POINT(10)", 0, 0, false},
