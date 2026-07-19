@@ -105,6 +105,84 @@ func TestLoadAllLatchesWhenEverySourceFails(t *testing.T) {
 	}
 }
 
+// TestLoadAllCountsLoadFailure exercises the branch where a download succeeds
+// but LoadSource fails (provider Open errors). That path's failed++ was NOT
+// COVERED because the other LoadAll tests fail earlier (unsafe key / download).
+func TestLoadAllCountsLoadFailure(t *testing.T) {
+	reg := newRegistryWithStorage(
+		&mockStorage{objects: []output.StorageObject{{Key: "a.gpkg"}}},
+		&mockRepository{openErr: errors.New("open boom")},
+	)
+
+	if err := reg.LoadAll(context.Background()); err != nil {
+		t.Fatalf("LoadAll: %v", err)
+	}
+	if got := reg.SourceCount(); got != 0 {
+		t.Errorf("SourceCount = %d, want 0 (Open failed, nothing loads)", got)
+	}
+	if got := reg.failedCount.Load(); got != 1 {
+		t.Errorf("failedCount = %d, want 1 (load-failure failed++ mutated?)", got)
+	}
+}
+
+// TestSafeLocalPathAcceptsBaseDir covers the boundary where the key resolves to
+// the cache dir itself (joined == base). That case must be accepted, pinning the
+// `joined != base` guard so its negation can't be flipped silently.
+func TestSafeLocalPathAcceptsBaseDir(t *testing.T) {
+	reg := newTestRegistry() // localPath "/tmp"
+	got, err := reg.safeLocalPath(".")
+	if err != nil {
+		t.Fatalf("safeLocalPath(\".\") should be accepted (resolves to the base dir), got %v", err)
+	}
+	if got != "/tmp" {
+		t.Errorf("safeLocalPath(\".\") = %q, want /tmp (the base dir itself)", got)
+	}
+}
+
+// TestSyncDeletesLocalCacheFile pins the `src.path != ""` guard in Sync's
+// removal loop by asserting the on-disk cache file is actually deleted when a
+// source disappears from remote storage. Without the guard-driven os.Remove the
+// file would linger, so a flipped guard fails the test.
+func TestSyncDeletesLocalCacheFile(t *testing.T) {
+	dir := t.TempDir()
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+
+	// A real file on disk that Sync should remove once the source leaves remote.
+	cacheFile := dir + "/gone.gpkg"
+	if err := os.WriteFile(cacheFile, []byte("x"), 0o600); err != nil {
+		t.Fatalf("seed cache file: %v", err)
+	}
+
+	storage := &mockStorage{objects: []output.StorageObject{{Key: "gone.gpkg"}}}
+	reg := NewSourceRegistry(
+		[]output.SpatialSource{&mockRepository{}},
+		storage,
+		testMeter(),
+		output.NoOpTracer{},
+		logger,
+		dir,
+	)
+	ctx := context.Background()
+
+	// First sync loads "gone" with Path == <dir>/gone.gpkg (set by the adapter).
+	if _, err := reg.Sync(ctx); err != nil {
+		t.Fatalf("initial sync: %v", err)
+	}
+	// Drop it from remote, then sync again → it must be unloaded AND its cache
+	// file deleted.
+	storage.objects = nil
+	stats, err := reg.Sync(ctx)
+	if err != nil {
+		t.Fatalf("second sync: %v", err)
+	}
+	if stats.Removed != 1 {
+		t.Fatalf("Removed = %d, want 1", stats.Removed)
+	}
+	if _, err := os.Stat(cacheFile); !os.IsNotExist(err) {
+		t.Errorf("cache file still present after Sync removal (src.path guard mutated?): stat err = %v", err)
+	}
+}
+
 // TestUpdateMetricsCounters pins the loaded/ready tallies against a crafted
 // source map so the `ready++`, `== StatusReady`, `len(r.sources)` and the two
 // atomic Store calls in updateMetrics all have observable effects. The map is
