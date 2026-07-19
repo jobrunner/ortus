@@ -241,7 +241,9 @@ func (s *QueryService) queryLayer(ctx context.Context, sourceID string, layer *d
 
 	queryCoord, ok := s.transformCoordinate(ctx, req.Coordinate, layer)
 	if !ok {
-		span.AddEvent("layer skipped due to SRID mismatch")
+		// ok=false covers an unsupported SRID mismatch (no transformer) and a
+		// failed/canceled transform; transformCoordinate logs the specific reason.
+		span.AddEvent("layer skipped (coordinate not transformable)")
 		return false
 	}
 
@@ -306,11 +308,15 @@ func (s *QueryService) transformCoordinate(ctx context.Context, coord domain.Coo
 	return transformed, true
 }
 
-// isCanceled reports whether err is a context cancellation or deadline — an
-// expected outcome when the client aborts the request (e.g. the map UI cancels
-// the previous in-flight query), not a server-side failure worth warning about.
+// isCanceled reports whether err is a client-side context cancellation — an
+// expected outcome when the caller aborts the request (e.g. the map UI cancels
+// the previous in-flight query), not a failure worth warning about.
+//
+// context.DeadlineExceeded is deliberately NOT treated as expected: the server
+// applies its own query.timeout via context.WithTimeout, so a deadline is a real
+// "query too slow" signal that should keep warning.
 func isCanceled(err error) bool {
-	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
+	return errors.Is(err, context.Canceled)
 }
 
 // applyMaxFeaturesLimit limits features to not exceed maxFeatures. Returns true if limit reached.
