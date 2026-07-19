@@ -153,13 +153,15 @@ func TestLoadAllCountsLoadFailure(t *testing.T) {
 // the cache dir itself (joined == base). That case must be accepted, pinning the
 // `joined != base` guard so its negation can't be flipped silently.
 func TestSafeLocalPathAcceptsBaseDir(t *testing.T) {
-	reg := newTestRegistry() // localPath "/tmp"
+	reg := newTestRegistry()
 	got, err := reg.safeLocalPath(".")
 	if err != nil {
 		t.Fatalf("safeLocalPath(\".\") should be accepted (resolves to the base dir), got %v", err)
 	}
-	if got != "/tmp" {
-		t.Errorf("safeLocalPath(\".\") = %q, want /tmp (the base dir itself)", got)
+	// Assert against the registry's own localPath (cleaned), not a hard-coded
+	// literal, so the test tracks the helper rather than its current "/tmp".
+	if want := filepath.Clean(reg.localPath); got != want {
+		t.Errorf("safeLocalPath(\".\") = %q, want %q (the base dir itself)", got, want)
 	}
 }
 
