@@ -2,7 +2,7 @@
 # Coverage tells you a line executed; mutation testing tells you a test would
 # actually CATCH a bug in it. It runs the suite per mutant but the core packages
 # are fast (~100 s total), so it gates every PR that touches them AND runs weekly
-# on master. The job FAILS when a package's mutation score regresses below its
+# (on the default branch). The job FAILS when a package's mutation score is below its
 # ratcheted baseline (per-package thresholds below; raise them as tests improve).
 name: Mutation Testing
 
@@ -58,7 +58,7 @@ jobs:
           set -uo pipefail
           fail=0
           run_pkg() {
-            pkg="$1"; eff="$2"; mcov="$3"
+            local pkg="$1" eff="$2" mcov="$3"
             echo "===== gremlins: $pkg (min efficacy ${eff}%, min mutator-coverage ${mcov}%) =====" | tee -a mutation.log
             if ! gremlins unleash --threshold-efficacy "$eff" --threshold-mcover "$mcov" "$pkg" 2>&1 | tee -a mutation.log; then
               echo "::error::Mutation gate FAILED for $pkg — score below baseline (efficacy ${eff}% / mcover ${mcov}%). Add tests that kill the LIVED mutants in mutation.log, or (last resort) adjust the baseline in mutation.yml with justification."
