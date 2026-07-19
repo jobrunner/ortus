@@ -25,6 +25,7 @@ type Gazetteer interface {
 	Islands(ctx context.Context, p domain.Coordinate) ([]domain.Island, error)
 
 	// Elevation returns the height above sea level at the point, or (nil, nil)
-	// when the optional elevation feature is not wired (so the caller omits it).
+	// when the optional elevation feature is not wired — adapters render a null
+	// elevation block in that case.
 	Elevation(ctx context.Context, p domain.Coordinate) (*domain.Elevation, error)
 }
