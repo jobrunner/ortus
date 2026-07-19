@@ -59,10 +59,14 @@ def main():
         return 2
     files = dict(leaves(nodes[0], []))
 
-    cx = cfg["complexity"]
-    metric, default_cap, baseline = cx["metric"], cx["default_cap"], cx["baseline"]
-    hs = cfg["hotspot"]
-    min_cx, min_cov, allow = hs["min_complexity"], hs["min_coverage"], set(hs["allow"])
+    try:
+        cx = cfg["complexity"]
+        metric, default_cap, baseline = cx["metric"], cx["default_cap"], cx["baseline"]
+        hs = cfg["hotspot"]
+        min_cx, min_cov, allow = hs["min_complexity"], hs["min_coverage"], set(hs["allow"])
+    except (KeyError, TypeError) as e:  # missing key or wrong shape (typo in config)
+        print(f"::error::{cfg_path}: malformed config ({e})", file=sys.stderr)
+        return 2
 
     violations, hints = [], []
 
