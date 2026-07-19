@@ -95,11 +95,15 @@ codecharta: ## CodeCharta-Map (Struktur+Komplexitaet+Coverage+Git) -> ortus.cc.j
 	@command -v ccsh >/dev/null 2>&1 || npm install -g codecharta-analysis@1.143.0
 	$(GO) install github.com/jandelgado/gcov2lcov@v1.1.1
 	ccsh unifiedparser . -fe=go -e='_test\.go,third_party' -nc -o base.cc.json
-	$(GO) test -coverprofile=coverage.out ./... || true
-	$$($(GO) env GOPATH)/bin/gcov2lcov -infile=coverage.out -outfile=coverage.info
-	ccsh coverageimport coverage.info -f lcov -nc -o coverage.cc.json
 	ccsh gitlogparser repo-scan --repo-path=. --add-author --silent -nc -o git.cc.json
-	ccsh merge base.cc.json coverage.cc.json git.cc.json -o ortus.cc.json.gz
+	@$(GO) test -coverprofile=coverage.out ./... || true; \
+	 inputs="base.cc.json git.cc.json"; \
+	 if [ -s coverage.out ]; then \
+	   $$($(GO) env GOPATH)/bin/gcov2lcov -infile=coverage.out -outfile=coverage.info; \
+	   ccsh coverageimport coverage.info -f lcov -nc -o coverage.cc.json; \
+	   inputs="$$inputs coverage.cc.json"; \
+	 else echo "WARN: keine coverage.out — Map ohne Coverage"; fi; \
+	 ccsh merge $$inputs -o ortus.cc.json.gz
 	@echo "-> ortus.cc.json.gz  (laden in https://maibornwolff.github.io/codecharta/visualization/)"
 
 # Fuzz targets at the parse boundaries (untrusted input). Seeds run automatically

@@ -7,9 +7,9 @@
 name: Mutation Testing
 
 on:
-  # Runs on every PR (not path-filtered) so it can be a REQUIRED status check —
-  # a path-filtered check that skips would leave the requirement permanently
-  # unsatisfied and block unrelated PRs. The run is fast (~100 s).
+  # Runs on every PR to main/master (not path-filtered) so it can be a REQUIRED
+  # status check — a path-filtered check that skips would leave the requirement
+  # permanently unsatisfied and block unrelated PRs. The run is fast (~100 s).
   pull_request:
     branches: [main, master]
   schedule:

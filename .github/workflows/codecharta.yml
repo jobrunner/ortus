@@ -63,20 +63,29 @@ jobs:
       - name: Structure + complexity (unifiedparser)
         run: ccsh unifiedparser . -fe=go -e='_test\.go,third_party' -nc -o base.cc.json
 
-      - name: Test coverage -> cc.json
+      - name: Test coverage -> cc.json (best-effort)
         run: |
-          # Tolerate test failures here — the Test job is the gate; this only needs
-          # whatever coverage was produced. Paths are repo-relative, matching the
-          # unifiedparser nodes so the merge lands coverage on the code files.
+          # Best-effort: a build/test failure (caught by the Test job) must not sink
+          # the map. Only import coverage if a non-empty profile was produced. Paths
+          # are repo-relative, matching the unifiedparser nodes so the merge lands
+          # coverage on the code files.
           go test -coverprofile=coverage.out ./... || true
-          "$(go env GOPATH)/bin/gcov2lcov" -infile=coverage.out -outfile=coverage.info
-          ccsh coverageimport coverage.info -f lcov -nc -o coverage.cc.json
+          if [ -s coverage.out ]; then
+            "$(go env GOPATH)/bin/gcov2lcov" -infile=coverage.out -outfile=coverage.info
+            ccsh coverageimport coverage.info -f lcov -nc -o coverage.cc.json
+          else
+            echo "::warning::no coverage profile produced; the map will omit coverage"
+          fi
 
       - name: Git history (churn / authors)
         run: ccsh gitlogparser repo-scan --repo-path=. --add-author --silent -nc -o git.cc.json
 
       - name: Merge into ortus.cc.json.gz
-        run: ccsh merge base.cc.json coverage.cc.json git.cc.json -o ortus.cc.json.gz
+        run: |
+          # base + git always exist; coverage only when the step above produced it.
+          inputs="base.cc.json git.cc.json"
+          [ -f coverage.cc.json ] && inputs="$inputs coverage.cc.json"
+          ccsh merge $inputs -o ortus.cc.json.gz
 
       - name: Upload map
         if: always()
