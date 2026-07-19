@@ -231,9 +231,18 @@ func TestGazetteerIslandsBlock(t *testing.T) {
 	if len(arr) != 2 {
 		t.Fatalf("islands len = %d, want 2", len(arr))
 	}
-	first, _ := arr[0].(map[string]any)
-	if first["name"] != "Sylt" || first["name_native"] != "Söl'ring" || first["name_source"] != "latin-osm" {
-		t.Errorf("islands[0] = %v, want Sylt/Söl'ring/latin-osm", first)
+	// Assert by content, not index: ordering isn't part of the HTTP contract.
+	var sylt map[string]any
+	for _, it := range arr {
+		if m, ok := it.(map[string]any); ok && m["name"] == "Sylt" {
+			sylt = m
+		}
+	}
+	if sylt == nil {
+		t.Fatalf("islands missing a Sylt entry; got %v", arr)
+	}
+	if sylt["name_native"] != "Söl'ring" || sylt["name_source"] != "latin-osm" {
+		t.Errorf("Sylt island = %v, want Söl'ring/latin-osm", sylt)
 	}
 	// The island's name_source is echoed in the response-wide sources block.
 	if srcs, ok := body["sources"].([]any); !ok || len(srcs) == 0 {

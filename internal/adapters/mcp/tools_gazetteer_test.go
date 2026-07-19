@@ -49,6 +49,9 @@ func startGazetteerServer(t *testing.T) *httptest.Server {
 				NameSource: domain.NameProvenance{Code: "latin-osm", Short: "OSM name", Long: "OSM name tag.", Standard: ""}},
 			DistanceKM: 4, Azimuth: 90, Compass: "E", Label: "4 km E Würzburg",
 		},
+		islands: []domain.Island{
+			{Name: "Mainau", NameNative: "", NameSource: domain.NameProvenance{Code: "latin-osm", Short: "OSM name", Long: "OSM name tag."}},
+		},
 		elev: &domain.Elevation{
 			Meters: 177.0, AccuracyM: 4.0, AccuracyBasis: "GLO-30 LE90 (absolute)",
 			HorizontalM: 6.0, VerticalDatum: "EGM2008", SeaLevel: false, SurfaceModel: "DSM",
@@ -113,6 +116,10 @@ func TestGazetteerTool(t *testing.T) {
 				EquivalentDescription string `json:"equivalent_description"`
 			} `json:"hierarchy"`
 		} `json:"admin"`
+		Islands []struct {
+			Name       string `json:"name"`
+			NameSource string `json:"name_source"`
+		} `json:"islands"`
 		Bearing *struct {
 			Label      string `json:"label"`
 			NameSource string `json:"name_source"`
@@ -147,6 +154,11 @@ func TestGazetteerTool(t *testing.T) {
 	}
 	if out.Bearing == nil || out.Bearing.Label != "4 km E Würzburg" {
 		t.Errorf("bearing = %+v, want label '4 km E Würzburg'", out.Bearing)
+	}
+	// Islands must be present as an array with the canned island (guards against
+	// the field being dropped or mis-shaped — unknown fields would decode silently).
+	if len(out.Islands) != 1 || out.Islands[0].Name != "Mainau" || out.Islands[0].NameSource != "latin-osm" {
+		t.Errorf("islands = %+v, want single Mainau/latin-osm entry", out.Islands)
 	}
 	if out.Elevation == nil || out.Elevation.Meters != 177.0 || out.Elevation.VerticalDatum != "EGM2008" ||
 		out.Elevation.SeaLevel != false || out.Elevation.SurfaceModel != "DSM" {
