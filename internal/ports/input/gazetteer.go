@@ -19,7 +19,13 @@ type Gazetteer interface {
 	// ("4 km E Würzburg"), selected per the BearingPolicy.
 	Bearing(ctx context.Context, p domain.Coordinate, pol domain.BearingPolicy) (*domain.Fix, error)
 
+	// Islands returns the named island(s) whose polygon contains the point, or
+	// nil when the point is on no island or the optional islands layer is not
+	// configured — adapters render a null islands block in that case.
+	Islands(ctx context.Context, p domain.Coordinate) ([]domain.Island, error)
+
 	// Elevation returns the height above sea level at the point, or (nil, nil)
-	// when the optional elevation feature is not wired (so the caller omits it).
+	// when the optional elevation feature is not wired — adapters render a null
+	// elevation block in that case.
 	Elevation(ctx context.Context, p domain.Coordinate) (*domain.Elevation, error)
 }

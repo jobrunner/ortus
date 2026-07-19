@@ -119,6 +119,7 @@ paths:
                         equivalent: state
                         local_term: Land
                         equivalent_description: First-level subdivision (state, region, province).
+                  islands: null           # null unless the point lies on a mapped island
                   bearing:
                     reference: Berlin
                     name_native: ""
@@ -256,6 +257,7 @@ paths:
                       equivalent: state
                       local_term: Land
                       equivalent_description: First-level subdivision (state, region, province).
+                islands: null             # null: Würzburg is inland (an array of islands when the point is on one)
                 bearing:
                   reference: Würzburg
                   name_native: ""            # empty: already-Latin name (identical to reference)
@@ -615,10 +617,10 @@ components:
       type: object
       description: >-
         Gazetteer-Anreicherung für eine Koordinate: Verwaltungshierarchie (admin),
-        Peilung (bearing), Höhe über NN (elevation), name_source-Erläuterungen
-        (sources) und Datensatz-Lizenz/Attribution (license). Geliefert von
-        GET /api/v1/gazetteer und — standardmäßig — im `gazetteer`-Block von
-        GET /api/v1/query.
+        Insel(n) (islands), Höhe über NN (elevation), Peilung (bearing),
+        name_source-Erläuterungen (sources) und Datensatz-Lizenz/Attribution
+        (license). Geliefert von GET /api/v1/gazetteer und — standardmäßig — im
+        `gazetteer`-Block von GET /api/v1/query.
       properties:
         admin:
           nullable: true
@@ -657,6 +659,28 @@ components:
                   equivalent_description:
                     type: string
                     description: Generische Beschreibung des equivalent-Levels.
+        islands:
+          nullable: true
+          type: array
+          description: >-
+            Insel(n), deren Polygon die Koordinate enthält (eigener Layer,
+            unabhängig von der Verwaltungsabdeckung aufgelöst). null, wenn der
+            Punkt auf keiner erfassten Insel liegt oder kein Insel-Layer
+            konfiguriert ist. Mehrere Einträge bei verschachtelten Inseln.
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+                description: Inselname in lateinischer Schrift (immer gesetzt).
+              name_native:
+                type: string
+                description: Inselname in Originalschrift (leer, wenn identisch mit name).
+              name_source:
+                type: string
+                description: >-
+                  Codierung der Namensherkunft/Romanisierung; im response-weiten
+                  sources-Block beschrieben. Leer, wenn keine.
         bearing:
           nullable: true
           type: object
@@ -934,10 +958,11 @@ components:
             - $ref: '#/components/schemas/GazetteerData'
           nullable: true
           description: >-
-            Gazetteer-Anreicherung (admin, bearing, sources, license). Standardmäßig
-            enthalten, wenn das Gazetteer-Feature aktiv ist und die Koordinate WGS84
-            ist — mit with-gazetteer=0 (false/no/off) abschaltbar. Fehlt, wenn das
-            Feature aus ist, abgeschaltet wurde oder die Koordinate nicht WGS84 ist.
+            Gazetteer-Anreicherung (admin, islands, elevation, bearing, sources,
+            license). Standardmäßig enthalten, wenn das Gazetteer-Feature aktiv ist
+            und die Koordinate WGS84 ist — mit with-gazetteer=0 (false/no/off)
+            abschaltbar. Fehlt, wenn das Feature aus ist, abgeschaltet wurde oder die
+            Koordinate nicht WGS84 ist.
       required:
         - coordinate
         - results

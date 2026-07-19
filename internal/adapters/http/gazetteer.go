@@ -35,16 +35,17 @@ func (s *Server) handleGazetteer(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, http.StatusOK, out)
 }
 
-// gazetteerSections resolves the admin hierarchy (Locate) and the bearing fix
-// for a coordinate into a JSON-ready {admin, bearing} object. A part that has no
-// result (ErrNotFound — no admin coverage, or no anchor in reach) is null rather
+// gazetteerSections resolves a coordinate into a JSON-ready gazetteer object with
+// the admin hierarchy (Locate), the containing island(s) (Islands), the bearing
+// fix (Bearing) and the elevation (Elevation), plus a response-wide sources
+// excerpt and the dataset license. A part that has no result (ErrNotFound — no
+// admin coverage, not on an island, no anchor in reach, no DEM) is null rather
 // than an error; any other failure is returned so the caller can map it.
 //
-// The {admin, bearing} object is the reusable unit for the planned batch
-// endpoint: each batch entry is {id, coordinate, admin, bearing} with a
-// caller-chosen echo id.
+// This object is the reusable unit for the planned batch endpoint: each batch
+// entry is {id, coordinate, <these sections>} with a caller-chosen echo id.
 func (s *Server) gazetteerSections(ctx context.Context, coord domain.Coordinate) (map[string]interface{}, error) {
-	out := map[string]interface{}{"admin": nil, "bearing": nil, "elevation": nil, "sources": []interface{}{}}
+	out := map[string]interface{}{"admin": nil, "islands": nil, "bearing": nil, "elevation": nil, "sources": []interface{}{}}
 	prov := newProvenanceSet()
 
 	loc, err := s.gazetteer.Locate(ctx, coord)
@@ -55,6 +56,16 @@ func (s *Server) gazetteerSections(ctx context.Context, coord domain.Coordinate)
 		// no admin coverage at this point — leave admin null
 	default:
 		return nil, err
+	}
+
+	// Islands: the named island(s) containing the point (a separate layer,
+	// resolved independently of admin coverage). Empty ⇒ leave the block null.
+	islands, err := s.gazetteer.Islands(ctx, coord)
+	switch {
+	case err != nil:
+		return nil, err
+	case len(islands) > 0:
+		out["islands"] = formatIslands(islands, prov)
 	}
 
 	fix, err := s.gazetteer.Bearing(ctx, coord, s.bearingPolicy.OrDefault())
@@ -138,6 +149,21 @@ func formatLocality(loc *domain.Locality, prov *provenanceSet) map[string]interf
 		"country_iso": loc.CountryISO,
 		"hierarchy":   hierarchy,
 	}
+}
+
+// formatIslands renders the island(s) containing the point for JSON output,
+// recording each island's name provenance in prov. Returned as an array (a point
+// may lie on several nested islands); the block stays null upstream when empty.
+func formatIslands(islands []domain.Island, prov *provenanceSet) []map[string]interface{} {
+	out := make([]map[string]interface{}, len(islands))
+	for i, is := range islands {
+		out[i] = map[string]interface{}{
+			"name":        is.Name,
+			"name_native": is.NameNative,
+			"name_source": prov.add(is.NameSource),
+		}
+	}
+	return out
 }
 
 // formatFix renders a bearing fix for JSON output, recording the anchor's name

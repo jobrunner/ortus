@@ -153,6 +153,79 @@ func TestLocateBuildsEnrichedChain(t *testing.T) {
 	}
 }
 
+// islandFeature builds an islands-layer polygon feature with a name (+ optional
+// native/source), mirroring adminFeature for the islands layer.
+func islandFeature(name, native, source string) domain.Feature {
+	return domain.Feature{
+		LayerName:  "islands",
+		Properties: map[string]any{"name": name, "name_native": native, "name_source": source},
+	}
+}
+
+func islandsManifest() Manifest {
+	m := testManifest()
+	m.IslandsLayer = "islands"
+	m.IslandsNameColumn = "name"
+	m.NameNativeColumn = "name_native"
+	m.NameSourceColumn = "name_source"
+	return m
+}
+
+func TestIslandsResolvesContainingIslands(t *testing.T) {
+	// PiP returns the island polygon(s) containing the point (arbitrary order);
+	// Islands names them, orders by name, and carries native/source provenance.
+	idx := fakeIndex{pip: []domain.Feature{
+		islandFeature("Sylt", "", "latin-osm"),
+		islandFeature("Amrum", "", "latin-osm"),
+		islandFeature("", "", ""), // unnamed fill → skipped
+	}}
+	svc := NewService(idx, islandsManifest(), nil, nil, true)
+
+	got, err := svc.Islands(context.Background(), domain.NewWGS84Coordinate(8.31, 54.9))
+	if err != nil {
+		t.Fatalf("Islands: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("islands len = %d, want 2 (unnamed fill skipped)", len(got))
+	}
+	if got[0].Name != "Amrum" || got[1].Name != "Sylt" {
+		t.Errorf("islands order = [%q %q], want [Amrum Sylt] (name-sorted)", got[0].Name, got[1].Name)
+	}
+	if got[1].NameSource.Code != "latin-osm" {
+		t.Errorf("name source = %q, want latin-osm", got[1].NameSource.Code)
+	}
+}
+
+func TestIslandsUnconfiguredReturnsNil(t *testing.T) {
+	// testManifest has no islands layer → the block is omitted (nil, no error),
+	// and PointInPolygon is never called.
+	idx := fakeIndex{pipErr: errors.New("PiP must not be called when islands unconfigured")}
+	svc := NewService(idx, testManifest(), nil, nil, true)
+
+	got, err := svc.Islands(context.Background(), domain.NewWGS84Coordinate(9.93, 49.79))
+	if err != nil {
+		t.Fatalf("Islands (unconfigured): unexpected error %v", err)
+	}
+	if got != nil {
+		t.Errorf("islands = %v, want nil when no islands layer configured", got)
+	}
+}
+
+func TestIslandsMissingLayerDegradesToNil(t *testing.T) {
+	// An islands mapping that outruns the deployed dataset (layer absent) must
+	// degrade to no-result, not fail the whole gazetteer response.
+	idx := fakeIndex{pipErr: domain.ErrNotFound}
+	svc := NewService(idx, islandsManifest(), nil, nil, true)
+
+	got, err := svc.Islands(context.Background(), domain.NewWGS84Coordinate(8.31, 54.9))
+	if err != nil {
+		t.Fatalf("Islands (missing layer): want nil error, got %v", err)
+	}
+	if got != nil {
+		t.Errorf("islands = %v, want nil on ErrNotFound", got)
+	}
+}
+
 func TestLocateBearingRejectNonWGS84(t *testing.T) {
 	svc := NewService(fakeIndex{}, testManifest(), nil, nil, true)
 	p := domain.NewCoordinate(1_400_000, 6_600_000, domain.SRIDWebMercator) // 3857, not 4326

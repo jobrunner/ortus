@@ -44,6 +44,11 @@ type Manifest struct {
 	AdminNameColumn string // e.g. "name"
 	ParentFKColumn  string // e.g. "parent_id" (walked by ResolveChain)
 
+	// islands layer (optional; empty ⇒ no island lookup, so the response's islands
+	// block is null). The name-native/name-source columns are the shared ones below.
+	IslandsLayer      string // e.g. "islands"
+	IslandsNameColumn string // e.g. "name"
+
 	// shared (same column names on both layers)
 	CountryColumn    string // e.g. "country_iso"
 	NameNativeColumn string // e.g. "name_native" (original-script name)
@@ -211,6 +216,50 @@ func (s *Service) Locate(ctx context.Context, p domain.Coordinate) (*domain.Loca
 	})
 
 	return &domain.Locality{CountryISO: countryISO, Chain: chain}, nil
+}
+
+// Islands returns the named island(s) whose polygon contains the query point,
+// via a point-in-polygon query against the optional islands layer. It returns
+// (nil, nil) when no islands layer is configured (the dataset predates the
+// feature) or when the point lies on no island; adapters then render a null
+// islands block. Island lookup is independent of admin coverage: a point on a
+// small island outside any admin polygon still resolves its island name.
+func (s *Service) Islands(ctx context.Context, p domain.Coordinate) ([]domain.Island, error) {
+	if err := s.ready(); err != nil {
+		return nil, err
+	}
+	if err := requireWGS84(p); err != nil {
+		return nil, err
+	}
+	if s.manifest.IslandsLayer == "" {
+		return nil, nil // islands not configured — omit from the response
+	}
+	features, err := s.index.PointInPolygon(ctx, s.manifest.IslandsLayer, p)
+	if err != nil {
+		// Treat a missing layer like "no result" (as Locate/Elevation do) so an
+		// islands mapping that outruns the deployed dataset degrades gracefully.
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var islands []domain.Island
+	for i := range features {
+		f := &features[i]
+		name := f.GetStringProperty(s.manifest.IslandsNameColumn)
+		if name == "" {
+			continue // coverage fills / unnamed polygons carry no island name
+		}
+		islands = append(islands, domain.Island{
+			Name:       name,
+			NameNative: f.GetStringProperty(s.manifest.NameNativeColumn),
+			NameSource: s.resolveNameSource(f.GetStringProperty(s.manifest.NameSourceColumn)),
+		})
+	}
+	// Deterministic order (PiP row order is unspecified); smallest name first so
+	// nested islands read naturally and tests stay stable.
+	sort.SliceStable(islands, func(i, j int) bool { return islands[i].Name < islands[j].Name })
+	return islands, nil
 }
 
 // Elevation samples the height above sea level at the query point. It returns

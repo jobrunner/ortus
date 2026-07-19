@@ -36,6 +36,13 @@ type adminOut struct {
 	Hierarchy  []adminUnitOut `json:"hierarchy"`
 }
 
+// islandOut is one island whose polygon contains the coordinate.
+type islandOut struct {
+	Name       string `json:"name"`
+	NameNative string `json:"name_native"`
+	NameSource string `json:"name_source"`
+}
+
 // bearingOut is the bearing fix relative to the most salient nearby place.
 type bearingOut struct {
 	Reference  string  `json:"reference"`
@@ -81,13 +88,14 @@ type elevationOut struct {
 	Source              *licenseOut `json:"source"`
 }
 
-// gazetteerOut is the tool result: admin and/or bearing, either of which is null
-// when it has no result for the coordinate. Elevation is null unless the DEM
-// feature is wired. Sources is the response-wide provenance excerpt describing
-// each name_source code that appears above; License is the dataset attribution
-// (null when unset).
+// gazetteerOut is the tool result: admin, islands, bearing and elevation, any of
+// which is null when it has no result for the coordinate (no admin coverage, not
+// on an island, no anchor in reach, or no DEM wired). Sources is the response-wide
+// provenance excerpt describing each name_source code that appears above; License
+// is the dataset attribution (null when unset).
 type gazetteerOut struct {
 	Admin     *adminOut     `json:"admin"`
+	Islands   []islandOut   `json:"islands"`
 	Bearing   *bearingOut   `json:"bearing"`
 	Elevation *elevationOut `json:"elevation"`
 	Sources   []sourceOut   `json:"sources"`
@@ -120,15 +128,56 @@ func (p *provenanceSet) list() []sourceOut {
 	return p.items
 }
 
+// islandOuts maps resolved islands to their output shape, recording each name
+// provenance in prov. Returns nil for no islands so the block serializes as null.
+func islandOuts(islands []domain.Island, prov *provenanceSet) []islandOut {
+	if len(islands) == 0 {
+		return nil
+	}
+	out := make([]islandOut, len(islands))
+	for i, is := range islands {
+		out[i] = islandOut{
+			Name:       is.Name,
+			NameNative: is.NameNative,
+			NameSource: prov.add(is.NameSource),
+		}
+	}
+	return out
+}
+
+// newElevationOut maps an elevation result to its output shape, nesting the DEM
+// source license under Source. Returns nil when elevation is unwired (nil), so
+// the block serializes as null.
+func newElevationOut(elev *domain.Elevation) *elevationOut {
+	if elev == nil {
+		return nil
+	}
+	eo := &elevationOut{
+		Meters:              elev.Meters,
+		AccuracyM:           elev.AccuracyM,
+		AccuracyBasis:       elev.AccuracyBasis,
+		HorizontalAccuracyM: elev.HorizontalM,
+		VerticalDatum:       elev.VerticalDatum,
+		SeaLevel:            elev.SeaLevel,
+		SurfaceModel:        elev.SurfaceModel,
+	}
+	if !elev.License.IsEmpty() {
+		eo.Source = &licenseOut{Name: elev.License.Name, URL: elev.License.URL, Attribution: elev.License.Attribution}
+	}
+	return eo
+}
+
 func addGazetteer(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 	mcp.AddTool(srv, &mcp.Tool{
 		Name: "gazetteer",
 		Description: "Reverse-geocode a coordinate to its administrative hierarchy " +
-			"(admin), compute a bearing to the most salient nearby place (bearing, " +
-			"e.g. '4 km E Würzburg'), and report the height above sea level " +
-			"(elevation, meters; when a DEM is configured). Any part is null when it " +
-			"has no result — no admin coverage, no anchor within reach, or no " +
-			"elevation configured. Equivalent to GET /api/v1/gazetteer.",
+			"(admin), name the island(s) containing it (islands, when an islands " +
+			"layer is configured), compute a bearing to the most salient nearby " +
+			"place (bearing, e.g. '4 km E Würzburg'), and report the height above " +
+			"sea level (elevation, meters; when a DEM is configured). Any part is " +
+			"null when it has no result — no admin coverage, not on an island, no " +
+			"anchor within reach, or no elevation configured. Equivalent to " +
+			"GET /api/v1/gazetteer.",
 	}, func(ctx toolCtx, _ *callRequest, in gazetteerIn) (*callResult, gazetteerOut, error) {
 		coord, err := selectCoordinate(in.Lon, in.Lat, in.X, in.Y, in.SRID)
 		if err != nil {
@@ -160,6 +209,12 @@ func addGazetteer(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 			return nil, gazetteerOut{}, err
 		}
 
+		islands, err := deps.Gazetteer.Islands(ctx, coord)
+		if err != nil {
+			return nil, gazetteerOut{}, err
+		}
+		out.Islands = islandOuts(islands, prov)
+
 		fix, err := deps.Gazetteer.Bearing(ctx, coord, deps.BearingPolicy.OrDefault())
 		switch {
 		case err == nil:
@@ -181,24 +236,10 @@ func addGazetteer(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 		}
 
 		elev, err := deps.Gazetteer.Elevation(ctx, coord)
-		switch {
-		case err != nil:
+		if err != nil {
 			return nil, gazetteerOut{}, err
-		case elev != nil:
-			eo := &elevationOut{
-				Meters:              elev.Meters,
-				AccuracyM:           elev.AccuracyM,
-				AccuracyBasis:       elev.AccuracyBasis,
-				HorizontalAccuracyM: elev.HorizontalM,
-				VerticalDatum:       elev.VerticalDatum,
-				SeaLevel:            elev.SeaLevel,
-				SurfaceModel:        elev.SurfaceModel,
-			}
-			if !elev.License.IsEmpty() {
-				eo.Source = &licenseOut{Name: elev.License.Name, URL: elev.License.URL, Attribution: elev.License.Attribution}
-			}
-			out.Elevation = eo
 		}
+		out.Elevation = newElevationOut(elev)
 
 		out.Sources = prov.list()
 		if !deps.GazetteerLicense.IsEmpty() {

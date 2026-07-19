@@ -22,12 +22,14 @@ import (
 
 // fakeGazetteer is a canned input.Gazetteer for handler tests.
 type fakeGazetteer struct {
-	loc     *domain.Locality
-	locErr  error
-	fix     *domain.Fix
-	fixErr  error
-	elev    *domain.Elevation
-	elevErr error
+	loc        *domain.Locality
+	locErr     error
+	islands    []domain.Island
+	islandsErr error
+	fix        *domain.Fix
+	fixErr     error
+	elev       *domain.Elevation
+	elevErr    error
 }
 
 func (f fakeGazetteer) Locate(context.Context, domain.Coordinate) (*domain.Locality, error) {
@@ -35,6 +37,9 @@ func (f fakeGazetteer) Locate(context.Context, domain.Coordinate) (*domain.Local
 }
 func (f fakeGazetteer) Bearing(context.Context, domain.Coordinate, domain.BearingPolicy) (*domain.Fix, error) {
 	return f.fix, f.fixErr
+}
+func (f fakeGazetteer) Islands(context.Context, domain.Coordinate) ([]domain.Island, error) {
+	return f.islands, f.islandsErr
 }
 func (f fakeGazetteer) Elevation(context.Context, domain.Coordinate) (*domain.Elevation, error) {
 	return f.elev, f.elevErr
@@ -206,6 +211,51 @@ func TestGazetteerElevationBlock(t *testing.T) {
 	}
 	if lic, ok := body["license"].(map[string]any); ok && lic["name"] == src["name"] {
 		t.Errorf("DEM source must be distinct from gazetteer license, both = %v", lic["name"])
+	}
+}
+
+func TestGazetteerIslandsBlock(t *testing.T) {
+	islands := []domain.Island{
+		{Name: "Sylt", NameNative: "Söl'ring", NameSource: domain.NameProvenance{Code: "latin-osm"}},
+		{Name: "Amrum"},
+	}
+	srv := newGazetteerServer(t, fakeGazetteer{loc: sampleLocality(), fix: sampleFix(), islands: islands})
+	rec, body := doGET(t, srv, "/api/v1/gazetteer?lon=8.31&lat=54.9")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	arr, ok := body["islands"].([]any)
+	if !ok {
+		t.Fatalf("islands missing or not an array; got %v", body["islands"])
+	}
+	if len(arr) != 2 {
+		t.Fatalf("islands len = %d, want 2", len(arr))
+	}
+	// Assert by content, not index: ordering isn't part of the HTTP contract.
+	var sylt map[string]any
+	for _, it := range arr {
+		if m, ok := it.(map[string]any); ok && m["name"] == "Sylt" {
+			sylt = m
+		}
+	}
+	if sylt == nil {
+		t.Fatalf("islands missing a Sylt entry; got %v", arr)
+	}
+	if sylt["name_native"] != "Söl'ring" || sylt["name_source"] != "latin-osm" {
+		t.Errorf("Sylt island = %v, want Söl'ring/latin-osm", sylt)
+	}
+	// The island's name_source is echoed in the response-wide sources block.
+	if srcs, ok := body["sources"].([]any); !ok || len(srcs) == 0 {
+		t.Errorf("sources should include the island name_source, got %v", body["sources"])
+	}
+}
+
+func TestGazetteerIslandsOmittedWhenAbsent(t *testing.T) {
+	// No islands → the block is null (point on no island / layer unconfigured).
+	srv := newGazetteerServer(t, fakeGazetteer{loc: sampleLocality(), fix: sampleFix()})
+	_, body := doGET(t, srv, "/api/v1/gazetteer?lon=9.93&lat=49.79")
+	if body["islands"] != nil {
+		t.Errorf("islands = %v, want null when the point is on no island", body["islands"])
 	}
 }
 
