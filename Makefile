@@ -88,8 +88,24 @@ mutation: ## Mutation-Testing (gremlins) — hartes Gate pro Paket, wie in der C
 	$(GO) install github.com/go-gremlins/gremlins/cmd/gremlins@v0.5.1
 	@rc=0; \
 	 gremlins unleash --threshold-efficacy 90 --threshold-mcover 95 ./internal/domain || rc=1; \
-	 gremlins unleash --threshold-efficacy 65 --threshold-mcover 88 ./internal/application || rc=1; \
+	 gremlins unleash --threshold-efficacy 70 --threshold-mcover 88 ./internal/application || rc=1; \
 	 exit $$rc
+
+codecharta: ## CodeCharta-Map (Struktur+Komplexitaet+Coverage+Git) -> ortus.cc.json.gz (braucht node+java)
+	@command -v ccsh >/dev/null 2>&1 || npm install -g codecharta-analysis@1.143.0
+	$(GO) install github.com/jandelgado/gcov2lcov@v1.1.1
+	ccsh unifiedparser . -fe=go -e='_test\.go,third_party' -nc -o base.cc.json
+	ccsh gitlogparser repo-scan --repo-path=. --add-author --silent -nc -o git.cc.json
+	@$(GO) test -coverprofile=coverage.out ./... || true; \
+	 gobin=$$($(GO) env GOBIN); [ -n "$$gobin" ] || gobin=$$($(GO) env GOPATH)/bin; \
+	 inputs="base.cc.json git.cc.json"; \
+	 if [ -s coverage.out ]; then \
+	   "$$gobin"/gcov2lcov -infile=coverage.out -outfile=coverage.info; \
+	   ccsh coverageimport coverage.info -f lcov -nc -o coverage.cc.json; \
+	   inputs="$$inputs coverage.cc.json"; \
+	 else echo "WARN: keine coverage.out — Map ohne Coverage"; fi; \
+	 ccsh merge $$inputs -o ortus.cc.json.gz
+	@echo "-> ortus.cc.json.gz  (laden in https://maibornwolff.github.io/codecharta/visualization/)"
 
 # Fuzz targets at the parse boundaries (untrusted input). Seeds run automatically
 # in `make test`/CI; this drives actual fuzzing. Crashers land in the package's

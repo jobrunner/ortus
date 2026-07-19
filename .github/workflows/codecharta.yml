@@ -1,0 +1,103 @@
+# CodeCharta analysis — a 3D "code city" of the Go core, combining structure +
+# complexity (ccsh unifiedparser), test coverage (go cover -> lcov ->
+# coverageimport) and git history / churn / authors (gitlogparser). The merged
+# map is uploaded as an artifact; open it at
+# https://maibornwolff.github.io/codecharta/visualization/ (load ortus.cc.json.gz).
+# Informational: it produces an artifact, not a pass/fail quality gate, and is
+# NOT a required check — it won't be added to the merge-blocking ruleset. (It can
+# still fail on a tooling error — a broken install/parser/merge — which is worth
+# fixing, but a low mutation/coverage number here never vetoes a merge.)
+name: CodeCharta
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+env:
+  GO_VERSION: '1.26.5'
+  CCSH_VERSION: '1.143.0'
+  GCOV2LCOV_VERSION: 'v1.1.1'
+
+permissions:
+  contents: read
+
+jobs:
+  codecharta:
+    name: CodeCharta analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # gitlogparser needs full history for churn/authors/age
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Set up Java (ccsh runtime)
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # go test -coverprofile links cgo SpatiaLite; install it so the tests build.
+      - name: Install SpatiaLite
+        run: |
+          sudo apt-get update && sudo apt-get install -y libsqlite3-mod-spatialite
+          lib=$(dpkg -L libsqlite3-mod-spatialite | grep -m1 'mod_spatialite\.so' || true)
+          if [ -z "$lib" ]; then echo "mod_spatialite.so not found" >&2; exit 1; fi
+          echo "SPATIALITE_LIBRARY_PATH=$lib" >> "$GITHUB_ENV"
+
+      - name: Install ccsh + gcov2lcov
+        run: |
+          npm install -g codecharta-analysis@${{ env.CCSH_VERSION }}
+          go install github.com/jandelgado/gcov2lcov@${{ env.GCOV2LCOV_VERSION }}
+          # Put the go install dir on PATH so later steps call gcov2lcov by name
+          # (go install honours GOBIN when set, else the first GOPATH/bin).
+          gobin="$(go env GOBIN)"; [ -n "$gobin" ] || gobin="$(go env GOPATH)/bin"
+          echo "$gobin" >> "$GITHUB_PATH"
+
+      - name: Structure + complexity (unifiedparser)
+        run: ccsh unifiedparser . -fe=go -e='_test\.go,third_party' -nc -o base.cc.json
+
+      - name: Test coverage -> cc.json (best-effort)
+        run: |
+          # Best-effort: a build/test failure (caught by the Test job) must not sink
+          # the map. Only import coverage if a non-empty profile was produced. Paths
+          # are repo-relative, matching the unifiedparser nodes so the merge lands
+          # coverage on the code files.
+          go test -coverprofile=coverage.out ./... || true
+          if [ -s coverage.out ]; then
+            gcov2lcov -infile=coverage.out -outfile=coverage.info
+            ccsh coverageimport coverage.info -f lcov -nc -o coverage.cc.json
+          else
+            echo "::warning::no coverage profile produced; the map will omit coverage"
+          fi
+
+      - name: Git history (churn / authors)
+        run: ccsh gitlogparser repo-scan --repo-path=. --add-author --silent -nc -o git.cc.json
+
+      - name: Merge into ortus.cc.json.gz
+        run: |
+          # base + git always exist; coverage only when the step above produced it.
+          inputs="base.cc.json git.cc.json"
+          [ -f coverage.cc.json ] && inputs="$inputs coverage.cc.json"
+          ccsh merge $inputs -o ortus.cc.json.gz
+
+      - name: Upload map
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: codecharta-map
+          path: ortus.cc.json.gz
+          if-no-files-found: warn

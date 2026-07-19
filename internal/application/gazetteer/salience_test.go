@@ -1,6 +1,7 @@
 package gazetteer
 
 import (
+	"math"
 	"testing"
 
 	"github.com/jobrunner/ortus/internal/domain"
@@ -198,5 +199,109 @@ func TestCompositeSalienceTunableCapitalBonus(t *testing.T) {
 	best, ok := cs.Select([]Candidate{city, capVillage}, domain.BearingPolicy{})
 	if !ok || best.Place.Name != "Capital" {
 		t.Errorf("tuned capital bonus should make the capital village win, got %+v (ok=%v)", best.Place, ok)
+	}
+}
+
+// TestCompositeScoreTerms pins every term of CompositeSalience.score so a mutated
+// operator (population branch, log/capital/wiki add, distance decay) changes the
+// number and fails. Values are chosen to be exact or near-exact.
+func TestCompositeScoreTerms(t *testing.T) {
+	c := DefaultCompositeSalience() // PopWeight 1, Wiki 0.3, Decay 0.04, CapScale 0.8, prior city/town/village 4.3/3.3/2.3
+	approx := func(got, want float64) bool { return math.Abs(got-want) < 1e-9 }
+	cases := []struct {
+		name string
+		cand Candidate
+		want float64
+	}{
+		// log10(1+9999)=4 ; minus 0.04*10 = 0.4  -> 3.6
+		{"population base minus decay", pcand(domain.ClassCity, "A", 10, 9999, "", ""), 3.6},
+		// population 0 -> class prior (village 2.3), distance 0
+		{"class-prior fallback when population unknown", pcand(domain.ClassVillage, "B", 0, 0, "", ""), 2.3},
+		// town prior 3.3 + CapScale 0.8 * CapitalBonus["3"]=1.5 => +1.2 -> 4.5
+		{"capital bonus added and scaled", pcand(domain.ClassTown, "C", 0, 0, "3", ""), 4.5},
+		// town prior 3.3 + wiki 0.3 -> 3.6
+		{"wikidata bonus added", pcand(domain.ClassTown, "D", 0, 0, "", "Q1"), 3.6},
+		// same as case 1 base (4.0) but 25 km -> minus 0.04*25=1.0 -> 3.0 (decay sign+slope)
+		{"distance decay reduces score", pcand(domain.ClassCity, "E", 25, 9999, "", ""), 3.0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := c.score(tc.cand); !approx(got, tc.want) {
+				t.Errorf("score = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestEligibleBoundary pins the reach>0 && dist<=reach logic (boundary + the
+// unknown-class guard).
+func TestEligibleBoundary(t *testing.T) {
+	pol := domain.DefaultBearingPolicy() // reach: village 5, town 18, city 60
+	cases := []struct {
+		name string
+		cand Candidate
+		want bool
+	}{
+		{"at reach is eligible (<=)", cand(domain.ClassTown, "T", 18), true},
+		{"just beyond reach is not", cand(domain.ClassTown, "T", 18.0001), false},
+		{"well within reach", cand(domain.ClassCity, "C", 1), true},
+		{"unknown class has no reach", cand(domain.ClassUnknown, "U", 1), false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := eligible(tc.cand, pol); got != tc.want {
+				t.Errorf("eligible = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestNearerAndMoreSalient pins the deterministic tie-breaks.
+func TestNearerAndMoreSalient(t *testing.T) {
+	if !nearer(cand(domain.ClassTown, "A", 5), cand(domain.ClassTown, "B", 10)) {
+		t.Error("nearer: closer candidate should win")
+	}
+	if nearer(cand(domain.ClassTown, "A", 10), cand(domain.ClassTown, "B", 5)) {
+		t.Error("nearer: farther candidate must not win")
+	}
+	if !nearer(cand(domain.ClassTown, "A", 5), cand(domain.ClassTown, "B", 5)) {
+		t.Error("nearer: equal distance should fall back to smaller name (A<B)")
+	}
+	if nearer(cand(domain.ClassTown, "B", 5), cand(domain.ClassTown, "A", 5)) {
+		t.Error("nearer: equal distance, larger name must not win")
+	}
+	// class dominates distance
+	if !moreSalient(cand(domain.ClassCity, "C", 100), cand(domain.ClassTown, "T", 1)) {
+		t.Error("moreSalient: higher class should win despite being farther")
+	}
+	if moreSalient(cand(domain.ClassTown, "T", 1), cand(domain.ClassCity, "C", 100)) {
+		t.Error("moreSalient: lower class must not win")
+	}
+	if !moreSalient(cand(domain.ClassTown, "A", 3), cand(domain.ClassTown, "B", 5)) {
+		t.Error("moreSalient: same class should fall back to nearer")
+	}
+}
+
+// TestNearestProminent pins the proximity override: off when PreferNearestKM<=0,
+// villages excluded, the PreferNearestKM boundary, and nearest-qualifying wins.
+func TestNearestProminent(t *testing.T) {
+	pol := domain.DefaultBearingPolicy() // PreferNearestKM 5
+	off := pol
+	off.PreferNearestKM = 0
+	if _, ok := nearestProminent([]Candidate{cand(domain.ClassCity, "C", 1)}, off); ok {
+		t.Error("override off (PreferNearestKM<=0) must yield ok=false")
+	}
+	if _, ok := nearestProminent([]Candidate{cand(domain.ClassVillage, "V", 1)}, pol); ok {
+		t.Error("villages are excluded from the proximity override")
+	}
+	if _, ok := nearestProminent([]Candidate{cand(domain.ClassTown, "T", 6)}, pol); ok {
+		t.Error("a town beyond PreferNearestKM must not qualify")
+	}
+	if c, ok := nearestProminent([]Candidate{cand(domain.ClassTown, "T", 5)}, pol); !ok || c.Place.Name != "T" {
+		t.Errorf("a town exactly at PreferNearestKM should qualify, got %+v (ok=%v)", c.Place, ok)
+	}
+	got, ok := nearestProminent([]Candidate{cand(domain.ClassTown, "T", 4), cand(domain.ClassCity, "C", 2)}, pol)
+	if !ok || got.Place.Name != "C" {
+		t.Errorf("nearest qualifying should win, got %+v (ok=%v)", got.Place, ok)
 	}
 }
