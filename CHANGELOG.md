@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.25.0](https://github.com/jobrunner/ortus/compare/v0.24.0...v0.25.0) (2026-07-19)
+
+
+### Features
+
+* **gazetteer:** add islands layer and elevation in the frontend gazetteer block ([12fe473](https://github.com/jobrunner/ortus/commit/12fe473847b04306480056e528021670a0c8e88a))
+* **gazetteer:** islands layer + elevation in the frontend gazetteer block ([dee8166](https://github.com/jobrunner/ortus/commit/dee8166aaf7dfab8029e19c19a0e24b8d695fbef))
+
+
+### Bug Fixes
+
+* **ci:** fail cleanly on malformed CodeCharta ratchet config ([4bd900c](https://github.com/jobrunner/ortus/commit/4bd900cde5db4fef7fbabb5ebaf75b4f4c6180a1))
+* **ci:** friendlier ratchet errors + doc exit codes + stale-allowlist hint ([3d32540](https://github.com/jobrunner/ortus/commit/3d32540f6a35f7798b29fdd56ba6708e38b2a654))
+* **ci:** robust map-nodes parsing + use cfg_path in ratchet messages ([ce77ff8](https://github.com/jobrunner/ortus/commit/ce77ff8139a6abff58250636c0e6e596bdc81f2b))
+* **frontend:** only linkify http(s) elevation source URLs ([6be8d98](https://github.com/jobrunner/ortus/commit/6be8d98ba99ea002528b8aa6e8ed7657b3f16578))
+* **query:** log client cancellations at debug, not warn ([e8c885e](https://github.com/jobrunner/ortus/commit/e8c885e67cd345964f9fae948000c0bb04f36acf))
+* **query:** log client cancellations at debug, not warn ([1f645a6](https://github.com/jobrunner/ortus/commit/1f645a6bff72ff125c95df65fe27cfd75af1f8d3))
+* **query:** only treat context.Canceled as expected; neutral skip event ([f1c1d97](https://github.com/jobrunner/ortus/commit/f1c1d97f3c130d327ed113e87d6c79ab53ce4b8b))
+
 ## [0.24.0](https://github.com/jobrunner/ortus/compare/v0.23.0...v0.24.0) (2026-07-18)
 
 
