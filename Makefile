@@ -105,6 +105,7 @@ codecharta: ## CodeCharta-Map (Struktur+Komplexitaet+Coverage+Git) -> ortus.cc.j
 	   inputs="$$inputs coverage.cc.json"; \
 	 else echo "WARN: keine coverage.out — Map ohne Coverage"; fi; \
 	 ccsh merge $$inputs -o ortus.cc.json.gz
+	python3 scripts/codecharta-ratchet.py ortus.cc.json.gz .codecharta-ratchet.json
 	@echo "-> ortus.cc.json.gz  (laden in https://maibornwolff.github.io/codecharta/visualization/)"
 
 # Fuzz targets at the parse boundaries (untrusted input). Seeds run automatically
