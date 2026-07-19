@@ -1,18 +1,17 @@
 # Mutation testing with gremlins — a HARD GATE on the pure-logic core.
 # Coverage tells you a line executed; mutation testing tells you a test would
 # actually CATCH a bug in it. It runs the suite per mutant but the core packages
-# are fast (~100 s total), so it gates every PR that touches them AND runs weekly
-# (on the default branch). The job FAILS when a package's mutation score is below its
+# are fast (~100 s total), so it gates every PR (required status check) AND runs
+# weekly (on the default branch). The job FAILS when a package's mutation score is below its
 # ratcheted baseline (per-package thresholds below; raise them as tests improve).
 name: Mutation Testing
 
 on:
+  # Runs on every PR (not path-filtered) so it can be a REQUIRED status check —
+  # a path-filtered check that skips would leave the requirement permanently
+  # unsatisfied and block unrelated PRs. The run is fast (~100 s).
   pull_request:
-    paths:
-      - 'internal/domain/**'
-      - 'internal/application/**'
-      - '.github/workflows/mutation.yml'
-      - '.gremlins.yaml'
+    branches: [main, master]
   schedule:
     - cron: '0 3 * * 1' # Monday 03:00 UTC
   workflow_dispatch:

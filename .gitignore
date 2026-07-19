@@ -12,6 +12,11 @@
 # Output of go coverage
 coverage.out
 coverage.html
+coverage.info
+
+# CodeCharta analysis output (make codecharta)
+*.cc.json
+*.cc.json.gz
 
 # Dependency directories
 vendor/

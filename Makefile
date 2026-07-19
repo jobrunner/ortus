@@ -91,6 +91,17 @@ mutation: ## Mutation-Testing (gremlins) — hartes Gate pro Paket, wie in der C
 	 gremlins unleash --threshold-efficacy 65 --threshold-mcover 88 ./internal/application || rc=1; \
 	 exit $$rc
 
+codecharta: ## CodeCharta-Map (Struktur+Komplexitaet+Coverage+Git) -> ortus.cc.json.gz (braucht node+java)
+	@command -v ccsh >/dev/null 2>&1 || npm install -g codecharta-analysis@1.143.0
+	$(GO) install github.com/jandelgado/gcov2lcov@v1.1.1
+	ccsh unifiedparser . -fe=go -e='_test\.go,third_party' -nc -o base.cc.json
+	$(GO) test -coverprofile=coverage.out ./... || true
+	$$($(GO) env GOPATH)/bin/gcov2lcov -infile=coverage.out -outfile=coverage.info
+	ccsh coverageimport coverage.info -f lcov -nc -o coverage.cc.json
+	ccsh gitlogparser repo-scan --repo-path=. --add-author --silent -nc -o git.cc.json
+	ccsh merge base.cc.json coverage.cc.json git.cc.json -o ortus.cc.json.gz
+	@echo "-> ortus.cc.json.gz  (laden in https://maibornwolff.github.io/codecharta/visualization/)"
+
 # Fuzz targets at the parse boundaries (untrusted input). Seeds run automatically
 # in `make test`/CI; this drives actual fuzzing. Crashers land in the package's
 # testdata/fuzz/ and become permanent regression seeds.

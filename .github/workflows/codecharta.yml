@@ -1,0 +1,87 @@
+# CodeCharta analysis — a 3D "code city" of the Go core, combining structure +
+# complexity (ccsh unifiedparser), test coverage (go cover -> lcov ->
+# coverageimport) and git history / churn / authors (gitlogparser). The merged
+# map is uploaded as an artifact; open it at
+# https://maibornwolff.github.io/codecharta/visualization/ (load ortus.cc.json.gz).
+# Informational (not a gate): it always succeeds and never blocks a merge.
+name: CodeCharta
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+env:
+  GO_VERSION: '1.26.5'
+  CCSH_VERSION: '1.143.0'
+  GCOV2LCOV_VERSION: 'v1.1.1'
+
+permissions:
+  contents: read
+
+jobs:
+  codecharta:
+    name: CodeCharta analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # gitlogparser needs full history for churn/authors/age
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Set up Java (ccsh runtime)
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # go test -coverprofile links cgo SpatiaLite; install it so the tests build.
+      - name: Install SpatiaLite
+        run: |
+          sudo apt-get update && sudo apt-get install -y libsqlite3-mod-spatialite
+          lib=$(dpkg -L libsqlite3-mod-spatialite | grep -m1 'mod_spatialite\.so' || true)
+          if [ -z "$lib" ]; then echo "mod_spatialite.so not found" >&2; exit 1; fi
+          echo "SPATIALITE_LIBRARY_PATH=$lib" >> "$GITHUB_ENV"
+
+      - name: Install ccsh + gcov2lcov
+        run: |
+          npm install -g codecharta-analysis@${{ env.CCSH_VERSION }}
+          go install github.com/jandelgado/gcov2lcov@${{ env.GCOV2LCOV_VERSION }}
+
+      - name: Structure + complexity (unifiedparser)
+        run: ccsh unifiedparser . -fe=go -e='_test\.go,third_party' -nc -o base.cc.json
+
+      - name: Test coverage -> cc.json
+        run: |
+          # Tolerate test failures here — the Test job is the gate; this only needs
+          # whatever coverage was produced. Paths are repo-relative, matching the
+          # unifiedparser nodes so the merge lands coverage on the code files.
+          go test -coverprofile=coverage.out ./... || true
+          "$(go env GOPATH)/bin/gcov2lcov" -infile=coverage.out -outfile=coverage.info
+          ccsh coverageimport coverage.info -f lcov -nc -o coverage.cc.json
+
+      - name: Git history (churn / authors)
+        run: ccsh gitlogparser repo-scan --repo-path=. --add-author --silent -nc -o git.cc.json
+
+      - name: Merge into ortus.cc.json.gz
+        run: ccsh merge base.cc.json coverage.cc.json git.cc.json -o ortus.cc.json.gz
+
+      - name: Upload map
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: codecharta-map
+          path: ortus.cc.json.gz
+          if-no-files-found: warn
