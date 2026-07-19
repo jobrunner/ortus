@@ -1060,9 +1060,10 @@ const frontendHTML = `<!DOCTYPE html>
             }
 
             // Renders the location-context block: administrative hierarchy (with the
-            // meaning of each level), bearing, name-source explanations and the
-            // dataset attribution — everything the /query response carries under
-            // "gazetteer" so the page shows it without a second request.
+            // meaning of each level), the containing island(s), elevation, bearing,
+            // name-source explanations and the dataset attribution — everything the
+            // /query response carries under "gazetteer" so the page shows it without
+            // a second request.
             function renderGazetteer(gaz) {
                 let html = '<div class="gazetteer-block">';
                 html += '<h3 class="gazetteer-title">Ort &amp; Umgebung</h3>';

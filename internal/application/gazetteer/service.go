@@ -44,8 +44,8 @@ type Manifest struct {
 	AdminNameColumn string // e.g. "name"
 	ParentFKColumn  string // e.g. "parent_id" (walked by ResolveChain)
 
-	// islands layer (optional; empty ⇒ no island lookup, the response omits the
-	// block). The name-native/name-source columns are the shared ones below.
+	// islands layer (optional; empty ⇒ no island lookup, so the response's islands
+	// block is null). The name-native/name-source columns are the shared ones below.
 	IslandsLayer      string // e.g. "islands"
 	IslandsNameColumn string // e.g. "name"
 
@@ -221,9 +221,9 @@ func (s *Service) Locate(ctx context.Context, p domain.Coordinate) (*domain.Loca
 // Islands returns the named island(s) whose polygon contains the query point,
 // via a point-in-polygon query against the optional islands layer. It returns
 // (nil, nil) when no islands layer is configured (the dataset predates the
-// feature) or when the point lies on no island, so the handler omits the block.
-// Island lookup is independent of admin coverage: a point on a small island
-// outside any admin polygon still resolves its island name.
+// feature) or when the point lies on no island; adapters then render a null
+// islands block. Island lookup is independent of admin coverage: a point on a
+// small island outside any admin polygon still resolves its island name.
 func (s *Service) Islands(ctx context.Context, p domain.Coordinate) ([]domain.Island, error) {
 	if err := s.ready(); err != nil {
 		return nil, err

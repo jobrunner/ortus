@@ -21,7 +21,7 @@ type Gazetteer interface {
 
 	// Islands returns the named island(s) whose polygon contains the point, or
 	// nil when the point is on no island or the optional islands layer is not
-	// configured (so the caller omits the block).
+	// configured — adapters render a null islands block in that case.
 	Islands(ctx context.Context, p domain.Coordinate) ([]domain.Island, error)
 
 	// Elevation returns the height above sea level at the point, or (nil, nil)
