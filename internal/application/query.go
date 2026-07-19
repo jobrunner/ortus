@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"time"
 
@@ -246,6 +247,12 @@ func (s *QueryService) queryLayer(ctx context.Context, sourceID string, layer *d
 
 	features, err := s.registry.Query(ctx, sourceID, layer.Name, queryCoord)
 	if err != nil {
+		if isCanceled(err) {
+			// Expected when the client aborts the request (e.g. the map UI
+			// cancels the previous in-flight query) — not a server failure.
+			s.logger.Debug("layer query canceled", "source", sourceID, "layer", layer.Name, "error", err)
+			return false
+		}
 		s.logger.Warn("layer query failed", "source", sourceID, "layer", layer.Name, "error", err)
 		span.RecordError(err)
 		span.SetStatus(output.StatusError, "layer query failed")
@@ -287,12 +294,23 @@ func (s *QueryService) transformCoordinate(ctx context.Context, coord domain.Coo
 
 	transformed, err := s.transformer.Transform(ctx, coord, layer.SRID)
 	if err != nil {
+		if isCanceled(err) {
+			s.logger.Debug("coordinate transformation canceled", "from_srid", coord.SRID, "to_srid", layer.SRID, "error", err)
+			return coord, false
+		}
 		s.logger.Warn("coordinate transformation failed", "from_srid", coord.SRID, "to_srid", layer.SRID, "error", err)
 		span.RecordError(err)
 		span.SetStatus(output.StatusError, "transform failed")
 		return coord, false
 	}
 	return transformed, true
+}
+
+// isCanceled reports whether err is a context cancellation or deadline — an
+// expected outcome when the client aborts the request (e.g. the map UI cancels
+// the previous in-flight query), not a server-side failure worth warning about.
+func isCanceled(err error) bool {
+	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
 }
 
 // applyMaxFeaturesLimit limits features to not exceed maxFeatures. Returns true if limit reached.
