@@ -63,7 +63,8 @@ GeoPackage ships that metadata.
 
 **Gazetteer enrichment (on by default).** When the [gazetteer feature](configuration.md)
 is enabled, the query response additionally carries a `gazetteer` block with the
-administrative hierarchy, bearing, elevation (when a DEM is configured), name-source
+administrative hierarchy, the island(s) containing the point (when an islands layer
+is configured), elevation (when a DEM is configured), bearing, name-source
 explanations and the dataset attribution — so a client gets everything to process
 the result in one call. It is
 the same structure as the [gazetteer endpoint](#gazetteer-endpoint) (minus
@@ -79,8 +80,9 @@ errors the query) if it fails.
   "processing_time_ms": 12,
   "gazetteer": {
     "admin": { "country_iso": "DE", "hierarchy": [ /* … */ ] },
-    "bearing": { /* … */ },
+    "islands": [ /* … or null when the point is on no mapped island … */ ],
     "elevation": { /* … or null when no DEM configured … */ },
+    "bearing": { /* … */ },
     "sources": [ { "code": "latin-osm", "short": "…", "long": "…", "standard": "" } ],
     "license": { "name": "ODbL-1.0", "url": "…", "attribution": "© OpenStreetMap contributors …" }
   }
@@ -107,12 +109,13 @@ GET /api/v1/gazetteer?lon={longitude}&lat={latitude}
 GET /api/v1/gazetteer?x={x}&y={y}&srid={srid}
 ```
 
-Reverse-geocode a coordinate to its administrative hierarchy (`admin`), compute
+Reverse-geocode a coordinate to its administrative hierarchy (`admin`), name the
+island(s) containing it (`islands`, when an islands layer is configured), compute
 a bearing to the most salient nearby place (`bearing`, e.g. "4 km E Würzburg"),
 and — when a DEM is configured — report the height above sea level at the point
-(`elevation`). Each part is `null` when it has no result — no admin coverage, no
-anchor within reach, or no elevation configured. The dataset is WGS84; a non-4326
-`srid` is rejected.
+(`elevation`). Each part is `null` when it has no result — no admin coverage, not
+on a mapped island, no anchor within reach, or no elevation configured. The dataset
+is WGS84; a non-4326 `srid` is rejected.
 
 **"in X" vs "prope X".** The bearing distinguishes being *inside* a place from
 being *near* it by **administrative containment**, not distance: when the query
@@ -137,6 +140,9 @@ bearing from a label — the find is *in* Würzburg).
         "equivalent_description": "Local municipal authority (city/town/commune)." }
     ]
   },
+  "islands": [
+    { "name": "Sylt", "name_native": "", "name_source": "latin-osm" }
+  ],
   "bearing": {
     "reference": "Würzburg", "name_native": "", "name_source": "latin-osm",
     "class": "city", "distance_km": 4.0, "azimuth": 90.0, "compass": "E",
@@ -161,8 +167,8 @@ bearing from a label — the find is *in* Würzburg).
 }
 ```
 
-Each admin unit and the bearing anchor carry the romanized `name`, the
-original-script `name_native` (empty when the name is already Latin), and a
+Each admin unit, each island, and the bearing anchor carry the romanized `name`,
+the original-script `name_native` (empty when the name is already Latin), and a
 `name_source` provenance code. Admin units also carry the country-specific
 `local_term` and the generic `equivalent_description` for their tier. The
 response-wide `sources` block describes each distinct `name_source` code once
@@ -174,6 +180,13 @@ descriptions. The `license` block is the dataset-wide attribution (from the
 `license:` section of `ortus-gazetteer.yaml`); it is omitted when the manifest
 sets no license. This is the same block that appears under `gazetteer` in the
 [`/query`](#query-all-sources) response.
+
+The `islands` block is an array of the island(s) whose polygon contains the point,
+resolved by point-in-polygon against the optional islands layer of the gazetteer
+package — independently of admin coverage, so a small island outside any admin
+polygon still resolves. It is `null` when the point is on no mapped island or no
+islands layer is configured (`islands:` in `ortus-gazetteer.yaml`); nested islands
+yield several entries.
 
 The `elevation` block is present only when a DEM is configured
 (`gazetteer.elevation.source_id`); it is `null` otherwise. It reports the height

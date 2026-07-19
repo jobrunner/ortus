@@ -36,6 +36,13 @@ type adminOut struct {
 	Hierarchy  []adminUnitOut `json:"hierarchy"`
 }
 
+// islandOut is one island whose polygon contains the coordinate.
+type islandOut struct {
+	Name       string `json:"name"`
+	NameNative string `json:"name_native"`
+	NameSource string `json:"name_source"`
+}
+
 // bearingOut is the bearing fix relative to the most salient nearby place.
 type bearingOut struct {
 	Reference  string  `json:"reference"`
@@ -88,6 +95,7 @@ type elevationOut struct {
 // (null when unset).
 type gazetteerOut struct {
 	Admin     *adminOut     `json:"admin"`
+	Islands   []islandOut   `json:"islands"`
 	Bearing   *bearingOut   `json:"bearing"`
 	Elevation *elevationOut `json:"elevation"`
 	Sources   []sourceOut   `json:"sources"`
@@ -124,11 +132,13 @@ func addGazetteer(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 	mcp.AddTool(srv, &mcp.Tool{
 		Name: "gazetteer",
 		Description: "Reverse-geocode a coordinate to its administrative hierarchy " +
-			"(admin), compute a bearing to the most salient nearby place (bearing, " +
-			"e.g. '4 km E Würzburg'), and report the height above sea level " +
-			"(elevation, meters; when a DEM is configured). Any part is null when it " +
-			"has no result — no admin coverage, no anchor within reach, or no " +
-			"elevation configured. Equivalent to GET /api/v1/gazetteer.",
+			"(admin), name the island(s) containing it (islands, when an islands " +
+			"layer is configured), compute a bearing to the most salient nearby " +
+			"place (bearing, e.g. '4 km E Würzburg'), and report the height above " +
+			"sea level (elevation, meters; when a DEM is configured). Any part is " +
+			"null when it has no result — no admin coverage, not on an island, no " +
+			"anchor within reach, or no elevation configured. Equivalent to " +
+			"GET /api/v1/gazetteer.",
 	}, func(ctx toolCtx, _ *callRequest, in gazetteerIn) (*callResult, gazetteerOut, error) {
 		coord, err := selectCoordinate(in.Lon, in.Lat, in.X, in.Y, in.SRID)
 		if err != nil {
@@ -158,6 +168,22 @@ func addGazetteer(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 			// no admin coverage — leave nil
 		default:
 			return nil, gazetteerOut{}, err
+		}
+
+		islands, err := deps.Gazetteer.Islands(ctx, coord)
+		switch {
+		case err != nil:
+			return nil, gazetteerOut{}, err
+		case len(islands) > 0:
+			io := make([]islandOut, len(islands))
+			for i, is := range islands {
+				io[i] = islandOut{
+					Name:       is.Name,
+					NameNative: is.NameNative,
+					NameSource: prov.add(is.NameSource),
+				}
+			}
+			out.Islands = io
 		}
 
 		fix, err := deps.Gazetteer.Bearing(ctx, coord, deps.BearingPolicy.OrDefault())

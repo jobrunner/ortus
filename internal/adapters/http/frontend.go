@@ -526,7 +526,7 @@ const frontendHTML = `<!DOCTYPE html>
             margin-top: 0.125rem;
         }
 
-        .admin-src, .gaz-bearing-meta {
+        .admin-src, .gaz-bearing-meta, .gaz-elevation-meta {
             font-size: 0.75rem;
             color: var(--text-muted);
             margin-top: 0.125rem;
@@ -540,7 +540,7 @@ const frontendHTML = `<!DOCTYPE html>
             font-size: 0.75rem;
         }
 
-        .gaz-bearing {
+        .gaz-bearing, .gaz-elevation {
             font-weight: 500;
         }
 
@@ -1050,12 +1050,13 @@ const frontendHTML = `<!DOCTYPE html>
                 return html;
             }
 
-            // Whether the gazetteer block has anything worth showing. Only admin or
-            // bearing constitute location content — the sources list is empty without
-            // them, and the dataset license alone is not location context. Guards
-            // against an empty "Ort & Umgebung" box for points with no coverage.
+            // Whether the gazetteer block has anything worth showing. Admin, an
+            // island, elevation or a bearing constitute location content — the
+            // sources list is empty without them, and the dataset license alone is
+            // not location context. Guards against an empty "Ort & Umgebung" box for
+            // points with no coverage.
             function hasGazetteerContent(gaz) {
-                return !!(gaz && (gaz.admin || gaz.bearing));
+                return !!(gaz && (gaz.admin || (gaz.islands && gaz.islands.length) || gaz.elevation || gaz.bearing));
             }
 
             // Renders the location-context block: administrative hierarchy (with the
@@ -1100,6 +1101,57 @@ const frontendHTML = `<!DOCTYPE html>
                             html += '</li>';
                         });
                         html += '</ul>';
+                    }
+                    html += '</div>';
+                }
+
+                if (gaz.islands && gaz.islands.length > 0) {
+                    html += '<div class="gaz-section">';
+                    html += '<div class="gaz-label">Insel' + (gaz.islands.length > 1 ? 'n' : '') + '</div>';
+                    html += '<ul class="admin-list">';
+                    gaz.islands.forEach(function(is) {
+                        html += '<li class="admin-item">';
+                        html += '<div class="admin-line">';
+                        html += '<span class="admin-name">' + escapeHtml(is.name || '-') + '</span>';
+                        if (is.name_native && is.name_native !== is.name) {
+                            html += ' <span class="admin-native">' + escapeHtml(is.name_native) + '</span>';
+                        }
+                        html += '</div>';
+                        if (is.name_source) {
+                            html += '<div class="admin-src">Name: <code>' + escapeHtml(is.name_source) + '</code></div>';
+                        }
+                        html += '</li>';
+                    });
+                    html += '</ul></div>';
+                }
+
+                // Elevation renders inside the gazetteer block, before the bearing.
+                if (gaz.elevation) {
+                    const e = gaz.elevation;
+                    html += '<div class="gaz-section">';
+                    html += '<div class="gaz-label">Höhe</div>';
+                    let elevText;
+                    if (e.sea_level) {
+                        elevText = 'Meeresspiegel (0 m)';
+                    } else {
+                        elevText = (typeof e.meters === 'number' ? e.meters.toFixed(0) : '-') + ' m ü. NN';
+                    }
+                    html += '<div class="gaz-elevation">' + escapeHtml(elevText) + '</div>';
+                    const emeta = [];
+                    if (typeof e.accuracy_m === 'number' && e.accuracy_m > 0) emeta.push('±' + e.accuracy_m.toFixed(0) + ' m');
+                    if (e.accuracy_basis) emeta.push(escapeHtml(e.accuracy_basis));
+                    if (e.vertical_datum) emeta.push(escapeHtml(e.vertical_datum));
+                    if (emeta.length > 0) {
+                        html += '<div class="gaz-elevation-meta">' + emeta.join(' &middot; ') + '</div>';
+                    }
+                    if (e.source && e.source.name) {
+                        html += '<div class="gaz-attribution">Quelle: ';
+                        if (e.source.url) {
+                            html += '<a href="' + escapeHtml(e.source.url) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(e.source.name) + '</a>';
+                        } else {
+                            html += escapeHtml(e.source.name);
+                        }
+                        html += '</div>';
                     }
                     html += '</div>';
                 }

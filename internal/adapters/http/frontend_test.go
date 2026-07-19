@@ -35,10 +35,28 @@ func TestFrontendCoordinateInputWiring(t *testing.T) {
 		"equivalent_description",              // admin-level meaning rendered
 		"Namensquellen",                       // name_source explanations section
 		"Datenlizenz",                         // dataset attribution rendered
+		"gaz-elevation",                       // elevation rendered in the gazetteer block
+		"gaz.islands",                         // islands rendered in the gazetteer block
 	} {
 		if !strings.Contains(html, marker) {
 			t.Errorf("frontend is missing expected marker %q", marker)
 		}
+	}
+}
+
+// TestFrontendElevationBeforeBearing pins the required ordering: elevation
+// renders inside the gazetteer block BEFORE the bearing ("Peilung"), and islands
+// render before elevation (containment first, then height, then bearing).
+func TestFrontendElevationBeforeBearing(t *testing.T) {
+	html := frontendHTML
+	iIslands := strings.Index(html, `Insel`)   // islands section label
+	iElev := strings.Index(html, `Höhe`)       // elevation section label
+	iBearing := strings.Index(html, `Peilung`) // bearing section label
+	if iIslands < 0 || iElev < 0 || iBearing < 0 {
+		t.Fatalf("gazetteer section labels missing: islands=%d elevation=%d bearing=%d", iIslands, iElev, iBearing)
+	}
+	if !(iIslands < iElev && iElev < iBearing) {
+		t.Errorf("expected islands < elevation < bearing in render order; got islands=%d elevation=%d bearing=%d", iIslands, iElev, iBearing)
 	}
 }
 

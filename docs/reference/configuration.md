@@ -209,6 +209,10 @@ gazetteer:
 - `level_reference_path` (optional) enriches each admin level with its semantic
   `equivalent`, country-specific `local_term`, and `equivalent_description`.
   Without it, Locate still returns the raw hierarchy.
+- An optional `islands:` block in `ortus-gazetteer.yaml` (`layer`, `name_column`)
+  names the island(s) whose polygon contains the query point, surfaced as the
+  response `islands` array. `name_column` defaults to the admin layer's when
+  omitted. Without the block, no island lookup runs and `islands` is `null`.
 - `name_source_manifest_path` (optional) populates the response-wide `sources`
   block that describes each name-romanization/provenance code. Without it, each
   record still carries its raw `name_source` code but the descriptions are empty.

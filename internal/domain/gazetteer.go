@@ -99,6 +99,18 @@ type Locality struct {
 	Chain      []AdminUnit // most-local first
 }
 
+// Island is a named island whose polygon contains a coordinate — the result of a
+// point-in-polygon lookup against the gazetteer's optional islands layer. It
+// carries the same name provenance as places and admin units, so a client can
+// cite how the romanized Name was produced. A point may lie on several nested
+// islands (e.g. an islet within an archipelago), hence Locate-style results are
+// returned as a slice.
+type Island struct {
+	Name       string         // romanized (always-Latin) island name
+	NameNative string         // original-script name (empty if already Latin)
+	NameSource NameProvenance // how Name was romanized/sourced
+}
+
 // Elevation is the height above sea level at a queried coordinate, sampled from a
 // continuous raster DEM, plus the accuracy metadata a client needs to use it
 // responsibly. The accuracy fields matter for downstream terrain derivatives

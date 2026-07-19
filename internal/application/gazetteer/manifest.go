@@ -33,6 +33,13 @@ type manifestYAML struct {
 		CountryColumn  string `yaml:"country_column"`
 		ConstraintTier string `yaml:"bearing_constraint_tier"`
 	} `yaml:"admin"`
+	// Islands is optional: an added layer of named island polygons. When omitted,
+	// the gazetteer simply reports no island block. name_column defaults to the
+	// admin layer's when unset (the dataset shares column names across layers).
+	Islands struct {
+		Layer      string `yaml:"layer"`
+		NameColumn string `yaml:"name_column"`
+	} `yaml:"islands"`
 	License struct {
 		Name        string `yaml:"name"`
 		URL         string `yaml:"url"`
@@ -58,22 +65,30 @@ func ParseManifest(data []byte) (Manifest, error) {
 	if country == "" {
 		country = y.Places.CountryColumn
 	}
+	// islands.name_column defaults to the admin name column (shared convention)
+	// when an islands layer is declared without its own name column.
+	islandsName := y.Islands.NameColumn
+	if y.Islands.Layer != "" && islandsName == "" {
+		islandsName = y.Admin.NameColumn
+	}
 	m := Manifest{
-		PlacesLayer:      y.Places.Layer,
-		RankColumn:       y.Places.RankColumn,
-		NameColumn:       y.Places.NameColumn,
-		AdminFKColumn:    y.Places.AdminFK,
-		AdminLayer:       y.Admin.Layer,
-		LevelColumn:      y.Admin.LevelColumn,
-		AdminNameColumn:  y.Admin.NameColumn,
-		ParentFKColumn:   y.Admin.ParentFK,
-		CountryColumn:    country,
-		NameNativeColumn: y.Places.NameNativeColumn,
-		NameSourceColumn: y.Places.NameSourceColumn,
-		PopulationColumn: y.Places.PopulationColumn,
-		CapitalColumn:    y.Places.CapitalColumn,
-		NotabilityColumn: y.Places.NotabilityColumn,
-		ConstraintTier:   tier,
+		PlacesLayer:       y.Places.Layer,
+		RankColumn:        y.Places.RankColumn,
+		NameColumn:        y.Places.NameColumn,
+		AdminFKColumn:     y.Places.AdminFK,
+		AdminLayer:        y.Admin.Layer,
+		LevelColumn:       y.Admin.LevelColumn,
+		AdminNameColumn:   y.Admin.NameColumn,
+		ParentFKColumn:    y.Admin.ParentFK,
+		IslandsLayer:      y.Islands.Layer,
+		IslandsNameColumn: islandsName,
+		CountryColumn:     country,
+		NameNativeColumn:  y.Places.NameNativeColumn,
+		NameSourceColumn:  y.Places.NameSourceColumn,
+		PopulationColumn:  y.Places.PopulationColumn,
+		CapitalColumn:     y.Places.CapitalColumn,
+		NotabilityColumn:  y.Places.NotabilityColumn,
+		ConstraintTier:    tier,
 		License: domain.License{
 			Name:        y.License.Name,
 			URL:         y.License.URL,

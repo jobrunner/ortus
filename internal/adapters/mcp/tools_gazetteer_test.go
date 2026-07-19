@@ -16,9 +16,10 @@ import (
 
 // fakeGazetteer is a canned input.Gazetteer for the MCP tool test.
 type fakeGazetteer struct {
-	loc  *domain.Locality
-	fix  *domain.Fix
-	elev *domain.Elevation
+	loc     *domain.Locality
+	islands []domain.Island
+	fix     *domain.Fix
+	elev    *domain.Elevation
 }
 
 func (f fakeGazetteer) Locate(context.Context, domain.Coordinate) (*domain.Locality, error) {
@@ -26,6 +27,9 @@ func (f fakeGazetteer) Locate(context.Context, domain.Coordinate) (*domain.Local
 }
 func (f fakeGazetteer) Bearing(context.Context, domain.Coordinate, domain.BearingPolicy) (*domain.Fix, error) {
 	return f.fix, nil
+}
+func (f fakeGazetteer) Islands(context.Context, domain.Coordinate) ([]domain.Island, error) {
+	return f.islands, nil
 }
 func (f fakeGazetteer) Elevation(context.Context, domain.Coordinate) (*domain.Elevation, error) {
 	return f.elev, nil
