@@ -48,8 +48,9 @@ jobs:
           # required-status-check workflows — commits pushed with the default
           # GITHUB_TOKEN do NOT (GitHub's workflow loop-prevention), which leaves
           # the release PR permanently BLOCKED once checks are required. Falls back
-          # to GITHUB_TOKEN when the secret is unset (create RELEASE_PLEASE_TOKEN —
-          # a PAT with contents:write + pull-requests:write — to activate).
+          # to GITHUB_TOKEN when the secret is unset. To activate, create the
+          # RELEASE_PLEASE_TOKEN secret from a PAT: classic → `repo` + `workflow`
+          # scopes; fine-grained → Contents + Pull requests, both read/write.
           token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
 
   # Build + upload binaries only when a release was actually cut.
