@@ -62,6 +62,10 @@ jobs:
         run: |
           npm install -g codecharta-analysis@${{ env.CCSH_VERSION }}
           go install github.com/jandelgado/gcov2lcov@${{ env.GCOV2LCOV_VERSION }}
+          # Put the go install dir on PATH so later steps call gcov2lcov by name
+          # (go install honours GOBIN when set, else the first GOPATH/bin).
+          gobin="$(go env GOBIN)"; [ -n "$gobin" ] || gobin="$(go env GOPATH)/bin"
+          echo "$gobin" >> "$GITHUB_PATH"
 
       - name: Structure + complexity (unifiedparser)
         run: ccsh unifiedparser . -fe=go -e='_test\.go,third_party' -nc -o base.cc.json
@@ -74,7 +78,7 @@ jobs:
           # coverage on the code files.
           go test -coverprofile=coverage.out ./... || true
           if [ -s coverage.out ]; then
-            "$(go env GOPATH)/bin/gcov2lcov" -infile=coverage.out -outfile=coverage.info
+            gcov2lcov -infile=coverage.out -outfile=coverage.info
             ccsh coverageimport coverage.info -f lcov -nc -o coverage.cc.json
           else
             echo "::warning::no coverage profile produced; the map will omit coverage"

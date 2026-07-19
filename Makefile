@@ -97,9 +97,10 @@ codecharta: ## CodeCharta-Map (Struktur+Komplexitaet+Coverage+Git) -> ortus.cc.j
 	ccsh unifiedparser . -fe=go -e='_test\.go,third_party' -nc -o base.cc.json
 	ccsh gitlogparser repo-scan --repo-path=. --add-author --silent -nc -o git.cc.json
 	@$(GO) test -coverprofile=coverage.out ./... || true; \
+	 gobin=$$($(GO) env GOBIN); [ -n "$$gobin" ] || gobin=$$($(GO) env GOPATH)/bin; \
 	 inputs="base.cc.json git.cc.json"; \
 	 if [ -s coverage.out ]; then \
-	   $$($(GO) env GOPATH)/bin/gcov2lcov -infile=coverage.out -outfile=coverage.info; \
+	   "$$gobin"/gcov2lcov -infile=coverage.out -outfile=coverage.info; \
 	   ccsh coverageimport coverage.info -f lcov -nc -o coverage.cc.json; \
 	   inputs="$$inputs coverage.cc.json"; \
 	 else echo "WARN: keine coverage.out — Map ohne Coverage"; fi; \
