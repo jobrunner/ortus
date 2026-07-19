@@ -140,9 +140,7 @@ bearing from a label — the find is *in* Würzburg).
         "equivalent_description": "Local municipal authority (city/town/commune)." }
     ]
   },
-  "islands": [
-    { "name": "Sylt", "name_native": "", "name_source": "latin-osm" }
-  ],
+  "islands": null,
   "bearing": {
     "reference": "Würzburg", "name_native": "", "name_source": "latin-osm",
     "class": "city", "distance_km": 4.0, "azimuth": 90.0, "compass": "E",
@@ -184,9 +182,11 @@ sets no license. This is the same block that appears under `gazetteer` in the
 The `islands` block is an array of the island(s) whose polygon contains the point,
 resolved by point-in-polygon against the optional islands layer of the gazetteer
 package — independently of admin coverage, so a small island outside any admin
-polygon still resolves. It is `null` when the point is on no mapped island or no
-islands layer is configured (`islands:` in `ortus-gazetteer.yaml`); nested islands
-yield several entries.
+polygon still resolves. It is `null` when the point is on no mapped island (as in
+the inland Würzburg example above) or no islands layer is configured (`islands:` in
+`ortus-gazetteer.yaml`); nested islands yield several entries. For a point on an
+island it is, e.g.,
+`[{ "name": "Sylt", "name_native": "", "name_source": "latin-osm" }]`.
 
 The `elevation` block is present only when a DEM is configured
 (`gazetteer.elevation.source_id`); it is `null` otherwise. It reports the height

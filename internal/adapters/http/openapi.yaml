@@ -257,10 +257,7 @@ paths:
                       equivalent: state
                       local_term: Land
                       equivalent_description: First-level subdivision (state, region, province).
-                islands:                  # null unless the point lies on a mapped island
-                  - name: Sylt
-                    name_native: ""
-                    name_source: latin-osm
+                islands: null             # null: Würzburg is inland (an array of islands when the point is on one)
                 bearing:
                   reference: Würzburg
                   name_native: ""            # empty: already-Latin name (identical to reference)
