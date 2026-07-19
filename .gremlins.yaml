@@ -1,7 +1,15 @@
-# gremlins mutation-testing config. The weekly run is INFORMATIONAL: thresholds
-# are 0 so a low mutation score never fails the job — the score is a trend
-# signal for test effectiveness (coverage says a line ran; mutation says a test
-# would have caught a bug in it). Raise the thresholds later to ratchet.
+# gremlins mutation-testing config. The CI job (.github/workflows/mutation.yml)
+# is a HARD GATE: it runs each package with per-package --threshold-efficacy /
+# --threshold-mcover flags (domain is held to a stricter bar than application)
+# and FAILS the build when the mutation score regresses below the ratcheted
+# baseline. Coverage says a line ran; mutation says a test would have caught a
+# bug in it.
+#
+# The values below are a conservative GLOBAL FLOOR, used for ad-hoc local
+# `gremlins unleash` and as the default when the workflow doesn't pass a flag.
+# The per-package baselines the workflow enforces (raise them as tests improve):
+#   internal/domain       efficacy >= 90 %, mutator-coverage >= 95 %  (last: 95 / 100)
+#   internal/application  efficacy >= 65 %, mutator-coverage >= 88 %  (last: 69 / 90)
 unleash:
-  threshold-efficacy: 0
-  threshold-mcover: 0
+  threshold-efficacy: 65
+  threshold-mcover: 88
