@@ -1,17 +1,25 @@
-# Weekly mutation testing with gremlins. Coverage tells you a line executed;
-# mutation testing tells you a test would actually CATCH a bug in it. It's
-# expensive (the suite runs per mutant), so it runs weekly on the pure-logic
-# core only and is INFORMATIONAL — the score lands in the job summary + an
-# artifact for trend review; it never blocks (see .gremlins.yaml thresholds).
+# Mutation testing with gremlins — a HARD GATE on the pure-logic core.
+# Coverage tells you a line executed; mutation testing tells you a test would
+# actually CATCH a bug in it. It runs the suite per mutant but the core packages
+# are fast (~100 s total), so it gates every PR that touches them AND runs weekly
+# (on the default branch). The job FAILS when a package's mutation score is below its
+# ratcheted baseline (per-package thresholds below; raise them as tests improve).
 name: Mutation Testing
 
 on:
+  pull_request:
+    paths:
+      - 'internal/domain/**'
+      - 'internal/application/**'
+      - '.github/workflows/mutation.yml'
+      - '.gremlins.yaml'
   schedule:
     - cron: '0 3 * * 1' # Monday 03:00 UTC
   workflow_dispatch:
 
 env:
   GO_VERSION: '1.26.5'
+  GREMLINS_VERSION: 'v0.5.1'
 
 permissions:
   contents: read
@@ -40,26 +48,38 @@ jobs:
           echo "SPATIALITE_LIBRARY_PATH=$lib" >> "$GITHUB_ENV"
 
       - name: Install gremlins
-        run: go install github.com/go-gremlins/gremlins/cmd/gremlins@latest
+        run: go install github.com/go-gremlins/gremlins/cmd/gremlins@${{ env.GREMLINS_VERSION }}
 
-      # Informational: never fail the job on a low score (continue-on-error +
-      # thresholds 0). Scope is the pure-logic core; expand as runtime allows.
+      # Hard gate: each package must meet its per-package efficacy + mutator-
+      # coverage baseline, or gremlins exits non-zero and the job fails. Both
+      # packages always run (so the report shows both) before the job fails.
       - name: Run mutation testing
-        continue-on-error: true
         run: |
-          set +e
-          for pkg in ./internal/domain ./internal/application; do
-            echo "===== gremlins: $pkg =====" | tee -a mutation.log
-            gremlins unleash "$pkg" 2>&1 | tee -a mutation.log
-          done
+          set -uo pipefail
+          fail=0
+          run_pkg() {
+            local pkg="$1" eff="$2" mcov="$3"
+            echo "===== gremlins: $pkg (min efficacy ${eff}%, min mutator-coverage ${mcov}%) =====" | tee -a mutation.log
+            if ! gremlins unleash --threshold-efficacy "$eff" --threshold-mcover "$mcov" "$pkg" 2>&1 | tee -a mutation.log; then
+              echo "::error::Mutation gate FAILED for $pkg — score below baseline (efficacy ${eff}% / mcover ${mcov}%). Add tests that kill the LIVED mutants in mutation.log, or (last resort) adjust the baseline in .github/workflows/mutation.yml (and make mutation) with justification."
+              fail=1
+            fi
+          }
+          # Baselines (ratchet up as tests improve). Last measured: domain 95/100,
+          # application 69/90 — thresholds sit a few points below to absorb the
+          # small run-to-run variance from timed-out mutants.
+          run_pkg ./internal/domain 90 95
+          run_pkg ./internal/application 65 88
+          exit "$fail"
 
       - name: Summary
         if: always()
         run: |
+          summary=$(grep -iE 'gremlins:|Killed:|Test efficacy:|Mutator coverage:|LIVED|NOT COVERED' mutation.log 2>/dev/null | tail -60)
           {
             echo '### Mutation testing (gremlins) — internal/domain, internal/application'
             echo '```'
-            grep -iE 'mutation|efficacy|covered|killed|lived|timed out|not covered' mutation.log 2>/dev/null | tail -40 || echo "no summary captured"
+            echo "${summary:-no summary captured}"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 

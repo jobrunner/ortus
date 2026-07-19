@@ -84,8 +84,12 @@ BENCH_PKGS := ./internal/domain/ ./internal/adapters/storage/ ./internal/adapter
 bench: ## Hot-path Micro-Benchmarks (BENCHCOUNT/BENCHTIME überschreibbar)
 	@$(GO) test -run='^$$' -bench=. -benchmem $(if $(BENCHCOUNT),-count=$(BENCHCOUNT),) $(if $(BENCHTIME),-benchtime=$(BENCHTIME),) $(BENCH_PKGS)
 
-mutation: ## Mutation-Testing (gremlins) auf der Kernlogik — Testwirksamkeit (go install github.com/go-gremlins/gremlins/cmd/gremlins@latest)
-	gremlins unleash ./internal/domain ./internal/application
+mutation: ## Mutation-Testing (gremlins) — hartes Gate pro Paket, wie in der CI
+	$(GO) install github.com/go-gremlins/gremlins/cmd/gremlins@v0.5.1
+	@rc=0; \
+	 gremlins unleash --threshold-efficacy 90 --threshold-mcover 95 ./internal/domain || rc=1; \
+	 gremlins unleash --threshold-efficacy 65 --threshold-mcover 88 ./internal/application || rc=1; \
+	 exit $$rc
 
 # Fuzz targets at the parse boundaries (untrusted input). Seeds run automatically
 # in `make test`/CI; this drives actual fuzzing. Crashers land in the package's
