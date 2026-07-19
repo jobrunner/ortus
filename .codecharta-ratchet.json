@@ -1,0 +1,30 @@
+{
+  "_comment": "Ratchet config for scripts/codecharta-ratchet.py, run against the CodeCharta map (ortus.cc.json.gz). Two gates over the ccsh 'complexity' metric + go coverage. Ratchet by LOWERING the numbers as the code improves; RAISING a baseline entry needs review justification.",
+  "complexity": {
+    "metric": "complexity",
+    "default_cap": 50,
+    "_default_cap_note": "Every file not listed below must stay <= this. Current highest non-baseline file is 40 (internal/adapters/storage/http.go).",
+    "baseline": {
+      "internal/adapters/raster/repository.go": 143,
+      "internal/adapters/geopackage/repository.go": 127,
+      "cmd/gazetteer-fixture/main.go": 103,
+      "internal/adapters/telemetry/ringbuffer.go": 91,
+      "internal/app/app.go": 83,
+      "internal/application/registry.go": 79,
+      "internal/adapters/http/handlers.go": 73,
+      "internal/config/config.go": 72,
+      "internal/application/gazetteer/bearing.go": 55,
+      "internal/adapters/geopackage/spatialindex.go": 54,
+      "internal/adapters/watcher/watcher.go": 51
+    }
+  },
+  "hotspot": {
+    "_note": "A file is a hotspot when it is complex AND under-tested; new hotspots fail the build. Grandfathered files below are the current ones — remove them from 'allow' as their coverage improves.",
+    "min_complexity": 40,
+    "min_coverage": 70,
+    "allow": [
+      "internal/app/app.go",
+      "internal/adapters/http/handlers.go"
+    ]
+  }
+}

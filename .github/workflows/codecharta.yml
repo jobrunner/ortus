@@ -3,10 +3,11 @@
 # coverageimport) and git history / churn / authors (gitlogparser). The merged
 # map is uploaded as an artifact; open it at
 # https://maibornwolff.github.io/codecharta/visualization/ (load ortus.cc.json.gz).
-# Informational: it produces an artifact, not a pass/fail quality gate, and is
-# NOT a required check — it won't be added to the merge-blocking ruleset. (It can
-# still fail on a tooling error — a broken install/parser/merge — which is worth
-# fixing, but a low mutation/coverage number here never vetoes a merge.)
+# The map is also a RATCHET: scripts/codecharta-ratchet.py gates the map against
+# .codecharta-ratchet.json — a per-file complexity cap (baseline can't grow;
+# everything else <= default_cap) plus a hotspot gate (complex AND under-tested
+# files fail unless grandfathered). The job fails on a regression; the artifact
+# is still uploaded (if: always()). Ratchet the baselines DOWN as code improves.
 name: CodeCharta
 
 on:
@@ -93,6 +94,9 @@ jobs:
           inputs="base.cc.json git.cc.json"
           [ -f coverage.cc.json ] && inputs="$inputs coverage.cc.json"
           ccsh merge $inputs -o ortus.cc.json.gz
+
+      - name: Ratchet gate (complexity caps + hotspots)
+        run: python3 scripts/codecharta-ratchet.py ortus.cc.json.gz .codecharta-ratchet.json
 
       - name: Upload map
         if: always()
