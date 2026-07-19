@@ -25,6 +25,19 @@ make build
 curl "http://localhost:8080/api/v1/query?lon=13.405&lat=52.52"
 ```
 
+The Claude Code skills under `.claude/skills/` are symlinks into the
+`third_party/claude-skills` git submodule. Clone with `--recurse-submodules`
+(or run `git submodule update --init` once), otherwise the symlinks dangle:
+
+```bash
+git clone --recurse-submodules git@github.com:jobrunner/ortus.git
+# existing checkout:
+git submodule update --init third_party/claude-skills
+# bump to the latest skills:
+git -C third_party/claude-skills pull origin main \
+  && git add third_party/claude-skills && git commit -m "chore(skills): bump claude-skills"
+```
+
 ## Documentation
 
 Full docs follow the [Diátaxis](https://diataxis.fr/) framework and build with
