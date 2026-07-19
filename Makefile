@@ -88,7 +88,7 @@ mutation: ## Mutation-Testing (gremlins) — hartes Gate pro Paket, wie in der C
 	$(GO) install github.com/go-gremlins/gremlins/cmd/gremlins@v0.5.1
 	@rc=0; \
 	 gremlins unleash --threshold-efficacy 90 --threshold-mcover 95 ./internal/domain || rc=1; \
-	 gremlins unleash --threshold-efficacy 70 --threshold-mcover 88 ./internal/application || rc=1; \
+	 gremlins unleash --threshold-efficacy 74 --threshold-mcover 88 ./internal/application || rc=1; \
 	 exit $$rc
 
 codecharta: ## CodeCharta-Map (Struktur+Komplexitaet+Coverage+Git) -> ortus.cc.json.gz (braucht node+java)
