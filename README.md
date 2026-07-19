@@ -33,8 +33,8 @@ The Claude Code skills under `.claude/skills/` are symlinks into the
 git clone --recurse-submodules https://github.com/jobrunner/ortus.git
 # existing checkout:
 git submodule update --init third_party/claude-skills
-# bump to the latest skills:
-git -C third_party/claude-skills pull origin main \
+# bump to the latest skills (uses the branch pinned in .gitmodules: main):
+git submodule update --remote third_party/claude-skills \
   && git add third_party/claude-skills && git commit -m "chore(skills): bump claude-skills"
 ```
 
