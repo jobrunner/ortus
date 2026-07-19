@@ -55,7 +55,7 @@ func TestFrontendElevationBeforeBearing(t *testing.T) {
 	if iIslands < 0 || iElev < 0 || iBearing < 0 {
 		t.Fatalf("gazetteer section labels missing: islands=%d elevation=%d bearing=%d", iIslands, iElev, iBearing)
 	}
-	if !(iIslands < iElev && iElev < iBearing) {
+	if iIslands >= iElev || iElev >= iBearing {
 		t.Errorf("expected islands < elevation < bearing in render order; got islands=%d elevation=%d bearing=%d", iIslands, iElev, iBearing)
 	}
 }

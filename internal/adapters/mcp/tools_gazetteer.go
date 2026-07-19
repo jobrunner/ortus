@@ -128,6 +128,45 @@ func (p *provenanceSet) list() []sourceOut {
 	return p.items
 }
 
+// islandOuts maps resolved islands to their output shape, recording each name
+// provenance in prov. Returns nil for no islands so the block serializes as null.
+func islandOuts(islands []domain.Island, prov *provenanceSet) []islandOut {
+	if len(islands) == 0 {
+		return nil
+	}
+	out := make([]islandOut, len(islands))
+	for i, is := range islands {
+		out[i] = islandOut{
+			Name:       is.Name,
+			NameNative: is.NameNative,
+			NameSource: prov.add(is.NameSource),
+		}
+	}
+	return out
+}
+
+// newElevationOut maps an elevation result to its output shape, nesting the DEM
+// source license under Source. Returns nil when elevation is unwired (nil), so
+// the block serializes as null.
+func newElevationOut(elev *domain.Elevation) *elevationOut {
+	if elev == nil {
+		return nil
+	}
+	eo := &elevationOut{
+		Meters:              elev.Meters,
+		AccuracyM:           elev.AccuracyM,
+		AccuracyBasis:       elev.AccuracyBasis,
+		HorizontalAccuracyM: elev.HorizontalM,
+		VerticalDatum:       elev.VerticalDatum,
+		SeaLevel:            elev.SeaLevel,
+		SurfaceModel:        elev.SurfaceModel,
+	}
+	if !elev.License.IsEmpty() {
+		eo.Source = &licenseOut{Name: elev.License.Name, URL: elev.License.URL, Attribution: elev.License.Attribution}
+	}
+	return eo
+}
+
 func addGazetteer(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 	mcp.AddTool(srv, &mcp.Tool{
 		Name: "gazetteer",
@@ -171,20 +210,10 @@ func addGazetteer(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 		}
 
 		islands, err := deps.Gazetteer.Islands(ctx, coord)
-		switch {
-		case err != nil:
+		if err != nil {
 			return nil, gazetteerOut{}, err
-		case len(islands) > 0:
-			io := make([]islandOut, len(islands))
-			for i, is := range islands {
-				io[i] = islandOut{
-					Name:       is.Name,
-					NameNative: is.NameNative,
-					NameSource: prov.add(is.NameSource),
-				}
-			}
-			out.Islands = io
 		}
+		out.Islands = islandOuts(islands, prov)
 
 		fix, err := deps.Gazetteer.Bearing(ctx, coord, deps.BearingPolicy.OrDefault())
 		switch {
@@ -207,24 +236,10 @@ func addGazetteer(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 		}
 
 		elev, err := deps.Gazetteer.Elevation(ctx, coord)
-		switch {
-		case err != nil:
+		if err != nil {
 			return nil, gazetteerOut{}, err
-		case elev != nil:
-			eo := &elevationOut{
-				Meters:              elev.Meters,
-				AccuracyM:           elev.AccuracyM,
-				AccuracyBasis:       elev.AccuracyBasis,
-				HorizontalAccuracyM: elev.HorizontalM,
-				VerticalDatum:       elev.VerticalDatum,
-				SeaLevel:            elev.SeaLevel,
-				SurfaceModel:        elev.SurfaceModel,
-			}
-			if !elev.License.IsEmpty() {
-				eo.Source = &licenseOut{Name: elev.License.Name, URL: elev.License.URL, Attribution: elev.License.Attribution}
-			}
-			out.Elevation = eo
 		}
+		out.Elevation = newElevationOut(elev)
 
 		out.Sources = prov.list()
 		if !deps.GazetteerLicense.IsEmpty() {
