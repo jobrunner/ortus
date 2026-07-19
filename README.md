@@ -30,7 +30,7 @@ The Claude Code skills under `.claude/skills/` are symlinks into the
 (or run `git submodule update --init` once), otherwise the symlinks dangle:
 
 ```bash
-git clone --recurse-submodules git@github.com:jobrunner/ortus.git
+git clone --recurse-submodules https://github.com/jobrunner/ortus.git
 # existing checkout:
 git submodule update --init third_party/claude-skills
 # bump to the latest skills:
