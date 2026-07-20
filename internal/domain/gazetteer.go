@@ -141,9 +141,9 @@ type Elevation struct {
 type Exposure struct {
 	SlopeDeg      float64 // slope angle in degrees (0 = flat, 90 = vertical)
 	SlopePercent  float64 // slope as a percentage grade (100·tan(slope))
-	AspectDeg     float64 // downslope azimuth in degrees (0=N, 90=E); 0 when Flat
+	AspectDeg     float64 // downslope azimuth in degrees (0=N, 90=E); undefined (0, and null in the API) when Flat
 	AspectCompass string  // quantised aspect (N, NE, …); "" when Flat
-	Flat          bool    // slope below the flat threshold → aspect undefined
+	Flat          bool    // slope below the flat threshold → aspect undefined (adapters null/empty it)
 	// SampleSpacingM is the horizontal spacing between the gradient samples (the
 	// Horn baseline is twice this). It varies with the DEM resolution.
 	SampleSpacingM float64

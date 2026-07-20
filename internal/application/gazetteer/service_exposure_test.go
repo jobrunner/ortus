@@ -29,7 +29,9 @@ func (p planeSampler) ElevationAt(_ context.Context, c domain.Coordinate) (outpu
 	if !p.ok {
 		return output.ElevationReading{}, false, nil
 	}
-	z := p.northGradM*c.Y*metersPerDegLat + p.eastGradM*c.X*metersPerDegLat
+	// East–west meters per degree shrink with latitude (cos), matching the service's
+	// lon/lat↔meters scaling, so eastGradM is genuinely "meters per meter eastward".
+	z := p.northGradM*c.Y*metersPerDegLat + p.eastGradM*c.X*metersPerDegLat*math.Cos(c.Y*math.Pi/180)
 	return output.ElevationReading{Meters: z}, true, nil
 }
 func (p planeSampler) License() domain.License { return p.license }

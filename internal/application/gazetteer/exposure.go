@@ -37,8 +37,8 @@ const (
 // point (offsetting lon/lat by the equivalent metric distance) and runs Horn's
 // finite-difference method. It returns (nil, nil) when no elevation sampler is
 // wired, or when the point or any neighbor has no DEM coverage (a reliable
-// gradient needs the full window) — so the handler omits the block rather than
-// erroring, mirroring Elevation.
+// gradient needs the full window) — adapters then render a null exposure block
+// (best-effort, no error), mirroring Elevation.
 func (s *Service) Exposure(ctx context.Context, p domain.Coordinate) (*domain.Exposure, error) {
 	if err := s.ready(); err != nil {
 		return nil, err
