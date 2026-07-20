@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.26.0](https://github.com/jobrunner/ortus/compare/v0.25.0...v0.26.0) (2026-07-20)
+
+
+### Features
+
+* **gazetteer:** add terrain exposure (slope + aspect) from the DEM ([bc10643](https://github.com/jobrunner/ortus/commit/bc106436dc28dbd21948ed267acc44efee497de3))
+* **gazetteer:** terrain exposure (slope + aspect) from the DEM ([db21ad4](https://github.com/jobrunner/ortus/commit/db21ad4abfa11eed850afaa12dd80755826174ed))
+
+
+### Bug Fixes
+
+* **gazetteer:** guard exposure near the poles; clarify null-vs-sea-level docs ([273903a](https://github.com/jobrunner/ortus/commit/273903a6e7217e56299f633de40fd0397f530ce8))
+* **gazetteer:** wrap exposure sample longitudes across the antimeridian ([90401e7](https://github.com/jobrunner/ortus/commit/90401e71577a833351d0e02b34055881621626cf))
+
 ## [0.25.0](https://github.com/jobrunner/ortus/compare/v0.24.0...v0.25.0) (2026-07-19)
 
 
