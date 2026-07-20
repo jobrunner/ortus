@@ -28,6 +28,8 @@ type fakeGazetteer struct {
 	islandsErr error
 	fix        *domain.Fix
 	fixErr     error
+	exp        *domain.Exposure
+	expErr     error
 	elev       *domain.Elevation
 	elevErr    error
 }
@@ -40,6 +42,9 @@ func (f fakeGazetteer) Bearing(context.Context, domain.Coordinate, domain.Bearin
 }
 func (f fakeGazetteer) Islands(context.Context, domain.Coordinate) ([]domain.Island, error) {
 	return f.islands, f.islandsErr
+}
+func (f fakeGazetteer) Exposure(context.Context, domain.Coordinate) (*domain.Exposure, error) {
+	return f.exp, f.expErr
 }
 func (f fakeGazetteer) Elevation(context.Context, domain.Coordinate) (*domain.Elevation, error) {
 	return f.elev, f.elevErr
@@ -256,6 +261,58 @@ func TestGazetteerIslandsOmittedWhenAbsent(t *testing.T) {
 	_, body := doGET(t, srv, "/api/v1/gazetteer?lon=9.93&lat=49.79")
 	if body["islands"] != nil {
 		t.Errorf("islands = %v, want null when the point is on no island", body["islands"])
+	}
+}
+
+func TestGazetteerExposureBlock(t *testing.T) {
+	exp := &domain.Exposure{
+		SlopeDeg: 12.5, SlopePercent: 22.2, AspectDeg: 135, AspectCompass: "SE",
+		Flat: false, SampleSpacingM: 30,
+		License: domain.License{Name: "Copernicus DEM GLO-30", URL: "https://example/glo30", Attribution: "© DLR/Airbus/ESA"},
+	}
+	srv := newGazetteerServer(t, fakeGazetteer{loc: sampleLocality(), fix: sampleFix(), exp: exp})
+	rec, body := doGET(t, srv, "/api/v1/gazetteer?lon=9.93&lat=49.79")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	e, ok := body["exposure"].(map[string]any)
+	if !ok {
+		t.Fatalf("exposure missing; got %v", body["exposure"])
+	}
+	if e["slope_deg"] != 12.5 || e["slope_percent"] != 22.2 {
+		t.Errorf("exposure slope = %v/%v, want 12.5/22.2", e["slope_deg"], e["slope_percent"])
+	}
+	if e["aspect_deg"] != 135.0 || e["aspect_compass"] != "SE" || e["flat"] != false {
+		t.Errorf("exposure aspect = %v/%v flat=%v, want 135/SE/false", e["aspect_deg"], e["aspect_compass"], e["flat"])
+	}
+	if e["sample_spacing_m"] != 30.0 {
+		t.Errorf("sample_spacing_m = %v, want 30", e["sample_spacing_m"])
+	}
+	src, ok := e["source"].(map[string]any)
+	if !ok || src["name"] != "Copernicus DEM GLO-30" {
+		t.Fatalf("exposure.source = %v, want Copernicus DEM", e["source"])
+	}
+}
+
+func TestGazetteerExposureFlatOmitsAspect(t *testing.T) {
+	// A flat point: aspect is undefined → aspect_deg null, aspect_compass empty.
+	exp := &domain.Exposure{SlopeDeg: 0.4, SlopePercent: 0.7, Flat: true, SampleSpacingM: 30}
+	srv := newGazetteerServer(t, fakeGazetteer{loc: sampleLocality(), fix: sampleFix(), exp: exp})
+	_, body := doGET(t, srv, "/api/v1/gazetteer?lon=9.93&lat=49.79")
+	e, ok := body["exposure"].(map[string]any)
+	if !ok {
+		t.Fatalf("exposure missing; got %v", body["exposure"])
+	}
+	if e["flat"] != true || e["aspect_deg"] != nil || e["aspect_compass"] != "" {
+		t.Errorf("flat exposure = flat:%v aspect_deg:%v compass:%v, want true/null/empty", e["flat"], e["aspect_deg"], e["aspect_compass"])
+	}
+}
+
+func TestGazetteerExposureOmittedWhenAbsent(t *testing.T) {
+	srv := newGazetteerServer(t, fakeGazetteer{loc: sampleLocality(), fix: sampleFix()})
+	_, body := doGET(t, srv, "/api/v1/gazetteer?lon=9.93&lat=49.79")
+	if body["exposure"] != nil {
+		t.Errorf("exposure = %v, want null when unavailable", body["exposure"])
 	}
 }
 

@@ -88,6 +88,20 @@ type elevationOut struct {
 	Source              *licenseOut `json:"source"`
 }
 
+// exposureOut is the terrain slope + aspect at the coordinate, derived from the
+// DEM. AspectDeg is null and AspectCompass empty when Flat (aspect undefined).
+// Source carries the DEM's license (same source as elevation). Null when the
+// elevation feature is not wired or the point has no full-window DEM coverage.
+type exposureOut struct {
+	SlopeDeg       float64     `json:"slope_deg"`
+	SlopePercent   float64     `json:"slope_percent"`
+	AspectDeg      *float64    `json:"aspect_deg"`
+	AspectCompass  string      `json:"aspect_compass"`
+	Flat           bool        `json:"flat"`
+	SampleSpacingM float64     `json:"sample_spacing_m"`
+	Source         *licenseOut `json:"source"`
+}
+
 // gazetteerOut is the tool result: admin, islands, bearing and elevation, any of
 // which is null when it has no result for the coordinate (no admin coverage, not
 // on an island, no anchor in reach, or no DEM wired). Sources is the response-wide
@@ -97,6 +111,7 @@ type gazetteerOut struct {
 	Admin     *adminOut     `json:"admin"`
 	Islands   []islandOut   `json:"islands"`
 	Bearing   *bearingOut   `json:"bearing"`
+	Exposure  *exposureOut  `json:"exposure"`
 	Elevation *elevationOut `json:"elevation"`
 	Sources   []sourceOut   `json:"sources"`
 	License   *licenseOut   `json:"license"`
@@ -167,16 +182,41 @@ func newElevationOut(elev *domain.Elevation) *elevationOut {
 	return eo
 }
 
+// newExposureOut maps a terrain exposure to its output shape. AspectDeg is nil
+// and AspectCompass empty when flat. Returns nil when exposure is unavailable
+// (nil), so the block serializes as null.
+func newExposureOut(exp *domain.Exposure) *exposureOut {
+	if exp == nil {
+		return nil
+	}
+	eo := &exposureOut{
+		SlopeDeg:       exp.SlopeDeg,
+		SlopePercent:   exp.SlopePercent,
+		Flat:           exp.Flat,
+		SampleSpacingM: exp.SampleSpacingM,
+	}
+	if !exp.Flat {
+		az := exp.AspectDeg
+		eo.AspectDeg = &az
+		eo.AspectCompass = exp.AspectCompass
+	}
+	if !exp.License.IsEmpty() {
+		eo.Source = &licenseOut{Name: exp.License.Name, URL: exp.License.URL, Attribution: exp.License.Attribution}
+	}
+	return eo
+}
+
 func addGazetteer(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 	mcp.AddTool(srv, &mcp.Tool{
 		Name: "gazetteer",
 		Description: "Reverse-geocode a coordinate to its administrative hierarchy " +
 			"(admin), name the island(s) containing it (islands, when an islands " +
 			"layer is configured), compute a bearing to the most salient nearby " +
-			"place (bearing, e.g. '4 km E Würzburg'), and report the height above " +
-			"sea level (elevation, meters; when a DEM is configured). Any part is " +
-			"null when it has no result — no admin coverage, not on an island, no " +
-			"anchor within reach, or no elevation configured. Equivalent to " +
+			"place (bearing, e.g. '4 km E Würzburg'), report the terrain slope and " +
+			"the direction it faces (exposure/aspect), and report the height above " +
+			"sea level (elevation, meters; exposure + elevation need a DEM). Any part " +
+			"is null when it has no result — no admin coverage, not on an island, no " +
+			"anchor within reach, or no DEM coverage. Equivalent to " +
 			"GET /api/v1/gazetteer.",
 	}, func(ctx toolCtx, _ *callRequest, in gazetteerIn) (*callResult, gazetteerOut, error) {
 		coord, err := selectCoordinate(in.Lon, in.Lat, in.X, in.Y, in.SRID)
@@ -234,6 +274,12 @@ func addGazetteer(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 		default:
 			return nil, gazetteerOut{}, err
 		}
+
+		exp, err := deps.Gazetteer.Exposure(ctx, coord)
+		if err != nil {
+			return nil, gazetteerOut{}, err
+		}
+		out.Exposure = newExposureOut(exp)
 
 		elev, err := deps.Gazetteer.Elevation(ctx, coord)
 		if err != nil {

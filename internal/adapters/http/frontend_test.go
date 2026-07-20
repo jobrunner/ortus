@@ -37,6 +37,8 @@ func TestFrontendCoordinateInputWiring(t *testing.T) {
 		"Datenlizenz",                         // dataset attribution rendered
 		"gaz-elevation",                       // elevation rendered in the gazetteer block
 		"gaz.islands",                         // islands rendered in the gazetteer block
+		"gaz.exposure",                        // exposure rendered in the gazetteer block
+		"Exposition",                          // exposure section label
 		"function httpUrl",                    // scheme guard for source links
 	} {
 		if !strings.Contains(html, marker) {
@@ -45,19 +47,20 @@ func TestFrontendCoordinateInputWiring(t *testing.T) {
 	}
 }
 
-// TestFrontendElevationBeforeBearing pins the required ordering: elevation
-// renders inside the gazetteer block BEFORE the bearing ("Peilung"), and islands
-// render before elevation (containment first, then height, then bearing).
+// TestFrontendElevationBeforeBearing pins the gazetteer render order:
+// islands < elevation < bearing < exposure (containment, then height, then
+// bearing, with exposure next to the bearing).
 func TestFrontendElevationBeforeBearing(t *testing.T) {
 	html := frontendHTML
-	iIslands := strings.Index(html, `Insel`)   // islands section label
-	iElev := strings.Index(html, `Höhe`)       // elevation section label
-	iBearing := strings.Index(html, `Peilung`) // bearing section label
-	if iIslands < 0 || iElev < 0 || iBearing < 0 {
-		t.Fatalf("gazetteer section labels missing: islands=%d elevation=%d bearing=%d", iIslands, iElev, iBearing)
+	iIslands := strings.Index(html, `Insel`)       // islands section label
+	iElev := strings.Index(html, `Höhe`)           // elevation section label
+	iBearing := strings.Index(html, `Peilung`)     // bearing section label
+	iExposure := strings.Index(html, `Exposition`) // exposure section label
+	if iIslands < 0 || iElev < 0 || iBearing < 0 || iExposure < 0 {
+		t.Fatalf("gazetteer section labels missing: islands=%d elevation=%d bearing=%d exposure=%d", iIslands, iElev, iBearing, iExposure)
 	}
-	if iIslands >= iElev || iElev >= iBearing {
-		t.Errorf("expected islands < elevation < bearing in render order; got islands=%d elevation=%d bearing=%d", iIslands, iElev, iBearing)
+	if iIslands >= iElev || iElev >= iBearing || iBearing >= iExposure {
+		t.Errorf("expected islands < elevation < bearing < exposure; got islands=%d elevation=%d bearing=%d exposure=%d", iIslands, iElev, iBearing, iExposure)
 	}
 }
 

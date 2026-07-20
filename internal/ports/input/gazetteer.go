@@ -28,4 +28,10 @@ type Gazetteer interface {
 	// when the optional elevation feature is not wired — adapters render a null
 	// elevation block in that case.
 	Elevation(ctx context.Context, p domain.Coordinate) (*domain.Elevation, error)
+
+	// Exposure returns the terrain slope + aspect at the point, derived from the
+	// elevation DEM. It is (nil, nil) when the elevation feature is not wired or
+	// the point (or a neighbor) has no DEM coverage — adapters render a null
+	// exposure block in that case.
+	Exposure(ctx context.Context, p domain.Coordinate) (*domain.Exposure, error)
 }

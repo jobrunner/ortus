@@ -130,6 +130,7 @@ paths:
                     compass: ""
                     label: "in Berlin"
                     inside: true
+                  exposure: null          # null when no DEM covers the point
                   sources:
                     - code: latin-osm
                       short: OSM name (already Latin)
@@ -268,6 +269,17 @@ paths:
                   compass: E
                   label: "4 km E Würzburg"
                   inside: false
+                exposure:                 # null when no DEM covers the point
+                  slope_deg: 12.5
+                  slope_percent: 22.2
+                  aspect_deg: 135.0       # null when flat
+                  aspect_compass: SE      # "" when flat
+                  flat: false
+                  sample_spacing_m: 30.0
+                  source:
+                    name: "Copernicus DEM GLO-30"
+                    url: "https://doi.org/10.5270/ESA-c5d3d65"
+                    attribution: "© DLR e.V. 2010-2014 und © Airbus Defence and Space GmbH 2014-2018 provided under COPERNICUS by the European Union and ESA; all rights reserved."
                 elevation:                # null when no DEM is configured
                   meters: 177.0
                   accuracy_m: 4.0
@@ -617,10 +629,10 @@ components:
       type: object
       description: >-
         Gazetteer-Anreicherung für eine Koordinate: Verwaltungshierarchie (admin),
-        Insel(n) (islands), Höhe über NN (elevation), Peilung (bearing),
-        name_source-Erläuterungen (sources) und Datensatz-Lizenz/Attribution
-        (license). Geliefert von GET /api/v1/gazetteer und — standardmäßig — im
-        `gazetteer`-Block von GET /api/v1/query.
+        Insel(n) (islands), Peilung (bearing), Geländeexposition (exposure), Höhe
+        über NN (elevation), name_source-Erläuterungen (sources) und
+        Datensatz-Lizenz/Attribution (license). Geliefert von GET /api/v1/gazetteer
+        und — standardmäßig — im `gazetteer`-Block von GET /api/v1/query.
       properties:
         admin:
           nullable: true
@@ -724,6 +736,58 @@ components:
                 Per Containment bestimmt (nicht per Distanz), gilt also auch weit vom
                 Ortsmittelpunkt großer Städte. Ein Client kann bei `true` die Peilung
                 weglassen (der Fund liegt direkt im Ort).
+        exposure:
+          nullable: true
+          type: object
+          description: >-
+            Geländeexposition am Abfragepunkt: Hangneigung (slope) und
+            Expositionsrichtung (aspect), aus dem DEM per Horn-Verfahren über eine
+            3×3-Nachbarschaft. null, wenn kein DEM konfiguriert ist oder der Punkt
+            (bzw. ein Nachbar) keine DEM-Abdeckung hat. Da die Quelle ein DSM ist
+            (Oberfläche inkl. Vegetation/Bebauung), spiegeln Neigung/Richtung über
+            Wald/Bebauung die Kronen/Dächer, nicht das Gelände; auf flachem Grund
+            ist die Richtung rauschbestimmt (siehe `flat`).
+          properties:
+            slope_deg:
+              type: number
+              format: double
+              description: Hangneigung in Grad (0 = eben, 90 = senkrecht).
+            slope_percent:
+              type: number
+              format: double
+              description: Hangneigung als Prozent-Gefälle (100·tan(slope)).
+            aspect_deg:
+              type: number
+              format: double
+              nullable: true
+              description: >-
+                Expositions-Azimut in Grad (0=N, 90=O, im Uhrzeigersinn), also die
+                Richtung, in die der Hang abfällt. null, wenn `flat` (Richtung
+                unbestimmt).
+            aspect_compass:
+              type: string
+              description: >-
+                Quantisierte Exposition (N, NE, …, 8-Punkt-Rose). Leer, wenn `flat`.
+            flat:
+              type: boolean
+              description: >-
+                true, wenn die Neigung unter der Flach-Schwelle (~2°) liegt; die
+                Expositionsrichtung ist dann rauschbestimmt und wird weggelassen.
+            sample_spacing_m:
+              type: number
+              format: double
+              description: >-
+                Horizontaler Abstand der Gradient-Stützpunkte in Metern (die
+                Horn-Basislänge ist das Doppelte); richtet sich nach der
+                DEM-Auflösung (GLO-30 ≈ 30 m).
+            source:
+              type: object
+              nullable: true
+              description: DEM-Quelle (Lizenz/Attribution), wie bei elevation.
+              properties:
+                name: { type: string }
+                url: { type: string }
+                attribution: { type: string }
         elevation:
           nullable: true
           type: object
@@ -958,11 +1022,11 @@ components:
             - $ref: '#/components/schemas/GazetteerData'
           nullable: true
           description: >-
-            Gazetteer-Anreicherung (admin, islands, elevation, bearing, sources,
-            license). Standardmäßig enthalten, wenn das Gazetteer-Feature aktiv ist
-            und die Koordinate WGS84 ist — mit with-gazetteer=0 (false/no/off)
-            abschaltbar. Fehlt, wenn das Feature aus ist, abgeschaltet wurde oder die
-            Koordinate nicht WGS84 ist.
+            Gazetteer-Anreicherung (admin, islands, bearing, exposure, elevation,
+            sources, license). Standardmäßig enthalten, wenn das Gazetteer-Feature
+            aktiv ist und die Koordinate WGS84 ist — mit with-gazetteer=0
+            (false/no/off) abschaltbar. Fehlt, wenn das Feature aus ist, abgeschaltet
+            wurde oder die Koordinate nicht WGS84 ist.
       required:
         - coordinate
         - results
