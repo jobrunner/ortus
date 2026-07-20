@@ -102,9 +102,10 @@ type exposureOut struct {
 	Source         *licenseOut `json:"source"`
 }
 
-// gazetteerOut is the tool result: admin, islands, bearing and elevation, any of
-// which is null when it has no result for the coordinate (no admin coverage, not
-// on an island, no anchor in reach, or no DEM wired). Sources is the response-wide
+// gazetteerOut is the tool result: admin, islands, bearing, exposure and
+// elevation, any of which is null when it has no result for the coordinate (no
+// admin coverage, not on an island, no anchor in reach, no DEM wired, or — for
+// exposure — the point/neighbor lacks coverage). Sources is the response-wide
 // provenance excerpt describing each name_source code that appears above; License
 // is the dataset attribution (null when unset).
 type gazetteerOut struct {
