@@ -81,8 +81,9 @@ type horn3x3 struct {
 // (0=N, 90=E, clockwise); below the flat threshold it is undefined and Flat is
 // set. The center cell (w.c) is unused by Horn but kept for a complete window.
 func computeExposure(w horn3x3, spacingM float64) domain.Exposure {
-	// Horn gradients over an 8·spacing baseline. dzdx is east-positive, dzdy is
-	// north-positive (row 1 = north).
+	// Horn gradients: the physical baseline is 2·spacing (opposite cells at
+	// ±spacing); the 8·spacing denominator is that times Horn's 1-2-1 edge weights
+	// (which sum to 4). dzdx is east-positive, dzdy is north-positive (row 1 = north).
 	dzdx := ((w.ne + 2*w.e + w.se) - (w.nw + 2*w.w + w.sw)) / (8 * spacingM)
 	dzdy := ((w.nw + 2*w.n + w.ne) - (w.sw + 2*w.s + w.se)) / (8 * spacingM)
 
