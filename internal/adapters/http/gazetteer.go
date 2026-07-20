@@ -37,10 +37,12 @@ func (s *Server) handleGazetteer(w http.ResponseWriter, r *http.Request) {
 
 // gazetteerSections resolves a coordinate into a JSON-ready gazetteer object with
 // the admin hierarchy (Locate), the containing island(s) (Islands), the bearing
-// fix (Bearing) and the elevation (Elevation), plus a response-wide sources
-// excerpt and the dataset license. A part that has no result (ErrNotFound — no
-// admin coverage, not on an island, no anchor in reach, no DEM) is null rather
-// than an error; any other failure is returned so the caller can map it.
+// fix (Bearing), the terrain exposure (Exposure) and the elevation (Elevation),
+// plus a response-wide sources excerpt and the dataset license. Every part is
+// null when it has no result: admin/bearing signal absence with ErrNotFound (no
+// coverage / no anchor in reach), while the optional DEM-derived exposure/elevation
+// (and islands) return a nil result when unwired or uncovered. Any other failure
+// is returned so the caller can map it.
 //
 // This object is the reusable unit for the planned batch endpoint: each batch
 // entry is {id, coordinate, <these sections>} with a caller-chosen echo id.
