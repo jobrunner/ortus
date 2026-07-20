@@ -52,7 +52,7 @@ func (s *Service) Exposure(ctx context.Context, p domain.Coordinate) (*domain.Ex
 		return nil, err
 	}
 	if s.elevation == nil {
-		return nil, nil // feature not wired — omit from the response
+		return nil, nil // feature not wired — adapters render a null exposure block
 	}
 	w, ok, err := sampleWindow(ctx, s.elevation, p, exposureSampleSpacingM)
 	if err != nil {
@@ -134,7 +134,10 @@ func sampleWindow(ctx context.Context, sampler output.ElevationSampler, p domain
 	}
 	var z [9]float64
 	for i, o := range offsets {
-		r, present, e := sampler.ElevationAt(ctx, domain.NewWGS84Coordinate(p.X+o[0], p.Y+o[1]))
+		// Wrap longitude into [-180, 180] so neighbors near the antimeridian stay
+		// valid WGS84 (latitude is already bounded by the near-pole guard above).
+		lon := math.Mod(p.X+o[0]+540, 360) - 180
+		r, present, e := sampler.ElevationAt(ctx, domain.NewWGS84Coordinate(lon, p.Y+o[1]))
 		if e != nil {
 			if errors.Is(e, domain.ErrNotFound) {
 				return horn3x3{}, false, nil

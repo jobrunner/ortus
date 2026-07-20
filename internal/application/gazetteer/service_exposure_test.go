@@ -104,6 +104,32 @@ func TestExposureNearPoleReturnsNil(t *testing.T) {
 	}
 }
 
+// antimeridianSampler rejects longitudes outside [-180, 180], so it fails if
+// sampleWindow doesn't wrap neighbor longitudes across the antimeridian.
+type antimeridianSampler struct{}
+
+func (antimeridianSampler) ElevationAt(_ context.Context, c domain.Coordinate) (output.ElevationReading, bool, error) {
+	if c.X < -180 || c.X > 180 {
+		return output.ElevationReading{}, false, errors.New("longitude out of WGS84 range")
+	}
+	return output.ElevationReading{Meters: c.Y * metersPerDegLat * math.Tan(8*math.Pi/180)}, true, nil
+}
+func (antimeridianSampler) License() domain.License { return domain.License{} }
+
+// TestExposureWrapsLongitudeAtAntimeridian: a point just west of +180° has east
+// neighbors past +180°; those must wrap into range, not error or read as no data.
+func TestExposureWrapsLongitudeAtAntimeridian(t *testing.T) {
+	svc := NewService(fakeIndex{}, testManifest(), nil, nil, true)
+	svc.SetElevationSampler(antimeridianSampler{}, elevMeta())
+	got, err := svc.Exposure(context.Background(), wgs84(179.9999, 10.0))
+	if err != nil {
+		t.Fatalf("Exposure near antimeridian: %v (longitudes should wrap)", err)
+	}
+	if got == nil {
+		t.Fatal("Exposure near antimeridian = nil, want a result")
+	}
+}
+
 func TestExposureSamplerError(t *testing.T) {
 	sentinel := errors.New("read failed")
 	svc := NewService(fakeIndex{}, testManifest(), nil, nil, true)
