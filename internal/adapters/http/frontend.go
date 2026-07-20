@@ -526,7 +526,7 @@ const frontendHTML = `<!DOCTYPE html>
             margin-top: 0.125rem;
         }
 
-        .admin-src, .gaz-bearing-meta, .gaz-elevation-meta {
+        .admin-src, .gaz-bearing-meta, .gaz-elevation-meta, .gaz-exposure-meta {
             font-size: 0.75rem;
             color: var(--text-muted);
             margin-top: 0.125rem;
@@ -540,7 +540,7 @@ const frontendHTML = `<!DOCTYPE html>
             font-size: 0.75rem;
         }
 
-        .gaz-bearing, .gaz-elevation {
+        .gaz-bearing, .gaz-elevation, .gaz-exposure {
             font-weight: 500;
         }
 
@@ -1056,7 +1056,7 @@ const frontendHTML = `<!DOCTYPE html>
             // not location context. Guards against an empty "Ort & Umgebung" box for
             // points with no coverage.
             function hasGazetteerContent(gaz) {
-                return !!(gaz && (gaz.admin || (gaz.islands && gaz.islands.length) || gaz.elevation || gaz.bearing));
+                return !!(gaz && (gaz.admin || (gaz.islands && gaz.islands.length) || gaz.elevation || gaz.bearing || gaz.exposure));
             }
 
             // Renders the location-context block: administrative hierarchy (with the
@@ -1168,6 +1168,30 @@ const frontendHTML = `<!DOCTYPE html>
                     if (gaz.bearing.name_source) meta.push('Name: ' + escapeHtml(gaz.bearing.name_source));
                     if (meta.length > 0) {
                         html += '<div class="gaz-bearing-meta">' + meta.join(' &middot; ') + '</div>';
+                    }
+                    html += '</div>';
+                }
+
+                // Exposure (terrain slope + aspect) renders next to the bearing.
+                if (gaz.exposure) {
+                    const x = gaz.exposure;
+                    html += '<div class="gaz-section">';
+                    html += '<div class="gaz-label">Exposition</div>';
+                    let expText;
+                    if (x.flat) {
+                        expText = 'eben (Neigung ' + (typeof x.slope_deg === 'number' ? x.slope_deg.toFixed(1) : '?') + '°)';
+                    } else {
+                        const dir = x.aspect_compass ? escapeHtml(x.aspect_compass) : '';
+                        const asp = typeof x.aspect_deg === 'number' ? ' (' + x.aspect_deg.toFixed(0) + '°)' : '';
+                        expText = (dir ? dir + asp + '-Exposition' : 'Exposition') +
+                            ', ' + (typeof x.slope_deg === 'number' ? x.slope_deg.toFixed(1) : '?') + '° Neigung';
+                    }
+                    html += '<div class="gaz-exposure">' + expText + '</div>';
+                    const xmeta = [];
+                    if (typeof x.slope_percent === 'number') xmeta.push(x.slope_percent.toFixed(0) + ' %');
+                    if (typeof x.sample_spacing_m === 'number') xmeta.push('Raster ~' + x.sample_spacing_m.toFixed(0) + ' m');
+                    if (xmeta.length > 0) {
+                        html += '<div class="gaz-exposure-meta">' + xmeta.join(' &middot; ') + '</div>';
                     }
                     html += '</div>';
                 }

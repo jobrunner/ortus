@@ -64,9 +64,9 @@ GeoPackage ships that metadata.
 **Gazetteer enrichment (on by default).** When the [gazetteer feature](configuration.md)
 is enabled, the query response additionally carries a `gazetteer` block with the
 administrative hierarchy, the island(s) containing the point (when an islands layer
-is configured), elevation (when a DEM is configured), bearing, name-source
-explanations and the dataset attribution — so a client gets everything to process
-the result in one call. It is
+is configured), bearing, terrain exposure (slope + aspect) and elevation (both when
+a DEM is configured), name-source explanations and the dataset attribution — so a
+client gets everything to process the result in one call. It is
 the same structure as the [gazetteer endpoint](#gazetteer-endpoint) (minus
 `coordinate`). Opt out per request with `?with-gazetteer=0` (or `false`/`no`/`off`)
 to skip the extra spatial work; enrichment is best-effort and is omitted (never
@@ -81,8 +81,9 @@ errors the query) if it fails.
   "gazetteer": {
     "admin": { "country_iso": "DE", "hierarchy": [ /* … */ ] },
     "islands": [ /* … or null when the point is on no mapped island … */ ],
-    "elevation": { /* … or null when no DEM configured … */ },
     "bearing": { /* … */ },
+    "exposure": { /* slope + aspect, or null when no DEM covers the point … */ },
+    "elevation": { /* … or null when no DEM configured … */ },
     "sources": [ { "code": "latin-osm", "short": "…", "long": "…", "standard": "" } ],
     "license": { "name": "ODbL-1.0", "url": "…", "attribution": "© OpenStreetMap contributors …" }
   }
@@ -112,10 +113,13 @@ GET /api/v1/gazetteer?x={x}&y={y}&srid={srid}
 Reverse-geocode a coordinate to its administrative hierarchy (`admin`), name the
 island(s) containing it (`islands`, when an islands layer is configured), compute
 a bearing to the most salient nearby place (`bearing`, e.g. "4 km E Würzburg"),
-and — when a DEM is configured — report the height above sea level at the point
-(`elevation`). Each part is `null` when it has no result — no admin coverage, not
-on a mapped island, no anchor within reach, or no elevation configured. The dataset
-is WGS84; a non-4326 `srid` is rejected.
+and — when a DEM is configured — report the terrain exposure (`exposure`: slope +
+the direction it faces) and the height above sea level (`elevation`) at the point.
+Each part is `null` when it has no result — no admin coverage, not on a mapped
+island, no anchor within reach, no DEM configured, or (for `exposure`) the point
+or a neighbour lacks DEM coverage. `elevation` differs: outside DEM coverage it is
+not null but uses the sea-level convention (`meters: 0`, `sea_level: true`). The
+dataset is WGS84; a non-4326 `srid` is rejected.
 
 **"in X" vs "prope X".** The bearing distinguishes being *inside* a place from
 being *near* it by **administrative containment**, not distance: when the query
@@ -145,6 +149,11 @@ bearing from a label — the find is *in* Würzburg).
     "reference": "Würzburg", "name_native": "", "name_source": "latin-osm",
     "class": "city", "distance_km": 4.0, "azimuth": 90.0, "compass": "E",
     "label": "4 km E Würzburg", "inside": false
+  },
+  "exposure": {
+    "slope_deg": 12.5, "slope_percent": 22.2, "aspect_deg": 135.0,
+    "aspect_compass": "SE", "flat": false, "sample_spacing_m": 30.0,
+    "source": { "name": "Copernicus DEM GLO-30", "url": "…", "attribution": "© DLR/Airbus/ESA …" }
   },
   "elevation": {
     "meters": 177.0, "accuracy_m": 4.0, "accuracy_basis": "GLO-30 LE90 (absolute)",
@@ -197,6 +206,19 @@ per-point value when an accuracy layer such as a Height Error Mask is configured
 `meters: 0` where no DEM tile covers the point (ocean / outside coverage). The DEM
 `source` (name/url/attribution) is carried separately from the gazetteer `license`
 because it is a distinct dataset — both attributions must be displayed.
+
+The `exposure` block is the terrain orientation, also DEM-derived (present only
+when a DEM is configured, `null` otherwise and where the point or a neighbour has
+no coverage). It reports the `slope_deg` / `slope_percent` and the downslope
+`aspect_deg` (0=N, 90=E) with its quantised `aspect_compass` (8-point rose). On
+near-flat ground the aspect is noise-dominated, so `flat` is `true` and
+`aspect_deg`/`aspect_compass` are `null`/empty. `sample_spacing_m` is the DEM grid
+spacing used for the gradient. **Quality with Copernicus GLO-30:** slope/aspect are
+reliable on distinct, bare-earth slopes; because GLO-30 is a **DSM** they reflect
+canopy/roofs over forest and built-up areas, and on gentle terrain (below ~2°) the
+aspect is unreliable — see
+[Exposure from a DEM](../explanation/exposure-from-dem.md). Same DEM `source` as
+`elevation`.
 
 ## Source management
 

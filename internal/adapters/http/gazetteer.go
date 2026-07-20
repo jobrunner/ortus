@@ -37,15 +37,17 @@ func (s *Server) handleGazetteer(w http.ResponseWriter, r *http.Request) {
 
 // gazetteerSections resolves a coordinate into a JSON-ready gazetteer object with
 // the admin hierarchy (Locate), the containing island(s) (Islands), the bearing
-// fix (Bearing) and the elevation (Elevation), plus a response-wide sources
-// excerpt and the dataset license. A part that has no result (ErrNotFound — no
-// admin coverage, not on an island, no anchor in reach, no DEM) is null rather
-// than an error; any other failure is returned so the caller can map it.
+// fix (Bearing), the terrain exposure (Exposure) and the elevation (Elevation),
+// plus a response-wide sources excerpt and the dataset license. Every part is
+// null when it has no result: admin/bearing signal absence with ErrNotFound (no
+// coverage / no anchor in reach), while the optional DEM-derived exposure/elevation
+// (and islands) return a nil result when unwired or uncovered. Any other failure
+// is returned so the caller can map it.
 //
 // This object is the reusable unit for the planned batch endpoint: each batch
 // entry is {id, coordinate, <these sections>} with a caller-chosen echo id.
 func (s *Server) gazetteerSections(ctx context.Context, coord domain.Coordinate) (map[string]interface{}, error) {
-	out := map[string]interface{}{"admin": nil, "islands": nil, "bearing": nil, "elevation": nil, "sources": []interface{}{}}
+	out := map[string]interface{}{"admin": nil, "islands": nil, "bearing": nil, "exposure": nil, "elevation": nil, "sources": []interface{}{}}
 	prov := newProvenanceSet()
 
 	loc, err := s.gazetteer.Locate(ctx, coord)
@@ -76,6 +78,17 @@ func (s *Server) gazetteerSections(ctx context.Context, coord domain.Coordinate)
 		// no salient anchor within reach — leave bearing null
 	default:
 		return nil, err
+	}
+
+	// Exposure (terrain slope + aspect), next to the bearing. Derived from the DEM;
+	// (nil, nil) when elevation is unwired or the point has no full-window coverage,
+	// so the block stays null.
+	exp, err := s.gazetteer.Exposure(ctx, coord)
+	switch {
+	case err != nil:
+		return nil, err
+	case exp != nil:
+		out["exposure"] = formatExposure(exp)
 	}
 
 	// Elevation is optional: (nil, nil) means the feature is not wired, so leave
@@ -180,6 +193,32 @@ func formatFix(fix *domain.Fix, prov *provenanceSet) map[string]interface{} {
 		"label":       fix.Label,
 		"inside":      fix.Inside,
 	}
+}
+
+// formatExposure renders a terrain exposure (slope + aspect) for JSON output.
+// aspect_deg/aspect_compass are null/empty when flat (aspect undefined). The DEM
+// source's license/attribution is nested under "source", matching elevation.
+func formatExposure(e *domain.Exposure) map[string]interface{} {
+	out := map[string]interface{}{
+		"slope_deg":        e.SlopeDeg,
+		"slope_percent":    e.SlopePercent,
+		"aspect_deg":       nil,
+		"aspect_compass":   "",
+		"flat":             e.Flat,
+		"sample_spacing_m": e.SampleSpacingM,
+	}
+	if !e.Flat {
+		out["aspect_deg"] = e.AspectDeg
+		out["aspect_compass"] = e.AspectCompass
+	}
+	if !e.License.IsEmpty() {
+		out["source"] = map[string]interface{}{
+			"name":        e.License.Name,
+			"url":         e.License.URL,
+			"attribution": e.License.Attribution,
+		}
+	}
+	return out
 }
 
 // formatElevation renders an elevation result for JSON output. The DEM source's

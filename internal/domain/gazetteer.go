@@ -128,6 +128,28 @@ type Elevation struct {
 	License      License // DEM source license/attribution, distinct from the gazetteer's own
 }
 
+// Exposure is the terrain orientation at a coordinate — how steep the ground is
+// (slope) and which compass direction it faces (aspect) — derived from the
+// elevation DEM by finite differences over a 3×3 neighborhood (Horn's method).
+// It travels next to the bearing in the gazetteer response.
+//
+// Aspect is meaningful only on a distinct slope: on near-flat ground the gradient
+// is dominated by DEM noise, so below a threshold Flat is set and the aspect
+// fields are left empty. Because the source is a DSM (surface, not bare earth),
+// slope/aspect over forest or built-up areas reflect the canopy/roofs, not the
+// terrain — see docs/explanation/exposure-from-dem.md.
+type Exposure struct {
+	SlopeDeg      float64 // slope angle in degrees (0 = flat, 90 = vertical)
+	SlopePercent  float64 // slope as a percentage grade (100·tan(slope))
+	AspectDeg     float64 // downslope azimuth in degrees (0=N, 90=E); undefined (0, and null in the API) when Flat
+	AspectCompass string  // quantised aspect (N, NE, …); "" when Flat
+	Flat          bool    // slope below the flat threshold → aspect undefined (adapters null/empty it)
+	// SampleSpacingM is the horizontal spacing between the gradient samples (the
+	// Horn baseline is twice this). It varies with the DEM resolution.
+	SampleSpacingM float64
+	License        License // DEM source license/attribution (same source as Elevation)
+}
+
 // Fix is a bearing result: a reference place plus the direction and distance from
 // it to the queried point, with a ready-to-render label ("4 km E Würzburg").
 type Fix struct {

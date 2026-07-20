@@ -19,6 +19,7 @@ type fakeGazetteer struct {
 	loc     *domain.Locality
 	islands []domain.Island
 	fix     *domain.Fix
+	exp     *domain.Exposure
 	elev    *domain.Elevation
 }
 
@@ -30,6 +31,9 @@ func (f fakeGazetteer) Bearing(context.Context, domain.Coordinate, domain.Bearin
 }
 func (f fakeGazetteer) Islands(context.Context, domain.Coordinate) ([]domain.Island, error) {
 	return f.islands, nil
+}
+func (f fakeGazetteer) Exposure(context.Context, domain.Coordinate) (*domain.Exposure, error) {
+	return f.exp, nil
 }
 func (f fakeGazetteer) Elevation(context.Context, domain.Coordinate) (*domain.Elevation, error) {
 	return f.elev, nil

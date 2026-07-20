@@ -67,6 +67,7 @@ nav:
       - Architecture plan: explanation/architecture-plan.md
       - Gazetteer & bearing (plan): explanation/gazetteer-plan.md
       - Raster sources: explanation/raster-sources.md
+      - Exposure from a DEM: explanation/exposure-from-dem.md
       - Technical debt: explanation/technical-debt.md
       - Production-readiness review: explanation/production-readiness-review.md
       - Decisions (ADRs):
