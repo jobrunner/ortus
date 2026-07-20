@@ -130,7 +130,7 @@ paths:
                     compass: ""
                     label: "in Berlin"
                     inside: true
-                  exposure: null          # null when no DEM covers the point
+                  exposure: null          # null when no DEM is wired or the point/neighbour lacks coverage
                   sources:
                     - code: latin-osm
                       short: OSM name (already Latin)
@@ -269,7 +269,7 @@ paths:
                   compass: E
                   label: "4 km E Würzburg"
                   inside: false
-                exposure:                 # null when no DEM covers the point
+                exposure:                 # null when no DEM is wired or the point/neighbour lacks coverage
                   slope_deg: 12.5
                   slope_percent: 22.2
                   aspect_deg: 135.0       # null when flat

@@ -214,10 +214,11 @@ func addGazetteer(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 			"layer is configured), compute a bearing to the most salient nearby " +
 			"place (bearing, e.g. '4 km E Würzburg'), report the terrain slope and " +
 			"the direction it faces (exposure/aspect), and report the height above " +
-			"sea level (elevation, meters; exposure + elevation need a DEM). Any part " +
+			"sea level (elevation, meters; exposure + elevation need a DEM). A part " +
 			"is null when it has no result — no admin coverage, not on an island, no " +
-			"anchor within reach, or no DEM coverage. Equivalent to " +
-			"GET /api/v1/gazetteer.",
+			"anchor within reach, no DEM, or (exposure) the point/neighbor lacks " +
+			"coverage; elevation instead uses the sea-level convention (0 m) outside " +
+			"DEM coverage. Equivalent to GET /api/v1/gazetteer.",
 	}, func(ctx toolCtx, _ *callRequest, in gazetteerIn) (*callResult, gazetteerOut, error) {
 		coord, err := selectCoordinate(in.Lon, in.Lat, in.X, in.Y, in.SRID)
 		if err != nil {

@@ -30,6 +30,11 @@ const (
 	// metersPerDegLat is the length of one degree of latitude, ~constant. One
 	// degree of longitude is this scaled by cos(latitude).
 	metersPerDegLat = 111320.0
+
+	// exposureMaxLatitude is the |latitude| beyond which exposure is not computed:
+	// the E-W metric spacing collapses toward the poles and terrain aspect is
+	// meaningless there. Far outside any realistic gazetteer coverage.
+	exposureMaxLatitude = 85.0
 )
 
 // Exposure derives the terrain slope + aspect at the query point from the
@@ -107,17 +112,19 @@ func computeExposure(w horn3x3, spacingM float64) domain.Exposure {
 
 // sampleWindow reads the 3×3 elevation window (row 1 = north) around p at the
 // given metric spacing, via the sampler. Longitude offsets shrink with latitude
-// (cos-scaled, guarded near the poles) so the window stays roughly square on the
-// ground. ok is false — with a nil error — when the point or any neighbor has no
-// DEM coverage (a reliable gradient needs the whole window); a missing layer
-// (ErrNotFound) is likewise treated as no coverage, mirroring Elevation.
+// (cos-scaled) so the window stays roughly square on the ground. ok is false —
+// with a nil error — when the point or any neighbor has no DEM coverage (a
+// reliable gradient needs the whole window); a missing layer (ErrNotFound) is
+// likewise treated as no coverage, mirroring Elevation.
 func sampleWindow(ctx context.Context, sampler output.ElevationSampler, p domain.Coordinate, spacingM float64) (w horn3x3, ok bool, err error) {
-	dLat := spacingM / metersPerDegLat
-	cosLat := math.Cos(p.Y * math.Pi / 180)
-	if cosLat < 1e-6 {
-		cosLat = 1e-6
+	// Near the poles the E-W degree spacing collapses (cos→0), so a metric offset
+	// would span an absurd longitude range and sample a geographically meaningless
+	// window. Exposure isn't meaningful there anyway — report no coverage.
+	if math.Abs(p.Y) > exposureMaxLatitude {
+		return horn3x3{}, false, nil
 	}
-	dLon := spacingM / (metersPerDegLat * cosLat)
+	dLat := spacingM / metersPerDegLat
+	dLon := spacingM / (metersPerDegLat * math.Cos(p.Y*math.Pi/180))
 
 	// row 1 = north: nw, n, ne, w, c, e, sw, s, se
 	offsets := [9][2]float64{

@@ -47,10 +47,10 @@ func TestFrontendCoordinateInputWiring(t *testing.T) {
 	}
 }
 
-// TestFrontendElevationBeforeBearing pins the gazetteer render order:
+// TestFrontendGazetteerSectionOrder pins the gazetteer render order:
 // islands < elevation < bearing < exposure (containment, then height, then
 // bearing, with exposure next to the bearing).
-func TestFrontendElevationBeforeBearing(t *testing.T) {
+func TestFrontendGazetteerSectionOrder(t *testing.T) {
 	html := frontendHTML
 	iIslands := strings.Index(html, `Insel`)       // islands section label
 	iElev := strings.Index(html, `Höhe`)           // elevation section label

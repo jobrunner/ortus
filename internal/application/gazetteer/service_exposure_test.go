@@ -92,6 +92,18 @@ func TestExposureNoCoverageReturnsNil(t *testing.T) {
 	}
 }
 
+// TestExposureNearPoleReturnsNil: beyond exposureMaxLatitude the E-W spacing
+// collapses, so exposure is reported as unavailable rather than sampling a
+// meaningless window.
+func TestExposureNearPoleReturnsNil(t *testing.T) {
+	svc := NewService(fakeIndex{}, testManifest(), nil, nil, true)
+	svc.SetElevationSampler(planeSampler{northGradM: 0.1, ok: true}, elevMeta())
+	got, err := svc.Exposure(context.Background(), wgs84(10.0, 89.0))
+	if err != nil || got != nil {
+		t.Fatalf("Exposure() near pole = (%v, %v), want (nil, nil)", got, err)
+	}
+}
+
 func TestExposureSamplerError(t *testing.T) {
 	sentinel := errors.New("read failed")
 	svc := NewService(fakeIndex{}, testManifest(), nil, nil, true)

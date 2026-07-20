@@ -116,8 +116,10 @@ a bearing to the most salient nearby place (`bearing`, e.g. "4 km E Würzburg"),
 and — when a DEM is configured — report the terrain exposure (`exposure`: slope +
 the direction it faces) and the height above sea level (`elevation`) at the point.
 Each part is `null` when it has no result — no admin coverage, not on a mapped
-island, no anchor within reach, or no DEM coverage. The dataset is WGS84; a
-non-4326 `srid` is rejected.
+island, no anchor within reach, no DEM configured, or (for `exposure`) the point
+or a neighbour lacks DEM coverage. `elevation` differs: outside DEM coverage it is
+not null but uses the sea-level convention (`meters: 0`, `sea_level: true`). The
+dataset is WGS84; a non-4326 `srid` is rejected.
 
 **"in X" vs "prope X".** The bearing distinguishes being *inside* a place from
 being *near* it by **administrative containment**, not distance: when the query
