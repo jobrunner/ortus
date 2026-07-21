@@ -233,7 +233,8 @@ gazetteer:
   A configured-but-missing/non-continuous source fails startup fast. The DEM's own
   license (from its bundle manifest) is reported separately from the gazetteer
   dataset license.
-- `warmup` (on by default) runs one internal gazetteer query at `(lon, lat)` during
+- `warmup` (on by default) runs the internal gazetteer lookups (Locate, Islands,
+  Bearing, Exposure, Elevation) at `(lon, lat)` during
   startup, **before the server accepts traffic**, so the first real request isn't
   cold (the cause of a "Load failed" first request right after a deploy: the initial
   SpatiaLite/DEM open exceeded the client/proxy timeout). Point `lon`/`lat` at a

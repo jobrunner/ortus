@@ -43,15 +43,13 @@ func (s *Server) handleQuery(w http.ResponseWriter, r *http.Request) {
 	}
 
 	out := s.formatQueryResponse(response)
-	// Reproject the query point to WGS84 once. It powers the always-present `wgs84`
+	// Reproject the query point to WGS84 once (see wgs84OrLog): it powers the wgs84
 	// block (a geographic coordinate other services can compute with / store) and
 	// the gazetteer enrichment — the gazetteer dataset is EPSG:4326, so a non-4326
-	// query is reprojected here rather than skipped. ok is false only when the SRID
-	// can't be transformed (no transformer / unsupported pair); then both are omitted.
-	// Reproject the query point to WGS84 once (see wgs84OrLog): it powers the
-	// always-present wgs84 block and the gazetteer enrichment, so a non-4326 query
-	// is reprojected rather than skipped. Both are omitted for a non-transformable
-	// SRID; the core query result always returns.
+	// query is reprojected here rather than skipped. ok is false when the point can't
+	// be reprojected — the SRID isn't transformable (no transformer / unsupported
+	// pair) or the transform itself failed — and then both blocks are omitted while
+	// the core query result still returns.
 	if wgs, ok := s.wgs84OrLog(r, req.Coordinate); ok {
 		out["wgs84"] = wgs84Block(wgs)
 		s.attachGazetteer(r, wgs, out)

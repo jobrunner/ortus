@@ -12,8 +12,10 @@ import (
 // can't wedge startup — warmup is best-effort, not a gate on correctness.
 const warmGazetteerTimeout = 30 * time.Second
 
-// warmGazetteer runs one internal gazetteer query at startup so the FIRST real
-// request isn't cold. The cold cost is the SpatiaLite connection + mod_spatialite
+// warmGazetteer runs the internal gazetteer lookups (Locate, Islands, Bearing,
+// Exposure, Elevation) once at startup so the FIRST real request isn't cold — it
+// exercises every path a /query enrichment touches, not a single call. The cold
+// cost is the SpatiaLite connection + mod_spatialite
 // init + rtree/page-cache warm-up and the first DEM tile open; deferring it to the
 // first client request is what made that request time out ("Load failed", then
 // fine) after every deploy.

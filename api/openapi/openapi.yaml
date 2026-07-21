@@ -1045,9 +1045,11 @@ components:
           nullable: true
           description: >-
             Der Abfragepunkt in WGS84 (lon/lat) — die Eingabekoordinate, bei einem
-            projizierten `srid` nach EPSG:4326 reprojiziert. Immer enthalten, außer
-            der `srid` lässt sich nicht nach WGS84 transformieren. Gedacht zum
-            Weiterrechnen/Speichern in nachgelagerten Services.
+            projizierten `srid` nach EPSG:4326 reprojiziert. Fehlt nur, wenn der
+            Punkt nicht reprojiziert werden kann: entweder ist der `srid` nicht
+            transformierbar (kein Transformer / nicht unterstütztes Paar) oder die
+            Reprojektion selbst schlägt fehl (Best-Effort — die Kernabfrage liefert
+            dennoch). Gedacht zum Weiterrechnen/Speichern in nachgelagerten Services.
         results:
           type: array
           items:
@@ -1092,7 +1094,9 @@ components:
           nullable: true
           description: >-
             Der Abfragepunkt in WGS84 (lon/lat); bei projiziertem `srid` reprojiziert.
-            Fehlt nur, wenn der `srid` nicht nach WGS84 transformierbar ist.
+            Wie bei /query Best-Effort: fehlt, wenn der `srid` nicht transformierbar
+            ist (kein Transformer / nicht unterstütztes Paar) oder die Reprojektion
+            selbst fehlschlägt (die Kernabfrage liefert dennoch).
         results:
           type: array
           items:

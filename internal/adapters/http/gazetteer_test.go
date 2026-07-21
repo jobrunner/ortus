@@ -131,6 +131,57 @@ func TestQueryNonWGS84NoTransformer(t *testing.T) {
 	}
 }
 
+// readyQuerier is a minimal query-service registry reporting a single ready
+// source with no features, so a per-source /query returns 200 (empty results).
+// That is enough to assert the per-source response envelope (the wgs84 block)
+// without standing up a storage fixture — the default gazetteer test harness
+// loads no sources, so /api/v1/query/{sourceId} would otherwise 404.
+type readyQuerier struct{ id string }
+
+func (r readyQuerier) ReadySourceIDs() []string { return []string{r.id} }
+func (r readyQuerier) GetSource(context.Context, string) (*domain.Source, error) {
+	return &domain.Source{ID: r.id, Name: r.id}, nil
+}
+func (r readyQuerier) Query(context.Context, string, string, domain.Coordinate) ([]domain.Feature, error) {
+	return nil, nil
+}
+
+// newQuerySourceServer builds a Server whose query service has one ready source,
+// so GET /api/v1/query/{sourceId} reaches 200.
+func newQuerySourceServer(t *testing.T) *Server {
+	t.Helper()
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	reg := application.NewSourceRegistry(
+		[]output.SpatialSource{&mockRepository{}}, &mockStorage{},
+		noop.NewMeterProvider().Meter("test"), output.NoOpTracer{}, logger, "/tmp",
+	)
+	_ = reg.LoadAll(context.Background())
+	health := application.NewHealthService(reg, true, output.NoOpTracer{})
+	query := application.NewQueryService(readyQuerier{id: "districts"}, nil,
+		noop.NewMeterProvider().Meter("test"), output.NoOpTracer{}, logger, application.QueryServiceConfig{})
+	return NewServer(
+		config.ServerConfig{Host: "localhost", Port: 8080, ReadTimeout: time.Second, WriteTimeout: time.Second},
+		query, reg, health, nil, logger, false, ServerOptions{},
+	)
+}
+
+// TestQuerySourceWGS84Block: a per-source query (/api/v1/query/{sourceId}) carries
+// the wgs84 block just like /query, but never attaches the gazetteer block.
+func TestQuerySourceWGS84Block(t *testing.T) {
+	srv := newQuerySourceServer(t)
+	rec, body := doGET(t, srv, "/api/v1/query/districts?lon=9.93&lat=49.79")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	w, ok := body["wgs84"].(map[string]any)
+	if !ok || w["lon"] != 9.93 || w["lat"] != 49.79 {
+		t.Fatalf("per-source wgs84 = %v, want {lon:9.93, lat:49.79}", body["wgs84"])
+	}
+	if _, hasGaz := body["gazetteer"]; hasGaz {
+		t.Errorf("per-source query must NOT attach a gazetteer block; got %v", body["gazetteer"])
+	}
+}
+
 // TestGazetteerEndpointReprojects3857: the dedicated endpoint now serves a
 // projected coordinate by reprojecting it (was 422 before), and carries wgs84.
 func TestGazetteerEndpointReprojects3857(t *testing.T) {

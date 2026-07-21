@@ -62,12 +62,14 @@ curl "http://localhost:8080/api/v1/query?lon=13.405&lat=52.52&properties=name,po
 Each result carries its source's `license` (name/url/attribution) when the
 GeoPackage ships that metadata.
 
-**`wgs84` block (always present).** Alongside the echoed input `coordinate`, every
-query response carries `wgs84: { lon, lat }` — the query point in WGS84. For a 4326
-query it equals the input; for a projected `srid` (e.g. 3857) it is the input
-**reprojected** to WGS84. It gives downstream services a geographic coordinate to
-compute with / store regardless of the input SRID. It is omitted only when the
-`srid` can't be transformed to WGS84 (no transformer / unsupported pair).
+**`wgs84` block.** Alongside the echoed input `coordinate`, a query response carries
+`wgs84: { lon, lat }` — the query point in WGS84. For a 4326 query it equals the
+input; for a projected `srid` (e.g. 3857) it is the input **reprojected** to WGS84.
+It gives downstream services a geographic coordinate to compute with / store
+regardless of the input SRID. It is omitted only when the query point can't be
+reprojected — either the `srid` isn't transformable (no transformer / unsupported
+pair) or the reprojection itself fails (best-effort: the core query result still
+returns, and the failure is logged server-side).
 
 **Gazetteer enrichment (on by default).** When the [gazetteer feature](configuration.md)
 is enabled, the query response additionally carries a `gazetteer` block with the
