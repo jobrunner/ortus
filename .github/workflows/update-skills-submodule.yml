@@ -1,0 +1,62 @@
+# On-demand bump of the third_party/claude-skills submodule to the latest commit
+# of its tracked branch (main, per .gitmodules), opened as a PR. This is the
+# manual counterpart to the weekly Dependabot `gitsubmodule` update: run it from
+# the Actions tab ("Run workflow") or `gh workflow run update-skills-submodule.yml`
+# when you want the newest skills without waiting for Monday.
+#
+# It is workflow_dispatch-only (no schedule) so it never races Dependabot's PR.
+# The skills repo is PRIVATE, so both the submodule fetch and the branch push use
+# RELEASE_PLEASE_TOKEN (a PAT): the default GITHUB_TOKEN can't read another private
+# repo, and a branch pushed with GITHUB_TOKEN wouldn't trigger the PR's CI.
+name: Update skills submodule
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+
+      - name: Bump submodule to latest tracked branch
+        id: bump
+        run: |
+          git submodule update --remote --recursive third_party/claude-skills
+          if git diff --quiet -- third_party/claude-skills; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "claude-skills already at the latest commit — nothing to do."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "new=$(git -C third_party/claude-skills rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open PR
+        if: steps.bump.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          NEW: ${{ steps.bump.outputs.new }}
+        run: |
+          branch="chore/bump-claude-skills-${NEW}"
+          # Idempotent: if this exact bump was already proposed (branch exists on
+          # origin), a rerun is a no-op rather than a push collision / duplicate PR.
+          if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+            echo "Branch $branch already exists — bump to ${NEW} is already proposed; nothing to do."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add third_party/claude-skills
+          git commit -m "chore(skills): bump claude-skills submodule to ${NEW}"
+          git push -u origin "$branch"
+          gh pr create \
+            --title "chore(skills): bump claude-skills submodule to ${NEW}" \
+            --body "On-demand bump of the \`third_party/claude-skills\` submodule to the latest \`main\` (\`${NEW}\`), triggered via workflow_dispatch. The manual counterpart to the weekly Dependabot gitsubmodule update."
