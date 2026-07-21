@@ -50,6 +50,11 @@ def cap_check(files, metric, default_cap, baseline, label, cfg_path):
             violations.append(f"{label}: {rel} = {val:.0f} > {cap} ({where})")
         elif rel in baseline and val < cap:
             hints.append(f"ratchet down: {rel} {label} {cap} -> {val:.0f} in {cfg_path}")
+    # Flag stale baseline entries (file renamed/deleted) so the config stays clean —
+    # a dead entry otherwise silently stops applying, mirroring the hotspot.allow hint.
+    for rel in sorted(baseline):
+        if rel not in files:
+            hints.append(f"{label} baseline: {rel} is not in the map (renamed/deleted?) — remove it from {cfg_path}")
     return violations, hints
 
 
