@@ -95,6 +95,15 @@ def main():
         print(f"::error::{cfg_path}: malformed config ({e})", file=sys.stderr)
         return 2
 
+    # Guard against a vacuous pass: if a cap metric is absent from EVERY file (a ccsh
+    # version / parser change, or a typo'd metric name), cap_check would skip all files
+    # and the gate would silently pass. Fail loudly instead — the map still has files.
+    for m in (metric, fmetric):
+        if files and not any(a.get(m) is not None for a in files.values()):
+            print(f"::error::metric '{m}' is absent from every file in the map — "
+                  f"ccsh version/parser mismatch? Refusing to pass vacuously.", file=sys.stderr)
+            return 2
+
     violations, hints = [], []
 
     # 1. Per-file aggregate complexity (sum of function complexity). Stops a file
