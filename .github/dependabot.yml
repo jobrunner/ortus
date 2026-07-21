@@ -68,3 +68,21 @@ updates:
         update-types:
           - "minor"
           - "patch"
+
+  # git submodules — bumps the third_party/claude-skills pin to the latest of its
+  # tracked branch (main, per .gitmodules) as a reviewed PR, so ortus's CI/hooks
+  # (the skills back doc-drift + pre-commit tooling) validate the new skills version
+  # before it lands. Keeps the submodule pinned (reproducible) while still updating
+  # regularly. Manual on-demand run: Insights → Dependency graph → Dependabot →
+  # "Check for updates" (or the Update skills submodule workflow_dispatch action).
+  # NOTE: claude-skills is private; Dependabot needs access to it (same-owner repos
+  # are reachable by default) or the PR won't appear.
+  - package-ecosystem: gitsubmodule
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    labels:
+      - dependencies
+      - skills
