@@ -238,6 +238,8 @@ gazetteer:
   cold (the cause of a "Load failed" first request right after a deploy: the initial
   SpatiaLite/DEM open exceeded the client/proxy timeout). Point `lon`/`lat` at a
   coordinate your dataset **and** DEM cover; set `enabled: false` if you run no
-  gazetteer/DEM. Best-effort and time-bounded — it never blocks startup.
+  gazetteer/DEM. It runs synchronously and therefore **delays readiness by up to
+  ~30 s** — but it is time-bounded (never blocks indefinitely) and best-effort (a
+  warmup error is logged at WARN, startup still proceeds).
 - The dataset and its sidecars are built by the `build-gazetteer-package` skill
   (see `.claude/skills/build-gazetteer-package/`).

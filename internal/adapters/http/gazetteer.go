@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -24,8 +25,10 @@ func (s *Server) handleGazetteer(w http.ResponseWriter, r *http.Request) {
 	// transformed rather than rejected; only a non-transformable SRID is refused.
 	wgs, ok := s.toWGS84(r.Context(), coord)
 	if !ok {
-		s.writeError(w, http.StatusUnprocessableEntity,
-			"coordinate SRID cannot be transformed to WGS84 (EPSG:4326)")
+		s.writeError(w, http.StatusUnprocessableEntity, fmt.Sprintf(
+			"coordinate SRID %d cannot be transformed to WGS84 (EPSG:4326); "+
+				"query with srid=4326 (lon/lat), or run ortus with a coordinate transformer",
+			coord.SRID))
 		return
 	}
 
