@@ -88,6 +88,10 @@ def main():
         print(f"::error::{map_path}: no nodes in map — cannot run the ratchet", file=sys.stderr)
         return 2
     files = dict(leaves(nodes[0], []))
+    if not files:
+        print(f"::error::{map_path}: map has nodes but no File leaves — cannot run the "
+              f"ratchet (ccsh format change?). Refusing to pass vacuously.", file=sys.stderr)
+        return 2
 
     try:
         cx = cfg["complexity"]
@@ -111,7 +115,7 @@ def main():
     # version / parser change, or a typo'd metric name), cap_check would skip all files
     # and the gate would silently pass. Fail loudly instead — the map still has files.
     for m in (metric, fmetric):
-        if files and not any(a.get(m) is not None for a in files.values()):
+        if not any(a.get(m) is not None for a in files.values()):
             print(f"::error::metric '{m}' is absent from every file in the map — "
                   f"ccsh version/parser mismatch? Refusing to pass vacuously.", file=sys.stderr)
             return 2
