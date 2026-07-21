@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.27.0](https://github.com/jobrunner/ortus/compare/v0.26.0...v0.27.0) (2026-07-21)
+
+
+### Features
+
+* **query:** add wgs84 block, gazetteer for any srid, lat/lon display, startup warmup ([177213e](https://github.com/jobrunner/ortus/commit/177213e1cc97ea39b02391182a53185187bbb2f8))
+* **query:** WGS84 block + gazetteer for any SRID; lat/lon display; startup warmup ([f3c5ec7](https://github.com/jobrunner/ortus/commit/f3c5ec7b1b589e1458da6c16f3f23d14363ca81a))
+
+
+### Bug Fixes
+
+* **gazetteer:** warn on warmup errors; accurate blocking wording; actionable 422 ([223d7a1](https://github.com/jobrunner/ortus/commit/223d7a1476c39133b4127e251a6a33885a9229a9))
+
 ## [0.26.0](https://github.com/jobrunner/ortus/compare/v0.25.0...v0.26.0) (2026-07-20)
 
 
