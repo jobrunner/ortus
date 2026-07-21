@@ -332,6 +332,7 @@ func (a *App) buildHTTPServer(cfg *config.Config, logger *slog.Logger) *httpAdap
 			BearingPolicy:    a.gazetteerPolicy,
 			GazetteerLicense: a.gazetteerLicense,
 			Version:          cfg.Build.Version,
+			Transformer:      a.Transformer,
 		},
 	)
 }
@@ -402,6 +403,12 @@ func (a *App) Start(ctx context.Context) error {
 	if err := a.bindGazetteerElevation(); err != nil {
 		return fmt.Errorf("wiring gazetteer elevation: %w", err)
 	}
+
+	// Warm the gazetteer/DEM path BEFORE the listener accepts traffic, so the first
+	// real request isn't cold (the cause of the "Load failed" first request after a
+	// deploy). Synchronous + best-effort: the server only starts listening — and the
+	// reverse proxy only sees a ready ortus — once this returns.
+	a.warmGazetteer(startupCtx)
 
 	// Start file watcher. Pass the parent ctx (NOT startupCtx) — the
 	// watcher keeps the ctx for the life of the process and uses it as the

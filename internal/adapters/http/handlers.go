@@ -1,7 +1,6 @@
 package http
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -44,26 +43,16 @@ func (s *Server) handleQuery(w http.ResponseWriter, r *http.Request) {
 	}
 
 	out := s.formatQueryResponse(response)
-	// Gazetteer enrichment is ON by default when the feature is wired, so a client
-	// gets the admin hierarchy, bearing, name-source explanations and dataset
-	// attribution in the same call. Opt out with with-gazetteer=0 (or false/no/off)
-	// to skip the extra spatial work. Only attempted for WGS84 coordinates — the
-	// gazetteer dataset is EPSG:4326, so a non-4326 srid query would only fail and
-	// log; it is silently skipped instead. Best-effort: a gazetteer failure is
-	// logged and omitted so it never breaks the core query result.
-	if s.gazetteer != nil && gazetteerEnrichmentRequested(r) && isWGS84(req.Coordinate) {
-		if g, gerr := s.gazetteerSections(r.Context(), req.Coordinate); gerr != nil {
-			if errors.Is(gerr, context.Canceled) {
-				// Client aborted the request (e.g. a new map click supersedes the
-				// previous query) — expected, not a failure. A server-side deadline
-				// (query.timeout) is NOT hidden: it still warns via the else branch.
-				s.logger.Debug("gazetteer enrichment canceled", "error", gerr)
-			} else {
-				s.logger.Warn("gazetteer enrichment failed", "error", gerr)
-			}
-		} else {
-			out["gazetteer"] = g
-		}
+	// Reproject the query point to WGS84 once (see wgs84OrLog): it powers the wgs84
+	// block (a geographic coordinate other services can compute with / store) and
+	// the gazetteer enrichment — the gazetteer dataset is EPSG:4326, so a non-4326
+	// query is reprojected here rather than skipped. ok is false when the point can't
+	// be reprojected — the SRID isn't transformable (no transformer / unsupported
+	// pair) or the transform itself failed — and then both blocks are omitted while
+	// the core query result still returns.
+	if wgs, ok := s.wgs84OrLog(r, req.Coordinate); ok {
+		out["wgs84"] = wgs84Block(wgs)
+		s.attachGazetteer(r, wgs, out)
 	}
 	s.writeJSON(w, http.StatusOK, out)
 }
@@ -92,7 +81,13 @@ func (s *Server) handleQuerySource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.writeJSON(w, http.StatusOK, s.formatQueryResponse(response))
+	out := s.formatQueryResponse(response)
+	// The wgs84 block travels on every query response (single-source too), even
+	// though single-source queries don't attach the gazetteer block.
+	if wgs, ok := s.wgs84OrLog(r, req.Coordinate); ok {
+		out["wgs84"] = wgs84Block(wgs)
+	}
+	s.writeJSON(w, http.StatusOK, out)
 }
 
 // handleHealth returns detailed health status.

@@ -42,6 +42,7 @@ curl "http://localhost:8080/api/v1/query?lon=13.405&lat=52.52&properties=name,po
 ```json
 {
   "coordinate": { "x": 13.405, "y": 52.52, "srid": 4326 },
+  "wgs84": { "lon": 13.405, "lat": 52.52 },
   "results": [
     {
       "source_id": "districts",
@@ -61,20 +62,31 @@ curl "http://localhost:8080/api/v1/query?lon=13.405&lat=52.52&properties=name,po
 Each result carries its source's `license` (name/url/attribution) when the
 GeoPackage ships that metadata.
 
+**`wgs84` block.** Alongside the echoed input `coordinate`, a query response carries
+`wgs84: { lon, lat }` — the query point in WGS84. For a 4326 query it equals the
+input; for a projected `srid` (e.g. 3857) it is the input **reprojected** to WGS84.
+It gives downstream services a geographic coordinate to compute with / store
+regardless of the input SRID. It is omitted only when the query point can't be
+reprojected — either the `srid` isn't transformable (no transformer / unsupported
+pair) or the reprojection itself fails (best-effort: the core query result still
+returns, and the failure is logged server-side).
+
 **Gazetteer enrichment (on by default).** When the [gazetteer feature](configuration.md)
 is enabled, the query response additionally carries a `gazetteer` block with the
 administrative hierarchy, the island(s) containing the point (when an islands layer
 is configured), bearing, terrain exposure (slope + aspect) and elevation (both when
 a DEM is configured), name-source explanations and the dataset attribution — so a
-client gets everything to process the result in one call. It is
-the same structure as the [gazetteer endpoint](#gazetteer-endpoint) (minus
-`coordinate`). Opt out per request with `?with-gazetteer=0` (or `false`/`no`/`off`)
-to skip the extra spatial work; enrichment is best-effort and is omitted (never
-errors the query) if it fails.
+client gets everything to process the result in one call. It works for **any SRID
+that reprojects to WGS84** (the point is reprojected before the lookup, not just
+4326). It is the same structure as the [gazetteer endpoint](#gazetteer-endpoint)
+(minus `coordinate`). Opt out per request with `?with-gazetteer=0` (or
+`false`/`no`/`off`) to skip the extra spatial work; enrichment is best-effort and is
+omitted (never errors the query) if it fails.
 
 ```jsonc
 {
   "coordinate": { "x": 13.405, "y": 52.52, "srid": 4326 },
+  "wgs84": { "lon": 13.405, "lat": 52.52 },
   "results": [ /* … as above, incl. per-source license … */ ],
   "total_features": 1,
   "processing_time_ms": 12,
@@ -119,7 +131,9 @@ Each part is `null` when it has no result — no admin coverage, not on a mapped
 island, no anchor within reach, no DEM configured, or (for `exposure`) the point
 or a neighbour lacks DEM coverage. `elevation` differs: outside DEM coverage it is
 not null but uses the sea-level convention (`meters: 0`, `sea_level: true`). The
-dataset is WGS84; a non-4326 `srid` is rejected.
+response also carries the `wgs84: { lon, lat }` block (as on `/query`). The dataset
+is WGS84; a **projected `srid` (e.g. 3857) is reprojected** to WGS84 before the
+lookup — only an `srid` that can't be transformed to WGS84 is rejected (`422`).
 
 **"in X" vs "prope X".** The bearing distinguishes being *inside* a place from
 being *near* it by **administrative containment**, not distance: when the query
@@ -136,6 +150,7 @@ bearing from a label — the find is *in* Würzburg).
 ```json
 {
   "coordinate": { "x": 9.93, "y": 49.79, "srid": 4326 },
+  "wgs84": { "lon": 9.93, "lat": 49.79 },
   "admin": {
     "country_iso": "DE",
     "hierarchy": [

@@ -933,24 +933,30 @@ const frontendHTML = `<!DOCTYPE html>
             }
 
             function displayResults(data, srid) {
-                // Header info
+                // Header info. For WGS84 we show Lat/Lon (the conventional geographic
+                // order). For a projected SRID we show the entered X/Y plus the
+                // reprojected WGS84 lat/lon from the response's wgs84 block.
                 const coord = data.coordinate;
                 if (srid === '4326') {
-                    resultCoord.textContent = 'Lon: ' + coord.x.toFixed(6) + ', Lat: ' + coord.y.toFixed(6);
+                    resultCoord.textContent = 'Lat: ' + coord.y.toFixed(6) + ', Lon: ' + coord.x.toFixed(6);
                 } else {
-                    resultCoord.textContent = 'X: ' + coord.x.toFixed(2) + ', Y: ' + coord.y.toFixed(2) + ' (EPSG:' + coord.srid + ')';
+                    let txt = 'X: ' + coord.x.toFixed(2) + ', Y: ' + coord.y.toFixed(2) + ' (EPSG:' + coord.srid + ')';
+                    if (data.wgs84) {
+                        txt += ' · WGS84 Lat: ' + data.wgs84.lat.toFixed(6) + ', Lon: ' + data.wgs84.lon.toFixed(6);
+                    }
+                    resultCoord.textContent = txt;
                 }
 
                 resultStats.textContent = data.total_features + ' Feature(s) in ' + data.processing_time_ms + 'ms';
 
                 let html = '';
 
-                // Location context (gazetteer): admin hierarchy with level meaning,
-                // bearing, name-source explanations and dataset attribution. Present
-                // for WGS84 when the gazetteer feature is enabled — but only rendered
-                // when it actually has location content (a point with no admin
-                // coverage and no anchor would otherwise be an empty box; sources are
-                // empty and the dataset license alone is not location context).
+                // Location context (gazetteer): admin hierarchy, islands, elevation,
+                // bearing, exposure, name-source explanations and dataset attribution.
+                // Present whenever the query point could be reprojected to WGS84 (any
+                // SRID the transformer supports, not just 4326) and the feature is
+                // enabled — but only rendered when it actually has location content
+                // (an uncovered point with no anchor would otherwise be an empty box).
                 if (hasGazetteerContent(data.gazetteer)) {
                     html += renderGazetteer(data.gazetteer);
                 }

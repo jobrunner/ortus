@@ -247,6 +247,18 @@ type GazetteerConfig struct {
 	NameSourceManifestPath string                   `mapstructure:"name_source_manifest_path"` // name-source manifest (optional; name provenance)
 	Bearing                GazetteerBearingConfig   `mapstructure:"bearing"`
 	Elevation              GazetteerElevationConfig `mapstructure:"elevation"`
+	Warmup                 GazetteerWarmupConfig    `mapstructure:"warmup"`
+}
+
+// GazetteerWarmupConfig controls the startup self-warmup: before the server
+// accepts traffic, ortus runs one internal gazetteer query at (Lon, Lat) so the
+// SpatiaLite connection, mod_spatialite and the first DEM tile are already warm —
+// otherwise the first real request pays that cold cost and can time out ("Load
+// failed", then fine). Point Lon/Lat at a coordinate your dataset AND DEM cover.
+type GazetteerWarmupConfig struct {
+	Enabled bool    `mapstructure:"enabled"`
+	Lon     float64 `mapstructure:"lon"`
+	Lat     float64 `mapstructure:"lat"`
 }
 
 // GazetteerElevationConfig wires the optional elevation feature: the gazetteer
@@ -400,6 +412,12 @@ func Defaults() {
 	viper.SetDefault("gazetteer.manifest_path", "")
 	viper.SetDefault("gazetteer.level_reference_path", "")
 	viper.SetDefault("gazetteer.name_source_manifest_path", "")
+	// Startup self-warmup (on by default). The default point (Würzburg) is covered
+	// by the West-Palearctic admin data and a central-European DEM; override to a
+	// point your DEM covers, or disable if you don't run a gazetteer/DEM.
+	viper.SetDefault("gazetteer.warmup.enabled", true)
+	viper.SetDefault("gazetteer.warmup.lon", 9.93)
+	viper.SetDefault("gazetteer.warmup.lat", 49.79)
 	// Bearing tuning knobs — defaults match domain.DefaultBearingPolicy.
 	viper.SetDefault("gazetteer.bearing.reach_village_km", 5.0)
 	viper.SetDefault("gazetteer.bearing.reach_town_km", 18.0)

@@ -88,6 +88,9 @@ paths:
                   x: 13.405
                   y: 52.52
                   srid: 4326
+                wgs84:
+                  lon: 13.405
+                  lat: 52.52
                 results:
                   - source_id: districts
                     source_name: districts.gpkg
@@ -222,6 +225,9 @@ paths:
         eine Peilung zum salientesten nahen Ort (`bearing`, z. B. "4 km E Würzburg").
         Jeder Teil ist `null`, wenn es kein Ergebnis gibt — keine Admin-Abdeckung bzw.
         kein Anker in Reichweite. Nur verfügbar, wenn das Gazetteer-Feature aktiv ist.
+        Ein projizierter `srid` (z. B. 3857) wird intern nach WGS84 reprojiziert; die
+        Antwort enthält die reprojizierte Koordinate im `wgs84`-Block. Nur ein `srid`,
+        der sich nicht nach WGS84 transformieren lässt, wird mit 422 abgelehnt.
       operationId: gazetteer
       parameters:
         - $ref: '#/components/parameters/LonParam'
@@ -241,6 +247,9 @@ paths:
                   x: 9.93
                   y: 49.79
                   srid: 4326
+                wgs84:
+                  lon: 9.93
+                  lat: 49.79
                 admin:
                   country_iso: DE
                   hierarchy:
@@ -623,6 +632,13 @@ components:
           properties:
             coordinate:
               $ref: '#/components/schemas/Coordinate'
+            wgs84:
+              allOf:
+                - $ref: '#/components/schemas/Wgs84Coordinate'
+              nullable: true
+              description: >-
+                Der Abfragepunkt in WGS84 (lon/lat); bei projiziertem `srid`
+                reprojiziert (siehe with-gazetteer / Endpoint-Beschreibung).
         - $ref: '#/components/schemas/GazetteerData'
 
     GazetteerData:
@@ -886,6 +902,24 @@ components:
               type: string
               description: Anzuzeigender Attributionstext.
 
+    Wgs84Coordinate:
+      type: object
+      description: >-
+        Eine WGS84-Koordinate (EPSG:4326) als lon/lat. Explizit geografisch (nicht
+        x/y/srid), damit nachgelagerte Services direkt damit rechnen/speichern können.
+      properties:
+        lon:
+          type: number
+          format: double
+          description: Längengrad (WGS84).
+        lat:
+          type: number
+          format: double
+          description: Breitengrad (WGS84).
+      required:
+        - lon
+        - lat
+
     Coordinate:
       type: object
       description: Geografische Koordinate
@@ -1005,6 +1039,17 @@ components:
       properties:
         coordinate:
           $ref: '#/components/schemas/Coordinate'
+        wgs84:
+          allOf:
+            - $ref: '#/components/schemas/Wgs84Coordinate'
+          nullable: true
+          description: >-
+            Der Abfragepunkt in WGS84 (lon/lat) — die Eingabekoordinate, bei einem
+            projizierten `srid` nach EPSG:4326 reprojiziert. Fehlt nur, wenn der
+            Punkt nicht reprojiziert werden kann: entweder ist der `srid` nicht
+            transformierbar (kein Transformer / nicht unterstütztes Paar) oder die
+            Reprojektion selbst schlägt fehl (Best-Effort — die Kernabfrage liefert
+            dennoch). Gedacht zum Weiterrechnen/Speichern in nachgelagerten Services.
         results:
           type: array
           items:
@@ -1024,9 +1069,10 @@ components:
           description: >-
             Gazetteer-Anreicherung (admin, islands, bearing, exposure, elevation,
             sources, license). Standardmäßig enthalten, wenn das Gazetteer-Feature
-            aktiv ist und die Koordinate WGS84 ist — mit with-gazetteer=0
-            (false/no/off) abschaltbar. Fehlt, wenn das Feature aus ist, abgeschaltet
-            wurde oder die Koordinate nicht WGS84 ist.
+            aktiv ist und der Abfragepunkt nach WGS84 auflösbar ist (ein projizierter
+            `srid` wird dafür reprojiziert) — mit with-gazetteer=0 (false/no/off)
+            abschaltbar. Fehlt, wenn das Feature aus ist, abgeschaltet wurde oder der
+            `srid` sich nicht nach WGS84 transformieren lässt.
       required:
         - coordinate
         - results
@@ -1037,10 +1083,20 @@ components:
       type: object
       description: >-
         Antwort von GET /api/v1/query/{sourceId}. Wie QueryResponse, aber OHNE den
-        gazetteer-Block (die Einzelquellen-Abfrage reichert nicht an).
+        gazetteer-Block (die Einzelquellen-Abfrage reichert nicht an). Der
+        wgs84-Block wird dennoch mitgeliefert.
       properties:
         coordinate:
           $ref: '#/components/schemas/Coordinate'
+        wgs84:
+          allOf:
+            - $ref: '#/components/schemas/Wgs84Coordinate'
+          nullable: true
+          description: >-
+            Der Abfragepunkt in WGS84 (lon/lat); bei projiziertem `srid` reprojiziert.
+            Wie bei /query Best-Effort: fehlt, wenn der `srid` nicht transformierbar
+            ist (kein Transformer / nicht unterstütztes Paar) oder die Reprojektion
+            selbst fehlschlägt (die Kernabfrage liefert dennoch).
         results:
           type: array
           items:

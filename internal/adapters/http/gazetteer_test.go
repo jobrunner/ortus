@@ -51,6 +51,12 @@ func (f fakeGazetteer) Elevation(context.Context, domain.Coordinate) (*domain.El
 }
 
 func newGazetteerServer(t *testing.T, gaz input.Gazetteer) *Server {
+	return newGazetteerServerT(t, gaz, nil)
+}
+
+// newGazetteerServerT is newGazetteerServer with an optional coordinate transformer
+// (for the non-WGS84 → WGS84 reprojection tests).
+func newGazetteerServerT(t *testing.T, gaz input.Gazetteer, tf output.CoordinateTransformer) *Server {
 	t.Helper()
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	reg := application.NewSourceRegistry(
@@ -65,8 +71,168 @@ func newGazetteerServer(t *testing.T, gaz input.Gazetteer) *Server {
 	return NewServer(
 		config.ServerConfig{Host: "localhost", Port: 8080, ReadTimeout: time.Second, WriteTimeout: time.Second},
 		query, reg, health, nil, logger, false,
-		ServerOptions{Gazetteer: gaz, GazetteerLicense: sampleGazetteerLicense()},
+		ServerOptions{Gazetteer: gaz, GazetteerLicense: sampleGazetteerLicense(), Transformer: tf},
 	)
+}
+
+// fakeTransformer is a canned output.CoordinateTransformer for the reprojection
+// tests: it maps any supported source SRID to a fixed WGS84 lon/lat.
+type fakeTransformer struct {
+	lon, lat     float64
+	supported    bool
+	transformErr error
+}
+
+func (f fakeTransformer) Transform(_ context.Context, _ domain.Coordinate, _ int) (domain.Coordinate, error) {
+	if f.transformErr != nil {
+		return domain.Coordinate{}, f.transformErr
+	}
+	return domain.NewWGS84Coordinate(f.lon, f.lat), nil
+}
+func (f fakeTransformer) IsSupported(_, _ int) bool { return f.supported }
+
+// TestQueryWGS84Block: a WGS84 /query carries the always-present wgs84 block
+// (lon/lat = the input), no transformer needed.
+func TestQueryWGS84Block(t *testing.T) {
+	srv := newGazetteerServer(t, fakeGazetteer{loc: sampleLocality(), fix: sampleFix()})
+	_, body := doGET(t, srv, "/api/v1/query?lon=9.93&lat=49.79")
+	w, ok := body["wgs84"].(map[string]any)
+	if !ok || w["lon"] != 9.93 || w["lat"] != 49.79 {
+		t.Fatalf("wgs84 = %v, want {lon:9.93, lat:49.79}", body["wgs84"])
+	}
+}
+
+// TestQueryReprojectsNonWGS84: a 3857 /query is reprojected to WGS84 → the wgs84
+// block AND the gazetteer block are both present (previously gazetteer was skipped
+// for non-WGS84).
+func TestQueryReprojectsNonWGS84(t *testing.T) {
+	tf := fakeTransformer{lon: -16.856, lat: 28.60, supported: true}
+	srv := newGazetteerServerT(t, fakeGazetteer{loc: sampleLocality(), fix: sampleFix()}, tf)
+	_, body := doGET(t, srv, "/api/v1/query?x=-1876403.675&y=3291468.780&srid=3857")
+	w, ok := body["wgs84"].(map[string]any)
+	if !ok || w["lon"] != -16.856 || w["lat"] != 28.60 {
+		t.Fatalf("wgs84 = %v, want reprojected {-16.856, 28.60}", body["wgs84"])
+	}
+	if _, ok := body["gazetteer"].(map[string]any); !ok {
+		t.Fatalf("gazetteer block missing for a reprojected 3857 query; got %v", body["gazetteer"])
+	}
+}
+
+// TestQueryNonWGS84NoTransformer: without a transformer a projected query can't be
+// reprojected → no wgs84 and no gazetteer (graceful skip, core query still returns).
+func TestQueryNonWGS84NoTransformer(t *testing.T) {
+	srv := newGazetteerServer(t, fakeGazetteer{loc: sampleLocality(), fix: sampleFix()})
+	_, body := doGET(t, srv, "/api/v1/query?x=-1876403.675&y=3291468.780&srid=3857")
+	if body["wgs84"] != nil {
+		t.Errorf("wgs84 = %v, want absent without a transformer", body["wgs84"])
+	}
+	if body["gazetteer"] != nil {
+		t.Errorf("gazetteer = %v, want absent for a non-transformable SRID", body["gazetteer"])
+	}
+}
+
+// readyQuerier is a minimal query-service registry reporting a single ready
+// source with no features, so a per-source /query returns 200 (empty results).
+// That is enough to assert the per-source response envelope (the wgs84 block)
+// without standing up a storage fixture — the default gazetteer test harness
+// loads no sources, so /api/v1/query/{sourceId} would otherwise 404.
+type readyQuerier struct{ id string }
+
+func (r readyQuerier) ReadySourceIDs() []string { return []string{r.id} }
+func (r readyQuerier) GetSource(context.Context, string) (*domain.Source, error) {
+	return &domain.Source{ID: r.id, Name: r.id}, nil
+}
+func (r readyQuerier) Query(context.Context, string, string, domain.Coordinate) ([]domain.Feature, error) {
+	return nil, nil
+}
+
+// newQuerySourceServer builds a Server whose query service has one ready source,
+// so GET /api/v1/query/{sourceId} reaches 200.
+func newQuerySourceServer(t *testing.T) *Server {
+	t.Helper()
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	reg := application.NewSourceRegistry(
+		[]output.SpatialSource{&mockRepository{}}, &mockStorage{},
+		noop.NewMeterProvider().Meter("test"), output.NoOpTracer{}, logger, "/tmp",
+	)
+	_ = reg.LoadAll(context.Background())
+	health := application.NewHealthService(reg, true, output.NoOpTracer{})
+	query := application.NewQueryService(readyQuerier{id: "districts"}, nil,
+		noop.NewMeterProvider().Meter("test"), output.NoOpTracer{}, logger, application.QueryServiceConfig{})
+	return NewServer(
+		config.ServerConfig{Host: "localhost", Port: 8080, ReadTimeout: time.Second, WriteTimeout: time.Second},
+		query, reg, health, nil, logger, false, ServerOptions{},
+	)
+}
+
+// TestQuerySourceWGS84Block: a per-source query (/api/v1/query/{sourceId}) carries
+// the wgs84 block just like /query, but never attaches the gazetteer block.
+func TestQuerySourceWGS84Block(t *testing.T) {
+	srv := newQuerySourceServer(t)
+	rec, body := doGET(t, srv, "/api/v1/query/districts?lon=9.93&lat=49.79")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	w, ok := body["wgs84"].(map[string]any)
+	if !ok || w["lon"] != 9.93 || w["lat"] != 49.79 {
+		t.Fatalf("per-source wgs84 = %v, want {lon:9.93, lat:49.79}", body["wgs84"])
+	}
+	if _, hasGaz := body["gazetteer"]; hasGaz {
+		t.Errorf("per-source query must NOT attach a gazetteer block; got %v", body["gazetteer"])
+	}
+}
+
+// TestGazetteerEndpointReprojects3857: the dedicated endpoint now serves a
+// projected coordinate by reprojecting it (was 422 before), and carries wgs84.
+func TestGazetteerEndpointReprojects3857(t *testing.T) {
+	tf := fakeTransformer{lon: -16.856, lat: 28.60, supported: true}
+	srv := newGazetteerServerT(t, fakeGazetteer{loc: sampleLocality(), fix: sampleFix()}, tf)
+	rec, body := doGET(t, srv, "/api/v1/gazetteer?x=-1876403.675&y=3291468.780&srid=3857")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	w, ok := body["wgs84"].(map[string]any)
+	if !ok || w["lon"] != -16.856 {
+		t.Errorf("wgs84 = %v, want reprojected", body["wgs84"])
+	}
+	if _, ok := body["admin"].(map[string]any); !ok {
+		t.Errorf("admin block missing; got %v", body["admin"])
+	}
+}
+
+// TestGazetteerEndpointRejectsUntransformable: a projected coordinate with no
+// transformer available is refused (422), not silently empty.
+func TestGazetteerEndpointRejectsUntransformable(t *testing.T) {
+	srv := newGazetteerServer(t, fakeGazetteer{loc: sampleLocality(), fix: sampleFix()})
+	rec, _ := doGET(t, srv, "/api/v1/gazetteer?x=-1876403.675&y=3291468.780&srid=3857")
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want 422 for a non-transformable SRID", rec.Code)
+	}
+}
+
+// TestGazetteerEndpointTransformErrorIs5xx: a transformer that SUPPORTS the pair
+// but fails the transform is an internal error → 5xx, not a client 422.
+func TestGazetteerEndpointTransformErrorIs5xx(t *testing.T) {
+	tf := fakeTransformer{supported: true, transformErr: errors.New("proj boom")}
+	srv := newGazetteerServerT(t, fakeGazetteer{loc: sampleLocality(), fix: sampleFix()}, tf)
+	rec, _ := doGET(t, srv, "/api/v1/gazetteer?x=-1876403.675&y=3291468.780&srid=3857")
+	if rec.Code < 500 {
+		t.Fatalf("status = %d, want 5xx for an internal transform failure (not 422)", rec.Code)
+	}
+}
+
+// TestQueryTransformErrorStillReturnsCore: an internal transform failure on /query
+// omits wgs84 + gazetteer but must NOT fail the core query (still 200).
+func TestQueryTransformErrorStillReturnsCore(t *testing.T) {
+	tf := fakeTransformer{supported: true, transformErr: errors.New("proj boom")}
+	srv := newGazetteerServerT(t, fakeGazetteer{loc: sampleLocality(), fix: sampleFix()}, tf)
+	rec, body := doGET(t, srv, "/api/v1/query?x=-1876403.675&y=3291468.780&srid=3857")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (transform failure must not sink the query)", rec.Code)
+	}
+	if body["wgs84"] != nil || body["gazetteer"] != nil {
+		t.Errorf("wgs84/gazetteer should be omitted on transform failure; got %v / %v", body["wgs84"], body["gazetteer"])
+	}
 }
 
 func sampleGazetteerLicense() domain.License {
