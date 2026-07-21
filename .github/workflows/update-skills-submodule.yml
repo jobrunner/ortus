@@ -45,6 +45,12 @@ jobs:
           NEW: ${{ steps.bump.outputs.new }}
         run: |
           branch="chore/bump-claude-skills-${NEW}"
+          # Idempotent: if this exact bump was already proposed (branch exists on
+          # origin), a rerun is a no-op rather than a push collision / duplicate PR.
+          if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+            echo "Branch $branch already exists — bump to ${NEW} is already proposed; nothing to do."
+            exit 0
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b "$branch"
