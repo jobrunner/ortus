@@ -283,7 +283,8 @@ func isWGS84(c domain.Coordinate) bool {
 // the wgs84 block and skip gazetteer enrichment (the gazetteer dataset is 4326).
 func (s *Server) toWGS84(ctx context.Context, c domain.Coordinate) (domain.Coordinate, bool) {
 	if isWGS84(c) {
-		// Normalize SRID 0 → 4326 so downstream (gazetteer requireWGS84) accepts it.
+		// Already WGS84 — normalize SRID 0 → 4326 so the returned coord carries an
+		// explicit WGS84 SRID for downstream consistency (requireWGS84 accepts 0 too).
 		return domain.NewWGS84Coordinate(c.X, c.Y), true
 	}
 	if s.transformer == nil || !s.transformer.IsSupported(c.SRID, domain.SRIDWGS84) {
