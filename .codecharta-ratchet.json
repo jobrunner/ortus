@@ -1,9 +1,9 @@
 {
-  "_comment": "Ratchet config for scripts/codecharta-ratchet.py, run against the CodeCharta map (ortus.cc.json.gz). Two gates over the ccsh 'complexity' metric + go coverage. Ratchet by LOWERING the numbers as the code improves; RAISING a baseline entry needs review justification.",
+  "_comment": "Ratchet config for scripts/codecharta-ratchet.py, run against the CodeCharta map (ortus.cc.json.gz). Three gates: (1) per-file aggregate complexity, (2) per-FUNCTION complexity (not gameable by moving code between files), (3) hotspot (complex AND under-tested), plus go coverage. Ratchet by LOWERING the numbers as the code improves; RAISING a baseline entry needs review justification.",
   "complexity": {
     "metric": "complexity",
     "default_cap": 50,
-    "_default_cap_note": "Every file not listed below must stay <= this. Current highest non-baseline file is 40 (internal/adapters/storage/http.go).",
+    "_default_cap_note": "Per-file SUM of function complexity. Every file not listed below must stay <= this. This gate stops a file becoming a monolith, but can be satisfied by splitting a file (the sum moves with the code) — see function_complexity for the non-gameable ceiling. Current highest non-baseline file is 40 (internal/adapters/storage/http.go).",
     "baseline": {
       "internal/adapters/raster/repository.go": 143,
       "internal/adapters/geopackage/repository.go": 127,
@@ -18,13 +18,29 @@
       "internal/adapters/watcher/watcher.go": 51
     }
   },
+  "function_complexity": {
+    "metric": "max_complexity_per_function",
+    "default_cap": 10,
+    "_default_cap_note": "The single most complex FUNCTION in a file (McCabe). This is the real overall-complexity control: a function keeps its complexity wherever it lives, so moving it between files can't game this gate — the only way to pass is to actually simplify the function (or extract cohesive sub-functions). New functions must stay <= 10; the baseline freezes today's offenders at their current max so they can't grow, and should ratchet DOWN as they are simplified. Repo max today is 15.",
+    "baseline": {
+      "internal/adapters/http/handlers.go": 15,
+      "internal/adapters/raster/repository.go": 15,
+      "internal/app/app.go": 15,
+      "cmd/gazetteer-fixture/main.go": 14,
+      "internal/adapters/geopackage/repository.go": 13,
+      "internal/adapters/http/gazetteer.go": 13,
+      "internal/adapters/mcp/tools_gazetteer.go": 13,
+      "internal/adapters/telemetry/ringbuffer.go": 12,
+      "internal/app/gazetteer.go": 12,
+      "internal/adapters/storage/http.go": 11
+    }
+  },
   "hotspot": {
     "_note": "A file is a hotspot when it is complex AND under-tested; new hotspots fail the build. Grandfathered files below are the current ones — remove them from 'allow' as their coverage improves.",
     "min_complexity": 40,
     "min_coverage": 70,
     "allow": [
-      "internal/app/app.go",
-      "internal/adapters/http/handlers.go"
+      "internal/app/app.go"
     ]
   }
 }
