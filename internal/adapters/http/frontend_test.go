@@ -40,6 +40,8 @@ func TestFrontendCoordinateInputWiring(t *testing.T) {
 		"gaz.exposure",                        // exposure rendered in the gazetteer block
 		"Exposition",                          // exposure section label
 		"function httpUrl",                    // scheme guard for source links
+		"'Lat: ' + coord.y",                   // WGS84 result shows Lat before Lon
+		"data.wgs84",                          // reprojected WGS84 shown for projected SRIDs
 	} {
 		if !strings.Contains(html, marker) {
 			t.Errorf("frontend is missing expected marker %q", marker)

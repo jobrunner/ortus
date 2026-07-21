@@ -188,6 +188,10 @@ gazetteer:
     per_point_accuracy_basis: "Copernicus HEM (per-pixel 1σ)"
     horizontal_accuracy_m: 6.0
     surface_model: DSM
+  warmup:                         # startup self-warmup (on by default)
+    enabled: true
+    lon: 9.93                     # point your dataset AND DEM cover
+    lat: 49.79
 ```
 
 - `geopackage_path` and `manifest_path` are **required** when `enabled: true`;
@@ -229,5 +233,11 @@ gazetteer:
   A configured-but-missing/non-continuous source fails startup fast. The DEM's own
   license (from its bundle manifest) is reported separately from the gazetteer
   dataset license.
+- `warmup` (on by default) runs one internal gazetteer query at `(lon, lat)` during
+  startup, **before the server accepts traffic**, so the first real request isn't
+  cold (the cause of a "Load failed" first request right after a deploy: the initial
+  SpatiaLite/DEM open exceeded the client/proxy timeout). Point `lon`/`lat` at a
+  coordinate your dataset **and** DEM cover; set `enabled: false` if you run no
+  gazetteer/DEM. Best-effort and time-bounded — it never blocks startup.
 - The dataset and its sidecars are built by the `build-gazetteer-package` skill
   (see `.claude/skills/build-gazetteer-package/`).

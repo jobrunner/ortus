@@ -18,6 +18,7 @@ import (
 	"github.com/jobrunner/ortus/internal/config"
 	"github.com/jobrunner/ortus/internal/domain"
 	"github.com/jobrunner/ortus/internal/ports/input"
+	"github.com/jobrunner/ortus/internal/ports/output"
 )
 
 // Server wraps the HTTP server with application handlers. It depends only on
@@ -29,9 +30,10 @@ type Server struct {
 	registry         input.SourceRegistry
 	health           input.HealthChecker
 	syncService      input.Syncer
-	gazetteer        input.Gazetteer      // nil ⇒ gazetteer feature disabled (no route, no /query enrichment)
-	bearingPolicy    domain.BearingPolicy // configured bearing tuning; zero ⇒ use DefaultBearingPolicy
-	gazetteerLicense domain.License       // dataset license/attribution surfaced in the gazetteer block
+	gazetteer        input.Gazetteer              // nil ⇒ gazetteer feature disabled (no route, no /query enrichment)
+	bearingPolicy    domain.BearingPolicy         // configured bearing tuning; zero ⇒ use DefaultBearingPolicy
+	gazetteerLicense domain.License               // dataset license/attribution surfaced in the gazetteer block
+	transformer      output.CoordinateTransformer // reprojects a non-WGS84 query coord to WGS84 for the wgs84 block + gazetteer enrichment; nil ⇒ only WGS84 inputs are enriched
 	logger           *slog.Logger
 	config           config.ServerConfig
 	withGeometry     bool                 // Include geometry in query results
@@ -55,6 +57,10 @@ type ServerOptions struct {
 	BearingPolicy    domain.BearingPolicy // optional bearing tuning; zero value falls back to DefaultBearingPolicy
 	GazetteerLicense domain.License       // optional dataset license/attribution surfaced in the gazetteer block
 	Version          string               // build version shown in the frontend footer (defaults to "dev")
+	// Transformer reprojects a non-WGS84 query coordinate to WGS84 so the response
+	// carries a `wgs84` block and the gazetteer can enrich any SRID. Optional: when
+	// nil, only WGS84 inputs get the wgs84 block + gazetteer enrichment.
+	Transformer output.CoordinateTransformer
 }
 
 // NewServer creates a new HTTP server.
@@ -99,6 +105,7 @@ func NewServer(
 		gazetteer:        opts.Gazetteer,
 		bearingPolicy:    opts.BearingPolicy,
 		gazetteerLicense: opts.GazetteerLicense,
+		transformer:      opts.Transformer,
 		logger:           logger,
 		config:           cfg,
 		withGeometry:     withGeometry,

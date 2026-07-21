@@ -20,7 +20,16 @@ func (s *Server) handleGazetteer(w http.ResponseWriter, r *http.Request) {
 	}
 	coord := s.paramsToCoordinate(params)
 
-	sections, err := s.gazetteerSections(r.Context(), coord)
+	// Reproject to WGS84 (the gazetteer dataset's SRID). A non-4326 input is
+	// transformed rather than rejected; only a non-transformable SRID is refused.
+	wgs, ok := s.toWGS84(r.Context(), coord)
+	if !ok {
+		s.writeError(w, http.StatusUnprocessableEntity,
+			"coordinate SRID cannot be transformed to WGS84 (EPSG:4326)")
+		return
+	}
+
+	sections, err := s.gazetteerSections(r.Context(), wgs)
 	if err != nil {
 		s.handleQueryError(w, err)
 		return
@@ -28,6 +37,7 @@ func (s *Server) handleGazetteer(w http.ResponseWriter, r *http.Request) {
 
 	out := map[string]interface{}{
 		"coordinate": map[string]interface{}{"x": coord.X, "y": coord.Y, "srid": coord.SRID},
+		"wgs84":      wgs84Block(wgs),
 	}
 	for k, v := range sections {
 		out[k] = v
@@ -259,9 +269,33 @@ func gazetteerEnrichmentRequested(r *http.Request) bool {
 }
 
 // isWGS84 reports whether a coordinate is WGS84 (EPSG:4326), treating SRID 0 as
-// unset/WGS84 (the coordinate constructors default to it). The gazetteer dataset
-// is 4326-only, so enrichment is skipped for any other SRID rather than attempted
-// and failed.
+// unset/WGS84 (the coordinate constructors default to it).
 func isWGS84(c domain.Coordinate) bool {
 	return c.SRID == 0 || c.SRID == domain.SRIDWGS84
+}
+
+// toWGS84 returns the coordinate reprojected to WGS84 (X=lon, Y=lat). ok is false
+// only when the input is not WGS84 and cannot be transformed — no transformer
+// wired, the SRID pair is unsupported, or the transform fails. Callers then omit
+// the wgs84 block and skip gazetteer enrichment (the gazetteer dataset is 4326).
+func (s *Server) toWGS84(ctx context.Context, c domain.Coordinate) (domain.Coordinate, bool) {
+	if isWGS84(c) {
+		// Normalize SRID 0 → 4326 so downstream (gazetteer requireWGS84) accepts it.
+		return domain.NewWGS84Coordinate(c.X, c.Y), true
+	}
+	if s.transformer == nil || !s.transformer.IsSupported(c.SRID, domain.SRIDWGS84) {
+		return domain.Coordinate{}, false
+	}
+	w, err := s.transformer.Transform(ctx, c, domain.SRIDWGS84)
+	if err != nil {
+		return domain.Coordinate{}, false
+	}
+	return w, true
+}
+
+// wgs84Block renders the always-present WGS84 coordinate block. It is lon/lat
+// (not x/y/srid) because it is an explicitly-geographic coordinate other services
+// can compute with and store, regardless of the query's input SRID.
+func wgs84Block(c domain.Coordinate) map[string]interface{} {
+	return map[string]interface{}{"lon": c.X, "lat": c.Y}
 }

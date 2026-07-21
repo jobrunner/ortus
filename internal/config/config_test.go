@@ -34,6 +34,10 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.Server.Host != "0.0.0.0" || cfg.Server.Port != 8080 {
 		t.Errorf("server defaults = %s:%d, want 0.0.0.0:8080", cfg.Server.Host, cfg.Server.Port)
 	}
+	// Gazetteer startup warmup: on by default, at the shipped-dataset default point.
+	if w := cfg.Gazetteer.Warmup; !w.Enabled || w.Lon != 9.93 || w.Lat != 49.79 {
+		t.Errorf("gazetteer.warmup defaults = %+v, want {Enabled:true Lon:9.93 Lat:49.79}", w)
+	}
 	if cfg.Storage.Type != StorageTypeLocal || cfg.Storage.LocalPath != "./data" {
 		t.Errorf("storage defaults = %+v", cfg.Storage)
 	}

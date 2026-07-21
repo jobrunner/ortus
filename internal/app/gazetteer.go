@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/jobrunner/ortus/internal/adapters/geopackage"
 	"github.com/jobrunner/ortus/internal/application/gazetteer"
@@ -11,6 +12,36 @@ import (
 	"github.com/jobrunner/ortus/internal/domain"
 	"github.com/jobrunner/ortus/internal/ports/input"
 )
+
+// warmGazetteerTimeout bounds the startup warmup so a slow/misconfigured DEM
+// can't wedge startup — warmup is best-effort, not a gate on correctness.
+const warmGazetteerTimeout = 30 * time.Second
+
+// warmGazetteer runs one internal gazetteer query at startup so the FIRST real
+// request isn't cold. The cold cost is the SpatiaLite connection + mod_spatialite
+// init + rtree/page-cache warm-up and the first DEM tile open; deferring it to the
+// first client request is what made that request time out ("Load failed", then
+// fine) after every deploy. Best-effort + time-bounded: failures are logged, never
+// block startup. Called before the listener starts, so a ready ortus is a warm one.
+func (a *App) warmGazetteer(ctx context.Context) {
+	w := a.Config.Gazetteer.Warmup
+	if a.Gazetteer == nil || !w.Enabled {
+		return
+	}
+	wctx, cancel := context.WithTimeout(ctx, warmGazetteerTimeout)
+	defer cancel()
+	coord := domain.NewWGS84Coordinate(w.Lon, w.Lat)
+	start := time.Now()
+	// Exercise every path a /query enrichment touches; ignore results — the point
+	// is to warm the machinery, not to assert coverage at the warmup coordinate.
+	_, _ = a.Gazetteer.Locate(wctx, coord)
+	_, _ = a.Gazetteer.Islands(wctx, coord)
+	_, _ = a.Gazetteer.Bearing(wctx, coord, a.gazetteerPolicy.OrDefault())
+	_, _ = a.Gazetteer.Exposure(wctx, coord)
+	_, _ = a.Gazetteer.Elevation(wctx, coord)
+	a.Logger.Info("gazetteer warmup complete",
+		"lon", w.Lon, "lat", w.Lat, "duration", time.Since(start))
+}
 
 // buildGazetteer wires the optional gazetteer (reverse geocode + bearing) from
 // config. When disabled it is a no-op (App.Gazetteer stays nil, so no route is
