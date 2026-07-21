@@ -68,7 +68,7 @@ jobs:
           ref: ${{ needs.release-please.outputs.tag_name }}
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version: ${{ env.GO_VERSION }}
           # Don't reuse the shared module cache for release builds — a poisoned
