@@ -11,7 +11,7 @@
       "internal/adapters/telemetry/ringbuffer.go": 91,
       "internal/app/app.go": 83,
       "internal/application/registry.go": 79,
-      "internal/adapters/http/handlers.go": 73,
+      "internal/adapters/http/handlers.go": 70,
       "internal/config/config.go": 72,
       "internal/application/gazetteer/bearing.go": 55,
       "internal/adapters/geopackage/spatialindex.go": 54,

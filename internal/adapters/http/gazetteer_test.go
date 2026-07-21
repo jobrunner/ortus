@@ -159,6 +159,31 @@ func TestGazetteerEndpointRejectsUntransformable(t *testing.T) {
 	}
 }
 
+// TestGazetteerEndpointTransformErrorIs5xx: a transformer that SUPPORTS the pair
+// but fails the transform is an internal error → 5xx, not a client 422.
+func TestGazetteerEndpointTransformErrorIs5xx(t *testing.T) {
+	tf := fakeTransformer{supported: true, transformErr: errors.New("proj boom")}
+	srv := newGazetteerServerT(t, fakeGazetteer{loc: sampleLocality(), fix: sampleFix()}, tf)
+	rec, _ := doGET(t, srv, "/api/v1/gazetteer?x=-1876403.675&y=3291468.780&srid=3857")
+	if rec.Code < 500 {
+		t.Fatalf("status = %d, want 5xx for an internal transform failure (not 422)", rec.Code)
+	}
+}
+
+// TestQueryTransformErrorStillReturnsCore: an internal transform failure on /query
+// omits wgs84 + gazetteer but must NOT fail the core query (still 200).
+func TestQueryTransformErrorStillReturnsCore(t *testing.T) {
+	tf := fakeTransformer{supported: true, transformErr: errors.New("proj boom")}
+	srv := newGazetteerServerT(t, fakeGazetteer{loc: sampleLocality(), fix: sampleFix()}, tf)
+	rec, body := doGET(t, srv, "/api/v1/query?x=-1876403.675&y=3291468.780&srid=3857")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (transform failure must not sink the query)", rec.Code)
+	}
+	if body["wgs84"] != nil || body["gazetteer"] != nil {
+		t.Errorf("wgs84/gazetteer should be omitted on transform failure; got %v / %v", body["wgs84"], body["gazetteer"])
+	}
+}
+
 func sampleGazetteerLicense() domain.License {
 	return domain.License{
 		Name:        "ODbL-1.0",

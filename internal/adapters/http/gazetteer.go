@@ -22,13 +22,20 @@ func (s *Server) handleGazetteer(w http.ResponseWriter, r *http.Request) {
 	coord := s.paramsToCoordinate(params)
 
 	// Reproject to WGS84 (the gazetteer dataset's SRID). A non-4326 input is
-	// transformed rather than rejected; only a non-transformable SRID is refused.
-	wgs, ok := s.toWGS84(r.Context(), coord)
-	if !ok {
+	// transformed rather than rejected; a non-transformable SRID is a client error
+	// (422), while an internal transform failure maps to 5xx via handleQueryError.
+	wgs, terr := s.toWGS84(r.Context(), coord)
+	switch {
+	case terr == nil:
+		// proceed
+	case errors.Is(terr, errNotTransformable):
 		s.writeError(w, http.StatusUnprocessableEntity, fmt.Sprintf(
 			"coordinate SRID %d cannot be transformed to WGS84 (EPSG:4326); "+
 				"query with srid=4326 (lon/lat), or run ortus with a coordinate transformer",
 			coord.SRID))
+		return
+	default:
+		s.handleQueryError(w, terr)
 		return
 	}
 
@@ -277,24 +284,30 @@ func isWGS84(c domain.Coordinate) bool {
 	return c.SRID == 0 || c.SRID == domain.SRIDWGS84
 }
 
-// toWGS84 returns the coordinate reprojected to WGS84 (X=lon, Y=lat). ok is false
-// only when the input is not WGS84 and cannot be transformed — no transformer
-// wired, the SRID pair is unsupported, or the transform fails. Callers then omit
-// the wgs84 block and skip gazetteer enrichment (the gazetteer dataset is 4326).
-func (s *Server) toWGS84(ctx context.Context, c domain.Coordinate) (domain.Coordinate, bool) {
+// errNotTransformable marks a coordinate whose SRID cannot be reprojected to
+// WGS84 (no transformer wired, or the SRID pair is unsupported) — a client
+// concern. It is distinct from an *internal* transform failure, which toWGS84
+// returns as a different (wrapped) error so callers can map it to 5xx / log it.
+var errNotTransformable = errors.New("coordinate SRID not transformable to WGS84")
+
+// toWGS84 returns the coordinate reprojected to WGS84 (X=lon, Y=lat). It returns
+// errNotTransformable when the input is not WGS84 and can't be reprojected (a
+// client concern → 422 / omit block), or a wrapped error when the transform
+// itself failed (an internal concern → 5xx / log). nil error ⇒ ready to use.
+func (s *Server) toWGS84(ctx context.Context, c domain.Coordinate) (domain.Coordinate, error) {
 	if isWGS84(c) {
 		// Already WGS84 — normalize SRID 0 → 4326 so the returned coord carries an
 		// explicit WGS84 SRID for downstream consistency (requireWGS84 accepts 0 too).
-		return domain.NewWGS84Coordinate(c.X, c.Y), true
+		return domain.NewWGS84Coordinate(c.X, c.Y), nil
 	}
 	if s.transformer == nil || !s.transformer.IsSupported(c.SRID, domain.SRIDWGS84) {
-		return domain.Coordinate{}, false
+		return domain.Coordinate{}, errNotTransformable
 	}
 	w, err := s.transformer.Transform(ctx, c, domain.SRIDWGS84)
 	if err != nil {
-		return domain.Coordinate{}, false
+		return domain.Coordinate{}, fmt.Errorf("reproject SRID %d to WGS84: %w", c.SRID, err)
 	}
-	return w, true
+	return w, nil
 }
 
 // wgs84Block renders the always-present WGS84 coordinate block. It is lon/lat
