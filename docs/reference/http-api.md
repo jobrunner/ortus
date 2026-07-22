@@ -213,7 +213,7 @@ island it is, e.g.,
 `[{ "name": "Sylt", "name_native": "", "name_source": "latin-osm" }]`.
 
 The `elevation` block is present only when a DEM is configured
-(`gazetteer.elevation.source_id`); it is `null` otherwise. It reports the height
+(`gazetteer.elevation.bundle_path`) and openable; it is `null` otherwise. It reports the height
 above sea level (`meters`) at the query point, `vertical_datum` (e.g. `EGM2008`),
 the vertical `accuracy_m` with its `accuracy_basis` (a dataset constant, or a
 per-point value when an accuracy layer such as a Height Error Mask is configured),

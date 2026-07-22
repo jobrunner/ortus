@@ -178,8 +178,8 @@ gazetteer:
       # class_prior: { city: 4.3, town: 3.3, village: 2.3 }          # base score when population is unknown
       # capital_bonus: { "2": 2.0, "3": 1.5, "4": 1.2, "5": 0.6, "6": 0.4, "7": 0.2, "yes": 2.0 }
   elevation:                    # optional: height above sea level at the query point
-    source_id: copernicus-dem-westpalearctic   # raster source id of the DEM bundle; "" = feature off
-    layer: elevation            # continuous elevation layer id in that source
+    bundle_path: /data/gazetteer/copernicus-dem-westpalearctic.zip   # gazetteer-owned DEM bundle; "" = feature off
+    layer: elevation            # continuous elevation layer id in that bundle
     accuracy_layer: accuracy    # optional per-point accuracy layer (e.g. HEM); "" = off
     tile_cache_size: 64         # open-tile LRU bound for multi-tile DEMs
     vertical_datum: EGM2008
@@ -224,15 +224,21 @@ gazetteer:
   block in `ortus-gazetteer.yaml` (name/url/attribution) — set it so clients get
   the attribution they must display.
 - `elevation` (optional) adds the height above sea level at the query point to the
-  gazetteer response. `source_id` names a **continuous** raster source loaded via
-  the normal storage path (a DEM bundle); empty leaves the feature off. `layer` is
-  its continuous layer (default `elevation`); an optional `accuracy_layer` (e.g. a
-  Copernicus Height Error Mask) supplies a *per-point* vertical accuracy, else the
-  `accuracy_m` constant is reported. `accuracy_basis`/`per_point_accuracy_basis`,
+  gazetteer response. `bundle_path` is the **gazetteer-owned** DEM bundle (a
+  `.zip`): it is opened **out of competition** — directly, like `geopackage_path`,
+  **not** through the source pool — so it never appears in `GET /api/v1/sources`
+  and is never point-in-polygon queried; it is reachable only through the gazetteer.
+  Empty leaves the feature off. **A missing or unopenable bundle is non-fatal:**
+  startup continues and the DEM-derived features (`elevation` **and** `exposure`)
+  simply stay silent (`null`) until the path is valid. `layer` is its continuous
+  layer (default `elevation`); an optional `accuracy_layer` (e.g. a Copernicus
+  Height Error Mask) supplies a *per-point* vertical accuracy, else the `accuracy_m`
+  constant is reported. `accuracy_basis`/`per_point_accuracy_basis`,
   `horizontal_accuracy_m`, `vertical_datum` and `surface_model` are surfaced verbatim.
-  A configured-but-missing/non-continuous source fails startup fast. The DEM's own
-  license (from its bundle manifest) is reported separately from the gazetteer
-  dataset license.
+  The DEM's own license (from its bundle manifest) is reported separately from the
+  gazetteer dataset license. **Ops:** keep the DEM `.zip` in the gazetteer folder,
+  **not** in `storage.local_path` — otherwise it also loads as a normal pool source
+  (a WARN fires) and gets listed + double-queried.
 - `warmup` (on by default) runs the internal gazetteer lookups (Locate, Islands,
   Bearing, Exposure, Elevation) at `(lon, lat)` during
   startup, **before the server accepts traffic**, so the first real request isn't

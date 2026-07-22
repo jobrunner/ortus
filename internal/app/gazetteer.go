@@ -105,44 +105,6 @@ func (a *App) buildGazetteer(ctx context.Context) error {
 	return nil
 }
 
-// bindGazetteerElevation wires the optional elevation sampler into the gazetteer
-// after the source pool has loaded (the DEM bundle is a normal raster source, so
-// it only exists post-LoadAll). No-op when the gazetteer is disabled or no
-// elevation source is configured. A configured-but-missing/non-continuous source
-// fails startup loudly rather than silently returning zero elevations.
-func (a *App) bindGazetteerElevation() error {
-	if a.Gazetteer == nil {
-		return nil
-	}
-	ec := a.Config.Gazetteer.Elevation
-	if ec.SourceID == "" {
-		return nil
-	}
-	layer := ec.Layer
-	if layer == "" {
-		layer = "elevation"
-	}
-	sampler, err := a.RasterRepository.NewElevationSource(ec.SourceID, layer, ec.AccuracyLayer)
-	if err != nil {
-		return err
-	}
-	a.Gazetteer.SetElevationSampler(sampler, gazetteer.ElevationMeta{
-		VerticalDatum:         ec.VerticalDatum,
-		AccuracyM:             ec.AccuracyM,
-		AccuracyBasis:         ec.AccuracyBasis,
-		PerPointAccuracyBasis: ec.PerPointAccuracyBasis,
-		HorizontalM:           ec.HorizontalM,
-		SurfaceModel:          ec.SurfaceModel,
-	})
-	a.Logger.Info("gazetteer elevation enabled",
-		"source_id", ec.SourceID,
-		"layer", layer,
-		"accuracy_layer", ec.AccuracyLayer,
-		"vertical_datum", ec.VerticalDatum,
-	)
-	return nil
-}
-
 // salienceRank is the config value for the legacy class-then-distance strategy.
 const salienceRank = "rank"
 

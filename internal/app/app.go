@@ -49,9 +49,10 @@ type App struct {
 	MCPServer         *mcp.Server         // nil when MCP is disabled
 	Gazetteer         *gazetteer.Service  // nil when the gazetteer feature is disabled
 
-	gazetteerClose   func() error         // releases the gazetteer index connection; nil when disabled
-	gazetteerPolicy  domain.BearingPolicy // bearing tuning knobs (config) + constraint tier (manifest)
-	gazetteerLicense domain.License       // dataset license/attribution from the manifest; surfaced in responses
+	gazetteerClose             func() error         // releases the gazetteer index connection; nil when disabled
+	gazetteerPolicy            domain.BearingPolicy // bearing tuning knobs (config) + constraint tier (manifest)
+	gazetteerLicense           domain.License       // dataset license/attribution from the manifest; surfaced in responses
+	gazetteerElevationSourceID string               // raster id of the out-of-competition DEM; "" when off/unopened (must be closed on shutdown, it's not in the registry)
 }
 
 // tracerProvider returns the underlying OTel TracerProvider for instrumentation
@@ -398,11 +399,12 @@ func (a *App) Start(ctx context.Context) error {
 	}
 	startupSpan.SetAttributes(output.Int("ortus.sources.loaded", a.Registry.SourceCount()))
 
-	// Bind the gazetteer elevation sampler now that sources are loaded — the DEM
-	// bundle is a normal source in the pool, so it only exists after LoadAll.
-	if err := a.bindGazetteerElevation(); err != nil {
-		return fmt.Errorf("wiring gazetteer elevation: %w", err)
-	}
+	// Open + bind the gazetteer-owned elevation DEM. It is opened here (not in
+	// buildGazetteer) on purpose: after CleanupOrphaned so the freshly-unpacked
+	// bundle isn't swept away, and after LoadAll so the pool-collision check is
+	// meaningful. It is opened out of competition (never a pool source) and is
+	// non-fatal — a missing/unopenable DEM leaves elevation + exposure silent.
+	a.bindGazetteerElevation(startupCtx)
 
 	// Warm the gazetteer/DEM path BEFORE the listener accepts traffic, so the first
 	// real request isn't cold (the cause of the "Load failed" first request after a
@@ -529,6 +531,10 @@ func (a *App) Shutdown(ctx context.Context) error {
 
 	// Release the gazetteer index connection.
 	a.closeGazetteer()
+
+	// Release the gazetteer-owned elevation DEM. It is opened out of competition
+	// (not in the registry), so the source-unload loop above never touched it.
+	a.closeGazetteerElevation(ctx)
 
 	// Shutdown metrics provider so the prometheus exporter unregisters.
 	if a.Metrics != nil {
