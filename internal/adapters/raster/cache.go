@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/jobrunner/ortus/internal/ports/output"
 )
@@ -139,20 +140,27 @@ func writeCompleteMarker(dir string) error {
 // pruneOldVersions removes cached extractions of sourceID whose fingerprint is not
 // activeFp. UNSAFE during overlapping rolling updates (an old container still opens
 // tiles from its dir) — gated behind SetPrune(true).
+//
+// It scans with os.ReadDir + exact prefix matching rather than filepath.Glob: the
+// sourceID is a filename stem and could contain glob metacharacters ([]*?), which
+// under Glob could match — and, since this deletes, remove — the wrong directories.
 func (r *Repository) pruneOldVersions(sourceID, activeFp string) {
-	matches, err := filepath.Glob(filepath.Join(r.cacheRoot(), sourceID+"@*"))
+	entries, err := os.ReadDir(r.cacheRoot())
 	if err != nil {
 		return
 	}
-	keep := sourceID + "@" + activeFp
-	for _, m := range matches {
-		if filepath.Base(m) == filepath.Base(keep) {
+	prefix := sourceID + "@" // the "@" delimiter also stops "foo" matching "foobar@…"
+	keep := prefix + activeFp
+	for _, e := range entries {
+		name := e.Name()
+		if !e.IsDir() || !strings.HasPrefix(name, prefix) || name == keep {
 			continue
 		}
-		if err := os.RemoveAll(m); err != nil {
-			r.logger.Warn("failed to prune stale raster extraction", "dir", m, "error", err)
+		dir := filepath.Join(r.cacheRoot(), name)
+		if err := os.RemoveAll(dir); err != nil {
+			r.logger.Warn("failed to prune stale raster extraction", "dir", dir, "error", err)
 			continue
 		}
-		r.logger.Info("pruned stale raster extraction", "dir", m)
+		r.logger.Info("pruned stale raster extraction", "dir", dir)
 	}
 }

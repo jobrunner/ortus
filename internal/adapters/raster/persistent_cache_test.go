@@ -181,6 +181,31 @@ func TestZipFingerprintStableAndContentSensitive(t *testing.T) {
 	}
 }
 
+// TestPruneGlobSafe: a sourceID with glob metacharacters must not cause prune to
+// match+delete the wrong directories (pruneOldVersions uses exact prefix matching,
+// not filepath.Glob).
+func TestPruneGlobSafe(t *testing.T) {
+	cache := t.TempDir()
+	r := persistentRepo(cache)
+	// "weird[x]" contains a glob character class; only "weird[x]@old" should go.
+	mustMkdir(t, filepath.Join(cache, "weird[x]@old"))
+	mustMkdir(t, filepath.Join(cache, "weird[x]@active"))
+	mustMkdir(t, filepath.Join(cache, "weirdx@keep")) // would be matched by the glob [x], must be kept
+	mustMkdir(t, filepath.Join(cache, "other@keep"))
+
+	r.pruneOldVersions("weird[x]", "active")
+
+	gone := filepath.Join(cache, "weird[x]@old")
+	if _, err := os.Stat(gone); !os.IsNotExist(err) {
+		t.Errorf("stale extraction %q should have been pruned", gone)
+	}
+	for _, keep := range []string{"weird[x]@active", "weirdx@keep", "other@keep"} {
+		if _, err := os.Stat(filepath.Join(cache, keep)); err != nil {
+			t.Errorf("%q must be kept: %v", keep, err)
+		}
+	}
+}
+
 func writeZip(t *testing.T, path string, entries [][2]string) {
 	t.Helper()
 	f, err := os.Create(path)
