@@ -162,11 +162,15 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (app *App
 	})
 	app.Repository.SetTracer(app.Tracer)
 
-	// Initialize raster bundle repository. Bundles are unpacked into OS temp
-	// dirs (not the watched storage path, so unpacked files don't re-trigger
-	// the watcher) and cleaned up on unload.
-	app.RasterRepository = raster.NewRepository("")
+	// Initialize raster bundle repository. In ephemeral mode bundles unpack into OS
+	// temp dirs (cleaned up on unload). With raster.extract_cache_dir set, they
+	// unpack once into that (mounted) dir keyed by ZIP content and are reused across
+	// restarts/updates — re-extracting only when the ZIP changes.
+	app.RasterRepository = raster.NewRepository(cfg.Raster.ExtractCacheDir)
 	app.RasterRepository.SetTracer(app.Tracer)
+	app.RasterRepository.SetLogger(logger)
+	app.RasterRepository.SetPersistent(cfg.Raster.ExtractCacheDir != "")
+	app.RasterRepository.SetPrune(cfg.Raster.ExtractCachePrune)
 	// Multi-tile DEMs (the gazetteer elevation source) keep a bounded LRU of open
 	// tile handles; size it from config before sources load (0 → default).
 	app.RasterRepository.SetTileCacheSize(cfg.Gazetteer.Elevation.TileCacheSize)

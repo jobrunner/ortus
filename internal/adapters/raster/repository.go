@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"math"
 	"os"
 	"path/filepath"
@@ -26,13 +27,16 @@ type Repository struct {
 	sources        map[string]*bundle
 	cacheDir       string // parent dir for per-bundle unpack directories
 	tracer         output.Tracer
+	logger         *slog.Logger
 	tileCacheSize  int   // open-handle LRU bound for tiled layers (0 → default)
 	maxBundleBytes int64 // per-bundle extraction cap; 0 → defaultMaxBundleBytes
+	persistent     bool  // content-addressed cache: reuse extractions across restarts
+	prune          bool  // remove older cached extractions of a source after a new one loads
 }
 
 type bundle struct {
 	source *domain.Source
-	dir    string // unpacked directory (removed on Close)
+	dir    string // unpacked directory (removed on Close only in ephemeral mode)
 	layers map[string]*rasterLayer
 }
 
@@ -70,6 +74,7 @@ func NewRepository(cacheDir string) *Repository {
 		sources:  make(map[string]*bundle),
 		cacheDir: cacheDir,
 		tracer:   output.NoOpTracer{},
+		logger:   slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}
 }
 
@@ -80,6 +85,28 @@ func (r *Repository) SetTracer(t output.Tracer) {
 	}
 	r.tracer = t
 }
+
+// SetLogger wires an operator-facing logger (extract vs. reuse decisions). Pass a
+// discard logger to silence. Defaults to discard.
+func (r *Repository) SetLogger(l *slog.Logger) {
+	if l == nil {
+		l = slog.New(slog.NewTextHandler(io.Discard, nil))
+	}
+	r.logger = l
+}
+
+// SetPersistent enables the content-addressed extraction cache: bundles unpack
+// into <cacheDir>/<id>@<fingerprint> and are reused across restarts, re-extracting
+// only when the ZIP content changes. Requires a durable cacheDir (a mounted
+// volume). Off by default (per-Open ephemeral temp dirs). Set before sources load.
+func (r *Repository) SetPersistent(v bool) { r.persistent = v }
+
+// SetPrune enables removal of older cached extractions of a source after a new
+// fingerprint loads (persistent mode only). Off by default: pruning is unsafe
+// during overlapping rolling updates on a shared volume (an old container still
+// lazily opens tiles from its extraction). Only enable when starts never overlap.
+// Set before load.
+func (r *Repository) SetPrune(v bool) { r.prune = v }
 
 // SetTileCacheSize sets the open-handle LRU bound applied to tiled layers loaded
 // afterwards. A value <= 0 leaves the default. Applies at layer-open time, so set
@@ -99,8 +126,9 @@ func (r *Repository) bundleCap() int64 {
 	return defaultMaxBundleBytes
 }
 
-// tempDirPrefix is the prefix of the per-bundle unpack directories. Kept in one
-// place so CleanupOrphaned can find them.
+// tempDirPrefix is the prefix of the per-bundle unpack directories in EPHEMERAL
+// mode. Kept in one place so CleanupOrphaned can find them. (The persistent-mode
+// prefixes/markers live in cache.go alongside the caching logic.)
 const tempDirPrefix = "ortus-raster-"
 
 // cacheRoot is where unpack dirs live (the OS temp dir when cacheDir is "").
@@ -112,13 +140,18 @@ func (r *Repository) cacheRoot() string {
 }
 
 // CleanupOrphaned removes leftover unpack directories from a previous run that
-// crashed before Close could remove them (Close is the only normal cleanup, so
-// a SIGKILL/OOM/panic would otherwise leak them and eventually fill the disk).
-// Call once at startup, before loading. NOTE: it removes ALL ortus-raster-*
-// directories under the cache root, so do not point two instances at the same
-// cacheDir.
+// crashed before cleanup. In EPHEMERAL mode it removes ALL ortus-raster-* dirs
+// (Close is the only normal cleanup, so a SIGKILL/OOM/panic would otherwise leak
+// them). In PERSISTENT mode it removes ONLY the in-progress .ortus-raster-tmp-*
+// extraction dirs (a crash before the atomic rename) and NEVER the completed
+// <id>@<fingerprint> caches — those are the whole point. Call once at startup,
+// before loading.
 func (r *Repository) CleanupOrphaned() (int, error) {
-	matches, err := filepath.Glob(filepath.Join(r.cacheRoot(), tempDirPrefix+"*"))
+	glob := tempDirPrefix + "*"
+	if r.persistent {
+		glob = persistentTempPrefix + "*"
+	}
+	matches, err := filepath.Glob(filepath.Join(r.cacheRoot(), glob))
 	if err != nil {
 		return 0, err
 	}
@@ -149,7 +182,8 @@ func (r *Repository) Prepare(_ context.Context, _ string, _ string) error {
 	return nil
 }
 
-// Open unpacks and validates a raster bundle and returns its domain.Source.
+// Open unpacks (ephemeral mode) or reuses a content-addressed extraction
+// (persistent mode) of a raster bundle and returns its domain.Source.
 func (r *Repository) Open(ctx context.Context, path string) (*domain.Source, error) {
 	_, span := r.tracer.Start(ctx, "raster.Open",
 		output.WithAttributes(output.String("ortus.source.path", path)),
@@ -166,14 +200,16 @@ func (r *Repository) Open(ctx context.Context, path string) (*domain.Source, err
 		return existing.source, nil
 	}
 
-	dir, err := os.MkdirTemp(r.cacheDir, tempDirPrefix+sourceID+"-")
-	if err != nil {
-		return nil, fmt.Errorf("creating unpack dir: %w", err)
+	var (
+		b   *bundle
+		err error
+	)
+	if r.persistent {
+		b, err = r.openPersistent(sourceID, path, span)
+	} else {
+		b, err = r.openEphemeral(sourceID, path)
 	}
-
-	b, err := r.openBundle(path, sourceID, dir)
 	if err != nil {
-		_ = os.RemoveAll(dir)
 		span.RecordError(err)
 		span.SetStatus(output.StatusError, "open failed")
 		return nil, err
@@ -181,11 +217,15 @@ func (r *Repository) Open(ctx context.Context, path string) (*domain.Source, err
 
 	r.mu.Lock()
 	if winner, raced := r.sources[sourceID]; raced {
-		// Lost a concurrent Open for the same source — discard our work so the
-		// freshly-unpacked dir and COG handles don't leak.
+		// Lost a concurrent Open for the same source — discard our bundle. Close our
+		// own handles either way; only remove the dir in ephemeral mode. In
+		// persistent mode b.dir is the SHARED cache the winner is using — never
+		// remove it.
 		r.mu.Unlock()
 		b.closeFiles()
-		_ = os.RemoveAll(b.dir)
+		if !r.persistent {
+			_ = os.RemoveAll(b.dir)
+		}
 		span.AddEvent("lost_open_race")
 		return winner.source, nil
 	}
@@ -199,13 +239,10 @@ func (r *Repository) Open(ctx context.Context, path string) (*domain.Source, err
 	return b.source, nil
 }
 
-// openBundle does the heavy lifting of Open without touching r.sources, so a
-// failure leaves no partial registration behind.
-func (r *Repository) openBundle(path, sourceID, dir string) (*bundle, error) {
-	if err := unzip(path, dir, r.bundleCap()); err != nil {
-		return nil, fmt.Errorf("unpacking bundle: %w", err)
-	}
-
+// loadBundle reads and validates the manifest of an ALREADY-unpacked dir and opens
+// its layer COG handles. Shared by the fresh-extract and cache-reuse paths; it does
+// not touch r.sources, so a failure leaves no partial registration behind.
+func (r *Repository) loadBundle(dir, sourceID, path string) (*bundle, error) {
 	rawManifest, err := readFileLimited(filepath.Join(dir, manifestName), maxManifestBytes)
 	if err != nil {
 		return nil, fmt.Errorf("reading %s: %w", manifestName, err)
@@ -607,7 +644,9 @@ func (r *Repository) queryTiled(sourceID, layerName string, coord domain.Coordin
 	}}, nil
 }
 
-// Close releases the bundle's COG handles and removes its unpacked directory.
+// Close releases the bundle's COG handles. In EPHEMERAL mode it also removes the
+// unpacked directory; in PERSISTENT mode the directory is a shared content cache
+// that must survive (reused on the next start), so only the handles are released.
 func (r *Repository) Close(ctx context.Context, sourceID string) error {
 	_, span := r.tracer.Start(ctx, "raster.Close",
 		output.WithAttributes(output.String("ortus.source.id", sourceID)),
@@ -625,7 +664,7 @@ func (r *Repository) Close(ctx context.Context, sourceID string) error {
 	}
 
 	b.closeFiles()
-	if b.dir != "" {
+	if !r.persistent && b.dir != "" {
 		if err := os.RemoveAll(b.dir); err != nil {
 			span.RecordError(err)
 		}
