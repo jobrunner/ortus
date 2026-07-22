@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0](https://github.com/jobrunner/ortus/compare/v0.27.0...v1.0.0) (2026-07-22)
+
+
+### ⚠ BREAKING CHANGES
+
+* **gazetteer:** gazetteer.elevation.source_id is replaced by gazetteer.elevation.bundle_path (a gazetteer-owned DEM .zip path). Move the DEM out of the sources storage dir into the gazetteer folder and set bundle_path.
+
+### Features
+
+* **gazetteer:** load elevation DEM out of competition via bundle_path ([25d6442](https://github.com/jobrunner/ortus/commit/25d644216188db0bbc8553a300f876c7c53b4642))
+* **raster:** persistent content-addressed extraction cache ([6e10fbc](https://github.com/jobrunner/ortus/commit/6e10fbc2d02829864c733523579d463e6ceda4e0))
+* **raster:** persistent content-addressed extraction cache ([512ec35](https://github.com/jobrunner/ortus/commit/512ec35212ec7b12c52e2032c7c4837eaee19b7f))
+
+
+### Bug Fixes
+
+* **deps:** bump golang.org/x/text to v0.39.0 (GO-2026-5970) ([f23dead](https://github.com/jobrunner/ortus/commit/f23deaddd4cde70e6af2882ed727a513d3f2baef))
+* **gazetteer:** don't close a pool-shared elevation DEM out from under the pool ([9a6cd41](https://github.com/jobrunner/ortus/commit/9a6cd414d59277bd91486ebc02d8a134cb114530))
+* **raster:** make prune glob-safe (exact prefix match, not filepath.Glob) ([3f4aea4](https://github.com/jobrunner/ortus/commit/3f4aea44dda97d6080ea726971b360582d182ff3))
+
 ## [0.27.0](https://github.com/jobrunner/ortus/compare/v0.26.0...v0.27.0) (2026-07-21)
 
 
