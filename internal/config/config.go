@@ -262,12 +262,16 @@ type GazetteerWarmupConfig struct {
 }
 
 // GazetteerElevationConfig wires the optional elevation feature: the gazetteer
-// samples a continuous raster DEM source (loaded via the normal source pool) at
-// the query point and reports the height above sea level. Empty SourceID leaves
-// the feature off. The accuracy/datum/surface fields are dataset-wide constants
-// surfaced in the response so a client can use the value responsibly.
+// samples a continuous raster DEM at the query point and reports the height above
+// sea level. The DEM is gazetteer-owned — opened "out of competition" from
+// BundlePath (like the gazetteer GeoPackage), NOT registered in the generic
+// source pool, so it never appears under GET /api/v1/sources and is never
+// point-in-polygon queried. Empty BundlePath leaves the feature off; a missing or
+// unopenable bundle is non-fatal (startup continues, elevation + exposure stay
+// silent). The accuracy/datum/surface fields are dataset-wide constants surfaced
+// in the response so a client can use the value responsibly.
 type GazetteerElevationConfig struct {
-	SourceID              string  `mapstructure:"source_id"`                // raster source id of the DEM bundle (e.g. "copernicus-dem-unterfranken")
+	BundlePath            string  `mapstructure:"bundle_path"`              // gazetteer-owned DEM bundle (.zip); "" = elevation/exposure off
 	Layer                 string  `mapstructure:"layer"`                    // continuous elevation layer id (default "elevation")
 	AccuracyLayer         string  `mapstructure:"accuracy_layer"`           // optional continuous per-point accuracy layer (e.g. HEM); "" = off
 	TileCacheSize         int     `mapstructure:"tile_cache_size"`          // open-tile LRU bound for multi-tile DEMs (default 64)
@@ -437,8 +441,9 @@ func Defaults() {
 	// Raster adapter.
 	viper.SetDefault("raster.max_bundle_extract_gib", 8)
 
-	// Elevation feature (optional): off unless source_id is set.
-	viper.SetDefault("gazetteer.elevation.source_id", "")
+	// Elevation feature (optional): off unless bundle_path is set. The DEM is
+	// gazetteer-owned (opened out-of-competition), not a generic pool source.
+	viper.SetDefault("gazetteer.elevation.bundle_path", "")
 	viper.SetDefault("gazetteer.elevation.layer", "elevation")
 	viper.SetDefault("gazetteer.elevation.accuracy_layer", "")
 	viper.SetDefault("gazetteer.elevation.tile_cache_size", 64)

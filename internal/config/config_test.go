@@ -38,6 +38,10 @@ func TestLoadDefaults(t *testing.T) {
 	if w := cfg.Gazetteer.Warmup; !w.Enabled || w.Lon != 9.93 || w.Lat != 49.79 {
 		t.Errorf("gazetteer.warmup defaults = %+v, want {Enabled:true Lon:9.93 Lat:49.79}", w)
 	}
+	// Elevation is off by default: the gazetteer-owned DEM bundle path is unset.
+	if bp := cfg.Gazetteer.Elevation.BundlePath; bp != "" {
+		t.Errorf("gazetteer.elevation.bundle_path default = %q, want empty (feature off)", bp)
+	}
 	if cfg.Storage.Type != StorageTypeLocal || cfg.Storage.LocalPath != "./data" {
 		t.Errorf("storage defaults = %+v", cfg.Storage)
 	}
