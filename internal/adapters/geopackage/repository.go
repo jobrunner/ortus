@@ -905,6 +905,13 @@ func scanFeature(rows *sql.Rows, columns []string, layerName, geomColumn string)
 		return domain.Feature{}, err
 	}
 
+	return buildFeature(columns, values, layerName, geomColumn), nil
+}
+
+// buildFeature maps a scanned row (columns + values, the LAST column being the
+// AsText geometry) into a domain.Feature. Split out from scanFeature so the batch
+// query can scan a leading per-point index column itself and reuse this mapping.
+func buildFeature(columns []string, values []interface{}, layerName, geomColumn string) domain.Feature {
 	feature := domain.Feature{
 		LayerName:  layerName,
 		Properties: make(map[string]interface{}),
@@ -939,7 +946,7 @@ func scanFeature(rows *sql.Rows, columns []string, layerName, geomColumn string)
 		}
 	}
 
-	return feature, nil
+	return feature
 }
 
 // extractGeometryType extracts the geometry type from WKT.

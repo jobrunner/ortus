@@ -15,6 +15,7 @@ type mockRepository struct {
 	packages map[string]*domain.Source
 	features map[string][]domain.Feature
 	openErr  error
+	queryErr error // if set, QueryPoint returns it (used to exercise error propagation)
 }
 
 func (m *mockRepository) Supports(_ string) bool { return true }
@@ -56,6 +57,9 @@ func (m *mockRepository) GetLayers(_ context.Context, packageID string) ([]domai
 }
 
 func (m *mockRepository) QueryPoint(_ context.Context, packageID, layerName string, _ domain.Coordinate) ([]domain.Feature, error) {
+	if m.queryErr != nil {
+		return nil, m.queryErr
+	}
 	key := packageID + ":" + layerName
 	if m.features != nil {
 		if features, ok := m.features[key]; ok {

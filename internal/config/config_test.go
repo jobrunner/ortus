@@ -48,6 +48,9 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.Query.MaxFeatures != 1000 {
 		t.Errorf("query defaults = %+v", cfg.Query)
 	}
+	if b := cfg.Query.Batch; b.MaxPoints != 10000 || b.MaxSyncPoints != 1000 || b.Concurrency != 4 {
+		t.Errorf("query.batch defaults = %+v, want {MaxPoints:10000 MaxSyncPoints:1000 Concurrency:4}", b)
+	}
 	if !cfg.Metrics.Enabled || cfg.Metrics.Port != 9090 {
 		t.Errorf("metrics defaults = %+v", cfg.Metrics)
 	}

@@ -44,6 +44,9 @@ type Server struct {
 	trustedProxies   []*net.IPNet         // proxy CIDRs allowed to set X-Forwarded-For
 	version          string               // build version, shown in the frontend footer
 	frontendPage     []byte               // frontend HTML pre-rendered with the version, built once in NewServer
+	batchMaxPoints   int                  // POST /query/batch hard cap
+	batchMaxSync     int                  // POST /query/batch sync-JSON cap (over → 413, stream instead)
+	batchConcurrency int                  // per-point gazetteer-enrichment worker pool for batch
 }
 
 // ServerOptions wraps optional dependencies the HTTP server can use, such as
@@ -61,6 +64,10 @@ type ServerOptions struct {
 	// carries a `wgs84` block and the gazetteer can enrich any SRID. Optional: when
 	// nil, only WGS84 inputs get the wgs84 block + gazetteer enrichment.
 	Transformer output.CoordinateTransformer
+	// Batch caps for POST /api/v1/query/batch (0 ⇒ built-in defaults).
+	BatchMaxPoints     int // hard cap per request
+	BatchMaxSyncPoints int // sync-JSON cap; over this → 413 (stream instead)
+	BatchConcurrency   int // per-point gazetteer-enrichment worker pool
 }
 
 // NewServer creates a new HTTP server.
@@ -114,6 +121,9 @@ func NewServer(
 		httpMetrics:      httpM,
 		version:          version,
 		frontendPage:     frontendPage,
+		batchMaxPoints:   firstPositive(opts.BatchMaxPoints, 10000),
+		batchMaxSync:     firstPositive(opts.BatchMaxSyncPoints, 1000),
+		batchConcurrency: firstPositive(opts.BatchConcurrency, 4),
 	}
 
 	// Opt-in per-IP rate limiting (off by default). Only the /api/v1 surface is
@@ -211,6 +221,7 @@ func (s *Server) setupRoutes() *mux.Router {
 
 	// Query endpoints
 	api.HandleFunc("/query", s.handleQuery).Methods(http.MethodGet)
+	api.HandleFunc("/query/batch", s.handleQueryBatch).Methods(http.MethodPost)
 	api.HandleFunc("/query/{sourceId}", s.handleQuerySource).Methods(http.MethodGet)
 
 	// Gazetteer endpoint (reverse geocode + bearing) — only when the feature is wired.

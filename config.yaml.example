@@ -55,6 +55,11 @@ storage:
 query:
   timeout: 30s
   max_features: 1000
+  # POST /api/v1/query/batch — resolve many coordinates in one request.
+  batch:
+    max_points: 10000       # hard cap on points per request (both delivery modes)
+    max_sync_points: 1000   # sync-JSON cap; over this → 413 (stream with Accept: application/x-ndjson)
+    concurrency: 4          # worker pool for the per-point gazetteer enrichment path
 
 # Remote storage sync configuration
 # Periodically checks remote storage (S3/Azure/HTTP) for new GeoPackages

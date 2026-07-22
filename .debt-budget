@@ -9,4 +9,9 @@
 # math.Float32frombits(uint32(raw)) to reinterpret a float32 band's bit pattern;
 # the uint32 narrowing is intentional and unavoidable (gosec G115). Integer bands
 # are decoded by masking (no suppression) and the tile/COG open shares one G304.
-26
+#
+# 2026-07: +1 for the set-based batch query (geopackage/batch.go buildBatchPointQuery,
+# gosec G201): the SQL interpolates the layer/geom identifiers (double-quoted) because
+# SQLite cannot parameterize identifiers — the same justified pattern as
+# executePointQuery. One suppression covers the whole query build.
+27

@@ -21,6 +21,10 @@ type sourceQuerier interface {
 	ReadySourceIDs() []string
 	GetSource(ctx context.Context, id string) (*domain.Source, error)
 	Query(ctx context.Context, sourceID, layer string, coord domain.Coordinate) ([]domain.Feature, error)
+	// QueryPoints resolves many coordinates against one layer at once (set-based
+	// when the adapter supports it, else a per-point loop), one result slice per
+	// input coordinate in order.
+	QueryPoints(ctx context.Context, sourceID, layer string, coords []domain.Coordinate) ([][]domain.Feature, error)
 }
 
 // QueryService handles point queries across registered sources.
