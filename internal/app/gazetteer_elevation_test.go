@@ -96,8 +96,11 @@ func buildElevBundle(t *testing.T, id string) string {
 func newElevApp(t *testing.T, bundlePath string) *App {
 	t.Helper()
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
+	rr := raster.NewRepository(t.TempDir())
+	// Wire the raster repo as a registry provider so a test can simulate the DEM
+	// also being pool-loaded (LoadSource routes .zip to it). Nothing auto-loads.
 	reg := application.NewSourceRegistry(
-		[]output.SpatialSource{}, nil, nil, output.NoOpTracer{}, logger, t.TempDir())
+		[]output.SpatialSource{rr}, nil, nil, output.NoOpTracer{}, logger, t.TempDir())
 	gaz := gazetteer.NewService(noopIndex{}, gazetteer.Manifest{}, nil, nil, true)
 	cfg := &config.Config{}
 	cfg.Gazetteer.Elevation.BundlePath = bundlePath
@@ -105,7 +108,7 @@ func newElevApp(t *testing.T, bundlePath string) *App {
 		Logger:           logger,
 		Tracer:           output.NoOpTracer{},
 		Registry:         reg,
-		RasterRepository: raster.NewRepository(t.TempDir()),
+		RasterRepository: rr,
 		Gazetteer:        gaz,
 		Config:           cfg,
 	}
@@ -175,5 +178,40 @@ func TestBindElevationOffWhenUnset(t *testing.T) {
 	a.bindGazetteerElevation(ctx)
 	if a.gazetteerElevationSourceID != "" {
 		t.Errorf("gazetteerElevationSourceID = %q, want empty when off", a.gazetteerElevationSourceID)
+	}
+}
+
+// TestBindElevationSharedBundleNotOwned: if the DEM is ALSO loaded as a pool
+// source (operator left the zip in the sources dir), Open returns the shared
+// pool-owned bundle. We must NOT take ownership — otherwise closeGazetteerElevation
+// would close it out from under the pool. Assert we borrow it (sampler works) but
+// leave it to the registry to close.
+func TestBindElevationSharedBundleNotOwned(t *testing.T) {
+	ctx := context.Background()
+	bundle := buildElevBundle(t, "shared-dem")
+	a := newElevApp(t, bundle)
+
+	// Simulate the DEM already loaded into the pool via the registry.
+	if err := a.Registry.LoadSource(ctx, bundle); err != nil {
+		t.Fatalf("pre-load into pool: %v", err)
+	}
+	if !a.Registry.IsLoaded("shared-dem") {
+		t.Fatal("precondition: DEM should be pool-loaded")
+	}
+
+	a.bindGazetteerElevation(ctx)
+
+	// Borrowed, not owned: the sampler works but we recorded no ownership.
+	if a.gazetteerElevationSourceID != "" {
+		t.Errorf("gazetteerElevationSourceID = %q, want empty (pool owns the shared bundle)", a.gazetteerElevationSourceID)
+	}
+	elev, err := a.Gazetteer.Elevation(ctx, domain.Coordinate{X: 20, Y: 20, SRID: domain.SRIDWGS84})
+	if err != nil || elev == nil || elev.Meters != 100 {
+		t.Fatalf("Elevation = (%+v, %v), want meters 100 (sampler still works)", elev, err)
+	}
+	// closeGazetteerElevation must be a no-op here (not close the pool's bundle).
+	a.closeGazetteerElevation(ctx)
+	if _, err := a.RasterRepository.QueryPoint(ctx, "shared-dem", "elevation", domain.Coordinate{X: 20, Y: 20, SRID: domain.SRIDWGS84}); err != nil {
+		t.Errorf("shared DEM must remain open for the pool after closeGazetteerElevation; got %v", err)
 	}
 }

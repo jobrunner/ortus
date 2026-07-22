@@ -37,10 +37,16 @@ func (a *App) bindGazetteerElevation(ctx context.Context) {
 			"bundle_path", ec.BundlePath, "error", err)
 		return
 	}
-	a.gazetteerElevationSourceID = src.ID
 	if a.Registry.IsLoaded(src.ID) {
+		// The DEM is ALSO registered as a pool source (operator left the zip in the
+		// sources dir), so Open returned the shared, pool-owned bundle. Do NOT take
+		// ownership: borrow it as a sampler only and let the registry's unload close
+		// it. Leaving gazetteerElevationSourceID unset keeps closeGazetteerElevation a
+		// no-op for it, so we never close a bundle out from under the pool.
 		a.Logger.Warn("gazetteer elevation bundle is also present in the sources pool — remove the zip from the storage dir so it stops appearing in /api/v1/sources and being double-queried",
 			"id", src.ID)
+	} else {
+		a.gazetteerElevationSourceID = src.ID // we opened it exclusively → we close it on shutdown
 	}
 
 	layer := ec.Layer
