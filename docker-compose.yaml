@@ -8,11 +8,18 @@ services:
     volumes:
       - ./data:/app/data:ro
       - certmagic-cache:/app/cache
+      # Persistent raster-extraction cache. Durable across container restart/recreate
+      # and image update, so the DEM is only unpacked when its ZIP content changes.
+      # Prod on Hetzner: replace the named volume with a Cloud Volume mounted on the
+      # host, e.g.  - /mnt/ortus-rastercache:/app/rastercache
+      - rastercache:/app/rastercache
     environment:
       - ORTUS_SERVER_HOST=0.0.0.0
       - ORTUS_SERVER_PORT=8080
       - ORTUS_STORAGE_TYPE=local
       - ORTUS_STORAGE_LOCAL_PATH=/app/data
+      # Turn on the persistent, content-addressed extraction cache (see volume above).
+      - ORTUS_RASTER_EXTRACT_CACHE_DIR=/app/rastercache
       - ORTUS_LOGGING_LEVEL=info
       - ORTUS_LOGGING_FORMAT=json
       - ORTUS_METRICS_ENABLED=true
@@ -53,3 +60,4 @@ services:
 volumes:
   certmagic-cache:
   prometheus-data:
+  rastercache:

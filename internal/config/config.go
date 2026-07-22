@@ -234,6 +234,17 @@ type RasterConfig struct {
 	// such as continental DEM tile sets (e.g. the West-Palearctic elevation
 	// bundle is ~40 GiB).
 	MaxBundleExtractGiB int `mapstructure:"max_bundle_extract_gib"`
+	// ExtractCacheDir, when set, turns on the persistent content-addressed
+	// extraction cache: bundles are unpacked once into <dir>/<id>@<fingerprint>
+	// and reused across restarts/updates, re-extracting only when the ZIP content
+	// changes. Point it at a durable, mounted volume. Empty = ephemeral (unpack to
+	// an OS temp dir on every start; today's behavior).
+	ExtractCacheDir string `mapstructure:"extract_cache_dir"`
+	// ExtractCachePrune removes older cached extractions of a source after a new
+	// fingerprint loads. Default false: pruning is unsafe during overlapping
+	// rolling updates on a shared volume. Only enable when container starts never
+	// overlap.
+	ExtractCachePrune bool `mapstructure:"extract_cache_prune"`
 }
 
 // GazetteerConfig holds the reverse-geocoding / bearing ("Peilung") feature. It
@@ -440,6 +451,8 @@ func Defaults() {
 
 	// Raster adapter.
 	viper.SetDefault("raster.max_bundle_extract_gib", 8)
+	viper.SetDefault("raster.extract_cache_dir", "")
+	viper.SetDefault("raster.extract_cache_prune", false)
 
 	// Elevation feature (optional): off unless bundle_path is set. The DEM is
 	// gazetteer-owned (opened out-of-competition), not a generic pool source.

@@ -136,6 +136,8 @@ Settings for the raster-bundle adapter (COG `*.zip` sources):
 ```yaml
 raster:
   max_bundle_extract_gib: 8   # per-bundle extracted-size cap (decompression-bomb guard)
+  extract_cache_dir: ""       # "" = unpack to OS temp every start; set = persistent content-addressed cache
+  extract_cache_prune: false  # remove old cached extractions of a source after a new one loads
 ```
 
 - `raster.max_bundle_extract_gib` bounds the total bytes extracted from one
@@ -144,6 +146,22 @@ raster:
   continental DEM tile sets — e.g. the West-Palearctic elevation bundle unpacks
   to ~40 GiB, so set `40`–`64` there. A bundle that exceeds the cap fails to load
   with a clear error rather than filling the disk.
+- `raster.extract_cache_dir` turns on a **persistent, content-addressed
+  extraction cache**. When empty (default) a bundle is unpacked into an OS temp
+  dir on **every** start — for the ~48 GB DEM that is minutes of unzip each
+  restart. Point this at a **durable, mounted volume** (Hetzner Cloud Volume in
+  prod, a Docker named volume in dev) and a bundle is unpacked **once** into
+  `<dir>/<id>@<fingerprint>` and reused across restarts **and** image updates.
+  The fingerprint is derived from the ZIP's central directory (per-entry name +
+  CRC + size — cheap, no decompression), so a re-extract happens **only** when
+  the archive content actually changes (a tile added or modified). The DEM `.zip`
+  stays read-only; the cache dir must be writable and sized for the *unpacked*
+  data (~2–3× the zip). Sizing still respects `max_bundle_extract_gib`.
+- `raster.extract_cache_prune` (default `false`) deletes older
+  `<id>@<fingerprint>` dirs after a new fingerprint loads, to bound disk use.
+  **Leave it off if container starts can overlap** (a rolling update where the
+  old container is still serving from its extraction) — pruning would pull the
+  tiles out from under it. Prune offline, or only where starts never overlap.
 
 ## Gazetteer
 

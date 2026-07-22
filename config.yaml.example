@@ -113,6 +113,14 @@ raster:
   # Raise it for large trusted bundles such as continental DEM tile sets — the
   # West-Palearctic elevation bundle is ~40 GiB.
   max_bundle_extract_gib: 8
+  # Persistent, content-addressed extraction cache. "" = unpack to an OS temp dir
+  # on every start (slow for the ~48 GB DEM). Set to a durable, mounted volume to
+  # unpack once into <dir>/<id>@<fingerprint> and reuse across restarts/updates;
+  # re-extraction happens only when the ZIP content changes.
+  extract_cache_dir: ""
+  # Remove old cached extractions of a source after a new fingerprint loads.
+  # Keep false if container starts can overlap (rolling update) — see the docs.
+  extract_cache_prune: false
 
 # Gazetteer (reverse geocoding + bearing / "Peilung"). A dedicated places/admin
 # GeoPackage, loaded separately from the generic query source pool. Disabled by
