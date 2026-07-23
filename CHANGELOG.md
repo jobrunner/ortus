@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0](https://github.com/jobrunner/ortus/compare/v1.0.0...v1.1.0) (2026-07-23)
+
+
+### Features
+
+* **query:** add batch endpoint (set-based multi-point query, sync + NDJSON) ([133ff32](https://github.com/jobrunner/ortus/commit/133ff3203837b36cb19d0ff90df09f2a70f0283b))
+* **query:** batch endpoint POST /api/v1/query/batch (set-based, sync + NDJSON) ([178a1c6](https://github.com/jobrunner/ortus/commit/178a1c65b49753c17e8b5e36ae3c5bd391b9b5c0))
+
 ## [1.0.0](https://github.com/jobrunner/ortus/compare/v0.27.0...v1.0.0) (2026-07-22)
 
 
