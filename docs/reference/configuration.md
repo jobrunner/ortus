@@ -107,7 +107,18 @@ query:
     journal_mode: ""         # e.g. WAL; empty leaves the file's existing mode
     max_open_conns: 0        # per source; 0 = unlimited
     max_idle_conns: 4
+  batch:                     # POST /api/v1/query/batch
+    max_points: 10000        # hard cap per request (both delivery modes)
+    max_sync_points: 1000    # sync-JSON cap; over → 413 (stream via Accept: application/x-ndjson)
+    concurrency: 4           # worker pool for the per-point gazetteer enrichment path
 ```
+
+- `query.batch.*` bound the batch endpoint (see [HTTP API](http-api.md#batch-query-many-points-one-request)).
+  A sync request above `max_sync_points` gets **413** (stream instead); any request
+  above `max_points` gets **400**. `concurrency` sizes the pool for `with-gazetteer`
+  enrichment only — point-in-polygon is set-based (one query per source), so it
+  needs no per-point workers. Keep `concurrency` modest: per-point gazetteer queries
+  contend on SQLite, so a large pool is counterproductive.
 
 A complete example lives in [`config.yaml.example`](https://github.com/jobrunner/ortus/blob/master/config.yaml.example);
 a test (`TestConfigExampleNoDrift`) keeps it in sync with the code.

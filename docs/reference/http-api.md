@@ -112,6 +112,60 @@ GET /api/v1/query/{sourceId}?lon={longitude}&lat={latitude}
 curl "http://localhost:8080/api/v1/query/districts?lon=13.405&lat=52.52"
 ```
 
+### Batch query (many points, one request)
+
+```text
+POST /api/v1/query/batch
+Content-Type: application/json
+```
+
+Resolves many coordinates in a single request instead of one request per point.
+Point-in-polygon runs **set-based** (one query per source for the whole batch), so
+a 10 000-point batch is dramatically cheaper than 10 000 requests. Body:
+
+```json
+{ "srid": 4326, "sources": ["timezones-2026a"], "properties": ["tzid"],
+  "with-gazetteer": false,
+  "points": [ {"id":"a","lon":13.405,"lat":52.52}, {"id":"b","x":-1876403.7,"y":3291468.8,"srid":3857} ] }
+```
+
+- `points` (required) — each a `lon/lat` **or** `x/y` coordinate with an optional
+  per-point `srid` (overrides the top-level `srid`) and an optional caller-chosen
+  `id` echoed back (uniqueness is the caller's concern; omitted → 0-based index).
+- `sources` / `properties` (optional) — restrict to those source ids / return only
+  those feature properties, exactly like the single-point endpoints.
+- `with-gazetteer` (optional, **default `false`**) — attach the `gazetteer` block
+  per point. This is the expensive, per-point path (not set-based); use sparingly
+  for large batches.
+
+**Delivery.** Default is a single JSON object; each result is a single-point
+response plus `id` (and `wgs84`, and `gazetteer` when requested). A per-point
+failure is an `error` object *inside that item* — the batch never aborts.
+
+```bash
+curl -X POST http://localhost:8080/api/v1/query/batch \
+  -H 'Content-Type: application/json' \
+  -d '{"sources":["timezones-2026a"],"properties":["tzid"],
+       "points":[{"id":"a","lon":13.405,"lat":52.52}]}'
+```
+
+For very large batches, request **NDJSON streaming** with `Accept:
+application/x-ndjson` — one result object per line, streamed incrementally:
+
+```bash
+curl -N -X POST http://localhost:8080/api/v1/query/batch \
+  -H 'Content-Type: application/json' -H 'Accept: application/x-ndjson' \
+  -d '{"points":[{"lon":13.4,"lat":52.5},{"lon":9.9,"lat":49.8}]}'
+```
+
+**Limits** (configurable, see [configuration](configuration.md)): a sync request
+above `query.batch.max_sync_points` (default 1000) returns **413** with a hint to
+stream; any request above `query.batch.max_points` (default 10000) returns **400**.
+The request body is also size-capped (roughly `max_points × 512 bytes` plus 64 KiB
+of headroom) before the point-count checks run, so an oversized payload returns
+**413** even when the point count is within `max_points` — e.g. very large `id`
+strings. Keep per-point fields compact, or lower `max_points` to tighten the cap.
+
 ## Gazetteer endpoint
 
 Only registered when the [gazetteer feature](configuration.md) is enabled

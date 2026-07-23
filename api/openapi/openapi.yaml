@@ -215,6 +215,66 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  /query/batch:
+    post:
+      tags:
+        - Query
+      summary: Stapelabfrage vieler Koordinaten
+      description: |
+        Löst viele Koordinaten in EINEM Request auf. Die Punkt-in-Polygon-Abfrage
+        läuft set-based (eine Query pro Datenquelle für alle Punkte) — deutlich
+        effizienter als ein Request pro Koordinate.
+
+        Liefert standardmäßig ein JSON-Objekt `{results, total, processing_time_ms}`.
+        Mit `Accept: application/x-ndjson` wird stattdessen ein NDJSON-Stream
+        geliefert (ein Ergebnis-Objekt pro Zeile) — für sehr große Batches.
+
+        Jedes Ergebnis trägt die vom Client gewählte `id` (bzw. den 0-basierten
+        Index) und entspricht sonst einer Einzelpunkt-Antwort plus `wgs84`; mit
+        `with-gazetteer: true` zusätzlich der `gazetteer`-Block (pro Punkt, teurer).
+        Ein Fehler an einem einzelnen Punkt erscheint als `error`-Objekt in dessen
+        Ergebnis, ohne den ganzen Batch abzubrechen.
+      operationId: queryBatch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchQueryRequest'
+      responses:
+        '200':
+          description: Ergebnisse (Sync-JSON oder NDJSON-Stream je nach Accept)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchQueryResponse'
+            application/x-ndjson:
+              schema:
+                $ref: '#/components/schemas/BatchQueryResultItem'
+        '400':
+          description: Ungültiger Body / leere points / Hard-Cap überschritten
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Angeforderte Datenquelle nicht gefunden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '413':
+          description: >-
+            Batch zu groß. Entweder überschreitet ein Sync-Request das
+            Sync-Limit (max_sync_points) — dann mit Accept application/x-ndjson
+            streamen — oder der Request-Body überschreitet die Größenobergrenze
+            (unabhängig von der Punktanzahl); in dem Fall weniger Punkte oder
+            kleinere Felder pro Punkt senden (Streaming hilft hier nicht).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /gazetteer:
     get:
       tags:
@@ -1348,6 +1408,91 @@ components:
       required:
         - status
 
+
+    BatchQueryPoint:
+      type: object
+      description: >-
+        Ein Abfragepunkt mit optionaler, vom Client gewählter Echo-id. Koordinaten
+        als lon/lat ODER x/y; ein optionaler srid überschreibt den Batch-srid.
+      properties:
+        id:
+          type: string
+          description: Opaque Echo-id (Eindeutigkeit ist Sache des Callers; fehlt → 0-basierter Index)
+        lon: { type: number, format: double }
+        lat: { type: number, format: double }
+        x: { type: number, format: double }
+        y: { type: number, format: double }
+        srid: { type: integer }
+
+    BatchQueryRequest:
+      type: object
+      required:
+        - points
+      properties:
+        srid:
+          type: integer
+          description: Standard-SRID für Punkte ohne eigenen srid (Default 4326)
+        sources:
+          type: array
+          items: { type: string }
+          description: Optional — nur diese Datenquellen abfragen (leer = alle)
+        properties:
+          type: array
+          items: { type: string }
+          description: Optional — nur diese Feature-Properties zurückgeben
+        with-gazetteer:
+          type: boolean
+          description: Gazetteer-Anreicherung pro Punkt (Default false — der teure Pfad)
+        points:
+          type: array
+          items:
+            $ref: '#/components/schemas/BatchQueryPoint'
+          description: Die abzufragenden Punkte (>= 1)
+
+    BatchQueryResultItem:
+      type: object
+      description: >-
+        Ein Batch-Ergebnis: wie eine Einzelpunkt-Antwort (coordinate, wgs84, results,
+        optional gazetteer) plus die Echo-id — ODER ein error-Objekt, wenn der Punkt
+        nicht auflösbar war. Im NDJSON-Stream ist jede Zeile genau ein solches Objekt.
+      properties:
+        id: { type: string }
+        coordinate: { $ref: '#/components/schemas/Coordinate' }
+        wgs84:
+          allOf:
+            - $ref: '#/components/schemas/Wgs84Coordinate'
+          nullable: true
+        results:
+          type: array
+          items: { $ref: '#/components/schemas/QueryResult' }
+        total_features: { type: integer }
+        gazetteer:
+          allOf:
+            - $ref: '#/components/schemas/GazetteerData'
+          nullable: true
+        error:
+          type: object
+          nullable: true
+          description: Nur gesetzt, wenn dieser Punkt nicht aufgelöst werden konnte
+          properties:
+            message: { type: string }
+
+    BatchQueryResponse:
+      type: object
+      description: Sync-Antwort der Stapelabfrage (ein Item pro Eingabepunkt, in Reihenfolge)
+      required:
+        - results
+        - total
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/BatchQueryResultItem'
+        total:
+          type: integer
+        processing_time_ms:
+          type: integer
+          format: int64
 
     Error:
       type: object

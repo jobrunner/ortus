@@ -18,6 +18,12 @@ type QueryService interface {
 
 	// QueryPointInSource performs a point query in a specific source.
 	QueryPointInSource(ctx context.Context, sourceID string, req domain.QueryRequest) (*domain.QueryResult, error)
+
+	// QueryBatch resolves many coordinates in one pass, returning one response per
+	// input coordinate in order. Point-in-polygon is done set-based (one query per
+	// source/layer for all points). sources (optional) restricts to those source
+	// ids; properties (optional) filters returned feature properties.
+	QueryBatch(ctx context.Context, coords []domain.Coordinate, sources []string, properties []string) ([]*domain.QueryResponse, error)
 }
 
 // SourceRegistry defines the primary port for source management.

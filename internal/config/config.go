@@ -130,10 +130,18 @@ type HTTPConfig struct {
 
 // QueryConfig holds query-related configuration.
 type QueryConfig struct {
-	Timeout      time.Duration `mapstructure:"timeout"`
-	MaxFeatures  int           `mapstructure:"max_features"`
-	WithGeometry bool          `mapstructure:"with_geometry"` // Include geometry in results (default: false)
-	SQLite       SQLiteConfig  `mapstructure:"sqlite"`
+	Timeout      time.Duration    `mapstructure:"timeout"`
+	MaxFeatures  int              `mapstructure:"max_features"`
+	WithGeometry bool             `mapstructure:"with_geometry"` // Include geometry in results (default: false)
+	SQLite       SQLiteConfig     `mapstructure:"sqlite"`
+	Batch        QueryBatchConfig `mapstructure:"batch"`
+}
+
+// QueryBatchConfig bounds the POST /api/v1/query/batch endpoint.
+type QueryBatchConfig struct {
+	MaxPoints     int `mapstructure:"max_points"`      // hard cap on points per request (both delivery modes)
+	MaxSyncPoints int `mapstructure:"max_sync_points"` // sync-JSON cap; over this → 413 (stream with Accept: application/x-ndjson)
+	Concurrency   int `mapstructure:"concurrency"`     // worker pool for the per-point gazetteer enrichment path
 }
 
 // SQLiteConfig tunes how the GeoPackage adapter opens its SQLite databases.
@@ -381,6 +389,9 @@ func Defaults() {
 	viper.SetDefault("query.sqlite.journal_mode", "")
 	viper.SetDefault("query.sqlite.max_open_conns", 0)
 	viper.SetDefault("query.sqlite.max_idle_conns", 4)
+	viper.SetDefault("query.batch.max_points", 10000)
+	viper.SetDefault("query.batch.max_sync_points", 1000)
+	viper.SetDefault("query.batch.concurrency", 4)
 
 	// TLS defaults
 	viper.SetDefault("tls.enabled", false)
@@ -532,7 +543,26 @@ func (c *Config) Validate() error {
 	if err := c.validateMCP(); err != nil {
 		return err
 	}
+	if err := c.validateQueryBatch(); err != nil {
+		return err
+	}
 	return c.validateGazetteer()
+}
+
+// validateQueryBatch keeps the batch caps sane. A zero value means "unset" —
+// viper Load always supplies positive defaults, and the HTTP handler falls back to
+// built-in defaults — so validation only rejects negatives and the one relationship
+// that is nonsensical (a sync cap above the hard cap). This keeps a hand-built or
+// partial Config (tests, minimal files) from tripping on defaults it never set.
+func (c *Config) validateQueryBatch() error {
+	b := c.Query.Batch
+	if b.MaxPoints < 0 || b.MaxSyncPoints < 0 || b.Concurrency < 0 {
+		return fmt.Errorf("query.batch.* values must be >= 0")
+	}
+	if b.MaxPoints > 0 && b.MaxSyncPoints > b.MaxPoints {
+		return fmt.Errorf("query.batch.max_sync_points (%d) must not exceed max_points (%d)", b.MaxSyncPoints, b.MaxPoints)
+	}
+	return nil
 }
 
 // validateGazetteer requires the dataset and manifest paths when the feature is

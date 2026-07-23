@@ -145,6 +145,9 @@ func (r readyQuerier) GetSource(context.Context, string) (*domain.Source, error)
 func (r readyQuerier) Query(context.Context, string, string, domain.Coordinate) ([]domain.Feature, error) {
 	return nil, nil
 }
+func (r readyQuerier) QueryPoints(_ context.Context, _, _ string, coords []domain.Coordinate) ([][]domain.Feature, error) {
+	return make([][]domain.Feature, len(coords)), nil
+}
 
 // newQuerySourceServer builds a Server whose query service has one ready source,
 // so GET /api/v1/query/{sourceId} reaches 200.

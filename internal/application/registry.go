@@ -307,6 +307,38 @@ func (r *SourceRegistry) Query(ctx context.Context, sourceID, layer string, coor
 	return entry.Repo.QueryPoint(ctx, sourceID, layer, coord)
 }
 
+// QueryPoints is the batch seam: it resolves many coordinates against one layer,
+// returning one feature slice per input coordinate in order. When the owning
+// adapter implements output.BatchQuerier (the GeoPackage adapter) it does this
+// in one set-based query; otherwise (e.g. raster) it loops QueryPoint per point,
+// so callers get identical results regardless of adapter.
+func (r *SourceRegistry) QueryPoints(ctx context.Context, sourceID, layer string, coords []domain.Coordinate) ([][]domain.Feature, error) {
+	r.mu.RLock()
+	entry, ok := r.sources[sourceID]
+	r.mu.RUnlock()
+	if !ok || entry.Repo == nil {
+		return nil, domain.ErrSourceNotFound
+	}
+	if bq, isBatch := entry.Repo.(output.BatchQuerier); isBatch {
+		return bq.QueryPoints(ctx, sourceID, layer, coords)
+	}
+	// Fallback: adapter has no batch path — loop the per-point query. Honor
+	// context cancellation between points so a disconnected client (or a large
+	// aborted batch) stops early instead of running every remaining query.
+	out := make([][]domain.Feature, len(coords))
+	for i, c := range coords {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		feats, err := entry.Repo.QueryPoint(ctx, sourceID, layer, c)
+		if err != nil {
+			return nil, err
+		}
+		out[i] = feats
+	}
+	return out, nil
+}
+
 // ListSources returns all registered sources.
 func (r *SourceRegistry) ListSources(ctx context.Context) ([]domain.Source, error) {
 	_, span := r.tracer.Start(ctx, "SourceRegistry.ListSources")
