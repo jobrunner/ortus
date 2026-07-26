@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math"
 	"net/http"
+	"sort"
 	"sync"
 
 	"github.com/jobrunner/ortus/internal/domain"
@@ -22,12 +24,21 @@ func (s *Server) batchGazetteer(r *http.Request, req *batchRequest, wgs []domain
 	}
 	ctx := r.Context()
 	out := make([]map[string]interface{}, len(wgs))
+	// Enrich in spatial (tile-locality) order rather than input order: consecutive
+	// per-point DEM/gazetteer lookups then reuse warm raster tile handles (the
+	// tileset keeps a bounded open-handle LRU) and OS page cache instead of
+	// thrashing across a scattered batch. Order only affects processing — results
+	// are written by original index, so the caller's echo-id order is unchanged.
+	order := make([]int, 0, len(wgs))
+	for i := range wgs {
+		if itemErr[i] == "" && wgsOK[i] {
+			order = append(order, i)
+		}
+	}
+	sort.Slice(order, func(a, b int) bool { return lessTileLocality(wgs[order[a]], wgs[order[b]]) })
 	sem := make(chan struct{}, s.batchConcurrency)
 	var wg sync.WaitGroup
-	for i := range wgs {
-		if itemErr[i] != "" || !wgsOK[i] {
-			continue
-		}
+	for _, i := range order {
 		// Acquire a slot, but bail if the client disconnected — otherwise a
 		// canceled request would keep queueing (and blocking on) work for every
 		// remaining point.
@@ -46,6 +57,24 @@ func (s *Server) batchGazetteer(r *http.Request, req *batchRequest, wgs []domain
 	}
 	wg.Wait()
 	return out
+}
+
+// lessTileLocality orders coordinates so spatially-close points — and thus points
+// sharing a DEM tile (Copernicus GLO-30 tiles are 1°×1°) — are processed
+// consecutively, warming the raster tile-handle LRU and OS page cache. It sorts
+// row-major over 1° tiles (latitude band, then longitude), with a stable
+// sub-order within a tile so the sort is deterministic. X is longitude, Y latitude.
+func lessTileLocality(a, b domain.Coordinate) bool {
+	if fa, fb := math.Floor(a.Y), math.Floor(b.Y); fa != fb {
+		return fa < fb
+	}
+	if fa, fb := math.Floor(a.X), math.Floor(b.X); fa != fb {
+		return fa < fb
+	}
+	if a.Y != b.Y {
+		return a.Y < b.Y
+	}
+	return a.X < b.X
 }
 
 // enrichGazetteerPoint resolves the gazetteer block for one coordinate, returning
