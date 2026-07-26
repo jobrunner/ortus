@@ -11,6 +11,15 @@ import (
 // defaultConstraintTier is used when the manifest omits bearing_constraint_tier.
 const defaultConstraintTier = "state"
 
+// orDefault returns v when non-empty, else def — for optional manifest columns
+// that fall back to their documented schema name.
+func orDefault(v, def string) string {
+	if v != "" {
+		return v
+	}
+	return def
+}
+
 // manifestYAML is the on-disk shape of ortus-gazetteer.yaml (§4 of the plan).
 type manifestYAML struct {
 	Places struct {
@@ -41,6 +50,17 @@ type manifestYAML struct {
 		Layer      string `yaml:"layer"`
 		NameColumn string `yaml:"name_column"`
 	} `yaml:"islands"`
+	// Mountains is optional: an added layer of mountain-range / single-mountain
+	// polygons. When omitted, no mountain lookup runs and the response's mountains
+	// field is null. name/landform/elevation/area columns default to the documented
+	// schema names when unset (the dataset shares column conventions across layers).
+	Mountains struct {
+		Layer           string `yaml:"layer"`
+		NameColumn      string `yaml:"name_column"`
+		LandformColumn  string `yaml:"landform_column"`
+		ElevationColumn string `yaml:"elevation_column"`
+		AreaColumn      string `yaml:"area_column"`
+	} `yaml:"mountains"`
 	License struct {
 		Name        string `yaml:"name"`
 		URL         string `yaml:"url"`
@@ -72,24 +92,41 @@ func ParseManifest(data []byte) (Manifest, error) {
 	if y.Islands.Layer != "" && islandsName == "" {
 		islandsName = y.Admin.NameColumn
 	}
+	// mountains column roles default to the documented schema names — but only when
+	// a mountains layer is declared, so an absent block leaves every field empty
+	// (like islands) and the service skips the lookup. name defaults to the
+	// mountains schema column "name" (not admin.name_column) so overriding the admin
+	// name column can't silently point the mountains lookup at the wrong column.
+	var mtnName, mtnLandform, mtnElevation, mtnArea string
+	if y.Mountains.Layer != "" {
+		mtnName = orDefault(y.Mountains.NameColumn, "name")
+		mtnLandform = orDefault(y.Mountains.LandformColumn, "landform")
+		mtnElevation = orDefault(y.Mountains.ElevationColumn, "ele")
+		mtnArea = orDefault(y.Mountains.AreaColumn, "area_km2")
+	}
 	m := Manifest{
-		PlacesLayer:       y.Places.Layer,
-		RankColumn:        y.Places.RankColumn,
-		NameColumn:        y.Places.NameColumn,
-		AdminFKColumn:     y.Places.AdminFK,
-		AdminLayer:        y.Admin.Layer,
-		LevelColumn:       y.Admin.LevelColumn,
-		AdminNameColumn:   y.Admin.NameColumn,
-		ParentFKColumn:    y.Admin.ParentFK,
-		IslandsLayer:      y.Islands.Layer,
-		IslandsNameColumn: islandsName,
-		CountryColumn:     country,
-		NameNativeColumn:  y.Places.NameNativeColumn,
-		NameSourceColumn:  y.Places.NameSourceColumn,
-		PopulationColumn:  y.Places.PopulationColumn,
-		CapitalColumn:     y.Places.CapitalColumn,
-		NotabilityColumn:  y.Places.NotabilityColumn,
-		ConstraintTier:    tier,
+		PlacesLayer:              y.Places.Layer,
+		RankColumn:               y.Places.RankColumn,
+		NameColumn:               y.Places.NameColumn,
+		AdminFKColumn:            y.Places.AdminFK,
+		AdminLayer:               y.Admin.Layer,
+		LevelColumn:              y.Admin.LevelColumn,
+		AdminNameColumn:          y.Admin.NameColumn,
+		ParentFKColumn:           y.Admin.ParentFK,
+		IslandsLayer:             y.Islands.Layer,
+		IslandsNameColumn:        islandsName,
+		MountainsLayer:           y.Mountains.Layer,
+		MountainsNameColumn:      mtnName,
+		MountainsLandformColumn:  mtnLandform,
+		MountainsElevationColumn: mtnElevation,
+		MountainsAreaColumn:      mtnArea,
+		CountryColumn:            country,
+		NameNativeColumn:         y.Places.NameNativeColumn,
+		NameSourceColumn:         y.Places.NameSourceColumn,
+		PopulationColumn:         y.Places.PopulationColumn,
+		CapitalColumn:            y.Places.CapitalColumn,
+		NotabilityColumn:         y.Places.NotabilityColumn,
+		ConstraintTier:           tier,
 		License: domain.License{
 			Name:        y.License.Name,
 			URL:         y.License.URL,

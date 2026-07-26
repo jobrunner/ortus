@@ -22,16 +22,18 @@ import (
 
 // fakeGazetteer is a canned input.Gazetteer for handler tests.
 type fakeGazetteer struct {
-	loc        *domain.Locality
-	locErr     error
-	islands    []domain.Island
-	islandsErr error
-	fix        *domain.Fix
-	fixErr     error
-	exp        *domain.Exposure
-	expErr     error
-	elev       *domain.Elevation
-	elevErr    error
+	loc          *domain.Locality
+	locErr       error
+	islands      []domain.Island
+	islandsErr   error
+	mountains    *domain.MountainResult
+	mountainsErr error
+	fix          *domain.Fix
+	fixErr       error
+	exp          *domain.Exposure
+	expErr       error
+	elev         *domain.Elevation
+	elevErr      error
 }
 
 func (f fakeGazetteer) Locate(context.Context, domain.Coordinate) (*domain.Locality, error) {
@@ -42,6 +44,9 @@ func (f fakeGazetteer) Bearing(context.Context, domain.Coordinate, domain.Bearin
 }
 func (f fakeGazetteer) Islands(context.Context, domain.Coordinate) ([]domain.Island, error) {
 	return f.islands, f.islandsErr
+}
+func (f fakeGazetteer) Mountains(context.Context, domain.Coordinate) (*domain.MountainResult, error) {
+	return f.mountains, f.mountainsErr
 }
 func (f fakeGazetteer) Exposure(context.Context, domain.Coordinate) (*domain.Exposure, error) {
 	return f.exp, f.expErr
@@ -430,6 +435,44 @@ func TestGazetteerIslandsOmittedWhenAbsent(t *testing.T) {
 	_, body := doGET(t, srv, "/api/v1/gazetteer?lon=9.93&lat=49.79")
 	if body["islands"] != nil {
 		t.Errorf("islands = %v, want null when the point is on no island", body["islands"])
+	}
+}
+
+func TestGazetteerMountainsBlock(t *testing.T) {
+	mtns := &domain.MountainResult{
+		Mountain: &domain.Mountain{Name: "Schwanberg", ElevationM: 474, HasElevation: true,
+			NameSource: domain.NameProvenance{Code: "latin-osm"}},
+		Range: &domain.Mountain{Name: "Steigerwald"},
+	}
+	srv := newGazetteerServer(t, fakeGazetteer{loc: sampleLocality(), fix: sampleFix(), mountains: mtns})
+	rec, body := doGET(t, srv, "/api/v1/gazetteer?lon=10.27&lat=49.72")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	m, ok := body["mountains"].(map[string]any)
+	if !ok {
+		t.Fatalf("mountains missing or not an object; got %v", body["mountains"])
+	}
+	mtn, ok := m["mountain"].(map[string]any)
+	if !ok || mtn["name"] != "Schwanberg" || mtn["elevation"] != 474.0 {
+		t.Errorf("mountain = %v, want Schwanberg @ 474 m", m["mountain"])
+	}
+	rng, ok := m["range"].(map[string]any)
+	if !ok || rng["name"] != "Steigerwald" {
+		t.Errorf("range = %v, want Steigerwald", m["range"])
+	}
+	// A range carries no elevation key.
+	if _, has := rng["elevation"]; has {
+		t.Errorf("range must not carry an elevation; got %v", rng["elevation"])
+	}
+}
+
+func TestGazetteerMountainsOmittedWhenAbsent(t *testing.T) {
+	// No mountains → the block is null (point on no mountain / layer unconfigured).
+	srv := newGazetteerServer(t, fakeGazetteer{loc: sampleLocality(), fix: sampleFix()})
+	_, body := doGET(t, srv, "/api/v1/gazetteer?lon=9.93&lat=49.79")
+	if body["mountains"] != nil {
+		t.Errorf("mountains = %v, want null when the point is on no mountain", body["mountains"])
 	}
 }
 

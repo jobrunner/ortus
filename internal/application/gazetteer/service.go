@@ -49,6 +49,15 @@ type Manifest struct {
 	IslandsLayer      string // e.g. "islands"
 	IslandsNameColumn string // e.g. "name"
 
+	// mountains layer (optional; empty ⇒ no mountain lookup, so the response's
+	// mountains block is null). Smallest containing feature wins PER landform. The
+	// name-native/name-source columns are the shared ones below.
+	MountainsLayer           string // e.g. "mountains"
+	MountainsNameColumn      string // e.g. "name"
+	MountainsLandformColumn  string // e.g. "landform" (range|mountain)
+	MountainsElevationColumn string // e.g. "ele" (summit height; NULL on range rows)
+	MountainsAreaColumn      string // e.g. "area_km2" (drives "smallest wins")
+
 	// shared (same column names on both layers)
 	CountryColumn    string // e.g. "country_iso"
 	NameNativeColumn string // e.g. "name_native" (original-script name)
@@ -260,6 +269,106 @@ func (s *Service) Islands(ctx context.Context, p domain.Coordinate) ([]domain.Is
 	// nested islands read naturally and tests stay stable.
 	sort.SliceStable(islands, func(i, j int) bool { return islands[i].Name < islands[j].Name })
 	return islands, nil
+}
+
+// Mountain landform vocabulary (closed set, per the mountains layer contract).
+const (
+	landformRange    = "range"    // a mountain range (Gebirgszug) polygon
+	landformMountain = "mountain" // a single-mountain DEM-derived territory
+)
+
+// Mountains returns the smallest (most specific) containing mountain range AND
+// single-mountain territory, selected independently per landform, via a
+// point-in-polygon query against the optional mountains layer. It returns
+// (nil, nil) when no mountains layer is configured (the dataset predates the
+// feature) or when the point is on no mountain feature; adapters then render a
+// null mountains block. Like islands, a missing layer degrades to (nil, nil) so
+// a manifest that outruns the deployed dataset does not error.
+func (s *Service) Mountains(ctx context.Context, p domain.Coordinate) (*domain.MountainResult, error) {
+	if err := s.ready(); err != nil {
+		return nil, err
+	}
+	if err := requireWGS84(p); err != nil {
+		return nil, err
+	}
+	if s.manifest.MountainsLayer == "" {
+		return nil, nil // mountains not configured — omit from the response
+	}
+	features, err := s.index.PointInPolygon(ctx, s.manifest.MountainsLayer, p)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	rng := s.smallestByLandform(features, landformRange)
+	mtn := s.smallestByLandform(features, landformMountain)
+	if rng == nil && mtn == nil {
+		return nil, nil
+	}
+	return &domain.MountainResult{Range: rng, Mountain: mtn}, nil
+}
+
+// smallestByLandform returns the most specific (smallest-area) named feature of
+// the given landform among the point-in-polygon results, or nil when none match.
+// A known area always beats an unknown one; equal areas break by name so nested
+// features order deterministically regardless of PiP row order.
+func (s *Service) smallestByLandform(features []domain.Feature, landform string) *domain.Mountain {
+	var (
+		best     *domain.Feature
+		bestArea float64
+		bestName string
+	)
+	for i := range features {
+		f := &features[i]
+		if f.GetStringProperty(s.manifest.MountainsLandformColumn) != landform {
+			continue
+		}
+		name := f.GetStringProperty(s.manifest.MountainsNameColumn)
+		if name == "" {
+			continue // coverage fills / unnamed polygons carry no name
+		}
+		area := f.GetFloatProperty(s.manifest.MountainsAreaColumn)
+		if best == nil || moreSpecific(area, name, bestArea, bestName) {
+			best, bestArea, bestName = f, area, name
+		}
+	}
+	if best == nil {
+		return nil
+	}
+	return s.mountainFrom(best, landform == landformMountain)
+}
+
+// mountainFrom builds a domain.Mountain from a feature. Elevation is attached only
+// for a single-mountain (withElevation) and only when the column is actually set
+// (range rows carry a NULL ele).
+func (s *Service) mountainFrom(f *domain.Feature, withElevation bool) *domain.Mountain {
+	m := &domain.Mountain{
+		Name:       f.GetStringProperty(s.manifest.MountainsNameColumn),
+		NameNative: f.GetStringProperty(s.manifest.NameNativeColumn),
+		NameSource: s.resolveNameSource(f.GetStringProperty(s.manifest.NameSourceColumn)),
+	}
+	if withElevation {
+		if v, ok := f.GetProperty(s.manifest.MountainsElevationColumn); ok && v != nil {
+			m.ElevationM = f.GetFloatProperty(s.manifest.MountainsElevationColumn)
+			m.HasElevation = true
+		}
+	}
+	return m
+}
+
+// moreSpecific reports whether candidate (aArea, aName) is more specific than the
+// current best (bArea, bName): a smaller known area wins; an unknown area (<= 0)
+// never displaces a known one; equal areas break by name for determinism.
+func moreSpecific(aArea float64, aName string, bArea float64, bName string) bool {
+	aKnown, bKnown := aArea > 0, bArea > 0
+	if aKnown != bKnown {
+		return aKnown
+	}
+	if aKnown && aArea != bArea {
+		return aArea < bArea
+	}
+	return aName < bName
 }
 
 // Elevation samples the height above sea level at the query point. It returns

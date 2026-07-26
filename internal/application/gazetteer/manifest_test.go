@@ -59,6 +59,57 @@ license:
 	}
 }
 
+func TestParseManifestMountains(t *testing.T) {
+	// A declared mountains layer: name/landform/elevation/area columns all default
+	// to the documented mountains schema names when the block omits them (name to
+	// "name", NOT admin.name_column, so an admin override can't misdirect it).
+	y := validManifest + `
+mountains:
+  layer: mountains
+`
+	m, err := ParseManifest([]byte(y))
+	if err != nil {
+		t.Fatalf("ParseManifest: %v", err)
+	}
+	if m.MountainsLayer != "mountains" || m.MountainsNameColumn != "name" ||
+		m.MountainsLandformColumn != "landform" || m.MountainsElevationColumn != "ele" ||
+		m.MountainsAreaColumn != "area_km2" {
+		t.Errorf("mountains mapping = {layer:%q name:%q landform:%q ele:%q area:%q}, want defaults",
+			m.MountainsLayer, m.MountainsNameColumn, m.MountainsLandformColumn,
+			m.MountainsElevationColumn, m.MountainsAreaColumn)
+	}
+}
+
+func TestParseManifestMountainsNameDecoupledFromAdmin(t *testing.T) {
+	// Overriding admin.name_column must NOT change the mountains name column: it
+	// defaults to the mountains schema column "name", independent of admin.
+	y := strings.Replace(validManifest, "  name_column: name\n  parent_fk: parent_id",
+		"  name_column: admin_name\n  parent_fk: parent_id", 1) + `
+mountains:
+  layer: mountains
+`
+	m, err := ParseManifest([]byte(y))
+	if err != nil {
+		t.Fatalf("ParseManifest: %v", err)
+	}
+	if m.MountainsNameColumn != "name" {
+		t.Errorf("MountainsNameColumn = %q, want \"name\" (decoupled from admin.name_column)", m.MountainsNameColumn)
+	}
+}
+
+func TestParseManifestMountainsAbsent(t *testing.T) {
+	// No mountains block → every mountains field stays empty (feature disabled),
+	// so no defaults leak in.
+	m, err := ParseManifest([]byte(validManifest))
+	if err != nil {
+		t.Fatalf("ParseManifest: %v", err)
+	}
+	if m.MountainsLayer != "" || m.MountainsLandformColumn != "" || m.MountainsAreaColumn != "" {
+		t.Errorf("mountains fields should be empty when unconfigured, got layer=%q landform=%q area=%q",
+			m.MountainsLayer, m.MountainsLandformColumn, m.MountainsAreaColumn)
+	}
+}
+
 func TestParseManifestDefaultsTier(t *testing.T) {
 	// bearing_constraint_tier omitted → defaults to "state".
 	y := strings.Replace(validManifest, "  bearing_constraint_tier: state\n", "", 1)

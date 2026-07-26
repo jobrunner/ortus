@@ -43,6 +43,26 @@ type islandOut struct {
 	NameSource string `json:"name_source"`
 }
 
+// mountainOut is one mountain range or single-mountain territory whose polygon
+// contains the coordinate. Elevation (summit height, m) is present only for a
+// single-mountain; the key is omitted entirely for a range.
+type mountainOut struct {
+	Name       string `json:"name"`
+	NameNative string `json:"name_native"`
+	NameSource string `json:"name_source"`
+	// Elevation is omitted for a range (nil), present for a single-mountain — so the
+	// MCP shape matches the HTTP one, which omits the key on ranges.
+	Elevation *float64 `json:"elevation,omitempty"`
+}
+
+// mountainsOut is the two-level mountains result: the smallest containing
+// single-mountain and range (either null). Null when the point is on neither or
+// no mountains layer is configured.
+type mountainsOut struct {
+	Mountain *mountainOut `json:"mountain"`
+	Range    *mountainOut `json:"range"`
+}
+
 // bearingOut is the bearing fix relative to the most salient nearby place.
 type bearingOut struct {
 	Reference  string  `json:"reference"`
@@ -111,6 +131,7 @@ type exposureOut struct {
 type gazetteerOut struct {
 	Admin     *adminOut     `json:"admin"`
 	Islands   []islandOut   `json:"islands"`
+	Mountains *mountainsOut `json:"mountains"`
 	Bearing   *bearingOut   `json:"bearing"`
 	Exposure  *exposureOut  `json:"exposure"`
 	Elevation *elevationOut `json:"elevation"`
@@ -157,6 +178,37 @@ func islandOuts(islands []domain.Island, prov *provenanceSet) []islandOut {
 			NameNative: is.NameNative,
 			NameSource: prov.add(is.NameSource),
 		}
+	}
+	return out
+}
+
+// newMountainsOut maps the two-level mountains result to its output shape,
+// recording name provenance in prov. Returns nil when the result is nil so the
+// block serializes as null.
+func newMountainsOut(m *domain.MountainResult, prov *provenanceSet) *mountainsOut {
+	if m == nil {
+		return nil
+	}
+	return &mountainsOut{
+		Mountain: mountainOutFrom(m.Mountain, prov),
+		Range:    mountainOutFrom(m.Range, prov),
+	}
+}
+
+// mountainOutFrom maps one mountain (range or single-mountain) to its output
+// shape, or nil. Elevation is set only for a single-mountain (HasElevation).
+func mountainOutFrom(m *domain.Mountain, prov *provenanceSet) *mountainOut {
+	if m == nil {
+		return nil
+	}
+	out := &mountainOut{
+		Name:       m.Name,
+		NameNative: m.NameNative,
+		NameSource: prov.add(m.NameSource),
+	}
+	if m.HasElevation {
+		e := m.ElevationM
+		out.Elevation = &e
 	}
 	return out
 }
@@ -212,14 +264,17 @@ func addGazetteer(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 		Name: "gazetteer",
 		Description: "Reverse-geocode a coordinate to its administrative hierarchy " +
 			"(admin), name the island(s) containing it (islands, when an islands " +
-			"layer is configured), compute a bearing to the most salient nearby " +
-			"place (bearing, e.g. '4 km E Würzburg'), report the terrain slope and " +
-			"the direction it faces (exposure/aspect), and report the height above " +
-			"sea level (elevation, meters; exposure + elevation need a DEM). A part " +
-			"is null when it has no result — no admin coverage, not on an island, no " +
-			"anchor within reach, no DEM, or (exposure) the point/neighbor lacks " +
-			"coverage; elevation instead uses the sea-level convention (0 m) outside " +
-			"DEM coverage. Equivalent to GET /api/v1/gazetteer.",
+			"layer is configured), name the mountain range and single mountain it " +
+			"lies in (mountains.range / mountains.mountain, smallest containing per " +
+			"landform, when a mountains layer is configured), compute a bearing to " +
+			"the most salient nearby place (bearing, e.g. '4 km E Würzburg'), report " +
+			"the terrain slope and the direction it faces (exposure/aspect), and " +
+			"report the height above sea level (elevation, meters; exposure + " +
+			"elevation need a DEM). A part is null when it has no result — no admin " +
+			"coverage, not on an island/mountain, no anchor within reach, no DEM, or " +
+			"(exposure) the point/neighbor lacks coverage; elevation instead uses the " +
+			"sea-level convention (0 m) outside DEM coverage. Equivalent to " +
+			"GET /api/v1/gazetteer.",
 	}, func(ctx toolCtx, _ *callRequest, in gazetteerIn) (*callResult, gazetteerOut, error) {
 		coord, err := selectCoordinate(in.Lon, in.Lat, in.X, in.Y, in.SRID)
 		if err != nil {
@@ -256,6 +311,12 @@ func addGazetteer(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 			return nil, gazetteerOut{}, err
 		}
 		out.Islands = islandOuts(islands, prov)
+
+		mountains, err := deps.Gazetteer.Mountains(ctx, coord)
+		if err != nil {
+			return nil, gazetteerOut{}, err
+		}
+		out.Mountains = newMountainsOut(mountains, prov)
 
 		fix, err := deps.Gazetteer.Bearing(ctx, coord, deps.BearingPolicy.OrDefault())
 		switch {

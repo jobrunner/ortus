@@ -246,6 +246,13 @@ gazetteer:
   names the island(s) whose polygon contains the query point, surfaced as the
   response `islands` array. `name_column` defaults to the admin layer's when
   omitted. Without the block, no island lookup runs and `islands` is `null`.
+- An optional `mountains:` block in `ortus-gazetteer.yaml` (`layer`, and optionally
+  `name_column`, `landform_column`, `elevation_column`, `area_column`) names the
+  smallest containing mountain range and single-mountain territory (per landform),
+  surfaced as the response `mountains` object (`{ mountain, range }`). The column
+  roles default to the documented schema names (`name`/`landform`/`ele`/`area_km2`);
+  `area_column` drives the "smallest containing wins" selection. Without the block,
+  no mountain lookup runs and `mountains` is `null`.
 - `name_source_manifest_path` (optional) populates the response-wide `sources`
   block that describes each name-romanization/provenance code. Without it, each
   record still carries its raw `name_source` code but the descriptions are empty.

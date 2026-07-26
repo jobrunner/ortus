@@ -24,6 +24,12 @@ type Gazetteer interface {
 	// configured — adapters render a null islands block in that case.
 	Islands(ctx context.Context, p domain.Coordinate) ([]domain.Island, error)
 
+	// Mountains returns the smallest containing mountain range and single-mountain
+	// territory (independently, per landform), or nil when the point is on neither
+	// or the optional mountains layer is not configured — adapters render a null
+	// mountains block in that case.
+	Mountains(ctx context.Context, p domain.Coordinate) (*domain.MountainResult, error)
+
 	// Elevation returns the height above sea level at the point, or (nil, nil)
 	// when the optional elevation feature is not wired — adapters render a null
 	// elevation block in that case.
