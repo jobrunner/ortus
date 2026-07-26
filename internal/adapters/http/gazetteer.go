@@ -67,7 +67,7 @@ func (s *Server) handleGazetteer(w http.ResponseWriter, r *http.Request) {
 // This object is the reusable unit for the planned batch endpoint: each batch
 // entry is {id, coordinate, <these sections>} with a caller-chosen echo id.
 func (s *Server) gazetteerSections(ctx context.Context, coord domain.Coordinate) (map[string]interface{}, error) {
-	out := map[string]interface{}{"admin": nil, "islands": nil, "bearing": nil, "exposure": nil, "elevation": nil, "sources": []interface{}{}}
+	out := map[string]interface{}{"admin": nil, "islands": nil, "mountains": nil, "bearing": nil, "exposure": nil, "elevation": nil, "sources": []interface{}{}}
 	prov := newProvenanceSet()
 
 	loc, err := s.gazetteer.Locate(ctx, coord)
@@ -88,6 +88,12 @@ func (s *Server) gazetteerSections(ctx context.Context, coord domain.Coordinate)
 		return nil, err
 	case len(islands) > 0:
 		out["islands"] = formatIslands(islands, prov)
+	}
+
+	// Mountains: the smallest containing range and single-mountain (per landform),
+	// a separate layer resolved independently of admin coverage. nil ⇒ block null.
+	if err := s.addMountains(ctx, coord, out, prov); err != nil {
+		return nil, err
 	}
 
 	fix, err := s.gazetteer.Bearing(ctx, coord, s.bearingPolicy.OrDefault())
@@ -195,6 +201,49 @@ func formatIslands(islands []domain.Island, prov *provenanceSet) []map[string]in
 			"name_native": is.NameNative,
 			"name_source": prov.add(is.NameSource),
 		}
+	}
+	return out
+}
+
+// addMountains resolves the mountains layer and attaches the block to out; a nil
+// result (point on no mountain / layer unconfigured) leaves the block null.
+func (s *Server) addMountains(ctx context.Context, coord domain.Coordinate, out map[string]interface{}, prov *provenanceSet) error {
+	mountains, err := s.gazetteer.Mountains(ctx, coord)
+	if err != nil {
+		return err
+	}
+	if mountains != nil {
+		out["mountains"] = formatMountains(mountains, prov)
+	}
+	return nil
+}
+
+// formatMountains renders the two-level mountains result (smallest containing
+// range + single-mountain) as an object with `mountain` and `range` keys, each
+// null or a mountain object. The block itself stays null upstream when neither
+// landform matches.
+func formatMountains(m *domain.MountainResult, prov *provenanceSet) map[string]interface{} {
+	out := map[string]interface{}{"mountain": nil, "range": nil}
+	if m.Range != nil {
+		out["range"] = formatMountain(m.Range, prov)
+	}
+	if m.Mountain != nil {
+		out["mountain"] = formatMountain(m.Mountain, prov)
+	}
+	return out
+}
+
+// formatMountain renders one mountain range / single-mountain for JSON output,
+// recording its name provenance in prov. `elevation` (summit height, m) is present
+// only for a single-mountain; a range omits it.
+func formatMountain(m *domain.Mountain, prov *provenanceSet) map[string]interface{} {
+	out := map[string]interface{}{
+		"name":        m.Name,
+		"name_native": m.NameNative,
+		"name_source": prov.add(m.NameSource),
+	}
+	if m.HasElevation {
+		out["elevation"] = m.ElevationM
 	}
 	return out
 }

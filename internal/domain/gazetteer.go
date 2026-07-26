@@ -111,6 +111,30 @@ type Island struct {
 	NameSource NameProvenance // how Name was romanized/sourced
 }
 
+// Mountain is a named mountain range or single-mountain territory whose polygon
+// contains a coordinate — the result of a point-in-polygon lookup against the
+// gazetteer's optional mountains layer. It carries the same name provenance as
+// places/admin units. ElevationM is the summit height and is only meaningful for
+// a single-mountain (landform=mountain); HasElevation is false for a range.
+type Mountain struct {
+	Name         string         // romanized (always-Latin) range/mountain name
+	NameNative   string         // original-script name (empty if already Latin)
+	NameSource   NameProvenance // how Name was romanized/sourced
+	ElevationM   float64        // summit elevation in meters (single-mountain only)
+	HasElevation bool           // false for a range (its ele is NULL)
+}
+
+// MountainResult is the two-level mountains answer for a coordinate: the smallest
+// (most specific) containing mountain range AND the smallest containing
+// single-mountain territory, selected independently per landform (a point can be
+// on the Schwanberg *and* in the Steigerwald). Either field is nil when the point
+// is on no feature of that landform; the whole result is nil when neither matches
+// or the optional mountains layer is not configured.
+type MountainResult struct {
+	Mountain *Mountain // smallest containing single-mountain territory (landform=mountain), or nil
+	Range    *Mountain // smallest containing mountain range (landform=range), or nil
+}
+
 // Elevation is the height above sea level at a queried coordinate, sampled from a
 // continuous raster DEM, plus the accuracy metadata a client needs to use it
 // responsibly. The accuracy fields matter for downstream terrain derivatives

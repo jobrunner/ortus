@@ -16,11 +16,12 @@ import (
 
 // fakeGazetteer is a canned input.Gazetteer for the MCP tool test.
 type fakeGazetteer struct {
-	loc     *domain.Locality
-	islands []domain.Island
-	fix     *domain.Fix
-	exp     *domain.Exposure
-	elev    *domain.Elevation
+	loc       *domain.Locality
+	islands   []domain.Island
+	mountains *domain.MountainResult
+	fix       *domain.Fix
+	exp       *domain.Exposure
+	elev      *domain.Elevation
 }
 
 func (f fakeGazetteer) Locate(context.Context, domain.Coordinate) (*domain.Locality, error) {
@@ -31,6 +32,9 @@ func (f fakeGazetteer) Bearing(context.Context, domain.Coordinate, domain.Bearin
 }
 func (f fakeGazetteer) Islands(context.Context, domain.Coordinate) ([]domain.Island, error) {
 	return f.islands, nil
+}
+func (f fakeGazetteer) Mountains(context.Context, domain.Coordinate) (*domain.MountainResult, error) {
+	return f.mountains, nil
 }
 func (f fakeGazetteer) Exposure(context.Context, domain.Coordinate) (*domain.Exposure, error) {
 	return f.exp, nil
@@ -55,6 +59,11 @@ func startGazetteerServer(t *testing.T) *httptest.Server {
 		},
 		islands: []domain.Island{
 			{Name: "Mainau", NameNative: "", NameSource: domain.NameProvenance{Code: "latin-osm", Short: "OSM name", Long: "OSM name tag."}},
+		},
+		mountains: &domain.MountainResult{
+			Mountain: &domain.Mountain{Name: "Schwanberg", ElevationM: 474, HasElevation: true,
+				NameSource: domain.NameProvenance{Code: "latin-osm", Short: "OSM name", Long: "OSM name tag."}},
+			Range: &domain.Mountain{Name: "Steigerwald"},
 		},
 		elev: &domain.Elevation{
 			Meters: 177.0, AccuracyM: 4.0, AccuracyBasis: "GLO-30 LE90 (absolute)",
@@ -124,6 +133,16 @@ func TestGazetteerTool(t *testing.T) {
 			Name       string `json:"name"`
 			NameSource string `json:"name_source"`
 		} `json:"islands"`
+		Mountains *struct {
+			Mountain *struct {
+				Name      string   `json:"name"`
+				Elevation *float64 `json:"elevation"`
+			} `json:"mountain"`
+			Range *struct {
+				Name      string   `json:"name"`
+				Elevation *float64 `json:"elevation"`
+			} `json:"range"`
+		} `json:"mountains"`
 		Bearing *struct {
 			Label      string `json:"label"`
 			NameSource string `json:"name_source"`
@@ -161,6 +180,17 @@ func TestGazetteerTool(t *testing.T) {
 	}
 	// Islands must be present as an array with the canned island (guards against
 	// the field being dropped or mis-shaped — unknown fields would decode silently).
+	if out.Mountains == nil || out.Mountains.Mountain == nil || out.Mountains.Mountain.Name != "Schwanberg" ||
+		out.Mountains.Mountain.Elevation == nil || *out.Mountains.Mountain.Elevation != 474 {
+		t.Errorf("mountains.mountain = %+v, want Schwanberg @ 474 m", out.Mountains)
+	}
+	if out.Mountains == nil || out.Mountains.Range == nil || out.Mountains.Range.Name != "Steigerwald" {
+		t.Errorf("mountains.range = %+v, want Steigerwald", out.Mountains)
+	}
+	// A range carries no elevation.
+	if out.Mountains != nil && out.Mountains.Range != nil && out.Mountains.Range.Elevation != nil {
+		t.Errorf("range elevation = %v, want null", *out.Mountains.Range.Elevation)
+	}
 	if len(out.Islands) != 1 || out.Islands[0].Name != "Mainau" || out.Islands[0].NameSource != "latin-osm" {
 		t.Errorf("islands = %+v, want single Mainau/latin-osm entry", out.Islands)
 	}

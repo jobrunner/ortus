@@ -74,7 +74,8 @@ returns, and the failure is logged server-side).
 **Gazetteer enrichment (on by default).** When the [gazetteer feature](configuration.md)
 is enabled, the query response additionally carries a `gazetteer` block with the
 administrative hierarchy, the island(s) containing the point (when an islands layer
-is configured), bearing, terrain exposure (slope + aspect) and elevation (both when
+is configured), the mountain range and single mountain it lies in (when a mountains
+layer is configured), bearing, terrain exposure (slope + aspect) and elevation (both when
 a DEM is configured), name-source explanations and the dataset attribution — so a
 client gets everything to process the result in one call. It works for **any SRID
 that reprojects to WGS84** (the point is reprojected before the lookup, not just
@@ -93,6 +94,7 @@ omitted (never errors the query) if it fails.
   "gazetteer": {
     "admin": { "country_iso": "DE", "hierarchy": [ /* … */ ] },
     "islands": [ /* … or null when the point is on no mapped island … */ ],
+    "mountains": { /* { "mountain": {…}|null, "range": {…}|null } or null … */ },
     "bearing": { /* … */ },
     "exposure": { /* slope + aspect, or null when no DEM covers the point … */ },
     "elevation": { /* … or null when no DEM configured … */ },
@@ -180,13 +182,14 @@ GET /api/v1/gazetteer?x={x}&y={y}&srid={srid}
 ```
 
 Reverse-geocode a coordinate to its administrative hierarchy (`admin`), name the
-island(s) containing it (`islands`, when an islands layer is configured), compute
-a bearing to the most salient nearby place (`bearing`, e.g. "4 km E Würzburg"),
-and — when a DEM is configured — report the terrain exposure (`exposure`: slope +
-the direction it faces) and the height above sea level (`elevation`) at the point.
-Each part is `null` when it has no result — no admin coverage, not on a mapped
-island, no anchor within reach, no DEM configured, or (for `exposure`) the point
-or a neighbour lacks DEM coverage. `elevation` differs: outside DEM coverage it is
+island(s) containing it (`islands`, when an islands layer is configured), name the
+mountain range and single mountain it lies in (`mountains`, when a mountains layer
+is configured), compute a bearing to the most salient nearby place (`bearing`,
+e.g. "4 km E Würzburg"), and — when a DEM is configured — report the terrain
+exposure (`exposure`: slope + the direction it faces) and the height above sea
+level (`elevation`) at the point. Each part is `null` when it has no result — no
+admin coverage, not on a mapped island/mountain, no anchor within reach, no DEM
+configured, or (for `exposure`) the point or a neighbour lacks DEM coverage. `elevation` differs: outside DEM coverage it is
 not null but uses the sea-level convention (`meters: 0`, `sea_level: true`). The
 response also carries the `wgs84: { lon, lat }` block (as on `/query`). The dataset
 is WGS84; a **projected `srid` (e.g. 3857) is reprojected** to WGS84 before the
@@ -217,6 +220,7 @@ bearing from a label — the find is *in* Würzburg).
     ]
   },
   "islands": null,
+  "mountains": null,
   "bearing": {
     "reference": "Würzburg", "name_native": "", "name_source": "latin-osm",
     "class": "city", "distance_km": 4.0, "azimuth": 90.0, "compass": "E",
@@ -246,9 +250,9 @@ bearing from a label — the find is *in* Würzburg).
 }
 ```
 
-Each admin unit, each island, and the bearing anchor carry the romanized `name`,
-the original-script `name_native` (empty when the name is already Latin), and a
-`name_source` provenance code. Admin units also carry the country-specific
+Each admin unit, each island, each mountain, and the bearing anchor carry the
+romanized `name`, the original-script `name_native` (empty when the name is already
+Latin), and a `name_source` provenance code. Admin units also carry the country-specific
 `local_term` and the generic `equivalent_description` for their tier. The
 response-wide `sources` block describes each distinct `name_source` code once
 (`code`, `short`, `long`, `standard`) rather than repeating it per record; it is
@@ -268,6 +272,17 @@ the inland Würzburg example above) or no islands layer is configured (`islands:
 `ortus-gazetteer.yaml`); nested islands yield several entries. For a point on an
 island it is, e.g.,
 `[{ "name": "Sylt", "name_native": "", "name_source": "latin-osm" }]`.
+
+The `mountains` block is an object with a `mountain` and a `range` key — the
+smallest (most specific) containing single-mountain territory and mountain range,
+selected **independently per landform** via point-in-polygon against the optional
+mountains layer. Either key is `null` when the point is on no feature of that
+landform; the whole block is `null` when neither matches or no mountains layer is
+configured (`mountains:` in `ortus-gazetteer.yaml`). A `mountain` carries a summit
+`elevation` (metres); a `range` omits it. On the Schwanberg plateau, e.g.:
+`{ "mountain": { "name": "Schwanberg", "name_native": "", "name_source": "latin-osm", "elevation": 474 }, "range": { "name": "Steigerwald", "name_native": "", "name_source": "latin-osm" } }`.
+Single-mountain rows exist only where the dataset's optional DEM territory step has
+been built; a range-only dataset returns `mountain: null` with the `range` set.
 
 The `elevation` block is present only when a DEM is configured
 (`gazetteer.elevation.bundle_path`) and openable; it is `null` otherwise. It reports the height

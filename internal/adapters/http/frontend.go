@@ -951,8 +951,8 @@ const frontendHTML = `<!DOCTYPE html>
 
                 let html = '';
 
-                // Location context (gazetteer): admin hierarchy, islands, elevation,
-                // bearing, exposure, name-source explanations and dataset attribution.
+                // Location context (gazetteer): admin hierarchy, islands, mountains,
+                // elevation, bearing, exposure, name-source explanations and attribution.
                 // Present whenever the query point could be reprojected to WGS84 (any
                 // SRID the transformer supports, not just 4326) and the feature is
                 // enabled — but only rendered when it actually has location content
@@ -1062,7 +1062,7 @@ const frontendHTML = `<!DOCTYPE html>
             // not location context. Guards against an empty "Ort & Umgebung" box for
             // points with no coverage.
             function hasGazetteerContent(gaz) {
-                return !!(gaz && (gaz.admin || (gaz.islands && gaz.islands.length) || gaz.elevation || gaz.bearing || gaz.exposure));
+                return !!(gaz && (gaz.admin || (gaz.islands && gaz.islands.length) || (gaz.mountains && (gaz.mountains.mountain || gaz.mountains.range)) || gaz.elevation || gaz.bearing || gaz.exposure));
             }
 
             // Renders the location-context block: administrative hierarchy (with the
@@ -1126,6 +1126,34 @@ const frontendHTML = `<!DOCTYPE html>
                         html += '</div>';
                         if (is.name_source) {
                             html += '<div class="admin-src">Name: <code>' + escapeHtml(is.name_source) + '</code></div>';
+                        }
+                        html += '</li>';
+                    });
+                    html += '</ul></div>';
+                }
+
+                // Mountains: the smallest containing single mountain (Berg) and range
+                // (Gebirge), each optional. Berg carries a summit elevation.
+                if (gaz.mountains && (gaz.mountains.mountain || gaz.mountains.range)) {
+                    html += '<div class="gaz-section">';
+                    html += '<div class="gaz-label">Berg / Gebirge</div>';
+                    html += '<ul class="admin-list">';
+                    [{ m: gaz.mountains.mountain, kind: 'Berg' }, { m: gaz.mountains.range, kind: 'Gebirge' }].forEach(function(row) {
+                        var m = row.m;
+                        if (!m) { return; }
+                        html += '<li class="admin-item">';
+                        html += '<div class="admin-line">';
+                        html += '<span class="admin-name">' + escapeHtml(m.name || '-') + '</span>';
+                        html += ' <span class="badge">' + row.kind + '</span>';
+                        if (typeof m.elevation === 'number') {
+                            html += ' <span class="admin-native">' + Math.round(m.elevation) + ' m</span>';
+                        }
+                        if (m.name_native && m.name_native !== m.name) {
+                            html += ' <span class="admin-native">' + escapeHtml(m.name_native) + '</span>';
+                        }
+                        html += '</div>';
+                        if (m.name_source) {
+                            html += '<div class="admin-src">Name: <code>' + escapeHtml(m.name_source) + '</code></div>';
                         }
                         html += '</li>';
                     });

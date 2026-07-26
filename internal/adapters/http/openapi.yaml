@@ -770,6 +770,52 @@ components:
                 description: >-
                   Codierung der Namensherkunft/Romanisierung; im response-weiten
                   sources-Block beschrieben. Leer, wenn keine.
+        mountains:
+          nullable: true
+          type: object
+          description: >-
+            Berg/Gebirge, in dem die Koordinate liegt (eigener Layer, unabhängig
+            von der Verwaltungsabdeckung). null, wenn der Punkt auf keinem
+            erfassten Berg/Gebirge liegt oder kein Mountains-Layer konfiguriert
+            ist. Das jeweils kleinste (spezifischste) enthaltende Feature PRO
+            landform: der Einzelberg (mountain) und der Gebirgszug (range)
+            getrennt (z. B. mountain: Schwanberg, range: Steigerwald).
+          properties:
+            mountain:
+              nullable: true
+              type: object
+              description: >-
+                Kleinster enthaltender Einzelberg (DEM-Territorium). null, wenn
+                keiner enthält oder die Einzelberg-Zeilen fehlen (optionaler
+                Aufbauschritt im Datensatz).
+              properties:
+                name:
+                  type: string
+                  description: Bergname in lateinischer Schrift (immer gesetzt).
+                name_native:
+                  type: string
+                  description: Bergname in Originalschrift (leer, wenn identisch mit name).
+                name_source:
+                  type: string
+                  description: Codierung der Namensherkunft; im sources-Block beschrieben.
+                elevation:
+                  type: number
+                  format: double
+                  description: Gipfelhöhe in Metern (nur beim Einzelberg gesetzt).
+            range:
+              nullable: true
+              type: object
+              description: Kleinster enthaltender Gebirgszug. null, wenn keiner enthält.
+              properties:
+                name:
+                  type: string
+                  description: Gebirgsname in lateinischer Schrift (immer gesetzt).
+                name_native:
+                  type: string
+                  description: Gebirgsname in Originalschrift (leer, wenn identisch mit name).
+                name_source:
+                  type: string
+                  description: Codierung der Namensherkunft; im sources-Block beschrieben.
         bearing:
           nullable: true
           type: object

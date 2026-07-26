@@ -226,6 +226,111 @@ func TestIslandsMissingLayerDegradesToNil(t *testing.T) {
 	}
 }
 
+// mountainFeature builds a mountains-layer polygon feature. ele != nil marks a
+// single-mountain row (a range carries a NULL ele → pass nil).
+func mountainFeature(name, landform string, areaKm2 float64, ele *float64) domain.Feature {
+	props := map[string]any{
+		"name": name, "name_native": "", "name_source": "latin-osm",
+		"landform": landform, "area_km2": areaKm2,
+	}
+	if ele != nil {
+		props["ele"] = *ele
+	}
+	return domain.Feature{LayerName: "mountains", Properties: props}
+}
+
+func mountainsManifest() Manifest {
+	m := testManifest()
+	m.MountainsLayer = "mountains"
+	m.MountainsNameColumn = "name"
+	m.MountainsLandformColumn = "landform"
+	m.MountainsElevationColumn = "ele"
+	m.MountainsAreaColumn = "area_km2"
+	m.NameNativeColumn = "name_native"
+	m.NameSourceColumn = "name_source"
+	return m
+}
+
+func TestMountainsSmallestPerLandform(t *testing.T) {
+	// PiP returns nested ranges + a single mountain (arbitrary order). Mountains
+	// picks the smallest range AND the mountain separately; ele only on the mountain.
+	ele := 474.0
+	idx := fakeIndex{pip: []domain.Feature{
+		mountainFeature("Alpen", landformRange, 200000, nil),       // huge range
+		mountainFeature("Steigerwald", landformRange, 1694, nil),   // smaller range → wins
+		mountainFeature("Schwanberg", landformMountain, 0.5, &ele), // single mountain
+		mountainFeature("", landformRange, 1, nil),                 // unnamed fill → skipped
+	}}
+	svc := NewService(idx, mountainsManifest(), nil, nil, true)
+
+	got, err := svc.Mountains(context.Background(), domain.NewWGS84Coordinate(10.27, 49.72))
+	if err != nil {
+		t.Fatalf("Mountains: %v", err)
+	}
+	if got == nil || got.Range == nil || got.Mountain == nil {
+		t.Fatalf("want both range and mountain, got %+v", got)
+	}
+	if got.Range.Name != "Steigerwald" {
+		t.Errorf("range = %q, want Steigerwald (smallest-area range wins)", got.Range.Name)
+	}
+	if got.Range.HasElevation {
+		t.Error("a range must not carry an elevation")
+	}
+	if got.Mountain.Name != "Schwanberg" {
+		t.Errorf("mountain = %q, want Schwanberg", got.Mountain.Name)
+	}
+	if !got.Mountain.HasElevation || got.Mountain.ElevationM != 474 {
+		t.Errorf("mountain elevation = %v (has=%v), want 474", got.Mountain.ElevationM, got.Mountain.HasElevation)
+	}
+	if got.Mountain.NameSource.Code != "latin-osm" {
+		t.Errorf("name source = %q, want latin-osm", got.Mountain.NameSource.Code)
+	}
+}
+
+func TestMountainsRangeOnlyWhenNoTerritories(t *testing.T) {
+	// A dataset without the optional single-mountain rows: only a range matches, so
+	// Mountain is nil but the result is still returned.
+	idx := fakeIndex{pip: []domain.Feature{mountainFeature("Spessart", landformRange, 2072, nil)}}
+	svc := NewService(idx, mountainsManifest(), nil, nil, true)
+
+	got, err := svc.Mountains(context.Background(), domain.NewWGS84Coordinate(9.4, 50.05))
+	if err != nil {
+		t.Fatalf("Mountains: %v", err)
+	}
+	if got == nil || got.Range == nil || got.Range.Name != "Spessart" {
+		t.Fatalf("want range Spessart, got %+v", got)
+	}
+	if got.Mountain != nil {
+		t.Errorf("mountain = %+v, want nil (no territories)", got.Mountain)
+	}
+}
+
+func TestMountainsUnconfiguredReturnsNil(t *testing.T) {
+	idx := fakeIndex{pipErr: errors.New("PiP must not be called when mountains unconfigured")}
+	svc := NewService(idx, testManifest(), nil, nil, true)
+
+	got, err := svc.Mountains(context.Background(), domain.NewWGS84Coordinate(9.93, 49.79))
+	if err != nil {
+		t.Fatalf("Mountains (unconfigured): unexpected error %v", err)
+	}
+	if got != nil {
+		t.Errorf("mountains = %v, want nil when no mountains layer configured", got)
+	}
+}
+
+func TestMountainsMissingLayerDegradesToNil(t *testing.T) {
+	idx := fakeIndex{pipErr: domain.ErrNotFound}
+	svc := NewService(idx, mountainsManifest(), nil, nil, true)
+
+	got, err := svc.Mountains(context.Background(), domain.NewWGS84Coordinate(9.4, 50.05))
+	if err != nil {
+		t.Fatalf("Mountains (missing layer): want nil error, got %v", err)
+	}
+	if got != nil {
+		t.Errorf("mountains = %v, want nil on ErrNotFound", got)
+	}
+}
+
 func TestLocateBearingRejectNonWGS84(t *testing.T) {
 	svc := NewService(fakeIndex{}, testManifest(), nil, nil, true)
 	p := domain.NewCoordinate(1_400_000, 6_600_000, domain.SRIDWebMercator) // 3857, not 4326

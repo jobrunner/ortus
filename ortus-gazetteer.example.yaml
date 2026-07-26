@@ -21,6 +21,24 @@ admin:
   country_column: country_iso
   bearing_constraint_tier: state
 
+# Optional islands layer (named island polygons). Omit to disable — the response's
+# islands block is then null. name_column defaults to the admin name_column.
+islands:
+  layer: islands
+  name_column: name
+
+# Optional mountains layer (OSM mountain ranges + DEM-derived single-mountain
+# territories). Omit to disable — the response's mountains block is then null.
+# Smallest containing feature wins PER landform: ortus returns the most specific
+# range AND single mountain separately (e.g. mountain: Schwanberg, range: Steigerwald).
+# The column roles below default to these documented schema names when omitted.
+mountains:
+  layer: mountains
+  name_column: name           # romanized range/mountain name
+  landform_column: landform   # range | mountain
+  elevation_column: ele       # summit elevation (m); set on mountain rows, NULL on ranges
+  area_column: area_km2       # ellipsoidal area; drives "smallest containing wins"
+
 # Dataset-wide license/attribution for the gazetteer data. Optional but
 # recommended — ortus echoes it in the gazetteer response (REST + MCP) so a
 # client has the attribution it must display in the same call. The osm-admin-places
