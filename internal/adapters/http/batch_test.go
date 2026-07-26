@@ -6,9 +6,11 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -17,6 +19,7 @@ import (
 
 	"github.com/jobrunner/ortus/internal/application"
 	"github.com/jobrunner/ortus/internal/config"
+	"github.com/jobrunner/ortus/internal/domain"
 	"github.com/jobrunner/ortus/internal/ports/input"
 	"github.com/jobrunner/ortus/internal/ports/output"
 )
@@ -195,5 +198,74 @@ func TestQueryBatchGazetteer(t *testing.T) {
 	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
 	if _, ok := resp.Results[0]["gazetteer"].(map[string]any); !ok {
 		t.Errorf("item 0 should carry a gazetteer block, got %v", resp.Results[0])
+	}
+}
+
+// TestQueryBatchGazetteerDefaultOn: omitting with-gazetteer enriches by default
+// (consistent with /query's opt-out behavior).
+func TestQueryBatchGazetteerDefaultOn(t *testing.T) {
+	srv := newBatchServer(t, fakeGazetteer{loc: sampleLocality(), fix: sampleFix()}, 1000, 10000)
+	rec := doBatch(t, srv, `{"points":[{"id":"a","lon":9.93,"lat":49.79}]}`, "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body: %s)", rec.Code, rec.Body.String())
+	}
+	var resp struct {
+		Results []map[string]any `json:"results"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+	if _, ok := resp.Results[0]["gazetteer"].(map[string]any); !ok {
+		t.Errorf("omitted with-gazetteer should default ON; item 0 lacks gazetteer: %v", resp.Results[0])
+	}
+}
+
+// TestQueryBatchGazetteerOptOut: an explicit with-gazetteer=false skips enrichment.
+func TestQueryBatchGazetteerOptOut(t *testing.T) {
+	srv := newBatchServer(t, fakeGazetteer{loc: sampleLocality(), fix: sampleFix()}, 1000, 10000)
+	rec := doBatch(t, srv, `{"with-gazetteer":false,"points":[{"id":"a","lon":9.93,"lat":49.79}]}`, "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body: %s)", rec.Code, rec.Body.String())
+	}
+	var resp struct {
+		Results []map[string]any `json:"results"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+	if _, ok := resp.Results[0]["gazetteer"]; ok {
+		t.Errorf("with-gazetteer=false must skip enrichment; item 0 has a gazetteer block: %v", resp.Results[0])
+	}
+}
+
+// TestLessTileLocalityGroupsByTile verifies the enrichment sort key groups points
+// that share a 1° DEM tile contiguously (so per-point lookups reuse warm tile
+// handles), and that it is a strict, deterministic ordering.
+func TestLessTileLocalityGroupsByTile(t *testing.T) {
+	c := domain.NewWGS84Coordinate
+	// Two tiles interleaved on input; a negative-lon point checks floor (not trunc).
+	pts := []domain.Coordinate{
+		c(9.9, 49.1), c(-3.2, 40.8), c(9.1, 49.9), c(-3.9, 40.1), c(9.5, 49.5),
+	}
+	order := make([]int, len(pts))
+	for i := range order {
+		order[i] = i
+	}
+	sort.Slice(order, func(a, b int) bool { return lessTileLocality(pts[order[a]], pts[order[b]]) })
+
+	// Group each sorted point by its 1° tile; the sequence of distinct tiles must
+	// have no tile reappearing after a different one (i.e. same-tile points are contiguous).
+	seen := map[[2]int]bool{}
+	var last [2]int
+	haveLast := false
+	for _, idx := range order {
+		tile := [2]int{int(math.Floor(pts[idx].Y)), int(math.Floor(pts[idx].X))}
+		if !haveLast || tile != last {
+			if seen[tile] {
+				t.Fatalf("tile %v reappeared non-contiguously in order %v", tile, order)
+			}
+			seen[tile] = true
+			last, haveLast = tile, true
+		}
+	}
+	// Strictness: a coordinate is never less than itself.
+	if lessTileLocality(pts[0], pts[0]) {
+		t.Error("lessTileLocality must be irreflexive")
 	}
 }
