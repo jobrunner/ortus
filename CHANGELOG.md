@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1](https://github.com/jobrunner/ortus/compare/v1.1.0...v1.1.1) (2026-07-26)
+
+
+### Bug Fixes
+
+* **query:** batch gazetteer default-on + DEM tile-locality enrichment order ([c20dcfc](https://github.com/jobrunner/ortus/commit/c20dcfcd41949acee5ac012eb30047e26d1a0286))
+* **query:** default with-gazetteer on for batch (consistent with /query) ([8b4de03](https://github.com/jobrunner/ortus/commit/8b4de03da42e41bddd064530c6489e95e5bacb5b))
+
+
+### Performance Improvements
+
+* **query:** order batch gazetteer enrichment by DEM tile locality ([9355575](https://github.com/jobrunner/ortus/commit/935557543400258e6d2967399048c1a69112769e))
+
 ## [1.1.0](https://github.com/jobrunner/ortus/compare/v1.0.0...v1.1.0) (2026-07-23)
 
 
