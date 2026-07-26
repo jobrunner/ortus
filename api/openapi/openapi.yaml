@@ -230,8 +230,9 @@ paths:
         geliefert (ein Ergebnis-Objekt pro Zeile) — für sehr große Batches.
 
         Jedes Ergebnis trägt die vom Client gewählte `id` (bzw. den 0-basierten
-        Index) und entspricht sonst einer Einzelpunkt-Antwort plus `wgs84`; mit
-        `with-gazetteer: true` zusätzlich der `gazetteer`-Block (pro Punkt, teurer).
+        Index) und entspricht sonst einer Einzelpunkt-Antwort plus `wgs84` und —
+        standardmäßig (konsistent mit /query, das opt-out ist) — dem `gazetteer`-Block
+        (pro Punkt, teurer); mit `with-gazetteer: false` wird er weggelassen.
         Ein Fehler an einem einzelnen Punkt erscheint als `error`-Objekt in dessen
         Ergebnis, ohne den ganzen Batch abzubrechen.
       operationId: queryBatch
@@ -1442,7 +1443,10 @@ components:
           description: Optional — nur diese Feature-Properties zurückgeben
         with-gazetteer:
           type: boolean
-          description: Gazetteer-Anreicherung pro Punkt (Default false — der teure Pfad)
+          default: true
+          description: >-
+            Gazetteer-Anreicherung pro Punkt. Default true (konsistent mit /query,
+            das opt-out ist) — der teure Pfad; mit `false` explizit abschalten.
         points:
           type: array
           items:

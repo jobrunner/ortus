@@ -125,7 +125,7 @@ a 10 000-point batch is dramatically cheaper than 10 000 requests. Body:
 
 ```json
 { "srid": 4326, "sources": ["timezones-2026a"], "properties": ["tzid"],
-  "with-gazetteer": false,
+  "with-gazetteer": true,
   "points": [ {"id":"a","lon":13.405,"lat":52.52}, {"id":"b","x":-1876403.7,"y":3291468.8,"srid":3857} ] }
 ```
 
@@ -134,13 +134,16 @@ a 10 000-point batch is dramatically cheaper than 10 000 requests. Body:
   `id` echoed back (uniqueness is the caller's concern; omitted → 0-based index).
 - `sources` / `properties` (optional) — restrict to those source ids / return only
   those feature properties, exactly like the single-point endpoints.
-- `with-gazetteer` (optional, **default `false`**) — attach the `gazetteer` block
-  per point. This is the expensive, per-point path (not set-based); use sparingly
-  for large batches.
+- `with-gazetteer` (optional, **default `true`**, consistent with `/query` which is
+  opt-out) — attach the `gazetteer` block per point. This is the expensive,
+  per-point path (not set-based); send `false` to skip it for large PiP-only batches.
+  Points are enriched in DEM-tile order so per-point lookups keep the raster tile
+  cache warm.
 
 **Delivery.** Default is a single JSON object; each result is a single-point
-response plus `id` (and `wgs84`, and `gazetteer` when requested). A per-point
-failure is an `error` object *inside that item* — the batch never aborts.
+response plus `id`, `wgs84` and (unless `with-gazetteer:false`) the `gazetteer`
+block. A per-point failure is an `error` object *inside that item* — the batch
+never aborts.
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/query/batch \

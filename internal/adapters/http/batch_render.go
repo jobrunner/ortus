@@ -19,7 +19,7 @@ import (
 // off/unavailable. Each goroutine writes only its own index, so no synchronization
 // on the result slice is needed.
 func (s *Server) batchGazetteer(r *http.Request, req *batchRequest, wgs []domain.Coordinate, wgsOK []bool, itemErr []string) []map[string]interface{} {
-	if !req.WithGazetteer || s.gazetteer == nil {
+	if !batchWantsGazetteer(req) || s.gazetteer == nil {
 		return nil
 	}
 	ctx := r.Context()
@@ -29,13 +29,7 @@ func (s *Server) batchGazetteer(r *http.Request, req *batchRequest, wgs []domain
 	// tileset keeps a bounded open-handle LRU) and OS page cache instead of
 	// thrashing across a scattered batch. Order only affects processing — results
 	// are written by original index, so the caller's echo-id order is unchanged.
-	order := make([]int, 0, len(wgs))
-	for i := range wgs {
-		if itemErr[i] == "" && wgsOK[i] {
-			order = append(order, i)
-		}
-	}
-	sort.Slice(order, func(a, b int) bool { return lessTileLocality(wgs[order[a]], wgs[order[b]]) })
+	order := orderedByLocality(wgs, wgsOK, itemErr)
 	sem := make(chan struct{}, s.batchConcurrency)
 	var wg sync.WaitGroup
 	for _, i := range order {
@@ -57,6 +51,20 @@ func (s *Server) batchGazetteer(r *http.Request, req *batchRequest, wgs []domain
 	}
 	wg.Wait()
 	return out
+}
+
+// orderedByLocality returns the indices of enrichable points (valid WGS84 coord,
+// no per-item error) sorted by DEM tile locality, so enrichment processes
+// spatially adjacent points consecutively (warm tile cache).
+func orderedByLocality(wgs []domain.Coordinate, wgsOK []bool, itemErr []string) []int {
+	order := make([]int, 0, len(wgs))
+	for i := range wgs {
+		if itemErr[i] == "" && wgsOK[i] {
+			order = append(order, i)
+		}
+	}
+	sort.Slice(order, func(a, b int) bool { return lessTileLocality(wgs[order[a]], wgs[order[b]]) })
+	return order
 }
 
 // lessTileLocality orders coordinates so spatially-close points — and thus points

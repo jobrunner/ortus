@@ -14,11 +14,21 @@ import (
 
 // batchRequest is the POST /api/v1/query/batch body.
 type batchRequest struct {
-	SRID          int          `json:"srid"`           // default SRID for points without their own
-	Sources       []string     `json:"sources"`        // optional: restrict to these source ids
-	Properties    []string     `json:"properties"`     // optional: only these feature properties
-	WithGazetteer bool         `json:"with-gazetteer"` // opt-in gazetteer enrichment (default off for batch)
+	SRID       int      `json:"srid"`       // default SRID for points without their own
+	Sources    []string `json:"sources"`    // optional: restrict to these source ids
+	Properties []string `json:"properties"` // optional: only these feature properties
+	// WithGazetteer opts per-point gazetteer enrichment in/out. Pointer so an
+	// omitted field (nil) takes the batch default (ON, consistent with /query) and
+	// only an explicit `false` turns it off.
+	WithGazetteer *bool        `json:"with-gazetteer"`
 	Points        []batchPoint `json:"points"`
+}
+
+// batchWantsGazetteer reports whether per-point gazetteer enrichment is on. It
+// defaults to TRUE for a batch — consistent with the single-point /query endpoint,
+// which is opt-out — so a caller disables it only by sending "with-gazetteer": false.
+func batchWantsGazetteer(req *batchRequest) bool {
+	return req.WithGazetteer == nil || *req.WithGazetteer
 }
 
 // batchPoint is one coordinate with an optional caller-chosen echo id. Coordinate
