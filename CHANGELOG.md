@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0](https://github.com/jobrunner/ortus/compare/v1.1.1...v1.2.0) (2026-07-26)
+
+
+### Features
+
+* **gazetteer:** mountains block (range + single-mountain, PiP smallest-per-landform) ([40fe35a](https://github.com/jobrunner/ortus/commit/40fe35aabdd2f118f8df29da2b2154d2692099ea))
+* **gazetteer:** mountains block (range + single-mountain, PiP smallest-per-landform) ([738852a](https://github.com/jobrunner/ortus/commit/738852a7f9b89b137a56e0fe8245efb0d9bc4266))
+
 ## [1.1.1](https://github.com/jobrunner/ortus/compare/v1.1.0...v1.1.1) (2026-07-26)
 
 
