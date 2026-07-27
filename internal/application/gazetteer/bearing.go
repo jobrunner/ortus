@@ -33,18 +33,20 @@ func (s *Service) Bearing(ctx context.Context, p domain.Coordinate, pol domain.B
 		return nil, err
 	}
 	queryCountry := s.countryOf(containing)
+	ancestor, constrained := s.constraintAncestorIn(containing, pol.ConstraintTier)
+	ic := insideConstraint{country: queryCountry, ancestor: ancestor, constrained: constrained, tier: pol.ConstraintTier}
 	// "in {X}": the nearest place whose class inside-radius covers the point — i.e. we
 	// are standing IN that settlement. Decided by distance to the place point (proxy for
 	// the settlement's extent), NOT by administrative containment: a municipality polygon
 	// is large and rural, so containment wrongly reported fields/forest kilometers from a
-	// village as "in <village>" (e.g. the Schwanberg plateau, 1.8 km from Rödelsee).
-	if in, ok, inErr := s.placeInsideOf(ctx, p, pol, queryCountry); inErr != nil {
+	// village as "in <village>" (e.g. the Schwanberg plateau, 1.8 km from Rödelsee). The
+	// same country + boundary-tier guards as anchor selection still apply (see admits).
+	if in, ok, inErr := s.placeInsideOf(ctx, p, pol, ic); inErr != nil {
 		return nil, inErr
 	} else if ok {
 		return &domain.Fix{Reference: in.Place, DistanceKM: in.DistanceKM, Inside: true, Label: "in " + in.Place.Name}, nil
 	}
 	// Otherwise, a directional bearing to the most salient nearby anchor.
-	ancestor, constrained := s.constraintAncestorIn(containing, pol.ConstraintTier)
 	cands, err := s.gatherCandidates(ctx, p, pol, ancestor, constrained, queryCountry)
 	if err != nil {
 		return nil, err
@@ -56,44 +58,94 @@ func (s *Service) Bearing(ctx context.Context, p domain.Coordinate, pol domain.B
 	return s.buildFix(ctx, p, best, pol), nil
 }
 
-// insideCandidateK is how many nearest places placeInsideOf inspects: a small k > 1
-// so a nearer place that fails its (tighter) radius doesn't hide a farther place
-// whose (wider) radius does cover the point (e.g. a village node just out of reach
-// while the point is well within a nearby town/city radius).
-const insideCandidateK = 8
+// insideCandidateK is how many nearest places PER CLASS placeInsideOf inspects — a
+// few, so it can skip a nearest that fails the country/tier guards and still find a
+// qualifying one within the radius.
+const insideCandidateK = 5
 
-// placeInsideOf returns the nearest place whose class inside-radius covers p — the
-// settlement the point counts as being "in". It scans the nearest places (any class)
-// within the widest inside-radius and returns the first (nearest) that satisfies its
-// OWN class radius. ok is false when none qualify (open country / between settlements).
-func (s *Service) placeInsideOf(ctx context.Context, p domain.Coordinate, pol domain.BearingPolicy, country string) (Candidate, bool, error) {
-	maxR := 0.0
+// insideConstraint bundles the guards the "in {X}" scan applies to a candidate place:
+// same country (skipped when the query country is unknown, e.g. a point in no admin
+// polygon) and — when the boundary constraint is active — the same tier ancestor as the
+// query point. Without the tier guard, a place just across a state line could be reported
+// as the settlement you are "in"; anchor selection applies the same guards, keeping the
+// two consistent.
+type insideConstraint struct {
+	country     string
+	ancestor    int64
+	constrained bool
+	tier        string
+}
+
+// placeInsideOf returns the nearest place that covers p within ITS OWN class
+// inside-radius — the settlement the point counts as being "in". Each class is queried
+// independently within its own radius (city widest, village tightest) so a qualifying
+// town/city is never hidden behind many nearer out-of-radius villages; the overall
+// nearest qualifier wins (standing in a village names the village, not a larger town
+// whose wider radius also reaches). ok is false when no class qualifies (open country /
+// between settlements).
+func (s *Service) placeInsideOf(ctx context.Context, p domain.Coordinate, pol domain.BearingPolicy, ic insideConstraint) (Candidate, bool, error) {
+	var best Candidate
+	found := false
 	for _, c := range salienceClasses {
-		if r := pol.InsideRadiusKM(c); r > maxR {
-			maxR = r
+		r := pol.InsideRadiusKM(c)
+		if r <= 0 {
+			continue
+		}
+		cand, ok, err := s.nearestInClassWithin(ctx, p, c, r, ic)
+		if err != nil {
+			return Candidate{}, false, err
+		}
+		if ok && (!found || cand.DistanceKM < best.DistanceKM) {
+			best, found = cand, true
 		}
 	}
-	if maxR <= 0 {
-		return Candidate{}, false, nil
-	}
-	near, err := s.index.QueryKNN(ctx, s.manifest.PlacesLayer, p, insideCandidateK, maxR, nil)
+	return best, found, nil
+}
+
+// nearestInClassWithin returns the nearest place of class c within radiusKM of p that
+// passes the inside constraint. QueryKNN orders results nearest-first (SpatialIndex
+// contract), so scanning while keeping the minimum is equivalent to taking the first
+// admitted hit — the loop continues only to skip candidates the constraint rejects. The
+// explicit distance check does not rely on the index honoring the KNN radius bound.
+func (s *Service) nearestInClassWithin(ctx context.Context, p domain.Coordinate, c domain.PlaceClass, radiusKM float64, ic insideConstraint) (Candidate, bool, error) {
+	near, err := s.index.QueryKNN(ctx, s.manifest.PlacesLayer, p, insideCandidateK, radiusKM,
+		&output.Filter{Column: s.manifest.RankColumn, Values: []any{c.String()}})
 	if err != nil {
 		return Candidate{}, false, err
 	}
+	var best Candidate
+	found := false
 	for i := range near {
+		d := near[i].DistanceKM
+		if d > radiusKM {
+			continue
+		}
 		place, ok := s.placeFromFeature(&near[i].Feature)
 		if !ok {
 			continue
 		}
-		// Same-country guard (as for anchors): don't name a settlement across a border.
-		if country != "" && place.CountryISO != country {
-			continue
+		admit, admitErr := s.admits(ctx, place, ic)
+		if admitErr != nil {
+			return Candidate{}, false, admitErr
 		}
-		if r := pol.InsideRadiusKM(place.Class); r > 0 && near[i].DistanceKM <= r {
-			return Candidate{Place: place, DistanceKM: near[i].DistanceKM}, true, nil
+		if admit && (!found || d < best.DistanceKM) {
+			best, found = Candidate{Place: place, DistanceKM: d}, true
 		}
 	}
-	return Candidate{}, false, nil
+	return best, found, nil
+}
+
+// admits reports whether a place may be named as the settlement the point is "in":
+// same country (skipped when the query country is unknown), and — when constrained —
+// sharing the query point's boundary-tier ancestor.
+func (s *Service) admits(ctx context.Context, place domain.Place, ic insideConstraint) (bool, error) {
+	if ic.country != "" && place.CountryISO != ic.country {
+		return false, nil
+	}
+	if !ic.constrained {
+		return true, nil
+	}
+	return s.sameTier(ctx, place.AdminID, ic.ancestor, ic.tier)
 }
 
 // gatherCandidates collects the constraint-satisfying candidates of each class, up to

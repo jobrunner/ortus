@@ -42,7 +42,7 @@ func noConstraint() domain.BearingPolicy {
 func TestBearingInsideByDistance(t *testing.T) {
 	// A village whose node is well within its inside-radius (~0.36 km < 0.8 km) → the
 	// point counts as "in <village>": Latin "in", no direction, Inside=true.
-	idx := fakeIndex{knnAll: []domain.Feature{placeFeature("village", "Rödelsee", 0, 10.005)}}
+	idx := fakeIndex{knn: map[string][]domain.Feature{"village": {placeFeature("village", "Rödelsee", 0, 10.005)}}}
 	svc := NewService(idx, testManifest(), nil, nil, true)
 
 	fix, err := svc.Bearing(context.Background(), domain.NewWGS84Coordinate(10.0, 50.0), noConstraint())
@@ -60,8 +60,10 @@ func TestBearingNotInsideBeyondRadius(t *testing.T) {
 	// directional bearing to the salient city. (Old admin-containment logic wrongly
 	// said "in <village>" here.)
 	idx := fakeIndex{
-		knnAll: []domain.Feature{placeFeature("village", "Rödelsee", 0, 10.025)}, // ~1.79 km E
-		knn:    map[string][]domain.Feature{"city": {placeFeature("city", "Bigtown", 0, 9.9)}},
+		knn: map[string][]domain.Feature{
+			"village": {placeFeature("village", "Rödelsee", 0, 10.025)}, // ~1.79 km E, beyond 0.8 km
+			"city":    {placeFeature("city", "Bigtown", 0, 9.9)},        // salient anchor for the fallback
+		},
 	}
 	svc := NewService(idx, testManifest(), nil, nil, true)
 
@@ -117,9 +119,12 @@ func TestBearingReachExclusion(t *testing.T) {
 }
 
 func TestBearingInsideLabel(t *testing.T) {
-	// A place inside the InsideLabelKM threshold gets a directionless label.
+	// The directionless "prope" path: the anchor is beyond its inside-radius (so NOT
+	// "in X") yet within InsideLabelKM (1 km), where a compass bearing would be noise.
+	// Smallville sits ~0.93 km away — outside the 0.8 km village inside-radius but
+	// inside the 1 km prope threshold.
 	idx := fakeIndex{knn: map[string][]domain.Feature{
-		"village": {placeFeature("village", "Smallville", 0, 10.005)}, // ~0.36 km
+		"village": {placeFeature("village", "Smallville", 0, 10.013)}, // ~0.93 km
 	}}
 	svc := NewService(idx, testManifest(), nil, nil, true)
 
@@ -131,10 +136,10 @@ func TestBearingInsideLabel(t *testing.T) {
 		t.Errorf("label = %q, want 'prope Smallville'", fix.Label)
 	}
 	if fix.Compass != "" {
-		t.Errorf("compass = %q, want empty (inside threshold)", fix.Compass)
+		t.Errorf("compass = %q, want empty (inside prope threshold)", fix.Compass)
 	}
 	if fix.Inside {
-		t.Error("Inside = true, want false (near but not within the anchor's admin unit)")
+		t.Error("Inside = true, want false (beyond the village inside-radius)")
 	}
 }
 
@@ -146,9 +151,10 @@ func TestBearingAdminContainmentNoLongerForcesInside(t *testing.T) {
 	// "in Ochsenfurt" here — the same class of bug as a point 15 km inside a large
 	// municipality being reported as "in <town>".)
 	idx := fakeIndex{
-		knn:    map[string][]domain.Feature{"city": {placeFeature("city", "Ochsenfurt", 42, 10.05)}},
-		knnAll: []domain.Feature{placeFeature("city", "Ochsenfurt", 42, 10.05)}, // ~3.6 km > 3 km radius
-		pip:    []domain.Feature{adminFeatureID(42, "8", "Ochsenfurt")},         // query point ∈ fid 42
+		// ~3.6 km E — beyond the 3 km city inside-radius, so placeInsideOf rejects it and
+		// the fix falls through to a directional bearing (same fixture serves both paths).
+		knn: map[string][]domain.Feature{"city": {placeFeature("city", "Ochsenfurt", 42, 10.05)}},
+		pip: []domain.Feature{adminFeatureID(42, "8", "Ochsenfurt")}, // query point ∈ fid 42
 	}
 	svc := NewService(idx, testManifest(), nil, nil, true)
 

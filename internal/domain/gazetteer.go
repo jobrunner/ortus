@@ -182,10 +182,12 @@ type Fix struct {
 	Azimuth    float64 // degrees, 0=N, 90=E (reference→point)
 	Compass    string
 	Label      string
-	// Inside is true when the query point lies within the reference's own
-	// administrative unit — i.e. we are IN that place ("in Ochsenfurt"), not merely
-	// near it ("prope Ochsenfurt"). Decided by containment, not distance, so it holds
-	// even far from a large place's center node. Azimuth/Compass are unset when Inside.
+	// Inside is true when the query point lies IN the reference settlement
+	// ("in Ochsenfurt"), not merely near it ("prope Ochsenfurt"). Decided by
+	// class-scaled proximity — the point is within the reference's inside-radius (a
+	// proxy for the settlement's extent: city far, village close), and the reference
+	// is the nearest such place — NOT by administrative containment. Azimuth/Compass
+	// are unset when Inside.
 	Inside bool
 }
 

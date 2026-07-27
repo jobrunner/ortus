@@ -196,11 +196,14 @@ is WGS84; a **projected `srid` (e.g. 3857) is reprojected** to WGS84 before the
 lookup — only an `srid` that can't be transformed to WGS84 is rejected (`422`).
 
 **"in X" vs "prope X".** The bearing distinguishes being *inside* a place from being
-*near* it by **proximity to the nearest place**, class-scaled: `bearing.inside` is
-`true` (label `"in Würzburg"`) when the point lies within the nearest place's
-inside-radius — a proxy for the settlement's extent, since the dataset has place
-*points*, not built-up polygons (defaults: city 3 km, town 1.5 km, village 0.8 km,
-tunable via `gazetteer.bearing.inside_radius_*`). This deliberately does **not** use
+*near* it by **proximity to a place, class-scaled**: `bearing.inside` is `true`
+(label `"in Würzburg"`) when the point lies within a place's inside-radius — a proxy
+for the settlement's extent, since the dataset has place *points*, not built-up
+polygons. Each class is checked within its own radius and the nearest qualifier wins
+(so a point in a village names the village even if a larger town's wider radius also
+reaches, and the chosen place is not necessarily the nearest place overall). Defaults:
+city 3 km, town 1.5 km, village 0.8 km — tunable via
+`gazetteer.bearing.inside_radius_city_km` / `…_town_km` / `…_village_km`. This deliberately does **not** use
 administrative containment: a municipality polygon is large and rural, so containment
 reported fields and forest kilometres from a village as "in <village>" — e.g. a point
 on a mountain plateau 1.8 km from the village it administratively belongs to. When the

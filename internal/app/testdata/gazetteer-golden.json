@@ -145,11 +145,11 @@
       }
     ],
     "bearing": {
-      "label": "in Wertheim",
-      "reference": "Wertheim",
+      "label": "30 km W Würzburg",
+      "reference": "Würzburg",
       "name_native": "",
       "name_source": "latin-osm",
-      "inside": true
+      "inside": false
     }
   },
   {
