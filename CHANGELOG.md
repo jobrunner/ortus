@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1](https://github.com/jobrunner/ortus/compare/v1.2.0...v1.2.1) (2026-07-27)
+
+
+### Bug Fixes
+
+* **gazetteer:** dedup islands by name (one entry per distinct island) ([46e32dc](https://github.com/jobrunner/ortus/commit/46e32dc723b69f0aef32712ee110e3124bb2573a))
+* **gazetteer:** dedup islands by name (one entry per distinct island) ([007c3a7](https://github.com/jobrunner/ortus/commit/007c3a703d826e7a35c800594496fa3a906be6f7))
+
 ## [1.2.0](https://github.com/jobrunner/ortus/compare/v1.1.1...v1.2.0) (2026-07-26)
 
 
