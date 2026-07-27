@@ -39,6 +39,41 @@ func noConstraint() domain.BearingPolicy {
 	return pol
 }
 
+func TestBearingInsideByDistance(t *testing.T) {
+	// A village whose node is well within its inside-radius (~0.36 km < 0.8 km) → the
+	// point counts as "in <village>": Latin "in", no direction, Inside=true.
+	idx := fakeIndex{knnAll: []domain.Feature{placeFeature("village", "Rödelsee", 0, 10.005)}}
+	svc := NewService(idx, testManifest(), nil, nil, true)
+
+	fix, err := svc.Bearing(context.Background(), domain.NewWGS84Coordinate(10.0, 50.0), noConstraint())
+	if err != nil {
+		t.Fatalf("Bearing: %v", err)
+	}
+	if !fix.Inside || fix.Label != "in Rödelsee" || fix.Compass != "" {
+		t.Errorf("got label=%q inside=%v compass=%q, want 'in Rödelsee'/true/no-compass", fix.Label, fix.Inside, fix.Compass)
+	}
+}
+
+func TestBearingNotInsideBeyondRadius(t *testing.T) {
+	// The Schwanberg case: the nearest village is ~1.8 km away — beyond the 0.8 km
+	// village radius — so it is NOT "in <village>"; the fix falls through to a
+	// directional bearing to the salient city. (Old admin-containment logic wrongly
+	// said "in <village>" here.)
+	idx := fakeIndex{
+		knnAll: []domain.Feature{placeFeature("village", "Rödelsee", 0, 10.025)}, // ~1.79 km E
+		knn:    map[string][]domain.Feature{"city": {placeFeature("city", "Bigtown", 0, 9.9)}},
+	}
+	svc := NewService(idx, testManifest(), nil, nil, true)
+
+	fix, err := svc.Bearing(context.Background(), domain.NewWGS84Coordinate(10.0, 50.0), noConstraint())
+	if err != nil {
+		t.Fatalf("Bearing: %v", err)
+	}
+	if fix.Inside || fix.Reference.Name != "Bigtown" || fix.Compass != "E" {
+		t.Errorf("got label=%q inside=%v ref=%q, want directional to Bigtown (not 'in Rödelsee')", fix.Label, fix.Inside, fix.Reference.Name)
+	}
+}
+
 func TestBearingClassPrecedence(t *testing.T) {
 	// All within reach but beyond the 5 km proximity override → the most salient
 	// (city) wins outright over town and village.
@@ -103,15 +138,17 @@ func TestBearingInsideLabel(t *testing.T) {
 	}
 }
 
-func TestBearingInsideAdminUnit(t *testing.T) {
-	// Containment, not distance: the query point lies inside the anchor's own admin
-	// unit (fid 42), so the label is "in X" even though the anchor node is ~3.6 km
-	// away — the case a distance threshold would wrongly render directional.
+func TestBearingAdminContainmentNoLongerForcesInside(t *testing.T) {
+	// Regression guard for the fix: being inside the anchor's admin unit no longer
+	// yields "in X". The city node is ~3.6 km away — beyond its 3 km inside-radius —
+	// so although the point lies in Ochsenfurt's admin polygon (fid 42), the label is
+	// directional, not "in Ochsenfurt". (Old admin-containment logic wrongly said
+	// "in Ochsenfurt" here — the same class of bug as a point 15 km inside a large
+	// municipality being reported as "in <town>".)
 	idx := fakeIndex{
-		knn: map[string][]domain.Feature{
-			"city": {placeFeature("city", "Ochsenfurt", 42, 10.05)}, // ~3.6 km E of the query
-		},
-		pip: []domain.Feature{adminFeatureID(42, "8", "Ochsenfurt")}, // query point ∈ fid 42
+		knn:    map[string][]domain.Feature{"city": {placeFeature("city", "Ochsenfurt", 42, 10.05)}},
+		knnAll: []domain.Feature{placeFeature("city", "Ochsenfurt", 42, 10.05)}, // ~3.6 km > 3 km radius
+		pip:    []domain.Feature{adminFeatureID(42, "8", "Ochsenfurt")},         // query point ∈ fid 42
 	}
 	svc := NewService(idx, testManifest(), nil, nil, true)
 
@@ -119,14 +156,11 @@ func TestBearingInsideAdminUnit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Bearing: %v", err)
 	}
-	if !fix.Inside {
-		t.Error("Inside = false, want true (query point is within the anchor's admin unit)")
+	if fix.Inside {
+		t.Error("Inside = true, want false (3.6 km exceeds the city inside-radius; admin containment must not force 'in')")
 	}
-	if fix.Label != "in Ochsenfurt" {
-		t.Errorf("label = %q, want 'in Ochsenfurt'", fix.Label)
-	}
-	if fix.Compass != "" {
-		t.Errorf("compass = %q, want empty when inside", fix.Compass)
+	if fix.Compass == "" || fix.Label == "in Ochsenfurt" {
+		t.Errorf("label = %q compass = %q, want a directional bearing to Ochsenfurt", fix.Label, fix.Compass)
 	}
 }
 

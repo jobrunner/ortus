@@ -95,6 +95,11 @@ func (a *App) buildGazetteer(ctx context.Context) error {
 		InsideLabelKM:     b.InsideLabelKM,
 		CompassPoints:     b.CompassPoints,
 		CandidateRadiusKM: candidateRadiusKM, // > 0 only for composite; widens the candidate pool
+		InsideRadius: map[domain.PlaceClass]float64{
+			domain.ClassVillage: b.InsideRadiusVillageKM,
+			domain.ClassTown:    b.InsideRadiusTownKM,
+			domain.ClassCity:    b.InsideRadiusCityKM,
+		},
 	}
 	a.Logger.Info("gazetteer enabled",
 		"geopackage", cfg.GeoPackagePath,

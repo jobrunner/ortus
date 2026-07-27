@@ -311,7 +311,14 @@ type GazetteerBearingConfig struct {
 	ReachCityKM     float64 `mapstructure:"reach_city_km"`
 	PreferNearestKM float64 `mapstructure:"prefer_nearest_km"` // a town-or-larger anchor within this radius wins outright
 	InsideLabelKM   float64 `mapstructure:"inside_label_km"`
-	CompassPoints   int     `mapstructure:"compass_points"` // 8 or 16
+	// Inside radii: the point counts as "in {place}" when the nearest place of a class
+	// is within its radius (proxy for settlement extent — city reads far, village close).
+	// Replaces admin-containment for the "in X" decision, which wrongly reported fields
+	// kilometers from a village as "in <village>".
+	InsideRadiusVillageKM float64 `mapstructure:"inside_radius_village_km"`
+	InsideRadiusTownKM    float64 `mapstructure:"inside_radius_town_km"`
+	InsideRadiusCityKM    float64 `mapstructure:"inside_radius_city_km"`
+	CompassPoints         int     `mapstructure:"compass_points"` // 8 or 16
 	// Salience selects the anchor-selection strategy: "composite" (default —
 	// prominence-vs-proximity score; uses the enriched population/capital/wikidata
 	// columns, falls back to class where they are absent) or "rank" (the original
@@ -450,6 +457,9 @@ func Defaults() {
 	viper.SetDefault("gazetteer.bearing.reach_city_km", 60.0)
 	viper.SetDefault("gazetteer.bearing.prefer_nearest_km", 5.0)
 	viper.SetDefault("gazetteer.bearing.inside_label_km", 1.0)
+	viper.SetDefault("gazetteer.bearing.inside_radius_village_km", 0.8)
+	viper.SetDefault("gazetteer.bearing.inside_radius_town_km", 1.5)
+	viper.SetDefault("gazetteer.bearing.inside_radius_city_km", 3.0)
 	viper.SetDefault("gazetteer.bearing.compass_points", 8)
 	// Anchor salience: composite (prominence-vs-proximity) by default; per-field
 	// composite knobs default to the calibrated "balanced" profile in app wiring.

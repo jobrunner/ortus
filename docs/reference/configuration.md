@@ -196,6 +196,9 @@ gazetteer:
     reach_city_km: 60
     prefer_nearest_km: 5
     inside_label_km: 1
+    inside_radius_village_km: 0.8   # "in <village>" when the nearest place (village) is within this
+    inside_radius_town_km: 1.5
+    inside_radius_city_km: 3.0
     compass_points: 8
     salience: composite         # composite (default) | rank
     composite:                  # composite-strategy tuning (calibrated defaults shown)

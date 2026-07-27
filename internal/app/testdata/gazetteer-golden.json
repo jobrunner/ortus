@@ -64,11 +64,11 @@
       }
     ],
     "bearing": {
-      "label": "2 km NE Lefkosia - Lefkosa",
+      "label": "in Lefkosia - Lefkosa",
       "reference": "Lefkosia - Lefkosa",
       "name_native": "Λευκωσία - Lefkoşa",
       "name_source": "translit-el-843",
-      "inside": false
+      "inside": true
     }
   },
   {
@@ -145,11 +145,11 @@
       }
     ],
     "bearing": {
-      "label": "30 km W Würzburg",
-      "reference": "Würzburg",
+      "label": "in Wertheim",
+      "reference": "Wertheim",
       "name_native": "",
       "name_source": "latin-osm",
-      "inside": false
+      "inside": true
     }
   },
   {
@@ -496,11 +496,11 @@
       }
     ],
     "bearing": {
-      "label": "in Kalba",
+      "label": "6.5 km S Kalba",
       "reference": "Kalba",
       "name_native": "كلباء",
       "name_source": "osm-en",
-      "inside": true
+      "inside": false
     }
   },
   {
@@ -541,11 +541,11 @@
       }
     ],
     "bearing": {
-      "label": "in Khor Fakkan",
+      "label": "4 km W Khor Fakkan",
       "reference": "Khor Fakkan",
       "name_native": "خورفكان",
       "name_source": "osm-en",
-      "inside": true
+      "inside": false
     }
   },
   {
@@ -640,11 +640,11 @@
       }
     ],
     "bearing": {
-      "label": "1.5 km NW Ajman",
+      "label": "in Ajman",
       "reference": "Ajman",
       "name_native": "عجمان",
       "name_source": "osm-en",
-      "inside": false
+      "inside": true
     }
   },
   {
@@ -685,11 +685,11 @@
       }
     ],
     "bearing": {
-      "label": "3 km N Ajman",
+      "label": "in Ajman",
       "reference": "Ajman",
       "name_native": "عجمان",
       "name_source": "osm-en",
-      "inside": false
+      "inside": true
     }
   },
   {
@@ -1054,11 +1054,11 @@
       }
     ],
     "bearing": {
-      "label": "10 km W Athina",
-      "reference": "Athina",
-      "name_native": "Αθήνα",
+      "label": "in Peiraias",
+      "reference": "Peiraias",
+      "name_native": "Πειραιάς",
       "name_source": "translit-el-843",
-      "inside": false
+      "inside": true
     }
   },
   {
@@ -1108,11 +1108,11 @@
       }
     ],
     "bearing": {
-      "label": "44 km W Jerusalem",
-      "reference": "Jerusalem",
-      "name_native": "ירושלים",
+      "label": "in Ness Ziona",
+      "reference": "Ness Ziona",
+      "name_native": "נס ציונה",
       "name_source": "osm-en",
-      "inside": false
+      "inside": true
     }
   },
   {
@@ -1162,11 +1162,11 @@
       }
     ],
     "bearing": {
-      "label": "42 km W Jerusalem",
-      "reference": "Jerusalem",
-      "name_native": "ירושלים",
+      "label": "in Gibton",
+      "reference": "Gibton",
+      "name_native": "גיבתון",
       "name_source": "osm-en",
-      "inside": false
+      "inside": true
     }
   },
   {
@@ -1216,11 +1216,11 @@
       }
     ],
     "bearing": {
-      "label": "20 km E Kiryat Shmona",
-      "reference": "Kiryat Shmona",
-      "name_native": "קרית שמונה",
+      "label": "in Majdal Shams",
+      "reference": "Majdal Shams",
+      "name_native": "مجدل شمس",
       "name_source": "osm-en",
-      "inside": false
+      "inside": true
     }
   },
   {
@@ -1270,11 +1270,11 @@
       }
     ],
     "bearing": {
-      "label": "in Buq'atha",
+      "label": "1 km N Buq'atha",
       "reference": "Buq'atha",
       "name_native": "بقعاثا",
       "name_source": "osm-en",
-      "inside": true
+      "inside": false
     }
   },
   {
@@ -1459,11 +1459,11 @@
       }
     ],
     "bearing": {
-      "label": "in Kamennogorsk",
+      "label": "15 km NE Kamennogorsk",
       "reference": "Kamennogorsk",
       "name_native": "Каменногорск",
       "name_source": "translit-ru-bgn",
-      "inside": true
+      "inside": false
     }
   },
   {
@@ -1558,11 +1558,11 @@
       }
     ],
     "bearing": {
-      "label": "2.5 km N Vyborg",
+      "label": "in Vyborg",
       "reference": "Vyborg",
       "name_native": "Выборг",
       "name_source": "translit-ru-bgn",
-      "inside": false
+      "inside": true
     }
   }
 ]

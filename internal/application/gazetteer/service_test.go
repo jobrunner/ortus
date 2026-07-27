@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"math"
+	"sort"
 	"testing"
 
 	"github.com/jobrunner/ortus/internal/domain"
@@ -18,17 +19,33 @@ type fakeIndex struct {
 	pip      []domain.Feature
 	pipErr   error
 	knn      map[string][]domain.Feature
+	knnAll   []domain.Feature // returned for a nil (all-class) filter — used by placeInsideOf
 	knnErr   error
 	chains   map[int64][]output.AdminRow
 	chainErr error
 }
 
-func (f fakeIndex) QueryKNN(_ context.Context, _ string, p domain.Coordinate, _ int, _ float64, filter *output.Filter) ([]output.NearFeature, error) {
+func (f fakeIndex) QueryKNN(_ context.Context, _ string, p domain.Coordinate, k int, maxKM float64, filter *output.Filter) ([]output.NearFeature, error) {
 	if f.knnErr != nil {
 		return nil, f.knnErr
 	}
 	if filter == nil || len(filter.Values) == 0 {
-		return nil, nil
+		// All-class nearest (placeInsideOf): sort nearest-first and honor maxKM + k,
+		// as the real index does, so the "in {X}" distance-gate is exercised faithfully.
+		out := make([]output.NearFeature, 0, len(f.knnAll))
+		for i := range f.knnAll {
+			coord, _ := parsePointWKT(f.knnAll[i].Geometry.WKT)
+			d := equirectKM(p, coord)
+			if maxKM > 0 && d > maxKM {
+				continue
+			}
+			out = append(out, output.NearFeature{Feature: f.knnAll[i], DistanceKM: d})
+		}
+		sort.Slice(out, func(i, j int) bool { return out[i].DistanceKM < out[j].DistanceKM })
+		if k > 0 && len(out) > k {
+			out = out[:k]
+		}
+		return out, nil
 	}
 	key, _ := filter.Values[0].(string)
 	feats := f.knn[key]

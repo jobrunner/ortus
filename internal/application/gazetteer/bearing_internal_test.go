@@ -81,20 +81,17 @@ func TestBuildFixLabelThreshold(t *testing.T) {
 	ref := domain.Place{Name: "Würzburg", At: domain.NewWGS84Coordinate(9.93, 49.79)}
 	p := domain.NewWGS84Coordinate(10.10, 49.79) // due east of ref, so Azimuth is well-defined
 
-	// inside -> "in X", no direction.
-	if fx := svc.buildFix(context.Background(), p, Candidate{Place: ref, DistanceKM: 20}, pol, true); !fx.Inside || fx.Label != "in Würzburg" {
-		t.Errorf("inside: label=%q inside=%v, want 'in Würzburg'/true", fx.Label, fx.Inside)
-	}
-	// outside AND nearer than InsideLabelKM -> "prope X", no azimuth/direction.
-	if fx := svc.buildFix(context.Background(), p, Candidate{Place: ref, DistanceKM: 0.5}, pol, false); fx.Label != "prope Würzburg" || fx.Compass != "" {
+	// nearer than InsideLabelKM -> "prope X", no azimuth/direction. (The "in X" case is
+	// decided earlier by placeInsideOf, not buildFix — see TestBearingInsideByDistance.)
+	if fx := svc.buildFix(context.Background(), p, Candidate{Place: ref, DistanceKM: 0.5}, pol); fx.Label != "prope Würzburg" || fx.Compass != "" {
 		t.Errorf("near: label=%q compass=%q, want 'prope Würzburg'/no compass", fx.Label, fx.Compass)
 	}
 	// exactly at InsideLabelKM is NOT "near" (boundary is <, not <=) -> directional.
-	if fx := svc.buildFix(context.Background(), p, Candidate{Place: ref, DistanceKM: pol.InsideLabelKM}, pol, false); fx.Compass == "" || fx.Label == "prope Würzburg" {
+	if fx := svc.buildFix(context.Background(), p, Candidate{Place: ref, DistanceKM: pol.InsideLabelKM}, pol); fx.Compass == "" || fx.Label == "prope Würzburg" {
 		t.Errorf("at threshold should be directional, got label=%q compass=%q", fx.Label, fx.Compass)
 	}
 	// clearly outside -> directional label with a compass point.
-	if fx := svc.buildFix(context.Background(), p, Candidate{Place: ref, DistanceKM: 12}, pol, false); fx.Compass == "" || fx.Label == "prope Würzburg" {
+	if fx := svc.buildFix(context.Background(), p, Candidate{Place: ref, DistanceKM: 12}, pol); fx.Compass == "" || fx.Label == "prope Würzburg" {
 		t.Errorf("far: expected directional label, got label=%q compass=%q", fx.Label, fx.Compass)
 	}
 }
