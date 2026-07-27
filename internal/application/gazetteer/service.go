@@ -253,12 +253,20 @@ func (s *Service) Islands(ctx context.Context, p domain.Coordinate) ([]domain.Is
 		return nil, err
 	}
 	var islands []domain.Island
+	seen := make(map[string]bool)
 	for i := range features {
 		f := &features[i]
 		name := f.GetStringProperty(s.manifest.IslandsNameColumn)
-		if name == "" {
-			continue // coverage fills / unnamed polygons carry no island name
+		// Skip unnamed coverage fills, and report each island once per distinct name:
+		// a point can lie on several NESTED islands (islet within an archipelago), but
+		// those have different names. Two same-name polygons are always the same island
+		// duplicated in the data (e.g. two OSM objects for La Palma), never a meaningful
+		// second result — the property-level PiP dedup misses them because they differ
+		// by osm_id.
+		if name == "" || seen[name] {
+			continue
 		}
+		seen[name] = true
 		islands = append(islands, domain.Island{
 			Name:       name,
 			NameNative: f.GetStringProperty(s.manifest.NameNativeColumn),

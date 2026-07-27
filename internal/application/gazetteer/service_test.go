@@ -175,7 +175,7 @@ func TestIslandsResolvesContainingIslands(t *testing.T) {
 	// PiP returns the island polygon(s) containing the point (arbitrary order);
 	// Islands names them, orders by name, and carries native/source provenance.
 	idx := fakeIndex{pip: []domain.Feature{
-		islandFeature("Sylt", "", "latin-osm"),
+		islandFeature("Sylt", "Söl'ring", "latin-osm"),
 		islandFeature("Amrum", "", "latin-osm"),
 		islandFeature("", "", ""), // unnamed fill → skipped
 	}}
@@ -191,8 +191,30 @@ func TestIslandsResolvesContainingIslands(t *testing.T) {
 	if got[0].Name != "Amrum" || got[1].Name != "Sylt" {
 		t.Errorf("islands order = [%q %q], want [Amrum Sylt] (name-sorted)", got[0].Name, got[1].Name)
 	}
+	if got[1].NameNative != "Söl'ring" {
+		t.Errorf("Sylt name_native = %q, want Söl'ring", got[1].NameNative)
+	}
 	if got[1].NameSource.Code != "latin-osm" {
 		t.Errorf("name source = %q, want latin-osm", got[1].NameSource.Code)
+	}
+}
+
+func TestIslandsDedupSameName(t *testing.T) {
+	// Two polygons for the same island (e.g. two OSM objects for La Palma) both
+	// cover the point; the property-level PiP dedup misses them (different osm_id),
+	// so the service must collapse them to a single entry per distinct name.
+	idx := fakeIndex{pip: []domain.Feature{
+		islandFeature("La Palma", "", "latin-osm"),
+		islandFeature("La Palma", "", "latin-osm"),
+	}}
+	svc := NewService(idx, islandsManifest(), nil, nil, true)
+
+	got, err := svc.Islands(context.Background(), domain.NewWGS84Coordinate(-17.8849, 28.7547))
+	if err != nil {
+		t.Fatalf("Islands: %v", err)
+	}
+	if len(got) != 1 || got[0].Name != "La Palma" {
+		t.Fatalf("islands = %+v, want a single La Palma entry", got)
 	}
 }
 
