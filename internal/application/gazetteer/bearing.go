@@ -26,19 +26,27 @@ func (s *Service) Bearing(ctx context.Context, p domain.Coordinate, pol domain.B
 	if err := requireWGS84(p); err != nil {
 		return nil, err
 	}
-	// One point-in-polygon over the admin layer serves BOTH the boundary constraint
-	// (which tier ancestor contains the point) and the in/prope decision (is the point
-	// inside the anchor's own admin unit) — so we query it once, not twice.
+	// The admin point-in-polygon gives the query's country (same-country anchor guard)
+	// and the boundary-constraint tier ancestor.
 	containing, err := s.index.PointInPolygon(ctx, s.manifest.AdminLayer, p)
 	if err != nil {
 		return nil, err
 	}
-	ancestor, constrained := s.constraintAncestorIn(containing, pol.ConstraintTier)
-	// Requirement: a bearing anchor must lie in the same country as the query point.
-	// The state-tier constraint implies this where it applies, but not where the point
-	// has no state ancestor — and the composite candidate radius is wide enough to reach
-	// across a border — so enforce it explicitly from the point's own containing country.
 	queryCountry := s.countryOf(containing)
+	ancestor, constrained := s.constraintAncestorIn(containing, pol.ConstraintTier)
+	ic := insideConstraint{country: queryCountry, ancestor: ancestor, constrained: constrained, tier: pol.ConstraintTier}
+	// "in {X}": the nearest place whose class inside-radius covers the point — i.e. we
+	// are standing IN that settlement. Decided by distance to the place point (proxy for
+	// the settlement's extent), NOT by administrative containment: a municipality polygon
+	// is large and rural, so containment wrongly reported fields/forest kilometers from a
+	// village as "in <village>" (e.g. the Schwanberg plateau, 1.8 km from Rödelsee). The
+	// same country + boundary-tier guards as anchor selection still apply (see admits).
+	if in, ok, inErr := s.placeInsideOf(ctx, p, pol, ic); inErr != nil {
+		return nil, inErr
+	} else if ok {
+		return &domain.Fix{Reference: in.Place, DistanceKM: in.DistanceKM, Inside: true, Label: "in " + in.Place.Name}, nil
+	}
+	// Otherwise, a directional bearing to the most salient nearby anchor.
 	cands, err := s.gatherCandidates(ctx, p, pol, ancestor, constrained, queryCountry)
 	if err != nil {
 		return nil, err
@@ -47,8 +55,97 @@ func (s *Service) Bearing(ctx context.Context, p domain.Coordinate, pol domain.B
 	if !ok {
 		return nil, fmt.Errorf("bearing (%v): %w", p, domain.ErrNotFound)
 	}
-	inside := containsAdminUnit(containing, best.Place.AdminID)
-	return s.buildFix(ctx, p, best, pol, inside), nil
+	return s.buildFix(ctx, p, best, pol), nil
+}
+
+// insideCandidateK is how many nearest places PER CLASS placeInsideOf inspects — a
+// few, so it can skip a nearest that fails the country/tier guards and still find a
+// qualifying one within the radius.
+const insideCandidateK = 5
+
+// insideConstraint bundles the guards the "in {X}" scan applies to a candidate place:
+// same country (skipped when the query country is unknown, e.g. a point in no admin
+// polygon) and — when the boundary constraint is active — the same tier ancestor as the
+// query point. Without the tier guard, a place just across a state line could be reported
+// as the settlement you are "in"; anchor selection applies the same guards, keeping the
+// two consistent.
+type insideConstraint struct {
+	country     string
+	ancestor    int64
+	constrained bool
+	tier        string
+}
+
+// placeInsideOf returns the nearest place that covers p within ITS OWN class
+// inside-radius — the settlement the point counts as being "in". Each class is queried
+// independently within its own radius (city widest, village tightest) so a qualifying
+// town/city is never hidden behind many nearer out-of-radius villages; the overall
+// nearest qualifier wins (standing in a village names the village, not a larger town
+// whose wider radius also reaches). ok is false when no class qualifies (open country /
+// between settlements).
+func (s *Service) placeInsideOf(ctx context.Context, p domain.Coordinate, pol domain.BearingPolicy, ic insideConstraint) (Candidate, bool, error) {
+	var best Candidate
+	found := false
+	for _, c := range salienceClasses {
+		r := pol.InsideRadiusKM(c)
+		if r <= 0 {
+			continue
+		}
+		cand, ok, err := s.nearestInClassWithin(ctx, p, c, r, ic)
+		if err != nil {
+			return Candidate{}, false, err
+		}
+		if ok && (!found || cand.DistanceKM < best.DistanceKM) {
+			best, found = cand, true
+		}
+	}
+	return best, found, nil
+}
+
+// nearestInClassWithin returns the nearest place of class c within radiusKM of p that
+// passes the inside constraint. QueryKNN orders results nearest-first (SpatialIndex
+// contract), so scanning while keeping the minimum is equivalent to taking the first
+// admitted hit — the loop continues only to skip candidates the constraint rejects. The
+// explicit distance check does not rely on the index honoring the KNN radius bound.
+func (s *Service) nearestInClassWithin(ctx context.Context, p domain.Coordinate, c domain.PlaceClass, radiusKM float64, ic insideConstraint) (Candidate, bool, error) {
+	near, err := s.index.QueryKNN(ctx, s.manifest.PlacesLayer, p, insideCandidateK, radiusKM,
+		&output.Filter{Column: s.manifest.RankColumn, Values: []any{c.String()}})
+	if err != nil {
+		return Candidate{}, false, err
+	}
+	var best Candidate
+	found := false
+	for i := range near {
+		d := near[i].DistanceKM
+		if d > radiusKM {
+			continue
+		}
+		place, ok := s.placeFromFeature(&near[i].Feature)
+		if !ok {
+			continue
+		}
+		admit, admitErr := s.admits(ctx, place, ic)
+		if admitErr != nil {
+			return Candidate{}, false, admitErr
+		}
+		if admit && (!found || d < best.DistanceKM) {
+			best, found = Candidate{Place: place, DistanceKM: d}, true
+		}
+	}
+	return best, found, nil
+}
+
+// admits reports whether a place may be named as the settlement the point is "in":
+// same country (skipped when the query country is unknown), and — when constrained —
+// sharing the query point's boundary-tier ancestor.
+func (s *Service) admits(ctx context.Context, place domain.Place, ic insideConstraint) (bool, error) {
+	if ic.country != "" && place.CountryISO != ic.country {
+		return false, nil
+	}
+	if !ic.constrained {
+		return true, nil
+	}
+	return s.sameTier(ctx, place.AdminID, ic.ancestor, ic.tier)
 }
 
 // gatherCandidates collects the constraint-satisfying candidates of each class, up to
@@ -158,22 +255,6 @@ func (s *Service) countryOf(containing []domain.Feature) string {
 	return best
 }
 
-// containsAdminUnit reports whether the query point's containing admin polygons
-// include the unit adminFID (the anchor place's own unit) — the containment test
-// behind "in X" vs "prope X". A zero fid (unknown admin) yields false, so the caller
-// falls back to the distance heuristic.
-func containsAdminUnit(containing []domain.Feature, adminFID int64) bool {
-	if adminFID == 0 {
-		return false
-	}
-	for i := range containing {
-		if containing[i].ID == adminFID {
-			return true
-		}
-	}
-	return false
-}
-
 // sameTier reports whether a place's admin chain reaches the same tier ancestor
 // as the query point. A place with unknown admin (AdminID 0) is excluded (can't
 // verify), but a real ResolveChain error is returned rather than silently
@@ -224,26 +305,17 @@ func (s *Service) placeFromFeature(f *domain.Feature) (domain.Place, bool) {
 	}, true
 }
 
-// buildFix renders the bearing fix. The "in X" vs "prope X" vs "N km <dir> X"
-// choice comes first from containment (inside, decided by the caller via the
-// point's admin polygons — true even far from a big place's center node), then
-// the near-but-outside distance threshold, then the directional label. If Azimuth
-// fails (degenerate geometry) it keeps the directionless "prope" fallback rather
-// than dropping an otherwise valid anchor.
-func (s *Service) buildFix(ctx context.Context, p domain.Coordinate, best Candidate, pol domain.BearingPolicy, inside bool) *domain.Fix {
+// buildFix renders a directional bearing to a NON-inside anchor (the "in {X}" case
+// is decided earlier, in Bearing, by placeInsideOf). Below InsideLabelKM it keeps a
+// directionless "prope {X}" (a bearing from a few hundred meters is noise); otherwise
+// the directional label. If Azimuth fails (degenerate geometry) it keeps the "prope"
+// fallback rather than dropping an otherwise valid anchor. The Latin prefixes follow
+// specimen-label convention: "prope" is the established Latin locality term for "near".
+func (s *Service) buildFix(ctx context.Context, p domain.Coordinate, best Candidate, pol domain.BearingPolicy) *domain.Fix {
 	ref := best.Place
 	fix := &domain.Fix{Reference: ref, DistanceKM: best.DistanceKM}
 
-	// Label prefixes follow specimen-label convention: Latin "in" (inside the
-	// place's admin unit) and "prope" (near it) — "prope" is the established Latin
-	// locality term for "near" (abbr. pr.); we spell it out to stay unambiguous.
-	if inside {
-		fix.Inside = true
-		fix.Label = "in " + ref.Name
-		return fix
-	}
 	if best.DistanceKM < pol.InsideLabelKM {
-		// Near, but outside the place's admin unit.
 		fix.Label = "prope " + ref.Name
 		return fix
 	}

@@ -182,10 +182,12 @@ type Fix struct {
 	Azimuth    float64 // degrees, 0=N, 90=E (reference→point)
 	Compass    string
 	Label      string
-	// Inside is true when the query point lies within the reference's own
-	// administrative unit — i.e. we are IN that place ("in Ochsenfurt"), not merely
-	// near it ("prope Ochsenfurt"). Decided by containment, not distance, so it holds
-	// even far from a large place's center node. Azimuth/Compass are unset when Inside.
+	// Inside is true when the query point lies IN the reference settlement
+	// ("in Ochsenfurt"), not merely near it ("prope Ochsenfurt"). Decided by
+	// class-scaled proximity — the point is within the reference's inside-radius (a
+	// proxy for the settlement's extent: city far, village close), and the reference
+	// is the nearest such place — NOT by administrative containment. Azimuth/Compass
+	// are unset when Inside.
 	Inside bool
 }
 
@@ -196,8 +198,16 @@ type BearingPolicy struct {
 	Reach           map[PlaceClass]float64 // km per class
 	PreferNearestKM float64                // a town-or-larger anchor within this radius wins outright (0 = off)
 	ConstraintTier  string                 // semantic admin tier anchors must share (e.g. "state")
-	InsideLabelKM   float64                // below this, label as "in/prope {name}" without a bearing
+	InsideLabelKM   float64                // below this, label a NON-inside near-anchor as "prope {name}" without a direction
 	CompassPoints   int                    // 8 or 16
+	// InsideRadius maps each class to the distance within which the query point counts
+	// as "in" that place. It is a proxy for the settlement's extent — the dataset has
+	// place POINTS, not built-up polygons — so a city reads far, a village only when
+	// close. "in {X}" is decided by the nearest place that satisfies its own radius,
+	// NOT by administrative containment (a municipality polygon is large and rural, so
+	// containment wrongly reports fields/forest kilometers from the village as "in X").
+	// A class with no entry (0) never yields "in".
+	InsideRadius map[PlaceClass]float64
 	// CandidateRadiusKM, when > 0, makes candidate gathering use this one flat radius
 	// for every class instead of the per-class Reach. CompositeSalience sets it: it
 	// wants a wide candidate pool and lets its distance decay (not a hard per-class
@@ -243,7 +253,18 @@ func DefaultBearingPolicy() BearingPolicy {
 		ConstraintTier:  "state",
 		InsideLabelKM:   1.0,
 		CompassPoints:   8,
+		InsideRadius: map[PlaceClass]float64{
+			ClassVillage: 0.8,
+			ClassTown:    1.5,
+			ClassCity:    3.0,
+		},
 	}
+}
+
+// InsideRadiusKM returns the "in"-radius for a class, or 0 when the class has no
+// entry (a class with no inside-radius never yields an "in {X}" label).
+func (p BearingPolicy) InsideRadiusKM(c PlaceClass) float64 {
+	return p.InsideRadius[c]
 }
 
 // ReachKM returns the reach radius for a class, or 0 when the class has no entry

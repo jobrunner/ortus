@@ -195,15 +195,25 @@ response also carries the `wgs84: { lon, lat }` block (as on `/query`). The data
 is WGS84; a **projected `srid` (e.g. 3857) is reprojected** to WGS84 before the
 lookup — only an `srid` that can't be transformed to WGS84 is rejected (`422`).
 
-**"in X" vs "prope X".** The bearing distinguishes being *inside* a place from
-being *near* it by **administrative containment**, not distance: when the query
-point lies within the anchor's own admin unit, `bearing.inside` is `true` and the
-label is `"in Würzburg"` (this holds even far from a large city's center node).
-Near but outside → `"prope Würzburg"` (`inside: false`); otherwise a directional
-`"4 km E Würzburg"`. The label prefixes follow specimen-label convention: Latin
-`in` and `prope` (the established Latin locality term for "near"; abbr. *pr.*). A
-client can treat `inside: true` as "the point is in the settlement" (e.g. drop the
-bearing from a label — the find is *in* Würzburg).
+**"in X" vs "prope X".** The bearing distinguishes being *inside* a place from being
+*near* it by **proximity to a place, class-scaled**: `bearing.inside` is `true`
+(label `"in Würzburg"`) when the point lies within a place's inside-radius — a proxy
+for the settlement's extent, since the dataset has place *points*, not built-up
+polygons. Each class is checked within its own radius and the nearest qualifier wins
+(so a point in a village names the village even if a larger town's wider radius also
+reaches, and the chosen place is not necessarily the nearest place overall). Defaults:
+city 3 km, town 1.5 km, village 0.8 km — tunable via
+`gazetteer.bearing.inside_radius_city_km` / `…_town_km` / `…_village_km`. This deliberately does **not** use
+administrative containment: a municipality polygon is large and rural, so containment
+reported fields and forest kilometres from a village as "in <village>" — e.g. a point
+on a mountain plateau 1.8 km from the village it administratively belongs to. When the
+point is in no settlement, the label is a directional bearing to the most salient
+nearby anchor — `"4 km E Würzburg"`, or `"prope Würzburg"` (`inside: false`) below one
+kilometre, where a direction would be noise. The prefixes follow specimen-label
+convention: Latin `in` and `prope` (the established Latin locality term for "near";
+abbr. *pr.*). A client can treat `inside: true` as "the point is in the settlement".
+Because naming falls to the nearest place *point*, a point between two settlements may
+be named for an adjacent one rather than the administrative unit it sits in.
 
 **Response**
 

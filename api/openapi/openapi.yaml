@@ -854,11 +854,14 @@ components:
             inside:
               type: boolean
               description: >-
-                Der Abfragepunkt liegt INNERHALB der Verwaltungseinheit des Anker-Orts
-                — wir sind IN diesem Ort („in X"), nicht nur in der Nähe („prope X").
-                Per Containment bestimmt (nicht per Distanz), gilt also auch weit vom
-                Ortsmittelpunkt großer Städte. Ein Client kann bei `true` die Peilung
-                weglassen (der Fund liegt direkt im Ort).
+                Der Abfragepunkt liegt IN einem Ort („in X"), nicht nur in der Nähe
+                („prope X"). Bestimmt über die Distanz zu einem Ort, dessen
+                klassenskalierter Radius (Stadt 3 km, Kleinstadt 1,5 km, Dorf 0,8 km —
+                Proxy für die Siedlungsausdehnung) den Punkt abdeckt; der nächste solche
+                Ort gewinnt (nicht zwingend der überhaupt nächste Ort). NICHT per
+                Verwaltungs-Containment (ein Gemeindegebiet ist groß und ländlich, meldete
+                also Feld/Wald kilometerweit vom Ort fälschlich als „in X"). Ein Client
+                kann bei `true` die Peilung weglassen (der Fund liegt direkt im Ort).
         exposure:
           nullable: true
           type: object
