@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0](https://github.com/jobrunner/ortus/compare/v1.2.1...v1.3.0) (2026-07-28)
+
+
+### Features
+
+* **gazetteer:** optional built-up gate for the "in &lt;place&gt;" decision ([71d84b3](https://github.com/jobrunner/ortus/commit/71d84b317fd9d48b63d20f482b3bad5ff3ac888a))
+* **gazetteer:** optional built-up gate for the "in &lt;place&gt;" decision ([3fc6e4e](https://github.com/jobrunner/ortus/commit/3fc6e4ebc3bbdcee66c142d08d75adb828a0c0ff))
+
+
+### Bug Fixes
+
+* **gazetteer:** decide "in &lt;place&gt;" by distance to nearest place, not admin containment ([eeab368](https://github.com/jobrunner/ortus/commit/eeab368c37247a4351e604bfec051b4e8d432196))
+* **gazetteer:** decide "in &lt;place&gt;" by distance to nearest place, not admin containment ([a7a1e55](https://github.com/jobrunner/ortus/commit/a7a1e55daa0993490f38d9ceead597b7f8df4c6a))
+* **gazetteer:** fail the built-up gate closed on sampler error ([d9b76a0](https://github.com/jobrunner/ortus/commit/d9b76a0ef997279f2f2dfe0dab9c937db9584482))
+
 ## [1.2.1](https://github.com/jobrunner/ortus/compare/v1.2.0...v1.2.1) (2026-07-27)
 
 
