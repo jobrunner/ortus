@@ -15,8 +15,10 @@ import (
 // the raster adapter) keeps the gazetteer decoupled, mirroring ElevationSampler.
 type BuiltUpSampler interface {
 	// BuiltUpAt returns the built-up value at coord. ok is false when no data
-	// covers the point (outside the bundle's extent) — this is not an error; the
+	// covers the point (outside the bundle's extent) — this is NOT an error; the
 	// caller then falls back to the distance-only "in" decision rather than
-	// suppressing it.
+	// suppressing it. A non-nil err signals an unhealthy sampler (I/O/decode/
+	// misconfig), distinct from no-coverage: the caller fails the gate CLOSED on
+	// err (degrade to prope/directional) rather than risk an unverified "in".
 	BuiltUpAt(ctx context.Context, coord domain.Coordinate) (value float64, ok bool, err error)
 }

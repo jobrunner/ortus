@@ -147,17 +147,28 @@ func (s *Service) SetBuiltUpSampler(sampler output.BuiltUpSampler, minM2 float64
 	s.builtUpMinM2 = minM2
 }
 
-// builtUpAllows reports whether the "in {X}" path may run at p. It returns true when
-// no built-up sampler is wired or the point has no built-up coverage (fall back to the
-// distance-only decision), and — when a sampler IS wired and covers the point — only
-// when the built-up value meets the configured minimum. This suppresses "in <village>"
-// for points that sit within a place's radius but on no built-up fabric (fields/parks).
+// builtUpAllows reports whether the "in {X}" path may run at p:
+//   - no sampler wired            → true  (feature off; distance alone decides "in")
+//   - no coverage at p (ok=false) → true  (outside the bundle extent: documented
+//     graceful degradation, fall back to the distance-only decision)
+//   - sampler error               → false (fail CLOSED: the raster is unhealthy, so
+//     rather than risk an unverified "in <place>" — the very thing this gate exists
+//     to suppress — degrade to prope/directional; a point genuinely in a settlement
+//     is at worst reported as "prope", never as a wrong "in")
+//   - covered                     → built-up value meets the configured minimum
+//
+// The fail-closed error branch is deliberate: a false "in <village>" (a point on
+// fields within a place's radius) is exactly the confusion the gate removes, so a
+// sampler failure must not silently re-open that path.
 func (s *Service) builtUpAllows(ctx context.Context, p domain.Coordinate) bool {
 	if s.builtUp == nil {
 		return true
 	}
 	v, ok, err := s.builtUp.BuiltUpAt(ctx, p)
-	if err != nil || !ok {
+	if err != nil {
+		return false
+	}
+	if !ok {
 		return true
 	}
 	return v >= s.builtUpMinM2
