@@ -53,6 +53,7 @@ type App struct {
 	gazetteerPolicy            domain.BearingPolicy // bearing tuning knobs (config) + constraint tier (manifest)
 	gazetteerLicense           domain.License       // dataset license/attribution from the manifest; surfaced in responses
 	gazetteerElevationSourceID string               // raster id of the out-of-competition DEM; "" when off/unopened (must be closed on shutdown, it's not in the registry)
+	gazetteerBuiltUpSourceID   string               // raster id of the out-of-competition built-up gate raster; "" when off/unopened (closed on shutdown, not in the registry)
 }
 
 // tracerProvider returns the underlying OTel TracerProvider for instrumentation
@@ -412,6 +413,7 @@ func (a *App) Start(ctx context.Context) error {
 	// meaningful. It is opened out of competition (never a pool source) and is
 	// non-fatal — a missing/unopenable DEM leaves elevation + exposure silent.
 	a.bindGazetteerElevation(startupCtx)
+	a.bindGazetteerBuiltUp(startupCtx)
 
 	// Warm the gazetteer/DEM path BEFORE the listener accepts traffic, so the first
 	// real request isn't cold (the cause of the "Load failed" first request after a
@@ -542,6 +544,7 @@ func (a *App) Shutdown(ctx context.Context) error {
 	// Release the gazetteer-owned elevation DEM. It is opened out of competition
 	// (not in the registry), so the source-unload loop above never touched it.
 	a.closeGazetteerElevation(ctx)
+	a.closeGazetteerBuiltUp(ctx)
 
 	// Shutdown metrics provider so the prometheus exporter unregisters.
 	if a.Metrics != nil {

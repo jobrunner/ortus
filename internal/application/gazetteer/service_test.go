@@ -39,6 +39,18 @@ func (f fakeIndex) QueryKNN(_ context.Context, _ string, p domain.Coordinate, _ 
 	}
 	return out, nil
 }
+
+// fakeBuiltUp is a canned output.BuiltUpSampler for the "in {X}" gate tests.
+type fakeBuiltUp struct {
+	value float64
+	ok    bool
+	err   error
+}
+
+func (f fakeBuiltUp) BuiltUpAt(context.Context, domain.Coordinate) (value float64, ok bool, err error) {
+	return f.value, f.ok, f.err
+}
+
 func (f fakeIndex) PointInPolygon(context.Context, string, domain.Coordinate) ([]domain.Feature, error) {
 	return f.pip, f.pipErr
 }

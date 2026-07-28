@@ -213,7 +213,10 @@ kilometre, where a direction would be noise. The prefixes follow specimen-label
 convention: Latin `in` and `prope` (the established Latin locality term for "near";
 abbr. *pr.*). A client can treat `inside: true` as "the point is in the settlement".
 Because naming falls to the nearest place *point*, a point between two settlements may
-be named for an adjacent one rather than the administrative unit it sits in.
+be named for an adjacent one rather than the administrative unit it sits in. When a
+built-up raster is configured (`gazetteer.builtup`), `inside` additionally requires the
+point to sit on built-up fabric — so a point within a settlement's radius but on fields
+or a park is *not* "in" it; without that raster the decision uses distance alone.
 
 **Response**
 
