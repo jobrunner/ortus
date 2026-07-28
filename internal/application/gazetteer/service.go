@@ -121,6 +121,9 @@ type Service struct {
 
 	elevation output.ElevationSampler // optional; nil ⇒ no elevation in responses
 	elevMeta  ElevationMeta
+
+	builtUp      output.BuiltUpSampler // optional; nil ⇒ "in {X}" uses distance alone (no built-up gate)
+	builtUpMinM2 float64               // min built-up value for a point to count as "in" a settlement
 }
 
 // SetNameSources wires the optional name-source resolver so resolved name
@@ -134,6 +137,41 @@ func (s *Service) SetNameSources(r NameSourceResolver) { s.nameSources = r }
 func (s *Service) SetElevationSampler(sampler output.ElevationSampler, meta ElevationMeta) {
 	s.elevation = sampler
 	s.elevMeta = meta
+}
+
+// SetBuiltUpSampler wires the optional built-up sampler that gates the "in {X}"
+// decision: a point within a settlement's radius must also sit on built-up fabric
+// (>= minM2) to be labeled "in". Until it is called, "in {X}" uses distance alone.
+func (s *Service) SetBuiltUpSampler(sampler output.BuiltUpSampler, minM2 float64) {
+	s.builtUp = sampler
+	s.builtUpMinM2 = minM2
+}
+
+// builtUpAllows reports whether the "in {X}" path may run at p:
+//   - no sampler wired            → true  (feature off; distance alone decides "in")
+//   - no coverage at p (ok=false) → true  (outside the bundle extent: documented
+//     graceful degradation, fall back to the distance-only decision)
+//   - sampler error               → false (fail CLOSED: the raster is unhealthy, so
+//     rather than risk an unverified "in <place>" — the very thing this gate exists
+//     to suppress — degrade to prope/directional; a point genuinely in a settlement
+//     is at worst reported as "prope", never as a wrong "in")
+//   - covered                     → built-up value meets the configured minimum
+//
+// The fail-closed error branch is deliberate: a false "in <village>" (a point on
+// fields within a place's radius) is exactly the confusion the gate removes, so a
+// sampler failure must not silently re-open that path.
+func (s *Service) builtUpAllows(ctx context.Context, p domain.Coordinate) bool {
+	if s.builtUp == nil {
+		return true
+	}
+	v, ok, err := s.builtUp.BuiltUpAt(ctx, p)
+	if err != nil {
+		return false
+	}
+	if !ok {
+		return true
+	}
+	return v >= s.builtUpMinM2
 }
 
 // resolveNameSource turns a raw provenance code into a NameProvenance, enriched

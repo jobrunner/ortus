@@ -8,19 +8,20 @@
     "_batch_note": "geopackage/repository.go 127→128 (buildFeature extracted from scanFeature to enable batch reuse), application/registry.go 79→86 (QueryPoints batch seam + a context-cancellation guard in the non-batch fallback loop so a disconnected client aborts early — review-requested correctness fix), config/config.go 72→79 (query.batch.* config + validation), http/handlers.go 70→72 (handleQueryError now maps propagated context.DeadlineExceeded→504 and context.Canceled→499 for the batch path — two error-classification cases) — all for the batch-query endpoint. Per-function caps unchanged; the bulk of batch logic lives in new batch.go files.",
     "_bearing_inside_note": "application/gazetteer/bearing.go 55→68: the 'in {X}' decision moved from admin-containment to a class-scaled distance gate (placeInsideOf + nearestInClassWithin, per-class within each class's own radius so a qualifying town/city isn't hidden behind nearer out-of-radius villages). Fixes points far inside a large municipality being labelled 'in <village>'. Review round added the country+tier guard (admits) to the 'in' path so a place across a state line isn't reported as inside, consistent with anchor selection (→72). Per-function cap unchanged.",
     "_islands_dedup_note": "application/gazetteer/service.go 68→69: Islands now dedups by name (a same-name island duplicated in the data — two OSM objects for one island — must appear once), one added branch.",
+    "_builtup_gate_note": "application/gazetteer/bearing.go 72→73 and application/gazetteer/service.go 69→74: optional built-up gate for the 'in <place>' decision. bearing.go gains one branch — the 'in' path only runs when builtUpAllows(p) holds. service.go gains SetBuiltUpSampler wiring plus builtUpAllows, which short-circuits to distance-only when no sampler is wired or the point has no built-up coverage, otherwise requires the sampled built-up value to meet the configured minimum (suppresses 'in <village>' on fields/parks within a place's radius), and fails CLOSED on a sampler error (review-requested: an unhealthy raster must not silently re-open an unverified 'in'). Sampler + adapter live in new files (ports/output/builtup.go, adapters/raster/builtup.go, app/builtup.go); per-function caps unchanged. internal/app/app.go ratcheted 83→82 (map re-measure).",
     "_mountains_note": "New gazetteer 'mountains' block (smallest containing range + single-mountain per landform, mirroring islands): application/gazetteer/service.go 0→68 baselined (Mountains + smallestByLandform + mountainFrom + moreSpecific), http/gazetteer.go 0→57 baselined (addMountains + formatMountains + formatMountain). Per-function: gazetteerSections 13→14 and the MCP gazetteer handler 13→14 (one new optional block each, same inline pattern as islands/elevation); the mountains block was extracted to addMountains to keep gazetteerSections at +1 rather than +2.",
     "baseline": {
       "internal/adapters/raster/repository.go": 149,
       "internal/adapters/geopackage/repository.go": 128,
       "cmd/gazetteer-fixture/main.go": 103,
       "internal/adapters/telemetry/ringbuffer.go": 91,
-      "internal/app/app.go": 83,
+      "internal/app/app.go": 82,
       "internal/application/registry.go": 86,
       "internal/adapters/http/handlers.go": 72,
       "internal/config/config.go": 79,
-      "internal/application/gazetteer/service.go": 69,
+      "internal/application/gazetteer/service.go": 74,
       "internal/adapters/http/gazetteer.go": 57,
-      "internal/application/gazetteer/bearing.go": 72,
+      "internal/application/gazetteer/bearing.go": 73,
       "internal/adapters/geopackage/spatialindex.go": 54,
       "internal/adapters/watcher/watcher.go": 51
     }

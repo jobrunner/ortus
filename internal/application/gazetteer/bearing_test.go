@@ -76,6 +76,77 @@ func TestBearingNotInsideBeyondRadius(t *testing.T) {
 	}
 }
 
+func TestBearingBuiltUpGateSuppressesInOnFields(t *testing.T) {
+	// The village is within its radius (~0.36 km), but the point sits on no built-up
+	// fabric (sampled 0 < min 100) → NOT "in <village>"; falls through to a directional
+	// bearing to the salient city.
+	idx := fakeIndex{knn: map[string][]domain.Feature{
+		"village": {placeFeature("village", "Rödelsee", 0, 10.005)},
+		"city":    {placeFeature("city", "Bigtown", 0, 9.9)},
+	}}
+	svc := NewService(idx, testManifest(), nil, nil, true)
+	svc.SetBuiltUpSampler(fakeBuiltUp{value: 0, ok: true}, 100)
+
+	fix, err := svc.Bearing(context.Background(), domain.NewWGS84Coordinate(10.0, 50.0), noConstraint())
+	if err != nil {
+		t.Fatalf("Bearing: %v", err)
+	}
+	if fix.Inside || fix.Reference.Name != "Bigtown" {
+		t.Errorf("got label=%q inside=%v ref=%q, want directional to Bigtown (point not on built-up)", fix.Label, fix.Inside, fix.Reference.Name)
+	}
+}
+
+func TestBearingBuiltUpGateAllowsInOnBuiltUp(t *testing.T) {
+	// Same village, but the point IS on built-up fabric (3000 >= min 100) → "in <village>".
+	idx := fakeIndex{knn: map[string][]domain.Feature{"village": {placeFeature("village", "Rödelsee", 0, 10.005)}}}
+	svc := NewService(idx, testManifest(), nil, nil, true)
+	svc.SetBuiltUpSampler(fakeBuiltUp{value: 3000, ok: true}, 100)
+
+	fix, err := svc.Bearing(context.Background(), domain.NewWGS84Coordinate(10.0, 50.0), noConstraint())
+	if err != nil {
+		t.Fatalf("Bearing: %v", err)
+	}
+	if !fix.Inside || fix.Label != "in Rödelsee" {
+		t.Errorf("got label=%q inside=%v, want 'in Rödelsee' (point on built-up)", fix.Label, fix.Inside)
+	}
+}
+
+func TestBearingBuiltUpGateNoCoverageFallsBack(t *testing.T) {
+	// No built-up coverage at the point (ok=false) → the gate does not suppress; the
+	// "in" decision falls back to distance alone → "in <village>".
+	idx := fakeIndex{knn: map[string][]domain.Feature{"village": {placeFeature("village", "Rödelsee", 0, 10.005)}}}
+	svc := NewService(idx, testManifest(), nil, nil, true)
+	svc.SetBuiltUpSampler(fakeBuiltUp{ok: false}, 100)
+
+	fix, err := svc.Bearing(context.Background(), domain.NewWGS84Coordinate(10.0, 50.0), noConstraint())
+	if err != nil {
+		t.Fatalf("Bearing: %v", err)
+	}
+	if !fix.Inside || fix.Label != "in Rödelsee" {
+		t.Errorf("got label=%q inside=%v, want 'in Rödelsee' (no built-up coverage → fall back to distance)", fix.Label, fix.Inside)
+	}
+}
+
+func TestBearingBuiltUpGateFailsClosedOnError(t *testing.T) {
+	// The sampler errors (unhealthy raster: I/O/decode/misconfig). Rather than risk a
+	// wrong "in <village>", the gate fails CLOSED → the point degrades to a directional
+	// bearing to the salient city, never an unverified "in".
+	idx := fakeIndex{knn: map[string][]domain.Feature{
+		"village": {placeFeature("village", "Rödelsee", 0, 10.005)},
+		"city":    {placeFeature("city", "Bigtown", 0, 9.9)},
+	}}
+	svc := NewService(idx, testManifest(), nil, nil, true)
+	svc.SetBuiltUpSampler(fakeBuiltUp{err: errBuiltUp}, 100)
+
+	fix, err := svc.Bearing(context.Background(), domain.NewWGS84Coordinate(10.0, 50.0), noConstraint())
+	if err != nil {
+		t.Fatalf("Bearing: %v", err)
+	}
+	if fix.Inside || fix.Reference.Name != "Bigtown" {
+		t.Errorf("got label=%q inside=%v ref=%q, want directional to Bigtown (sampler error → fail closed)", fix.Label, fix.Inside, fix.Reference.Name)
+	}
+}
+
 func TestBearingClassPrecedence(t *testing.T) {
 	// All within reach but beyond the 5 km proximity override → the most salient
 	// (city) wins outright over town and village.

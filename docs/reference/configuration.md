@@ -220,6 +220,10 @@ gazetteer:
     per_point_accuracy_basis: "Copernicus HEM (per-pixel 1σ)"
     horizontal_accuracy_m: 6.0
     surface_model: DSM
+  builtup:                        # optional: refine the "in <place>" bearing decision
+    bundle_path: /data/gazetteer/ghs-builtup-westpalearctic.zip   # gazetteer-owned built-up raster; "" = gate off
+    layer: builtup                # continuous built-up layer id in that bundle
+    min_m2: 100                   # min built-up value (m² per cell) for a point to count as "in" a settlement
   warmup:                         # startup self-warmup (on by default)
     enabled: true
     lon: 9.93                     # point your dataset AND DEM cover
@@ -278,6 +282,17 @@ gazetteer:
   gazetteer dataset license. **Ops:** keep the DEM `.zip` in the gazetteer folder,
   **not** in `storage.local_path` — otherwise it also loads as a normal pool source
   (a WARN fires) and gets listed + double-queried.
+- `builtup` (optional) refines the bearing's **"in \<place\>"** decision: a
+  gazetteer-owned built-up raster (e.g. GHS-BUILT-S), opened **out of competition**
+  exactly like the DEM. When set, a point within a settlement's radius must also sit
+  on built-up fabric — its sampled built-up value must be `>= min_m2` — to be labelled
+  "in \<place\>"; this suppresses the label for points that fall within the radius but
+  on fields/parks. Empty `bundle_path` leaves the gate off (the "in" decision uses
+  distance alone), and — like elevation — a missing/unopenable bundle or a point with
+  no built-up coverage is non-fatal: the decision simply falls back to distance. `layer`
+  is its continuous layer (default `builtup`); `min_m2` is the built-up threshold (m²
+  of built-up surface per cell). Same **ops** caveat as the DEM: keep the `.zip` in the
+  gazetteer folder, not in `storage.local_path`.
 - `warmup` (on by default) runs the internal gazetteer lookups (Locate, Islands,
   Bearing, Exposure, Elevation) at `(lon, lat)` during
   startup, **before the server accepts traffic**, so the first real request isn't

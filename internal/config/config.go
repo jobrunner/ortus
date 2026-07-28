@@ -266,7 +266,19 @@ type GazetteerConfig struct {
 	NameSourceManifestPath string                   `mapstructure:"name_source_manifest_path"` // name-source manifest (optional; name provenance)
 	Bearing                GazetteerBearingConfig   `mapstructure:"bearing"`
 	Elevation              GazetteerElevationConfig `mapstructure:"elevation"`
+	BuiltUp                GazetteerBuiltUpConfig   `mapstructure:"builtup"`
 	Warmup                 GazetteerWarmupConfig    `mapstructure:"warmup"`
+}
+
+// GazetteerBuiltUpConfig wires the optional built-up gate that refines the "in
+// <place>" bearing decision: a gazetteer-owned built-up raster (e.g. GHS-BUILT-S),
+// opened out of competition like the elevation DEM. When set, a point within a
+// settlement's radius must also sit on built-up fabric (>= MinM2) to be labeled
+// "in". Empty BundlePath ⇒ gate off (the "in" decision uses distance alone).
+type GazetteerBuiltUpConfig struct {
+	BundlePath string  `mapstructure:"bundle_path"` // gazetteer-owned built-up raster bundle (.zip); "" = gate off
+	Layer      string  `mapstructure:"layer"`       // continuous built-up layer id (default "builtup")
+	MinM2      float64 `mapstructure:"min_m2"`      // min built-up value for a point to count as "in" a settlement
 }
 
 // GazetteerWarmupConfig controls the startup self-warmup: before the server
@@ -487,6 +499,9 @@ func Defaults() {
 	viper.SetDefault("gazetteer.elevation.per_point_accuracy_basis", "")
 	viper.SetDefault("gazetteer.elevation.horizontal_accuracy_m", 0.0)
 	viper.SetDefault("gazetteer.elevation.surface_model", "")
+	viper.SetDefault("gazetteer.builtup.bundle_path", "")
+	viper.SetDefault("gazetteer.builtup.layer", "builtup")
+	viper.SetDefault("gazetteer.builtup.min_m2", 100.0)
 }
 
 // Load loads configuration from environment and config file.

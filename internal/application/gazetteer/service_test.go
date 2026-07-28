@@ -39,6 +39,21 @@ func (f fakeIndex) QueryKNN(_ context.Context, _ string, p domain.Coordinate, _ 
 	}
 	return out, nil
 }
+
+// errBuiltUp is a canned sampler failure for the fail-closed gate test.
+var errBuiltUp = errors.New("built-up sampler unhealthy")
+
+// fakeBuiltUp is a canned output.BuiltUpSampler for the "in {X}" gate tests.
+type fakeBuiltUp struct {
+	value float64
+	ok    bool
+	err   error
+}
+
+func (f fakeBuiltUp) BuiltUpAt(context.Context, domain.Coordinate) (value float64, ok bool, err error) {
+	return f.value, f.ok, f.err
+}
+
 func (f fakeIndex) PointInPolygon(context.Context, string, domain.Coordinate) ([]domain.Feature, error) {
 	return f.pip, f.pipErr
 }

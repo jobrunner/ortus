@@ -41,10 +41,14 @@ func (s *Service) Bearing(ctx context.Context, p domain.Coordinate, pol domain.B
 	// is large and rural, so containment wrongly reported fields/forest kilometers from a
 	// village as "in <village>" (e.g. the Schwanberg plateau, 1.8 km from Rödelsee). The
 	// same country + boundary-tier guards as anchor selection still apply (see admits).
-	if in, ok, inErr := s.placeInsideOf(ctx, p, pol, ic); inErr != nil {
-		return nil, inErr
-	} else if ok {
-		return &domain.Fix{Reference: in.Place, DistanceKM: in.DistanceKM, Inside: true, Label: "in " + in.Place.Name}, nil
+	// When a built-up sampler is wired, the point must also sit on built-up fabric —
+	// this suppresses "in <village>" for points within the radius but in fields/parks.
+	if s.builtUpAllows(ctx, p) {
+		if in, ok, inErr := s.placeInsideOf(ctx, p, pol, ic); inErr != nil {
+			return nil, inErr
+		} else if ok {
+			return &domain.Fix{Reference: in.Place, DistanceKM: in.DistanceKM, Inside: true, Label: "in " + in.Place.Name}, nil
+		}
 	}
 	// Otherwise, a directional bearing to the most salient nearby anchor.
 	cands, err := s.gatherCandidates(ctx, p, pol, ancestor, constrained, queryCountry)

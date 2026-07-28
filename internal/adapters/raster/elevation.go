@@ -59,14 +59,15 @@ func (r *Repository) NewElevationSource(sourceID, layerName, accuracyLayer strin
 	return es, nil
 }
 
-// continuousLayer looks up a layer and asserts it is continuous.
+// continuousLayer looks up a layer and asserts it is continuous. Shared by the
+// elevation and built-up samplers.
 func continuousLayer(b *bundle, sourceID, layerName string) (*rasterLayer, error) {
 	layer, ok := b.layers[layerName]
 	if !ok {
-		return nil, fmt.Errorf("elevation source %q: layer %q not found", sourceID, layerName)
+		return nil, fmt.Errorf("raster source %q: layer %q not found", sourceID, layerName)
 	}
 	if !layer.continuous {
-		return nil, fmt.Errorf("elevation source %q: layer %q is not continuous (value_type must be continuous)", sourceID, layerName)
+		return nil, fmt.Errorf("raster source %q: layer %q is not continuous (value_type must be continuous)", sourceID, layerName)
 	}
 	return layer, nil
 }
