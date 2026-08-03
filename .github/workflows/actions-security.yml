@@ -77,7 +77,7 @@ jobs:
 
       - name: Upload SARIF to GitHub Security tab
         if: steps.scan.outputs.has_findings == 'true'
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@v4.37.4
         with:
           sarif_file: zizmor.sarif
           category: zizmor
