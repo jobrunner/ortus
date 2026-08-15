@@ -68,9 +68,10 @@ type openTile struct {
 // are read at full resolution (overview 0) and are bit-identical to a 1×1 read.
 const winRadius = 4
 
-func clampInt(v, lo, hi int) int {
-	if v < lo {
-		return lo
+// clampPixel clamps a pixel coordinate to the valid range [0, hi].
+func clampPixel(v, hi int) int {
+	if v < 0 {
+		return 0
 	}
 	if v > hi {
 		return hi
@@ -101,9 +102,9 @@ func (ot *openTile) sampleAt(band, px, py int) (uint64, error) {
 		return ot.winData.At(band, px-ot.winRect.X, py-ot.winRect.Y), nil
 	}
 	w, h := ot.cog.Width(), ot.cog.Height()
-	rect := gocog.Rectangle{X: clampInt(px-winRadius, 0, w), Y: clampInt(py-winRadius, 0, h)}
-	rect.Width = clampInt(px+winRadius+1, 0, w) - rect.X
-	rect.Height = clampInt(py+winRadius+1, 0, h) - rect.Y
+	rect := gocog.Rectangle{X: clampPixel(px-winRadius, w), Y: clampPixel(py-winRadius, h)}
+	rect.Width = clampPixel(px+winRadius+1, w) - rect.X
+	rect.Height = clampPixel(py+winRadius+1, h) - rect.Y
 	rd, err := ot.cog.ReadWindow(rect)
 	if err != nil {
 		return 0, err
