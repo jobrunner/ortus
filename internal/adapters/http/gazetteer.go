@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/jobrunner/ortus/internal/domain"
 )
@@ -70,6 +71,21 @@ func (s *Server) gazetteerSections(ctx context.Context, coord domain.Coordinate)
 	out := map[string]interface{}{"admin": nil, "islands": nil, "mountains": nil, "bearing": nil, "exposure": nil, "elevation": nil, "sources": []interface{}{}}
 	prov := newProvenanceSet()
 
+	// Per-section wall-clock timing. The generic /query response's
+	// processing_time_ms covers only the source point-queries and excludes this
+	// enrichment, so without these numbers the (often dominant) DEM-derived
+	// exposure/elevation cost is invisible. mark() records the time since the
+	// previous mark; the sections run sequentially, so the diffs partition the
+	// total. Exposed as the "timings_ms" block (per section + total).
+	timings := map[string]interface{}{}
+	tStart := time.Now()
+	prev := tStart
+	mark := func(name string) {
+		now := time.Now()
+		timings[name] = now.Sub(prev).Milliseconds()
+		prev = now
+	}
+
 	loc, err := s.gazetteer.Locate(ctx, coord)
 	switch {
 	case err == nil:
@@ -79,6 +95,8 @@ func (s *Server) gazetteerSections(ctx context.Context, coord domain.Coordinate)
 	default:
 		return nil, err
 	}
+
+	mark("locate")
 
 	// Islands: the named island(s) containing the point (a separate layer,
 	// resolved independently of admin coverage). Empty ⇒ leave the block null.
@@ -90,11 +108,15 @@ func (s *Server) gazetteerSections(ctx context.Context, coord domain.Coordinate)
 		out["islands"] = formatIslands(islands, prov)
 	}
 
+	mark("islands")
+
 	// Mountains: the smallest containing range and single-mountain (per landform),
 	// a separate layer resolved independently of admin coverage. nil ⇒ block null.
 	if err := s.addMountains(ctx, coord, out, prov); err != nil {
 		return nil, err
 	}
+
+	mark("mountains")
 
 	fix, err := s.gazetteer.Bearing(ctx, coord, s.bearingPolicy.OrDefault())
 	switch {
@@ -105,6 +127,8 @@ func (s *Server) gazetteerSections(ctx context.Context, coord domain.Coordinate)
 	default:
 		return nil, err
 	}
+
+	mark("bearing")
 
 	// Exposure (terrain slope + aspect), next to the bearing. Derived from the DEM;
 	// (nil, nil) when elevation is unwired or the point has no full-window coverage,
@@ -117,6 +141,8 @@ func (s *Server) gazetteerSections(ctx context.Context, coord domain.Coordinate)
 		out["exposure"] = formatExposure(exp)
 	}
 
+	mark("exposure")
+
 	// Elevation is optional: (nil, nil) means the feature is not wired, so leave
 	// the block null. A non-nil result is rendered even at sea level (meters 0).
 	elev, err := s.gazetteer.Elevation(ctx, coord)
@@ -126,6 +152,8 @@ func (s *Server) gazetteerSections(ctx context.Context, coord domain.Coordinate)
 	case elev != nil:
 		out["elevation"] = formatElevation(elev)
 	}
+	mark("elevation")
+
 	// Response-wide provenance excerpt: each distinct name_source code that appears
 	// above, described once (not repeated per record).
 	out["sources"] = prov.list()
@@ -138,6 +166,9 @@ func (s *Server) gazetteerSections(ctx context.Context, coord domain.Coordinate)
 			"attribution": s.gazetteerLicense.Attribution,
 		}
 	}
+
+	timings["total"] = time.Since(tStart).Milliseconds()
+	out["timings_ms"] = timings
 	return out, nil
 }
 

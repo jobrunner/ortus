@@ -9,6 +9,9 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/paulmach/orb"
+	"github.com/tingold/gocog"
+
 	"github.com/jobrunner/ortus/internal/domain"
 )
 
@@ -268,6 +271,59 @@ func TestTiledLayerRouting(t *testing.T) {
 	}
 	if len(none) != 0 {
 		t.Fatalf("absent tile = %+v, want no feature", none)
+	}
+}
+
+// TestTileWindowCacheReuse verifies the per-handle decoded-window cache: a cluster
+// of nearby pixels (as a gazetteer request samples: elevation + a 3×3 exposure
+// window) decodes the covering block ONCE, and every cached sample is bit-identical
+// to a direct 1×1 read. This is the fix for the ~1 s gazetteer enrichment (10 DEM
+// samples that previously decoded the block 10 times).
+func TestTileWindowCacheReuse(t *testing.T) {
+	dir := t.TempDir()
+	zipPath := buildTiledBundle(t, dir, "dem", tiledManifest, []string{"N20_E020.tif"})
+	repo := NewRepository(t.TempDir())
+	t.Cleanup(func() { _ = repo.Close(context.Background(), "dem") })
+	if _, err := repo.Open(context.Background(), zipPath); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	// Reach the tile handle through the package internals.
+	ot, err := repo.sources["dem"].layers["elevation"].tiles.acquire([2]int{20, 20}, "N20_E020.tif")
+	if err != nil {
+		t.Fatalf("acquire: %v", err)
+	}
+	defer repo.sources["dem"].layers["elevation"].tiles.release([2]int{20, 20})
+	band := repo.sources["dem"].layers["elevation"].tiles.band
+
+	// A pixel well inside the tile, so the ±1 cluster stays in bounds.
+	px, py := ot.cog.PixelFromPoint(orb.Point{20.5, 20.5}, 0)
+	if px < 1 {
+		px = 1
+	}
+	if py < 1 {
+		py = 1
+	}
+
+	ot.mu.Lock()
+	defer ot.mu.Unlock()
+	cluster := [][2]int{{0, 0}, {1, 0}, {-1, 0}, {0, 1}, {0, -1}, {1, 1}, {-1, -1}, {1, -1}, {-1, 1}}
+	for _, d := range cluster {
+		gx, gy := px+d[0], py+d[1]
+		got, serr := ot.sampleAt(band, gx, gy)
+		if serr != nil {
+			t.Fatalf("sampleAt(%d,%d): %v", gx, gy, serr)
+		}
+		oracle, rerr := ot.cog.ReadWindow(gocog.Rectangle{X: gx, Y: gy, Width: 1, Height: 1})
+		if rerr != nil {
+			t.Fatalf("oracle ReadWindow(%d,%d): %v", gx, gy, rerr)
+		}
+		if want := oracle.At(band, 0, 0); got != want {
+			t.Errorf("sampleAt(%d,%d) = %d, want %d (must equal a 1×1 read)", gx, gy, got, want)
+		}
+	}
+	if ot.reads != 1 {
+		t.Errorf("9 clustered samples caused %d window decodes, want 1 (cache reuse)", ot.reads)
 	}
 }
 

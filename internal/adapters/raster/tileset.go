@@ -48,6 +48,78 @@ type openTile struct {
 	file  *os.File
 	dtype gocog.DataType
 	mu    sync.Mutex
+
+	// Decoded-window cache (guarded by mu). gocog re-reads and LZW-decodes the whole
+	// covering COG block on every ReadWindow, so sampling N nearby pixels one-by-one
+	// decodes the block N times. A gazetteer request samples the elevation pixel plus
+	// a 3×3 exposure window (~10 pixels within ±1–2 px at 30 m spacing); reading one
+	// small window and serving neighbors from it collapses those to a single decode,
+	// and keeps repeated same-area requests warm across requests. reads counts actual
+	// ReadWindow calls (cache misses) — asserted by tests.
+	winRect gocog.Rectangle
+	winData *gocog.RasterData
+	winOK   bool
+	reads   int
+}
+
+// winRadius sizes the cached read window (2r+1 per side). 4 → a 9×9 window, which
+// covers a gazetteer request's elevation pixel plus its 3×3 exposure neighbors
+// while staying far below gocog's overview-downsample threshold, so cached values
+// are read at full resolution (overview 0) and are bit-identical to a 1×1 read.
+const winRadius = 4
+
+// clampPixel clamps a pixel coordinate to the valid range [0, hi].
+func clampPixel(v, hi int) int {
+	if v < 0 {
+		return 0
+	}
+	if v > hi {
+		return hi
+	}
+	return v
+}
+
+// readPixel decodes an exact 1×1 window at (px,py) — the fallback taken when a cached
+// window can't be trusted. Counts as one ReadWindow decode.
+func (ot *openTile) readPixel(band, px, py int) (uint64, error) {
+	rd, err := ot.cog.ReadWindow(gocog.Rectangle{X: px, Y: py, Width: 1, Height: 1})
+	if err != nil {
+		return 0, err
+	}
+	ot.reads++
+	return rd.At(band, 0, 0), nil
+}
+
+// sampleAt returns the raw band sample at pixel (px,py), reusing the cached decoded
+// window when the pixel falls inside it, otherwise decoding a small window around
+// the pixel once and caching it. Only the exact requested pixel is ever returned,
+// so this is a pure decode-cost optimization with no effect on results. The caller
+// MUST hold ot.mu (it already serializes reads on the stateful gocog reader).
+func (ot *openTile) sampleAt(band, px, py int) (uint64, error) {
+	if ot.winOK &&
+		px >= ot.winRect.X && px < ot.winRect.X+ot.winRect.Width &&
+		py >= ot.winRect.Y && py < ot.winRect.Y+ot.winRect.Height {
+		return ot.winData.At(band, px-ot.winRect.X, py-ot.winRect.Y), nil
+	}
+	w, h := ot.cog.Width(), ot.cog.Height()
+	rect := gocog.Rectangle{X: clampPixel(px-winRadius, w), Y: clampPixel(py-winRadius, h)}
+	rect.Width = clampPixel(px+winRadius+1, w) - rect.X
+	rect.Height = clampPixel(py+winRadius+1, h) - rect.Y
+	rd, err := ot.cog.ReadWindow(rect)
+	if err != nil {
+		return 0, err
+	}
+	ot.reads++
+	// Defensive: ReadWindow picks a downsampled overview when the window is a tiny
+	// fraction of the image — impossible for a 9×9 window on a real DEM tile, but a
+	// hypothetical tiny/overviewed tile could return dims != the request, and then
+	// indexing with full-res offsets would silently read the wrong pixel. In that case
+	// skip the window cache and fall back to an exact single-pixel read (pre-cache behavior).
+	if rd.Width != rect.Width || rd.Height != rect.Height {
+		return ot.readPixel(band, px, py)
+	}
+	ot.winRect, ot.winData, ot.winOK = rect, rd, true
+	return rd.At(band, px-rect.X, py-rect.Y), nil
 }
 
 type lruEntry struct {

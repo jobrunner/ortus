@@ -619,16 +619,18 @@ func (r *Repository) queryTiled(sourceID, layerName string, coord domain.Coordin
 	if px < 0 || py < 0 || px >= ot.cog.Width() || py >= ot.cog.Height() {
 		return nil, nil // outside this tile's extent — no data
 	}
-	// Serialize reads on this tile's stateful reader.
+	// Serialize reads on this tile's stateful reader; sampleAt also serves the pixel
+	// from a small cached decoded window, so a request's ~10 clustered DEM samples
+	// (elevation + 3×3 exposure) decode the covering block once, not ten times.
 	ot.mu.Lock()
-	rd, err := ot.cog.ReadWindow(gocog.Rectangle{X: px, Y: py, Width: 1, Height: 1})
+	raw, err := ot.sampleAt(ts.band, px, py)
 	ot.mu.Unlock()
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(output.StatusError, "sample failed")
 		return nil, &domain.QueryError{SourceID: sourceID, Layer: layerName, Err: err}
 	}
-	f, ok := sampleToFloat(ot.dtype, rd.At(ts.band, 0, 0))
+	f, ok := sampleToFloat(ot.dtype, raw)
 	if !ok {
 		err := fmt.Errorf("continuous tile layer %q: unsupported data type %d", layerName, ot.dtype)
 		span.RecordError(err)

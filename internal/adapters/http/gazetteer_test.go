@@ -619,6 +619,46 @@ func TestQueryGazetteerDefaultOn(t *testing.T) {
 	}
 }
 
+// TestGazetteerTimings: the enrichment reports per-section wall-clock timings
+// (locate/islands/mountains/bearing/exposure/elevation) plus a total, so the DEM-
+// derived cost that processing_time_ms omits is visible in every response. The
+// block appears both on the dedicated endpoint and inside the /query gazetteer block.
+func TestGazetteerTimings(t *testing.T) {
+	loc := &domain.Locality{CountryISO: "DE", Chain: []domain.AdminUnit{{Level: 2, Name: "Deutschland", Equivalent: "country"}}}
+	fix := &domain.Fix{Reference: domain.Place{Name: "Würzburg", Class: domain.ClassCity}, DistanceKM: 0.4, Label: "in Würzburg", Inside: true}
+	srv := newGazetteerServer(t, fakeGazetteer{loc: loc, fix: fix})
+
+	wantSections := []string{"locate", "islands", "mountains", "bearing", "exposure", "elevation", "total"}
+
+	// Dedicated endpoint: timings_ms is top-level.
+	_, body := doGET(t, srv, "/api/v1/gazetteer?lon=9.93&lat=49.79")
+	tm, ok := body["timings_ms"].(map[string]any)
+	if !ok {
+		t.Fatalf("gazetteer response missing timings_ms; got keys %v", keysOf(body))
+	}
+	for _, k := range wantSections {
+		v, present := tm[k]
+		if !present {
+			t.Errorf("timings_ms missing section %q; got %v", k, tm)
+			continue
+		}
+		// JSON numbers decode to float64; must be a non-negative integer count of ms.
+		if f, isNum := v.(float64); !isNum || f < 0 {
+			t.Errorf("timings_ms[%q] = %v, want non-negative number", k, v)
+		}
+	}
+
+	// /query enrichment: timings_ms lives inside the gazetteer block.
+	_, qbody := doGET(t, srv, "/api/v1/query?lon=9.93&lat=49.79")
+	gaz, ok := qbody["gazetteer"].(map[string]any)
+	if !ok {
+		t.Fatalf("query response missing gazetteer block; got keys %v", keysOf(qbody))
+	}
+	if _, ok := gaz["timings_ms"].(map[string]any); !ok {
+		t.Errorf("query gazetteer block missing timings_ms; got %v", keysOf(gaz))
+	}
+}
+
 func keysOf(m map[string]any) []string {
 	ks := make([]string, 0, len(m))
 	for k := range m {
