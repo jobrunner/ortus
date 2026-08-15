@@ -2,7 +2,7 @@ module github.com/jobrunner/ortus
 
 go 1.26.0
 
-toolchain go1.26.5
+toolchain go1.26.6
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.22.0

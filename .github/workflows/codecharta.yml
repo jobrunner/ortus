@@ -18,7 +18,7 @@ on:
   workflow_dispatch:
 
 env:
-  GO_VERSION: '1.26.5'
+  GO_VERSION: '1.26.6'
   CCSH_VERSION: '1.143.0'
   GCOV2LCOV_VERSION: 'v1.1.1'
 
