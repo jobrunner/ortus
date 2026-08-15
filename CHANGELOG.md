@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0](https://github.com/jobrunner/ortus/compare/v1.3.0...v1.4.0) (2026-08-15)
+
+
+### Features
+
+* **gazetteer:** per-section timings in enrichment response ([189bc67](https://github.com/jobrunner/ortus/commit/189bc6743cefdfa6f59c0bec436a023227b305fd))
+* **raster:** decoded-window cache for tiled COG reads ([0ba3c09](https://github.com/jobrunner/ortus/commit/0ba3c09548880bd84c100ba0499d036f8596d57b))
+
+
+### Bug Fixes
+
+* **review:** clampPixel drops the always-zero lo param (unparam lint) ([25384fd](https://github.com/jobrunner/ortus/commit/25384fd1a3b9dc3936d3b69c21e2d138de8d08eb))
+* **review:** lint spelling, complexity ratchet, reads counter, grammar ([e8e43c4](https://github.com/jobrunner/ortus/commit/e8e43c4668a9df8a39e95f6082d56bafca376046))
+
+
+### Performance Improvements
+
+* **gazetteer:** DEM decoded-window cache + per-section enrichment timings ([26de7e2](https://github.com/jobrunner/ortus/commit/26de7e2b30d98acc9d6500de8c717028cc41c7b7))
+
 ## [1.3.0](https://github.com/jobrunner/ortus/compare/v1.2.1...v1.3.0) (2026-07-28)
 
 
