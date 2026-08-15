@@ -20,7 +20,8 @@
       "internal/adapters/http/handlers.go": 72,
       "internal/config/config.go": 79,
       "internal/application/gazetteer/service.go": 74,
-      "internal/adapters/http/gazetteer.go": 57,
+      "_timings_note": "gazetteerSections gained per-section wall-clock timing (a mark() closure + 6 mark() calls) to surface the DEM-derived exposure/elevation enrichment cost that processing_time_ms omits; +1 file complexity (57→58) and +1 function complexity (14→15, = current repo max) for that observability. Sub-functions were not extractable without splitting the section sequence.",
+      "internal/adapters/http/gazetteer.go": 58,
       "internal/application/gazetteer/bearing.go": 73,
       "internal/adapters/geopackage/spatialindex.go": 54,
       "internal/adapters/watcher/watcher.go": 51
@@ -36,7 +37,7 @@
       "internal/app/app.go": 15,
       "cmd/gazetteer-fixture/main.go": 14,
       "internal/adapters/geopackage/repository.go": 13,
-      "internal/adapters/http/gazetteer.go": 14,
+      "internal/adapters/http/gazetteer.go": 15,
       "internal/adapters/mcp/tools_gazetteer.go": 14,
       "internal/adapters/telemetry/ringbuffer.go": 12,
       "internal/app/gazetteer.go": 12,
