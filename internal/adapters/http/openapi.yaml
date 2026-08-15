@@ -972,6 +972,28 @@ components:
                 attribution:
                   type: string
                   description: Anzuzeigender Attributionstext.
+        timings_ms:
+          type: object
+          description: >-
+            Wall-clock-Zeit der einzelnen Enrichment-Sektionen in Millisekunden.
+            Ergänzt processing_time_ms des /query-Endpoints (das nur die generischen
+            Quell-Abfragen misst und diese Enrichment ausschließt), damit die oft
+            dominante DEM-abgeleitete exposure/elevation-Zeit sichtbar ist.
+          properties:
+            locate:
+              type: integer
+            islands:
+              type: integer
+            mountains:
+              type: integer
+            bearing:
+              type: integer
+            exposure:
+              type: integer
+            elevation:
+              type: integer
+            total:
+              type: integer
         sources:
           type: array
           description: >-
