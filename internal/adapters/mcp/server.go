@@ -97,9 +97,12 @@ func New(opts Options, deps Deps, logger *slog.Logger) *Server {
 	//     its reader goroutine per client connect. Stateless sessions are
 	//     ephemeral and closed when the request finishes.
 	//
-	// Consequence: GET and DELETE on the MCP path return 405 and no
-	// Mcp-Session-Id is issued. Both are spec-sanctioned (transports §2.2.3)
-	// and handled by conforming clients.
+	// Consequence: authorized GET and DELETE on the MCP path return 405 and
+	// no Mcp-Session-Id is issued. Both are spec-sanctioned (transports
+	// §2.2.3) and handled by conforming clients. Note that a token-protected
+	// listener still answers 401 before reaching the handler, so an
+	// unauthenticated GET/DELETE sees 401 rather than 405 — the auth
+	// middleware below wraps this handler.
 	streamHandler := mcp.NewStreamableHTTPHandler(
 		func(_ *http.Request) *mcp.Server { return srv },
 		&mcp.StreamableHTTPOptions{Logger: logger, Stateless: true},

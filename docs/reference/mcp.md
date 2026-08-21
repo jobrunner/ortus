@@ -123,9 +123,11 @@ debugging tool argument shapes.
 - The streamable-HTTP transport follows the MCP spec. The Go SDK
   (`github.com/modelcontextprotocol/go-sdk`) implements this natively.
 - The transport is **stateless**: the MCP path serves `POST` only, no
-  `Mcp-Session-Id` is issued, and `GET` (the standalone SSE stream) and
-  `DELETE` (session termination) answer `405 Method Not Allowed` — which
-  the spec explicitly permits for servers that offer no SSE stream. Every
+  `Mcp-Session-Id` is issued, and authorized `GET` (the standalone SSE
+  stream) and `DELETE` (session termination) answer `405 Method Not
+  Allowed` — which the spec explicitly permits for servers that offer no
+  SSE stream. On a token-protected listener the bearer-auth check runs
+  first, so an unauthenticated `GET`/`DELETE` still gets `401`. Every
   tool is pure request/response, so there is nothing to retain between
   requests, and any replica can serve any request without session
   affinity. Conforming clients negotiate this automatically.
@@ -147,5 +149,5 @@ debugging tool argument shapes.
 | `401 unauthorized` with a token set | Header must be exactly `Authorization: Bearer <token>` — case-sensitive prefix, single space, no quotes |
 | Tools return "tracing is disabled" | `tracing.enabled` is `false` in ortus config. Diagnostic tools require it; query tools do not |
 | `mcp.enabled is true … ORTUS_MCP_TOKEN must be set` at startup | Non-loopback `mcp.host` with no token — set the env var or rebind to `127.0.0.1` |
-| `405 Method Not Allowed` on `GET`/`DELETE` of the MCP path | Expected — the transport is stateless and serves `POST` only. See the architecture notes |
+| `405 Method Not Allowed` on `GET`/`DELETE` of the MCP path | Expected — the transport is stateless and serves `POST` only. See the architecture notes. (A `401` on the same request means the bearer-auth check rejected it before the transport was reached) |
 | Claude Desktop doesn't see the tools | `./ortus mcp` writes its protocol on **stdout** — make sure nothing else does. Logging is routed to stderr automatically |
