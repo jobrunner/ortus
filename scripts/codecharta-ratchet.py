@@ -19,6 +19,9 @@ merged map into three ratchets over metrics that aren't already gated elsewhere
      in `allow`. This blocks NEW complex-and-untested files; shrink `allow` as the
      existing ones get tests.
 
+Inside a baseline, keys starting with `_` are prose, not paths — write the
+justification for a number next to that number.
+
 Usage: codecharta-ratchet.py <map.cc.json[.gz]> [config.json]
 Exit codes: 0 = within ratchet, 1 = a metric regressed (per-file report),
 2 = usage / unreadable input / malformed map.
@@ -39,6 +42,10 @@ def cap_check(files, metric, default_cap, baseline, label, cfg_path):
     value (can't grow), everything else must stay <= default_cap. Returns
     (violations, hints); a baseline file now BELOW its cap yields a ratchet-down hint.
     Files missing the metric are skipped."""
+    # `_`-prefixed keys are prose, not paths: a justification belongs next to the
+    # number it explains, and without this every such note is reported as a stale
+    # baseline entry on every run — noise that trains readers to ignore the hints.
+    baseline = {k: v for k, v in baseline.items() if not k.startswith("_")}
     violations, hints = [], []
     for rel, attrs in sorted(files.items()):
         val = attrs.get(metric)
