@@ -128,6 +128,47 @@ func TestBearerAuth_RejectsBadToken(t *testing.T) {
 	}
 }
 
+// TestStatelessTransport pins the MCP handler to stateless mode. A stateful
+// handler leaks one ServerSession (and its reader goroutine) per client
+// connect: since protocol 2026-07-28 clients probe with `server/discover`
+// first, and the stateful path answers that probe from a session it never
+// hands out an Mcp-Session-Id for, so nothing can ever close it. The package's
+// goleak TestMain catches the leak itself; this test guards the configuration
+// that prevents it, by asserting the two observable marks of stateless mode.
+func TestStatelessTransport(t *testing.T) {
+	ts := startTestServer(t, "")
+
+	// A stateless handler serves POST only; GET (the standalone SSE stream)
+	// and DELETE (session termination) are 405. Both are allowed by the
+	// spec — see transports §2.2.3 for GET.
+	for _, method := range []string{http.MethodGet, http.MethodDelete} {
+		t.Run(method+"-not-allowed", func(t *testing.T) {
+			req, _ := http.NewRequestWithContext(context.Background(), method, ts.URL+"/mcp", nil)
+			req.Header.Set("Accept", "application/json, text/event-stream")
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				t.Fatalf("do: %v", err)
+			}
+			defer func() { _ = resp.Body.Close() }()
+			if resp.StatusCode != http.StatusMethodNotAllowed {
+				t.Errorf("status = %d, want %d — handler is not stateless", resp.StatusCode, http.StatusMethodNotAllowed)
+			}
+		})
+	}
+
+	// A full client session must complete without the server assigning a
+	// session ID; an ID would mean sessions outlive their request again.
+	t.Run("no-session-id", func(t *testing.T) {
+		session := connectClient(t, ts)
+		if _, err := session.ListTools(context.Background(), nil); err != nil {
+			t.Fatalf("ListTools: %v", err)
+		}
+		if id := session.ID(); id != "" {
+			t.Errorf("session ID = %q, want empty — handler is not stateless", id)
+		}
+	})
+}
+
 // TestBearerAuth_NoTokenAllowsAll: when the server is configured with
 // empty token (loopback mode), middleware should pass everything through.
 func TestBearerAuth_NoTokenAllowsAll(t *testing.T) {

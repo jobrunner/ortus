@@ -76,13 +76,36 @@ func New(opts Options, deps Deps, logger *slog.Logger) *Server {
 	}
 
 	// One Server instance is reused across HTTP requests. The SDK creates
-	// a fresh ServerSession per Streamable-HTTP connection internally.
+	// a fresh ServerSession per Streamable-HTTP request internally.
 	srv := buildMCPServer(deps, logger)
 
 	mux := http.NewServeMux()
+	// Stateless: every tool here is pure request/response — no
+	// notifications, subscriptions, resources or server->client calls — so
+	// there is no state worth retaining between requests. Two reasons this
+	// is the right mode:
+	//
+	//  1. It keeps the process horizontally scalable: any replica can serve
+	//     any request, no session affinity required.
+	//  2. It avoids a session leak in the stateful path. Since protocol
+	//     version 2026-07-28 (SEP-2575) clients probe with `server/discover`
+	//     before `initialize`. A stateful handler answers that probe from a
+	//     freshly created ServerSession but returns no Mcp-Session-Id, and
+	//     Server.discover populates InitializeParams — which defeats the
+	//     handler's "close if never initialized" cleanup. The session is
+	//     then unaddressable and never torn down, leaking one session plus
+	//     its reader goroutine per client connect. Stateless sessions are
+	//     ephemeral and closed when the request finishes.
+	//
+	// Consequence: authorized GET and DELETE on the MCP path return 405 and
+	// no Mcp-Session-Id is issued. Both are spec-sanctioned (transports
+	// §2.2.3) and handled by conforming clients. Note that a token-protected
+	// listener still answers 401 before reaching the handler, so an
+	// unauthenticated GET/DELETE sees 401 rather than 405 — the auth
+	// middleware below wraps this handler.
 	streamHandler := mcp.NewStreamableHTTPHandler(
 		func(_ *http.Request) *mcp.Server { return srv },
-		&mcp.StreamableHTTPOptions{Logger: logger},
+		&mcp.StreamableHTTPOptions{Logger: logger, Stateless: true},
 	)
 	wrapped := bearerAuthMiddleware(opts.Token, streamHandler)
 	// Register both the exact path and the trailing-slash variant.
