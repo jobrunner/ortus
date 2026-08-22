@@ -10,8 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Bug Fixes
 
-* **mcp:** serve streamable HTTP statelessly to stop session leak ([7e5f6d9](https://github.com/jobrunner/ortus/commit/7e5f6d9d426df426663150835c2fd59f770ad03d))
-* **mcp:** serve streamable HTTP statelessly to stop session leak ([4c2f9e6](https://github.com/jobrunner/ortus/commit/4c2f9e6376f384142bd18bc00bbdacfbff979bb6))
+* **mcp:** serve streamable HTTP statelessly to stop session leak ([4c2f9e6](https://github.com/jobrunner/ortus/commit/4c2f9e6376f384142bd18bc00bbdacfbff979bb6), [#180](https://github.com/jobrunner/ortus/pull/180))
 
 ## [1.4.0](https://github.com/jobrunner/ortus/compare/v1.3.0...v1.4.0) (2026-08-15)
 
