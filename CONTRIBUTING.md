@@ -30,6 +30,15 @@ before every push.
   them by release-please — don't hand-edit `VERSION`/`CHANGELOG.md`.
 - PRs merge as **merge commits** (squash is disabled). **All review threads
   must be resolved** before merge; Copilot re-reviews on each push.
+- **Merge with an empty commit body**: `gh pr merge PR_NUMBER --merge --body ""`.
+  The repo is set to `merge_commit_message=PR_TITLE`, so GitHub otherwise
+  copies the (conventional) PR title into the merge commit's body, and
+  release-please counts it a second time — the change then appears twice in
+  the changelog. GitHub has no setting for this (the only valid combinations
+  are `PR_TITLE`+`PR_BODY`, `PR_TITLE`+`BLANK` and `MERGE_MESSAGE`+`PR_TITLE`,
+  and the middle one just moves the conventional text into the subject), and
+  squash merges — which would avoid it — are blocked by the branch ruleset.
+  If a duplicate slips through, fix it in the release PR before merging it.
 - Keep PRs to one concern.
 
 ## The harness (what CI enforces)
