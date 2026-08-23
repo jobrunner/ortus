@@ -167,6 +167,19 @@ func (s *Server) gazetteerSections(ctx context.Context, coord domain.Coordinate)
 		}
 	}
 
+	// Which of the optional blocks above this deployment can answer at all. Every
+	// one of them renders null both when it is absent from the dataset and when
+	// the point simply has no result — and the second is a normal answer, since a
+	// point on flat ground belongs to no mountain. Without this, a package that
+	// silently lost a layer is indistinguishable from correct behavior.
+	caps := s.gazetteer.Capabilities()
+	out["available"] = map[string]interface{}{
+		"islands":   caps.Islands,
+		"mountains": caps.Mountains,
+		"exposure":  caps.Exposure,
+		"elevation": caps.Elevation,
+	}
+
 	timings["total"] = time.Since(tStart).Milliseconds()
 	out["timings_ms"] = timings
 	return out, nil

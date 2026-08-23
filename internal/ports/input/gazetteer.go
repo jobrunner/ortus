@@ -40,4 +40,11 @@ type Gazetteer interface {
 	// the point (or a neighbor) has no DEM coverage — adapters render a null
 	// exposure block in that case.
 	Exposure(ctx context.Context, p domain.Coordinate) (*domain.Exposure, error)
+
+	// Capabilities reports which optional blocks this deployment can answer at
+	// all, so a consumer can tell a null block that means "not part of this
+	// dataset" from one that means "no result here". Every method above returns
+	// (nil, nil) for both, which made a package that quietly lost a layer
+	// indistinguishable from correct behavior.
+	Capabilities() domain.GazetteerCapabilities
 }

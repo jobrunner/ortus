@@ -3,7 +3,9 @@ package app
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
+	"slices"
 
 	"github.com/jobrunner/ortus/internal/adapters/geopackage"
 	"github.com/jobrunner/ortus/internal/application/gazetteer"
@@ -67,6 +69,19 @@ func (a *App) buildGazetteer(ctx context.Context) error {
 		return fmt.Errorf("opening gazetteer GeoPackage: %w", err)
 	}
 
+	// Check the manifest against the GeoPackage it was paired with. This fails
+	// startup, unlike the SRID probe below, because the two are different kinds of
+	// problem: a bad SRID degrades one feature, whereas a manifest naming a table
+	// or column that is not there means the operator deployed a mismatched pair,
+	// and every affected query would answer "nothing found" indistinguishably from
+	// a legitimate empty result.
+	if err := verifyPackageContract(ctx, idx, manifest); err != nil {
+		// The handle is already open and a.gazetteerClose is not set yet, so
+		// nothing else would release it: App.New just propagates this error.
+		_ = idx.Close()
+		return err
+	}
+
 	// Probe the SRID metadata: if ellipsoidal Distance can't resolve EPSG:4326,
 	// the KNN radius silently drops every row. Warn loudly but don't fail — Locate
 	// (point-in-polygon) still works without it.
@@ -80,6 +95,7 @@ func (a *App) buildGazetteer(ctx context.Context) error {
 		a.Gazetteer.SetNameSources(nameSources)
 	}
 	a.gazetteerLicense = manifest.License
+	a.gazetteerDataset = domain.DatasetInfo{Version: manifest.DatasetVersion, Built: manifest.Built}
 	a.gazetteerClose = idx.Close
 	// Build the bearing policy from the tuning knobs (config) + the constraint
 	// tier (manifest, dataset-bound). Handlers pass this to Bearing().
@@ -108,6 +124,22 @@ func (a *App) buildGazetteer(ctx context.Context) error {
 		"salience", strategyName(cfg.Bearing.Salience),
 	)
 	return nil
+}
+
+// verifyPackageContract asks the GeoPackage which columns its tables actually
+// have, then lets the manifest judge whether that satisfies its mappings. The
+// adapter reports facts and the manifest owns the policy, so neither has to know
+// the other's job.
+func verifyPackageContract(ctx context.Context, idx *geopackage.GazetteerIndex, manifest gazetteer.Manifest) error {
+	schema, err := idx.TableColumns(ctx, slices.Sorted(maps.Keys(manifest.ExpectedTables())))
+	if err != nil {
+		return err
+	}
+	spatial, err := idx.SpatialLayers(ctx)
+	if err != nil {
+		return err
+	}
+	return manifest.VerifyAgainst(schema, spatial)
 }
 
 // salienceRank is the config value for the legacy class-then-distance strategy.

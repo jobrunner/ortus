@@ -17,14 +17,17 @@
       "internal/adapters/telemetry/ringbuffer.go": 91,
       "internal/app/app.go": 82,
       "internal/application/registry.go": 86,
-      "internal/adapters/http/handlers.go": 72,
+      "internal/adapters/http/handlers.go": 75,
       "internal/config/config.go": 79,
-      "internal/application/gazetteer/service.go": 74,
+      "internal/application/gazetteer/service.go": 76,
       "_timings_note": "gazetteerSections gained per-section wall-clock timing (a mark() closure + 6 mark() calls) to surface the DEM-derived exposure/elevation enrichment cost that processing_time_ms omits; +1 file complexity (57→58) and +1 function complexity (14→15, = current repo max) for that observability. Sub-functions were not extractable without splitting the section sequence.",
       "internal/adapters/http/gazetteer.go": 58,
       "internal/application/gazetteer/bearing.go": 73,
-      "internal/adapters/geopackage/spatialindex.go": 54,
-      "internal/adapters/watcher/watcher.go": 51
+      "internal/adapters/geopackage/spatialindex.go": 67,
+      "internal/adapters/watcher/watcher.go": 51,
+      "_note_spatialindex": "54 -> 67 (2026-08-23): TableColumns + SpatialLayers, reporting each declared table's columns and which tables are registered feature layers, so the manifest can be checked against the file at startup. Previously a manifest naming a table or column that is not there produced empty results indistinguishable from a legitimate 'nothing found'. Both facts are needed: columns alone do not make a queryable layer, since every read resolves its geometry column through gpkg_geometry_columns first, so a plain SQLite table with the right names would pass a columns-only check and then fail every query. The judgement itself lives in Manifest.VerifyAgainst, deliberately not here — the adapter only reports facts, which is what kept the file from growing further.",
+      "_note_handlers": "72 -> 75 (2026-08-23): the gazetteer identity block on /sources (dataset_version/built), field-wise omitted when unset so an absent value is never reported as blank. Three guard clauses for a deployed package that could otherwise not be told apart from any other build of the same file name.",
+      "_note_service": "74 -> 76 (2026-08-23): Capabilities(), reporting which optional blocks the loaded dataset can answer. Every optional block renders null both when absent from the dataset and when the point has no result, and the second is a normal answer since the territory run-out cap — so a package that silently lost a layer looked like correct behavior."
     }
   },
   "function_complexity": {
@@ -40,8 +43,9 @@
       "internal/adapters/http/gazetteer.go": 15,
       "internal/adapters/mcp/tools_gazetteer.go": 14,
       "internal/adapters/telemetry/ringbuffer.go": 12,
-      "internal/app/gazetteer.go": 12,
-      "internal/adapters/storage/http.go": 11
+      "internal/app/gazetteer.go": 13,
+      "internal/adapters/storage/http.go": 11,
+      "_note_app_gazetteer": "12 -> 13 (2026-08-23): one more guard clause in buildGazetteer for the startup contract check. The check itself was extracted into verifyPackageContract to keep this at +1; the remaining increment is the call site, which cannot be folded into an existing branch."
     }
   },
   "hotspot": {

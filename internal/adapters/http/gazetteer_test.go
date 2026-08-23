@@ -34,6 +34,23 @@ type fakeGazetteer struct {
 	expErr       error
 	elev         *domain.Elevation
 	elevErr      error
+	caps         *domain.GazetteerCapabilities
+}
+
+// Capabilities: a fake that was given data for a block stands for a deployment
+// that has it. `caps` overrides that for tests about an absent feature, where the
+// point is precisely that no data AND no capability is different from no data
+// alone.
+func (f fakeGazetteer) Capabilities() domain.GazetteerCapabilities {
+	if f.caps != nil {
+		return *f.caps
+	}
+	return domain.GazetteerCapabilities{
+		Islands:   f.islands != nil,
+		Mountains: f.mountains != nil,
+		Elevation: f.elev != nil,
+		Exposure:  f.exp != nil,
+	}
 }
 
 func (f fakeGazetteer) Locate(context.Context, domain.Coordinate) (*domain.Locality, error) {

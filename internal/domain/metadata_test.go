@@ -259,3 +259,26 @@ func TestQueryResultWithQueryTime(t *testing.T) {
 		t.Errorf("QueryTime = %v, want 100ms", result.QueryTime)
 	}
 }
+
+func TestDatasetInfoIsEmpty(t *testing.T) {
+	tests := []struct {
+		name string
+		info DatasetInfo
+		want bool
+	}{
+		// A package built before the fields existed reports neither, and that has
+		// to stay distinguishable from a package that reports one — the adapter
+		// omits the whole block for the former rather than publishing blanks.
+		{"no identity at all", DatasetInfo{}, true},
+		{"version only", DatasetInfo{Version: "0.2.0"}, false},
+		{"built only", DatasetInfo{Built: "2026-08-23"}, false},
+		{"both", DatasetInfo{Version: "0.2.0", Built: "2026-08-23"}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.info.IsEmpty(); got != tt.want {
+				t.Errorf("IsEmpty() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

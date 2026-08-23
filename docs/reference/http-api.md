@@ -250,6 +250,9 @@ or a park is *not* "in" it; without that raster the decision uses distance alone
     "surface_model": "DSM",
     "source": { "name": "Copernicus DEM GLO-30", "url": "…", "attribution": "© DLR/Airbus/ESA …" }
   },
+  "available": {
+    "islands": true, "mountains": true, "exposure": true, "elevation": true
+  },
   "sources": [
     { "code": "latin-osm", "short": "OSM name (already Latin)",
       "long": "Taken verbatim from the OpenStreetMap name tag; already Latin script, no transliteration applied.",
@@ -262,6 +265,16 @@ or a park is *not* "in" it; without that raster the decision uses distance alone
   }
 }
 ```
+
+`available` says which of the optional blocks this deployment can answer at all.
+Every optional block is `null` in two unrelated situations: the feature is not part
+of the loaded dataset (layer absent from the package, no DEM wired), or it is and
+the point simply has no result — a point on flat ground legitimately belongs to no
+mountain. Those were indistinguishable, so a package that quietly lost a layer
+looked exactly like correct behaviour. `true` means "this deployment can answer the
+block"; it says nothing about whether the requested point has a result. To tell the
+two apart: `mountains: null` with `available.mountains: true` means "no mountain
+here", with `false` it means "this dataset cannot answer that".
 
 Each admin unit, each island, each mountain, and the bearing anchor carry the
 romanized `name`, the original-script `name_native` (empty when the name is already
@@ -328,7 +341,8 @@ GET /api/v1/sources/{sourceId}           # source details
 GET /api/v1/sources/{sourceId}/layers    # layers of a source
 ```
 
-`GET /api/v1/sources` returns `{ sources: [...], count }`, each source with
+`GET /api/v1/sources` returns `{ sources: [...], count }` — plus a `gazetteer`
+block when a gazetteer package is loaded — each source with
 `id`, `name`, `path`, `size`, `layer_count`, `indexed`, `ready`, `loaded_at`,
 `last_queried`, and `license` (name/url/attribution) when the package carries
 one — omitted otherwise:
@@ -342,9 +356,19 @@ one — omitted otherwise:
       "license": { "name": "CC-BY-4.0", "url": "https://creativecommons.org/licenses/by/4.0/",
         "attribution": "© Example Data Provider" } }
   ],
-  "count": 1
+  "count": 1,
+  "gazetteer": { "dataset_version": "0.2.0", "built": "2026-08-23" }
 }
 ```
+
+The `gazetteer` block identifies the loaded gazetteer package. The gazetteer is
+read out of competition, so it is not one of the sources above — but it is the
+largest deployed artifact and the one most likely to drift from the binary, and
+the build-side package check only compares files on the build machine, so it
+cannot see what a server actually loaded. The block is omitted entirely when the
+feature is off or when the package predates the fields; an empty object would not
+mean the same thing as no answer. `dataset_version` versions the *data*, not
+ortus.
 
 A source's license travels inside the package: for GeoPackages it is the
 `gpkg_metadata` row with `mime_type='application/json'` **and**

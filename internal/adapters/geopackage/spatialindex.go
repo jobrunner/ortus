@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"math"
+	"slices"
 	"strings"
 
 	"github.com/jobrunner/ortus/internal/domain"
@@ -109,6 +110,74 @@ func (g *GazetteerIndex) VerifySRID(ctx context.Context) error {
 			"as %.0f m, expected ~110–111 km; check the dataset SRID / spatial_ref_sys", d.Float64)
 	}
 	return nil
+}
+
+// TableColumns reports the columns of each named table, keyed by table name. A
+// table that does not exist maps to an empty set rather than being absent, which
+// is the distinction a caller checking a manifest against the file needs — and
+// PRAGMA table_info yields no rows for an unknown table rather than erroring, so
+// the two cases arrive the same way here.
+//
+// This deliberately reports facts and makes no judgement: deciding which tables
+// and columns *ought* to be present is manifest policy and lives with the
+// manifest (see Manifest.VerifyAgainst), not in the adapter.
+func (g *GazetteerIndex) TableColumns(ctx context.Context, tables []string) (map[string]map[string]struct{}, error) {
+	out := make(map[string]map[string]struct{}, len(tables))
+	for _, table := range slices.Sorted(slices.Values(tables)) {
+		cols, err := g.tableColumns(ctx, table)
+		if err != nil {
+			return nil, fmt.Errorf("reading columns of %q: %w", table, err)
+		}
+		out[table] = cols
+	}
+	return out, nil
+}
+
+// SpatialLayers reports the registered geometry column of each GeoPackage feature
+// layer, keyed by table name — i.e. the contents of gpkg_geometry_columns.
+//
+// Having the columns is not enough to be queryable: every read resolves its
+// geometry column through that table first (see geomColumn) and fails with
+// ErrLayerNotFound without a row there. So a plain SQLite table carrying the right
+// column names would satisfy a columns-only check and then fail every query.
+//
+// The column NAME is reported, not just the row's existence, because the
+// registration can be stale: a row naming a column the table no longer has still
+// makes the layer look registered, and geomColumn would then hand that name to
+// every query. Reporting it lets the caller cross-check against the real columns.
+func (g *GazetteerIndex) SpatialLayers(ctx context.Context) (map[string]string, error) {
+	rows, err := g.db.QueryContext(ctx, "SELECT table_name, column_name FROM gpkg_geometry_columns")
+	if err != nil {
+		return nil, fmt.Errorf("reading gpkg_geometry_columns: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	out := map[string]string{}
+	for rows.Next() {
+		var table, col string
+		if err := rows.Scan(&table, &col); err != nil {
+			return nil, err
+		}
+		out[table] = col
+	}
+	return out, rows.Err()
+}
+
+// tableColumns returns the column names of one table, empty when it does not exist.
+func (g *GazetteerIndex) tableColumns(ctx context.Context, table string) (map[string]struct{}, error) {
+	rows, err := g.db.QueryContext(ctx, `SELECT name FROM pragma_table_info(?)`, table)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	cols := map[string]struct{}{}
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		cols[name] = struct{}{}
+	}
+	return cols, rows.Err()
 }
 
 // QueryKNN returns up to k nearest features of a layer within maxKM of p, ordered

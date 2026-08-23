@@ -52,6 +52,7 @@ type App struct {
 	gazetteerClose             func() error         // releases the gazetteer index connection; nil when disabled
 	gazetteerPolicy            domain.BearingPolicy // bearing tuning knobs (config) + constraint tier (manifest)
 	gazetteerLicense           domain.License       // dataset license/attribution from the manifest; surfaced in responses
+	gazetteerDataset           domain.DatasetInfo   // built-package identity (version/date) from the manifest; surfaced by /sources
 	gazetteerElevationSourceID string               // raster id of the out-of-competition DEM; "" when off/unopened (must be closed on shutdown, it's not in the registry)
 	gazetteerBuiltUpSourceID   string               // raster id of the out-of-competition built-up gate raster; "" when off/unopened (closed on shutdown, not in the registry)
 }
@@ -337,6 +338,7 @@ func (a *App) buildHTTPServer(cfg *config.Config, logger *slog.Logger) *httpAdap
 			Gazetteer:          a.gazetteerPort(),
 			BearingPolicy:      a.gazetteerPolicy,
 			GazetteerLicense:   a.gazetteerLicense,
+			GazetteerDataset:   a.gazetteerDataset,
 			Version:            cfg.Build.Version,
 			Transformer:        a.Transformer,
 			BatchMaxPoints:     cfg.Query.Batch.MaxPoints,
