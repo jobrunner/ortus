@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0](https://github.com/jobrunner/ortus/compare/v1.5.0...v1.6.0) (2026-08-23)
+
+
+### Features
+
+* **mcp:** report availability, closing the gap this branch opened ([957ba64](https://github.com/jobrunner/ortus/commit/957ba6489d9a64b173e2b6262abefea77ab6c86c))
+
+
+### Bug Fixes
+
+* **elevation:** stop reporting uncovered ground as sea level ([e5b8f73](https://github.com/jobrunner/ortus/commit/e5b8f73837aa2916f8028c37e2dae5fc438f0e00))
+* **gazetteer:** correct the MCP contract and make the null shape enforceable ([fe52fc1](https://github.com/jobrunner/ortus/commit/fe52fc17ea187467b54b2c2cfed2a65f13092a26))
+* **gocog:** floor pixel coordinates so out-of-footprint points are rejected ([813ac5d](https://github.com/jobrunner/ortus/commit/813ac5dd020f1191dbb3c7793944f566bc3f0f01))
+
 ## [1.5.0](https://github.com/jobrunner/ortus/compare/v1.4.1...v1.5.0) (2026-08-23)
 
 
