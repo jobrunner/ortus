@@ -90,7 +90,13 @@ func (a *App) buildGazetteer(ctx context.Context) error {
 	}
 
 	strategy, candidateRadiusKM := bearingStrategy(cfg.Bearing)
-	a.Gazetteer = gazetteer.NewService(idx, manifest, levels, strategy, true)
+	// The service talks to the index through the tracing decorator so every
+	// SpatiaLite round-trip shows up as a child span; idx itself stays the handle
+	// for the lifecycle calls (VerifySRID, Close), which are not port methods.
+	a.Gazetteer = gazetteer.NewService(
+		geopackage.NewTracedSpatialIndex(idx, a.Tracer), manifest, levels, strategy, true,
+	)
+	a.Gazetteer.SetTracer(a.Tracer)
 	if nameSources != nil {
 		a.Gazetteer.SetNameSources(nameSources)
 	}

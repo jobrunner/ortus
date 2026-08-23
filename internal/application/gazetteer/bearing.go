@@ -20,12 +20,11 @@ var salienceClasses = []domain.PlaceClass{domain.ClassCity, domain.ClassTown, do
 // place of each class within that class's reach, optionally constrains anchors to
 // the query point's boundary tier, and lets the salience strategy pick the best.
 func (s *Service) Bearing(ctx context.Context, p domain.Coordinate, pol domain.BearingPolicy) (*domain.Fix, error) {
-	if err := s.ready(); err != nil {
+	ctx, span, err := s.beginSection(ctx, "Bearing", p)
+	if err != nil {
 		return nil, err
 	}
-	if err := requireWGS84(p); err != nil {
-		return nil, err
-	}
+	defer span.End()
 	// The admin point-in-polygon gives the query's country (same-country anchor guard)
 	// and the boundary-constraint tier ancestor.
 	containing, err := s.index.PointInPolygon(ctx, s.manifest.AdminLayer, p)

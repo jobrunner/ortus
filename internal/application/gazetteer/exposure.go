@@ -45,12 +45,11 @@ const (
 // gradient needs the full window) — adapters then render a null exposure block
 // (best-effort, no error), mirroring Elevation.
 func (s *Service) Exposure(ctx context.Context, p domain.Coordinate) (*domain.Exposure, error) {
-	if err := s.ready(); err != nil {
+	ctx, span, err := s.beginSection(ctx, "Exposure", p)
+	if err != nil {
 		return nil, err
 	}
-	if err := requireWGS84(p); err != nil {
-		return nil, err
-	}
+	defer span.End()
 	if s.elevation == nil {
 		return nil, nil // feature not wired — adapters render a null exposure block
 	}

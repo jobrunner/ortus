@@ -11,12 +11,39 @@ import (
 
 	"go.opentelemetry.io/otel/metric/noop"
 
+	"github.com/jobrunner/ortus/internal/adapters/geopackage"
 	"github.com/jobrunner/ortus/internal/adapters/storage"
 	"github.com/jobrunner/ortus/internal/adapters/telemetry"
 	"github.com/jobrunner/ortus/internal/application"
+	"github.com/jobrunner/ortus/internal/application/gazetteer"
 	"github.com/jobrunner/ortus/internal/domain"
 	"github.com/jobrunner/ortus/internal/ports/output"
 )
+
+// coverageIndex is a fake SpatialIndex: every method succeeds with an empty or
+// trivial result, so each gazetteer section runs to completion (and emits its
+// span) without SpatiaLite.
+type coverageIndex struct{}
+
+func (coverageIndex) QueryKNN(context.Context, string, domain.Coordinate, int, float64, *output.Filter) ([]output.NearFeature, error) {
+	return nil, nil
+}
+
+func (coverageIndex) PointInPolygon(context.Context, string, domain.Coordinate) ([]domain.Feature, error) {
+	return nil, nil
+}
+
+func (coverageIndex) ResolveChain(context.Context, string, int64, output.AdminColumns) ([]output.AdminRow, error) {
+	return nil, nil
+}
+
+func (coverageIndex) DistanceKM(context.Context, domain.Coordinate, domain.Coordinate) (float64, error) {
+	return 1, nil
+}
+
+func (coverageIndex) Azimuth(context.Context, domain.Coordinate, domain.Coordinate) (float64, error) {
+	return 90, nil
+}
 
 // coverageRepo is a fake SpatialSource that lets every traced method
 // run to completion without hitting SQLite.
@@ -90,6 +117,23 @@ func TestTracingCoverage_AllPathsProduceSpans(t *testing.T) {
 		"HealthService.IsReady",
 		"HealthService.GetHealthDetails",
 		"HealthService.GetSourceHealth",
+		// Gazetteer sections. These were the gap that motivated tools/tracecheck:
+		// this list is hand-maintained, so it only ever checked what somebody
+		// remembered to add — and nobody added the gazetteer. The static gate
+		// derives the requirement from the code instead; the two are
+		// complementary, and this half proves the spans really reach the buffer.
+		"Gazetteer.Locate",
+		"Gazetteer.Islands",
+		"Gazetteer.Mountains",
+		"Gazetteer.Bearing",
+		"Gazetteer.Exposure",
+		"Gazetteer.Elevation",
+		// SpatialIndex decorator
+		"SpatialIndex.PointInPolygon",
+		"SpatialIndex.QueryKNN",
+		"SpatialIndex.ResolveChain",
+		"SpatialIndex.DistanceKM",
+		"SpatialIndex.Azimuth",
 	}
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
@@ -168,6 +212,50 @@ func TestTracingCoverage_AllPathsProduceSpans(t *testing.T) {
 	asRequest("watcher delete event", func(ctx context.Context) {
 		if err := reg.UnloadSource(ctx, "fake"); err != nil {
 			t.Fatalf("UnloadSource: %v", err)
+		}
+	})
+
+	// Gazetteer: every section must emit its span even when the underlying data
+	// yields nothing, because a section that answers "not found" is exactly the
+	// one a debugger needs to see in the trace.
+	idx := geopackage.NewTracedSpatialIndex(coverageIndex{}, tr)
+	gz := gazetteer.NewService(idx, gazetteer.Manifest{
+		PlacesLayer: "places", NameColumn: "name", RankColumn: "place", AdminFKColumn: "admin_id",
+		AdminLayer: "admin_levels", LevelColumn: "admin_level", AdminNameColumn: "name",
+		ParentFKColumn: "parent_id", CountryColumn: "country_iso",
+		IslandsLayer: "islands", IslandsNameColumn: "name",
+		MountainsLayer: "mountains", MountainsNameColumn: "name",
+		MountainsLandformColumn: "landform", MountainsAreaColumn: "area_km2",
+	}, nil, nil, true)
+	gz.SetTracer(tr)
+
+	asRequest("HTTP GET /api/v1/gazetteer", func(ctx context.Context) {
+		p := domain.NewWGS84Coordinate(10.0, 50.0)
+		_, _ = gz.Locate(ctx, p)
+		_, _ = gz.Islands(ctx, p)
+		_, _ = gz.Mountains(ctx, p)
+		_, _ = gz.Bearing(ctx, p, domain.DefaultBearingPolicy())
+		_, _ = gz.Exposure(ctx, p)
+		_, _ = gz.Elevation(ctx, p)
+	})
+
+	// DistanceKM and Azimuth are not guaranteed to be reached through Bearing with
+	// a fake index, so exercise the remaining decorator methods directly — the same
+	// approach the RepoOps block above takes.
+	asRequest("SpatialIndexOps", func(ctx context.Context) {
+		a := domain.NewWGS84Coordinate(10, 50)
+		b := domain.NewWGS84Coordinate(11, 51)
+		if _, err := idx.DistanceKM(ctx, a, b); err != nil {
+			t.Fatalf("DistanceKM: %v", err)
+		}
+		if _, err := idx.Azimuth(ctx, a, b); err != nil {
+			t.Fatalf("Azimuth: %v", err)
+		}
+		if _, err := idx.QueryKNN(ctx, "places", a, 5, 30, nil); err != nil {
+			t.Fatalf("QueryKNN: %v", err)
+		}
+		if _, err := idx.ResolveChain(ctx, "admin_levels", 1, output.AdminColumns{}); err != nil {
+			t.Fatalf("ResolveChain: %v", err)
 		}
 	})
 

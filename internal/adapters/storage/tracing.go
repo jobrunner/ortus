@@ -16,6 +16,10 @@ type TracedStorage struct {
 	systemAttr output.Attribute // e.g. {Key: "storage.system", Value: "s3"}
 }
 
+// Compile-time proof that the decorator still covers the whole port; see the
+// note on TracedSpatialIndex for why the assertion matters.
+var _ output.ObjectStorage = (*TracedStorage)(nil)
+
 // NewTracedStorage wraps inner with tracing using the given tracer. The
 // storageSystem string is recorded as the "storage.system" attribute (e.g.
 // "local", "s3", "azure", "http") so spans group cleanly in backends.

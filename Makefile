@@ -212,7 +212,7 @@ check: fmt vet lint test ## Alle Qualitätsprüfungen (vor Commit)
 # (siehe ADR/Memory); der Compiler entscheidet. Gleiche Schritte wie die CI.
 # Bewusst KEIN Aufruf des `build`-Targets (das schreibt ./ortus); stattdessen
 # ein binärloser Compile-Check via `go build ./...`.
-verify: fmt-check vet lint test arch debt-guard ## Maßgebliche Grün-Prüfung (gofmt-check+vet+compile+test+lint+arch+debt)
+verify: fmt-check vet lint test arch debt-guard trace-coverage ## Maßgebliche Grün-Prüfung (gofmt-check+vet+compile+test+lint+arch+debt+traces)
 	@echo "Compile-Check (go build ./...)…"
 	@$(GO) build ./...
 	@echo "\n✅ verify bestanden — Compile/Test/Lint/Format/Arch/Debt grün."
@@ -241,6 +241,25 @@ arch: ## Architektur-Fitness: Import-Grenzen + Modul-Hygiene
 	$(GOLINT) run --enable-only depguard,gomodguard_v2 ./...
 	$(GO) mod tidy -diff
 	@echo "✅ arch ok — Import-Grenzen & Modul-Hygiene grün."
+
+# Trace-Coverage: verhindert unsichtbare Codepfade. Instrumentierung hat keinen
+# scheiternden Test, der sie schützt — der Gazetteer-Layer lief monatelang ohne
+# einen einzigen Span, ohne dass irgendetwas rot wurde. Deshalb ein Gate.
+trace-coverage: ## Trace-Coverage: jeder Application-Einstiegspunkt + Traced*-Decorator öffnet einen Span
+	@$(GO) run ./tools/tracecheck .
+
+# Performance-Gate: fährt die feste Anfragemenge aus perf/baseline.json gegen eine
+# laufende Instanz und vergleicht die Spans mit den committeten Budgets. Setzt
+# tracing.enabled UND mcp.enabled auf der Zielinstanz voraus (perf/README.md).
+# Aufrufzahlen sind harte Grenzen, Zeiten lose Deckel — Details im Tool-Header.
+PERF_BASE ?= http://127.0.0.1:8080
+PERF_MCP  ?= http://127.0.0.1:9091/mcp
+
+perf-gate: ## Performance-Gate gegen perf/baseline.json (PERF_BASE=… PERF_MCP=…)
+	@$(GO) run ./tools/perfgate -base $(PERF_BASE) -mcp $(PERF_MCP) -baseline perf/baseline.json
+
+perf-gate-update: ## Performance-Baseline bewusst neu schreiben (Review erforderlich!)
+	@$(GO) run ./tools/perfgate -base $(PERF_BASE) -mcp $(PERF_MCP) -baseline perf/baseline.json -update
 
 hooks: ## Installiere git pre-commit Hook (.githooks)
 	git config core.hooksPath .githooks
