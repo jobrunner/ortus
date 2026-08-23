@@ -282,10 +282,23 @@ func TestGazetteerToolReportsAvailability(t *testing.T) {
 	if out.Available == nil {
 		t.Fatal("no available block in the MCP result — a null part is then ambiguous")
 	}
-	// The canned fake supplies islands/mountains/elevation/exposure data, so its
-	// derived capabilities are all true; what this pins is that the block is
-	// present and carries the four keys, not the fake's particular values.
-	if !out.Available.Islands || !out.Available.Mountains {
-		t.Errorf("available = %+v, want the fake's layers reported available", out.Available)
+	// All four keys are asserted, not just the true ones: a regression that drops a
+	// field or flips it decodes silently into the struct otherwise. The fake sets
+	// islands/mountains/elev but NOT exp, and derives its capabilities from that —
+	// so exposure is expected FALSE here, which also proves the block reports real
+	// state rather than a blanket true.
+	for _, tc := range []struct {
+		key  string
+		got  bool
+		want bool
+	}{
+		{"islands", out.Available.Islands, true},
+		{"mountains", out.Available.Mountains, true},
+		{"elevation", out.Available.Elevation, true},
+		{"exposure", out.Available.Exposure, false},
+	} {
+		if tc.got != tc.want {
+			t.Errorf("available.%s = %v, want %v", tc.key, tc.got, tc.want)
+		}
 	}
 }
