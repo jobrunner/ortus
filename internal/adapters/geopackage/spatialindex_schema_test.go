@@ -67,9 +67,11 @@ func TestSpatialLayers_ListsOnlyRegisteredFeatureLayers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SpatialLayers: %v", err)
 	}
+	// The geometry COLUMN is reported, not just the row's existence, so a caller
+	// can catch a stale registration naming a column the table no longer has.
 	for _, want := range []string{"places", "admin_levels"} {
-		if _, ok := got[want]; !ok {
-			t.Errorf("registered layer %q missing from the report, got %v", want, got)
+		if got[want] != "geom" {
+			t.Errorf("layer %q: geometry column = %q, want \"geom\" (got map %v)", want, got[want], got)
 		}
 	}
 	// gpkg_contents / gpkg_geometry_columns themselves are plain tables, not

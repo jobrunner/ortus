@@ -11,6 +11,9 @@ import (
 	"github.com/jobrunner/ortus/internal/domain"
 )
 
+// featureIDColumn is the GeoPackage primary key the adapter's SQL hardcodes.
+const featureIDColumn = "fid"
+
 // defaultConstraintTier is used when the manifest omits bearing_constraint_tier.
 const defaultConstraintTier = "state"
 
@@ -206,9 +209,15 @@ func (m Manifest) ExpectedTables() map[string][]string {
 		m.RankColumn, m.NameColumn, m.AdminFKColumn, m.CountryColumn,
 		m.NameNativeColumn, m.NameSourceColumn,
 		m.PopulationColumn, m.CapitalColumn, m.NotabilityColumn)
+	// featureIDColumn is required on the admin layer on top of the mapped roles:
+	// ResolveChain walks the parent chain with `fid` written literally into its SQL
+	// (WHERE fid = ?, JOIN ON a.fid = chain.parent_id), so it is a hard dependency
+	// of the adapter rather than a configurable role. A GeoPackage using a
+	// different feature-id column would otherwise pass startup and fail the
+	// bearing's chain lookup at query time.
 	add(m.AdminLayer,
 		m.LevelColumn, m.AdminNameColumn, m.ParentFKColumn, m.CountryColumn,
-		m.NameNativeColumn, m.NameSourceColumn)
+		m.NameNativeColumn, m.NameSourceColumn, featureIDColumn)
 	add(m.IslandsLayer, m.IslandsNameColumn, m.NameNativeColumn, m.NameSourceColumn)
 	add(m.MountainsLayer,
 		m.MountainsNameColumn, m.MountainsLandformColumn,
@@ -232,7 +241,7 @@ func (m Manifest) ExpectedTables() map[string][]string {
 // change usually breaks several mappings at once and one startup should report
 // all of them. Unset optional mappings arrive as "" and mean "not declared", not
 // "a column with an empty name".
-func (m Manifest) VerifyAgainst(schema map[string]map[string]struct{}, spatial map[string]struct{}) error {
+func (m Manifest) VerifyAgainst(schema map[string]map[string]struct{}, spatial map[string]string) error {
 	var problems []string
 	want := m.ExpectedTables()
 	for _, table := range slices.Sorted(maps.Keys(want)) {
@@ -245,11 +254,20 @@ func (m Manifest) VerifyAgainst(schema map[string]map[string]struct{}, spatial m
 		// geometry column via gpkg_geometry_columns first. A plain SQLite table
 		// with the right names would pass a columns-only check and then fail
 		// every query with "layer not found".
-		if _, ok := spatial[table]; !ok {
+		geom, registered := spatial[table]
+		if !registered {
 			problems = append(problems, fmt.Sprintf(
 				"table %q exists but is not registered as a GeoPackage feature layer "+
 					"(no gpkg_geometry_columns row), so every query on it would fail", table))
 			continue
+		}
+		// A registration can be stale: a row naming a column the table no longer
+		// has still looks registered, and every query would then select a column
+		// that is not there.
+		if _, ok := cols[geom]; !ok {
+			problems = append(problems, fmt.Sprintf(
+				"table %q is registered with geometry column %q, which the table does not have",
+				table, geom))
 		}
 		for _, c := range want[table] {
 			if _, ok := cols[c]; c != "" && !ok {

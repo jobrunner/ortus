@@ -109,8 +109,8 @@ func TestVerifyAgainst_AcceptsAMatchingSchema(t *testing.T) {
 		t.Fatalf("ParseManifest: %v", err)
 	}
 	err = m.VerifyAgainst(schemaOf(map[string][]string{
-		"places":       {"place", "name", "admin_id", "country_iso"},
-		"admin_levels": {"admin_level", "name", "parent_id", "country_iso"},
+		"places":       {"place", "name", "admin_id", "country_iso", "geom"},
+		"admin_levels": {"admin_level", "name", "parent_id", "country_iso", "geom", "fid"},
 	}), allSpatial())
 	if err != nil {
 		t.Fatalf("matching schema rejected: %v", err)
@@ -122,8 +122,8 @@ func TestVerifyAgainst_RejectsAMissingTable(t *testing.T) {
 	// The mountains layer is declared but absent from the file — the typo case,
 	// as opposed to an omitted optional block, which is legitimate.
 	err := m.VerifyAgainst(schemaOf(map[string][]string{
-		"places":       {"place", "name", "admin_id", "country_iso"},
-		"admin_levels": {"admin_level", "name", "parent_id", "country_iso"},
+		"places":       {"place", "name", "admin_id", "country_iso", "geom"},
+		"admin_levels": {"admin_level", "name", "parent_id", "country_iso", "geom", "fid"},
 	}), allSpatial())
 	if err == nil {
 		t.Fatal("a declared-but-absent table must be rejected")
@@ -139,8 +139,8 @@ func TestVerifyAgainst_RejectsAMissingColumn(t *testing.T) {
 		t.Fatalf("ParseManifest: %v", err)
 	}
 	err = m.VerifyAgainst(schemaOf(map[string][]string{
-		"places":       {"place", "name", "admin_id"}, // country_iso missing
-		"admin_levels": {"admin_level", "name", "parent_id", "country_iso"},
+		"places":       {"place", "name", "admin_id", "geom"}, // country_iso missing
+		"admin_levels": {"admin_level", "name", "parent_id", "country_iso", "geom", "fid"},
 	}), allSpatial())
 	if err == nil {
 		t.Fatal("a mapped-but-absent column must be rejected")
@@ -155,8 +155,8 @@ func TestVerifyAgainst_ReportsEveryViolationAtOnce(t *testing.T) {
 	// list all of them rather than making the operator fix and restart per problem.
 	m := manifestWithMountains(t)
 	err := m.VerifyAgainst(schemaOf(map[string][]string{
-		"places":       {"place"}, // name, admin_id, country_iso missing
-		"admin_levels": {"admin_level", "name", "parent_id", "country_iso"},
+		"places":       {"place", "geom"}, // name, admin_id, country_iso missing
+		"admin_levels": {"admin_level", "name", "parent_id", "country_iso", "geom", "fid"},
 	}), allSpatial())
 	if err == nil {
 		t.Fatal("want an error")
@@ -176,8 +176,8 @@ func TestVerifyAgainst_IgnoresUndeclaredOptionalLayers(t *testing.T) {
 		t.Fatalf("ParseManifest: %v", err)
 	}
 	if err := m.VerifyAgainst(schemaOf(map[string][]string{
-		"places":       {"place", "name", "admin_id", "country_iso"},
-		"admin_levels": {"admin_level", "name", "parent_id", "country_iso"},
+		"places":       {"place", "name", "admin_id", "country_iso", "geom"},
+		"admin_levels": {"admin_level", "name", "parent_id", "country_iso", "geom", "fid"},
 	}), allSpatial()); err != nil {
 		t.Fatalf("an undeclared optional layer must not be required: %v", err)
 	}
@@ -185,8 +185,8 @@ func TestVerifyAgainst_IgnoresUndeclaredOptionalLayers(t *testing.T) {
 
 // allSpatial says "every table named here is a registered feature layer", which is
 // the normal case; the tests that care about registration pass their own set.
-func allSpatial() map[string]struct{} {
-	return map[string]struct{}{"places": {}, "admin_levels": {}, "islands": {}, "mountains": {}}
+func allSpatial() map[string]string {
+	return map[string]string{"places": "geom", "admin_levels": "geom", "islands": "geom", "mountains": "geom"}
 }
 
 func TestVerifyAgainst_RejectsATableThatIsNotAFeatureLayer(t *testing.T) {
@@ -197,9 +197,9 @@ func TestVerifyAgainst_RejectsATableThatIsNotAFeatureLayer(t *testing.T) {
 		t.Fatalf("ParseManifest: %v", err)
 	}
 	err = m.VerifyAgainst(schemaOf(map[string][]string{
-		"places":       {"place", "name", "admin_id", "country_iso"},
-		"admin_levels": {"admin_level", "name", "parent_id", "country_iso"},
-	}), map[string]struct{}{"admin_levels": {}}) // places not registered
+		"places":       {"place", "name", "admin_id", "country_iso", "geom"},
+		"admin_levels": {"admin_level", "name", "parent_id", "country_iso", "geom", "fid"},
+	}), map[string]string{"admin_levels": "geom"}) // places not registered
 	if err == nil {
 		t.Fatal("a table with the right columns but no geometry registration must be rejected")
 	}
@@ -236,12 +236,51 @@ admin:
 	// And the merged set is actually enforced: a table missing a places-only
 	// column must still fail even though the admin role is satisfied.
 	err = m.VerifyAgainst(schemaOf(map[string][]string{
-		"everything": {"name", "country_iso", "admin_level", "parent_id"}, // no place/admin_id
-	}), map[string]struct{}{"everything": {}})
+		"everything": {"name", "country_iso", "admin_level", "parent_id", "geom", "fid"}, // no place/admin_id
+	}), map[string]string{"everything": "geom"})
 	if err == nil {
 		t.Fatal("a shared table missing a places column must be rejected")
 	}
 	if !strings.Contains(err.Error(), `no column "place"`) {
 		t.Errorf("error should name the dropped role's column, got: %v", err)
+	}
+}
+
+func TestVerifyAgainst_RejectsAStaleGeometryRegistration(t *testing.T) {
+	// The row exists, so the layer looks registered — but it names a column the
+	// table does not have, and geomColumn would hand that name to every query.
+	m, err := ParseManifest([]byte(minimalManifest))
+	if err != nil {
+		t.Fatalf("ParseManifest: %v", err)
+	}
+	err = m.VerifyAgainst(schemaOf(map[string][]string{
+		"places":       {"place", "name", "admin_id", "country_iso", "geom"},
+		"admin_levels": {"admin_level", "name", "parent_id", "country_iso", "geom", "fid"},
+	}), map[string]string{"places": "missing_geom", "admin_levels": "geom"})
+	if err == nil {
+		t.Fatal("a registration naming an absent column must be rejected")
+	}
+	if !strings.Contains(err.Error(), `geometry column "missing_geom"`) {
+		t.Errorf("the error should name the bad column, got: %v", err)
+	}
+}
+
+func TestExpectedTables_RequiresTheAdapterHardcodedFeatureID(t *testing.T) {
+	// ResolveChain writes `fid` straight into its SQL, so it is a dependency of
+	// the adapter rather than a configurable role — a GeoPackage with a different
+	// feature-id column would otherwise pass startup and fail bearing at runtime.
+	m, err := ParseManifest([]byte(minimalManifest))
+	if err != nil {
+		t.Fatalf("ParseManifest: %v", err)
+	}
+	if !slices.Contains(m.ExpectedTables()["admin_levels"], featureIDColumn) {
+		t.Errorf("the admin layer must require %q: %v", featureIDColumn, m.ExpectedTables()["admin_levels"])
+	}
+	err = m.VerifyAgainst(schemaOf(map[string][]string{
+		"places":       {"place", "name", "admin_id", "country_iso", "geom"},
+		"admin_levels": {"admin_level", "name", "parent_id", "country_iso", "geom"}, // no fid
+	}), allSpatial())
+	if err == nil || !strings.Contains(err.Error(), `no column "fid"`) {
+		t.Errorf("an admin layer without the feature id must be rejected, got: %v", err)
 	}
 }

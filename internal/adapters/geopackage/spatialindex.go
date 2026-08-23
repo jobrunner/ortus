@@ -133,27 +133,31 @@ func (g *GazetteerIndex) TableColumns(ctx context.Context, tables []string) (map
 	return out, nil
 }
 
-// SpatialLayers reports which tables are registered as GeoPackage feature layers,
-// i.e. have a row in gpkg_geometry_columns.
+// SpatialLayers reports the registered geometry column of each GeoPackage feature
+// layer, keyed by table name — i.e. the contents of gpkg_geometry_columns.
 //
 // Having the columns is not enough to be queryable: every read resolves its
 // geometry column through that table first (see geomColumn) and fails with
-// ErrLayerNotFound without it. So a plain SQLite table carrying the right column
-// names would satisfy a columns-only check and then fail every query — which is
-// exactly the silent mismatch the startup check exists to prevent.
-func (g *GazetteerIndex) SpatialLayers(ctx context.Context) (map[string]struct{}, error) {
-	rows, err := g.db.QueryContext(ctx, "SELECT table_name FROM gpkg_geometry_columns")
+// ErrLayerNotFound without a row there. So a plain SQLite table carrying the right
+// column names would satisfy a columns-only check and then fail every query.
+//
+// The column NAME is reported, not just the row's existence, because the
+// registration can be stale: a row naming a column the table no longer has still
+// makes the layer look registered, and geomColumn would then hand that name to
+// every query. Reporting it lets the caller cross-check against the real columns.
+func (g *GazetteerIndex) SpatialLayers(ctx context.Context) (map[string]string, error) {
+	rows, err := g.db.QueryContext(ctx, "SELECT table_name, column_name FROM gpkg_geometry_columns")
 	if err != nil {
 		return nil, fmt.Errorf("reading gpkg_geometry_columns: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
-	out := map[string]struct{}{}
+	out := map[string]string{}
 	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
+		var table, col string
+		if err := rows.Scan(&table, &col); err != nil {
 			return nil, err
 		}
-		out[name] = struct{}{}
+		out[table] = col
 	}
 	return out, rows.Err()
 }
