@@ -524,15 +524,9 @@ func (r *Repository) QueryPoint(ctx context.Context, sourceID, layerName string,
 	)
 	defer span.End()
 
-	r.mu.RLock()
-	b, ok := r.sources[sourceID]
-	r.mu.RUnlock()
-	if !ok {
-		return nil, domain.ErrSourceNotFound
-	}
-	layer, ok := b.layers[layerName]
-	if !ok {
-		return nil, domain.ErrLayerNotFound
+	layer, err := r.layerOf(sourceID, layerName)
+	if err != nil {
+		return nil, err
 	}
 
 	// Multi-tile continuous layer: route to the tile covering the point.
@@ -596,15 +590,69 @@ func (r *Repository) QueryPoint(ctx context.Context, sourceID, layerName string,
 	}}, nil
 }
 
+// layerOf resolves a loaded bundle's layer, shared by the query and coverage
+// paths so they can never disagree about which layer they are talking about.
+func (r *Repository) layerOf(sourceID, layerName string) (*rasterLayer, error) {
+	r.mu.RLock()
+	b, ok := r.sources[sourceID]
+	r.mu.RUnlock()
+	if !ok {
+		return nil, domain.ErrSourceNotFound
+	}
+	layer, ok := b.layers[layerName]
+	if !ok {
+		return nil, domain.ErrLayerNotFound
+	}
+	return layer, nil
+}
+
+// CoverageAt reports whether a layer has data coverage at coord, regardless of
+// whether the pixel there holds a value.
+//
+// QueryPoint returns "no feature" for two unrelated reasons — the point is beyond
+// the raster's footprint, or it is inside and the pixel is nodata — and a caller
+// that has to distinguish them cannot, because both arrive as an empty result.
+// For a DEM that difference is the whole question: nodata inside the footprint is
+// water, outside it is simply unknown.
+//
+// This walks the same tile/extent lookup as QueryPoint (minus the pixel read) so
+// the two cannot disagree about where coverage ends.
+func (r *Repository) CoverageAt(sourceID, layerName string, coord domain.Coordinate) (bool, error) {
+	layer, err := r.layerOf(sourceID, layerName)
+	if err != nil {
+		return false, err
+	}
+
+	if ts := layer.tiles; ts != nil {
+		latDeg, lonDeg := ts.cellFor(coord.X, coord.Y)
+		name := tileFileName(ts.pattern, latDeg, lonDeg)
+		if !ts.present(name) {
+			return false, nil
+		}
+		key := [2]int{latDeg, lonDeg}
+		ot, err := ts.acquire(key, name)
+		if err != nil {
+			return false, &domain.QueryError{SourceID: sourceID, Layer: layerName, Err: err}
+		}
+		defer ts.release(key)
+		px, py := ot.cog.PixelFromPoint(orb.Point{coord.X, coord.Y}, 0)
+		return px >= 0 && py >= 0 && px < ot.cog.Width() && py < ot.cog.Height(), nil
+	}
+
+	px, py := layer.cog.PixelFromPoint(orb.Point{coord.X, coord.Y}, 0)
+	return px >= 0 && py >= 0 && px < layer.cog.Width() && py < layer.cog.Height(), nil
+}
+
 // queryTiled samples a multi-tile continuous layer: it routes the point to its
 // grid cell, opens (via the LRU) the tile covering it, and decodes the sample. A
-// point over a missing tile or outside the tile extent yields no feature (the
-// ocean/no-coverage convention), not an error.
+// point over a missing tile or outside the tile extent yields no feature, not an
+// error. That absence alone does not say WHICH of the two it was — CoverageAt
+// answers that, and for a DEM the difference is water versus unknown.
 func (r *Repository) queryTiled(sourceID, layerName string, coord domain.Coordinate, ts *tileset, span output.Span) ([]domain.Feature, error) {
 	latDeg, lonDeg := ts.cellFor(coord.X, coord.Y)
 	name := tileFileName(ts.pattern, latDeg, lonDeg)
 	if !ts.present(name) {
-		return nil, nil // no tile → sea level / no coverage
+		return nil, nil // no tile for this cell — outside coverage (see CoverageAt)
 	}
 	key := [2]int{latDeg, lonDeg}
 	ot, err := ts.acquire(key, name)

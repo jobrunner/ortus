@@ -129,6 +129,13 @@ type exposureOut struct {
 // provenance excerpt describing each name_source code that appears above; License
 // is the dataset attribution (null when unset).
 type gazetteerOut struct {
+	// Available says which optional parts this deployment can answer at all.
+	// Without it a null part is ambiguous: absent from the dataset, or present and
+	// simply no result here. That mattered less while elevation reported sea level
+	// for uncovered ground — an MCP client could tell the two apart by the block
+	// being non-null. Now that uncovered ground is null too, this is the only way
+	// to distinguish them, so it is not optional polish.
+	Available availableOut  `json:"available"`
 	Admin     *adminOut     `json:"admin"`
 	Islands   []islandOut   `json:"islands"`
 	Mountains *mountainsOut `json:"mountains"`
@@ -137,6 +144,15 @@ type gazetteerOut struct {
 	Elevation *elevationOut `json:"elevation"`
 	Sources   []sourceOut   `json:"sources"`
 	License   *licenseOut   `json:"license"`
+}
+
+// availableOut mirrors domain.GazetteerCapabilities: what this deployment can
+// answer, independent of whether the queried point has a result.
+type availableOut struct {
+	Islands   bool `json:"islands"`
+	Mountains bool `json:"mountains"`
+	Exposure  bool `json:"exposure"`
+	Elevation bool `json:"elevation"`
 }
 
 // provenanceSet collects the distinct name-source provenances seen in a
@@ -272,16 +288,30 @@ func addGazetteer(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 			"report the height above sea level (elevation, meters; exposure + " +
 			"elevation need a DEM). A part is null when it has no result — no admin " +
 			"coverage, not on an island/mountain, no anchor within reach, no DEM, or " +
-			"(exposure) the point/neighbor lacks coverage; elevation instead uses the " +
-			"sea-level convention (0 m) outside DEM coverage. Equivalent to " +
-			"GET /api/v1/gazetteer.",
+			"(exposure) the point/neighbor lacks coverage. elevation is null " +
+			"OUTSIDE DEM coverage too: a point beyond the DEM's edge has no known " +
+			"height, and reporting 0 m there would assert sea level for ground the " +
+			"DEM never saw. sea_level=true means the DEM covers the point and holds " +
+			"no value — water it surveyed. The available block says which optional parts " +
+			"this deployment can answer at all, which is what distinguishes a null " +
+			"part meaning 'not in this dataset' from one meaning 'no result here'. " +
+			"Equivalent to GET /api/v1/gazetteer.",
 	}, func(ctx toolCtx, _ *callRequest, in gazetteerIn) (*callResult, gazetteerOut, error) {
 		coord, err := selectCoordinate(in.Lon, in.Lat, in.X, in.Y, in.SRID)
 		if err != nil {
 			return nil, gazetteerOut{}, err
 		}
 
-		out := gazetteerOut{Sources: []sourceOut{}}
+		caps := deps.Gazetteer.Capabilities()
+		out := gazetteerOut{
+			Sources: []sourceOut{},
+			Available: availableOut{
+				Islands:   caps.Islands,
+				Mountains: caps.Mountains,
+				Exposure:  caps.Exposure,
+				Elevation: caps.Elevation,
+			},
+		}
 		prov := newProvenanceSet()
 
 		loc, err := deps.Gazetteer.Locate(ctx, coord)

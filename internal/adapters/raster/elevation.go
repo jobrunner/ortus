@@ -76,27 +76,46 @@ func continuousLayer(b *bundle, sourceID, layerName string) (*rasterLayer, error
 func (e *ElevationSource) License() domain.License { return e.license }
 
 // ElevationAt samples the elevation (and, if bound, the per-point accuracy) at
-// coord. A point with no elevation data (ocean / outside the raster extent)
-// returns ok=false — the sea-level convention — rather than an error. A missing
-// accuracy sample (e.g. accuracy layer covers less than the DEM) simply leaves
-// HasAccuracy false.
-func (e *ElevationSource) ElevationAt(ctx context.Context, coord domain.Coordinate) (reading output.ElevationReading, ok bool, err error) {
+// coord, reporting why a height is or is not present. A missing accuracy sample
+// (e.g. the accuracy layer covers less than the DEM) simply leaves HasAccuracy
+// false.
+//
+// Absence is never an error, but it is no longer a single answer: a nodata pixel
+// inside the DEM is water, while a point beyond the DEM's edge is unknown. Both
+// used to report the same "not found" and were rendered as sea level, which made
+// a gap in the data indistinguishable from an actual measurement of 0 m.
+func (e *ElevationSource) ElevationAt(ctx context.Context, coord domain.Coordinate) (reading output.ElevationReading, cov output.ElevationCoverage, err error) {
 	m, has, err := e.sampleLayer(ctx, e.layerName, e.outputProp, coord)
 	if err != nil {
-		return output.ElevationReading{}, false, err
+		return output.ElevationReading{}, output.ElevationUnknown, err
 	}
 	if !has {
-		return output.ElevationReading{}, false, nil // no tile / nodata → sea level
+		// No value here — but "outside the DEM" and "water inside the DEM" are
+		// different answers, and only the second is sea level. Ask which.
+		covered, cerr := e.CoveredAt(ctx, coord)
+		if cerr != nil {
+			return output.ElevationReading{}, output.ElevationUnknown, cerr
+		}
+		if covered {
+			return output.ElevationReading{}, output.ElevationNoData, nil
+		}
+		return output.ElevationReading{}, output.ElevationUnknown, nil
 	}
 	reading = output.ElevationReading{Meters: m}
 	if e.accuracyName != "" {
 		acc, accHas, err := e.sampleLayer(ctx, e.accuracyName, e.accuracyProp, coord)
 		if err != nil {
-			return output.ElevationReading{}, false, err
+			return output.ElevationReading{}, output.ElevationUnknown, err
 		}
 		reading.AccuracyM, reading.HasAccuracy = acc, accHas
 	}
-	return reading, true, nil
+	return reading, output.ElevationMeasured, nil
+}
+
+// CoveredAt reports whether the DEM has coverage at coord, independent of whether
+// that pixel holds a value.
+func (e *ElevationSource) CoveredAt(_ context.Context, coord domain.Coordinate) (bool, error) {
+	return e.repo.CoverageAt(e.sourceID, e.layerName, coord)
 }
 
 // sampleLayer samples one continuous layer and extracts its float property.

@@ -707,6 +707,25 @@ components:
 
     GazetteerData:
       type: object
+      # Every optional block is SEEDED by gazetteerSections and therefore always
+      # present — absence is expressed as a null value, never by omitting the key.
+      # Declaring that here is what makes generated clients model it as nullable
+      # rather than optional, so they stop implementing a key-absence case the
+      # endpoint never produces. All three consumers (/gazetteer, /query's
+      # with_gazetteer, and the batch endpoint) build this through the same
+      # function, so the guarantee is uniform.
+      # `license` is deliberately NOT required: it is emitted only when the dataset
+      # carries one.
+      required:
+        - admin
+        - islands
+        - mountains
+        - bearing
+        - exposure
+        - elevation
+        - available
+        - sources
+        - timings_ms
       description: >-
         Gazetteer-Anreicherung für eine Koordinate: Verwaltungshierarchie (admin),
         Insel(n) (islands), Peilung (bearing), Geländeexposition (exposure), Höhe
@@ -922,10 +941,22 @@ components:
           type: object
           description: >-
             Höhe über NN am Abfragepunkt, aus einem kontinuierlichen Höhen-Raster
-            (DEM). null, wenn kein DEM konfiguriert ist. `sea_level: true` bedeutet,
-            dass keine DEM-Kachel den Punkt abdeckt (Ozean/außerhalb der Abdeckung);
-            `meters` ist dann 0. Für abgeleitete Größen (Hangneigung/Exposition) ist
-            der *relative* Fehler maßgeblich — siehe accuracy_basis.
+            (DEM).
+
+            Der Schlüssel ist immer vorhanden; `null` bedeutet **keine Aussage**:
+            entweder ist kein DEM konfiguriert — dann meldet `available.elevation`
+            false — oder der Punkt liegt außerhalb der DEM-Abdeckung. Letzteres
+            galt früher als
+            `sea_level: true`; das war eine Konvention, die nicht trägt, denn der
+            Rand eines DEM verläuft ebenso oft durch Land wie durch Wasser, und
+            0 m wurde damit genau dort behauptet, wo die Daten enden.
+
+            `sea_level: true` heißt jetzt: das DEM **deckt** den Punkt ab und hat
+            dort keinen Wert — vermessenes Wasser. `meters` ist dann 0 und
+            `accuracy_basis` weist die Konvention aus.
+
+            Für abgeleitete Größen (Hangneigung/Exposition) ist der *relative*
+            Fehler maßgeblich — siehe accuracy_basis.
           properties:
             meters:
               type: number
@@ -952,8 +983,10 @@ components:
             sea_level:
               type: boolean
               description: >-
-                true, wenn keine DEM-Kachel den Punkt abdeckt; meters ist dann 0
-                (Meeresspiegel-Konvention).
+                true, wenn das DEM den Punkt **abdeckt** und dort keinen Wert hat —
+                vermessenes Wasser; meters ist dann 0 (Meeresspiegel-Konvention).
+                Für einen Punkt AUSSERHALB der DEM-Abdeckung ist stattdessen der
+                gesamte elevation-Block null, denn dort ist die Höhe unbekannt.
             surface_model:
               type: string
               description: >-

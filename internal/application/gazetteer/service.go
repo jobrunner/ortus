@@ -445,9 +445,19 @@ func moreSpecific(aArea float64, aName string, bArea float64, bName string) bool
 }
 
 // Elevation samples the height above sea level at the query point. It returns
-// (nil, nil) when no elevation sampler is wired, so the handler omits the block
-// rather than erroring. A point with no DEM coverage yields SeaLevel=true with
-// Meters=0 (the ocean/no-tile convention), not an error.
+// (nil, nil) when no elevation sampler is wired, which the adapters render as a
+// null elevation — they seed every optional block, so absence is always a null
+// value and never an omitted key — rather than erroring.
+//
+// It also returns (nil, nil) for a point OUTSIDE the DEM's footprint. That case
+// used to be reported as SeaLevel=true, together with genuine water, on the
+// reasoning that anything the DEM does not cover is ocean. It is not: a DEM is
+// finite, and its edge runs through land as often as not, so the convention
+// asserted 0 m exactly where it was least entitled to. Water inside the footprint
+// still reports SeaLevel — that reading is sound, because the DEM looked.
+//
+// A null block therefore means "no answer here", which is only distinguishable
+// from "no DEM at all" via the response's availability flags.
 func (s *Service) Elevation(ctx context.Context, p domain.Coordinate) (*domain.Elevation, error) {
 	if err := s.ready(); err != nil {
 		return nil, err
@@ -458,7 +468,7 @@ func (s *Service) Elevation(ctx context.Context, p domain.Coordinate) (*domain.E
 	if s.elevation == nil {
 		return nil, nil // feature not wired — omit from the response
 	}
-	r, ok, err := s.elevation.ElevationAt(ctx, p)
+	r, cov, err := s.elevation.ElevationAt(ctx, p)
 	if err != nil {
 		// A missing source/layer (e.g. the DEM bundle mid hot-reload, or removed)
 		// must not fail the whole gazetteer response — omit elevation, like
@@ -468,18 +478,22 @@ func (s *Service) Elevation(ctx context.Context, p domain.Coordinate) (*domain.E
 		}
 		return nil, err
 	}
+	if cov == output.ElevationUnknown {
+		return nil, nil // outside the DEM — unknown, and not claimed as sea level
+	}
 	elev := &domain.Elevation{
 		Meters:        r.Meters,
-		SeaLevel:      !ok,
+		SeaLevel:      cov == output.ElevationNoData,
 		HorizontalM:   s.elevMeta.HorizontalM,
 		VerticalDatum: s.elevMeta.VerticalDatum,
 		SurfaceModel:  s.elevMeta.SurfaceModel,
 		License:       s.elevation.License(),
 	}
 	switch {
-	case !ok:
+	case cov == output.ElevationNoData:
 		// Sea-level convention: 0 m is a convention, not a measurement, so it
-		// carries no absolute accuracy figure.
+		// carries no absolute accuracy figure. It is only applied where the DEM
+		// covers the point and holds no value — i.e. water it actually surveyed.
 		elev.AccuracyBasis = "sea-level convention"
 	case r.HasAccuracy:
 		// Per-point accuracy (e.g. HEM) when the sampler supplies it.

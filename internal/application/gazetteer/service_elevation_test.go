@@ -12,13 +12,16 @@ import (
 // fakeSampler is a canned output.ElevationSampler for service tests.
 type fakeSampler struct {
 	reading output.ElevationReading
-	ok      bool
+	cov     output.ElevationCoverage
 	err     error
 	license domain.License
 }
 
-func (f fakeSampler) ElevationAt(context.Context, domain.Coordinate) (reading output.ElevationReading, ok bool, err error) {
-	return f.reading, f.ok, f.err
+func (f fakeSampler) ElevationAt(context.Context, domain.Coordinate) (reading output.ElevationReading, cov output.ElevationCoverage, err error) {
+	return f.reading, f.cov, f.err
+}
+func (f fakeSampler) CoveredAt(context.Context, domain.Coordinate) (bool, error) {
+	return f.cov != output.ElevationUnknown, nil
 }
 func (f fakeSampler) License() domain.License { return f.license }
 
@@ -48,7 +51,7 @@ func TestElevationUnwired(t *testing.T) {
 func TestElevationSampled(t *testing.T) {
 	lic := domain.License{Name: "Copernicus DEM GLO-30", Attribution: "© DLR/Airbus/ESA"}
 	svc := NewService(fakeIndex{}, testManifest(), nil, nil, true)
-	svc.SetElevationSampler(fakeSampler{reading: output.ElevationReading{Meters: 177.5}, ok: true, license: lic}, elevMeta())
+	svc.SetElevationSampler(fakeSampler{reading: output.ElevationReading{Meters: 177.5}, cov: output.ElevationMeasured, license: lic}, elevMeta())
 
 	got, err := svc.Elevation(context.Background(), wgs84(9.93, 49.79))
 	if err != nil {
@@ -72,7 +75,7 @@ func TestElevationSampled(t *testing.T) {
 func TestElevationPerPointAccuracy(t *testing.T) {
 	svc := NewService(fakeIndex{}, testManifest(), nil, nil, true)
 	svc.SetElevationSampler(fakeSampler{
-		reading: output.ElevationReading{Meters: 312, AccuracyM: 2.4, HasAccuracy: true}, ok: true,
+		reading: output.ElevationReading{Meters: 312, AccuracyM: 2.4, HasAccuracy: true}, cov: output.ElevationMeasured,
 	}, elevMeta())
 
 	got, err := svc.Elevation(context.Background(), wgs84(9.93, 49.79))
@@ -84,10 +87,11 @@ func TestElevationPerPointAccuracy(t *testing.T) {
 	}
 }
 
-// TestElevationSeaLevel: ok=false (no tile) yields the sea-level convention.
+// TestElevationSeaLevel: a nodata pixel INSIDE the DEM is water, so the
+// sea-level convention applies — the DEM looked and found none.
 func TestElevationSeaLevel(t *testing.T) {
 	svc := NewService(fakeIndex{}, testManifest(), nil, nil, true)
-	svc.SetElevationSampler(fakeSampler{reading: output.ElevationReading{}, ok: false}, elevMeta())
+	svc.SetElevationSampler(fakeSampler{reading: output.ElevationReading{}, cov: output.ElevationNoData}, elevMeta())
 
 	got, err := svc.Elevation(context.Background(), wgs84(8.0, 54.0))
 	if err != nil {
@@ -95,6 +99,26 @@ func TestElevationSeaLevel(t *testing.T) {
 	}
 	if !got.SeaLevel || got.Meters != 0 {
 		t.Errorf("got %+v, want sea_level true / meters 0", got)
+	}
+	if got.AccuracyBasis != "sea-level convention" {
+		t.Errorf("accuracy_basis = %q, want the convention marker", got.AccuracyBasis)
+	}
+}
+
+// TestElevationOutsideCoverageIsNotSeaLevel is the point of the tri-state: a
+// point beyond the DEM's edge is unknown. Reporting 0 m there asserted a height
+// exactly where the data ends — and a DEM's edge runs through land as often as
+// through water, so the old convention was most wrong where it mattered most.
+func TestElevationOutsideCoverageIsNotSeaLevel(t *testing.T) {
+	svc := NewService(fakeIndex{}, testManifest(), nil, nil, true)
+	svc.SetElevationSampler(fakeSampler{reading: output.ElevationReading{}, cov: output.ElevationUnknown}, elevMeta())
+
+	got, err := svc.Elevation(context.Background(), wgs84(8.0, 54.0))
+	if err != nil {
+		t.Fatalf("Elevation() error: %v", err)
+	}
+	if got != nil {
+		t.Errorf("got %+v, want no elevation block — outside the DEM is not a measurement", got)
 	}
 }
 
@@ -112,7 +136,7 @@ func TestElevationSamplerError(t *testing.T) {
 // TestElevationRejectsNonWGS84 mirrors Locate/Bearing: a non-4326 SRID is refused.
 func TestElevationRejectsNonWGS84(t *testing.T) {
 	svc := NewService(fakeIndex{}, testManifest(), nil, nil, true)
-	svc.SetElevationSampler(fakeSampler{reading: output.ElevationReading{Meters: 100}, ok: true}, elevMeta())
+	svc.SetElevationSampler(fakeSampler{reading: output.ElevationReading{Meters: 100}, cov: output.ElevationMeasured}, elevMeta())
 
 	_, err := svc.Elevation(context.Background(), domain.Coordinate{X: 4000000, Y: 3000000, SRID: 3035})
 	if !errors.Is(err, domain.ErrUnsupportedProjection) {

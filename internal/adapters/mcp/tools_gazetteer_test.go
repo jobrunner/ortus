@@ -236,3 +236,69 @@ func TestGazetteerTool(t *testing.T) {
 		t.Errorf("license = %+v, want ODbL attribution", out.License)
 	}
 }
+
+// TestGazetteerToolReportsAvailability: the MCP tool must expose the same
+// availability facts as the REST endpoint. While elevation reported sea level for
+// uncovered ground, an MCP client could tell "no DEM" from "outside coverage" by
+// the block being non-null. Now both are null, so this block is the only thing
+// that distinguishes them — omitting it on MCP would have removed a distinction
+// without providing the replacement.
+func TestGazetteerToolReportsAvailability(t *testing.T) {
+	ts := startGazetteerServer(t)
+	client := mcp.NewClient(&mcp.Implementation{Name: "gaz-avail"}, nil)
+	session, err := client.Connect(context.Background(),
+		&mcp.StreamableClientTransport{Endpoint: ts.URL + "/mcp"}, nil)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(func() { _ = session.Close() })
+
+	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{
+		Name:      "gazetteer",
+		Arguments: map[string]any{"lon": 9.93, "lat": 49.79},
+	})
+	if err != nil {
+		t.Fatalf("CallTool: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("tool returned error: %+v", res.Content)
+	}
+
+	var out struct {
+		Available *struct {
+			Islands   bool `json:"islands"`
+			Mountains bool `json:"mountains"`
+			Exposure  bool `json:"exposure"`
+			Elevation bool `json:"elevation"`
+		} `json:"available"`
+	}
+	raw, err := json.Marshal(res.StructuredContent)
+	if err != nil {
+		t.Fatalf("marshal structured content: %v", err)
+	}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		t.Fatalf("decode structured content: %v", err)
+	}
+	if out.Available == nil {
+		t.Fatal("no available block in the MCP result — a null part is then ambiguous")
+	}
+	// All four keys are asserted, not just the true ones: a regression that drops a
+	// field or flips it decodes silently into the struct otherwise. The fake sets
+	// islands/mountains/elev but NOT exp, and derives its capabilities from that —
+	// so exposure is expected FALSE here, which also proves the block reports real
+	// state rather than a blanket true.
+	for _, tc := range []struct {
+		key  string
+		got  bool
+		want bool
+	}{
+		{"islands", out.Available.Islands, true},
+		{"mountains", out.Available.Mountains, true},
+		{"elevation", out.Available.Elevation, true},
+		{"exposure", out.Available.Exposure, false},
+	} {
+		if tc.got != tc.want {
+			t.Errorf("available.%s = %v, want %v", tc.key, tc.got, tc.want)
+		}
+	}
+}
