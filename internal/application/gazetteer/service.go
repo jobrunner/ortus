@@ -445,12 +445,11 @@ func moreSpecific(aArea float64, aName string, bArea float64, bName string) bool
 }
 
 // Elevation samples the height above sea level at the query point. It returns
-// (nil, nil) when no elevation sampler is wired, so the handler omits the block
-// rather than erroring.
+// (nil, nil) when no elevation sampler is wired, which the adapters render as a
+// null elevation — they seed every optional block, so absence is always a null
+// value and never an omitted key — rather than erroring.
 //
-// It also returns (nil, nil) for a point OUTSIDE the DEM's footprint — which the
-// HTTP adapter renders as "elevation": null, since it seeds every optional block
-// with nil rather than omitting the key. That case
+// It also returns (nil, nil) for a point OUTSIDE the DEM's footprint. That case
 // used to be reported as SeaLevel=true, together with genuine water, on the
 // reasoning that anything the DEM does not cover is ocean. It is not: a DEM is
 // finite, and its edge runs through land as often as not, so the convention

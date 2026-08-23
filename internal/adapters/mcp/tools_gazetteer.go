@@ -272,9 +272,11 @@ func addGazetteer(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 			"report the height above sea level (elevation, meters; exposure + " +
 			"elevation need a DEM). A part is null when it has no result — no admin " +
 			"coverage, not on an island/mountain, no anchor within reach, no DEM, or " +
-			"(exposure) the point/neighbor lacks coverage; elevation instead uses the " +
-			"sea-level convention (0 m) outside DEM coverage. Equivalent to " +
-			"GET /api/v1/gazetteer.",
+			"(exposure) the point/neighbor lacks coverage. elevation is null " +
+			"OUTSIDE DEM coverage too: a point beyond the DEM's edge has no known " +
+			"height, and reporting 0 m there would assert sea level for ground the " +
+			"DEM never saw. sea_level=true means the DEM covers the point and holds " +
+			"no value — water it surveyed. Equivalent to GET /api/v1/gazetteer.",
 	}, func(ctx toolCtx, _ *callRequest, in gazetteerIn) (*callResult, gazetteerOut, error) {
 		coord, err := selectCoordinate(in.Lon, in.Lat, in.X, in.Y, in.SRID)
 		if err != nil {
