@@ -138,14 +138,17 @@ func sampleWindow(ctx context.Context, sampler output.ElevationSampler, p domain
 		// Wrap longitude into [-180, 180] so neighbors near the antimeridian stay
 		// valid WGS84 (latitude is already bounded by the near-pole guard above).
 		lon := math.Mod(p.X+o[0]+540, 360) - 180
-		r, present, e := sampler.ElevationAt(ctx, domain.NewWGS84Coordinate(lon, p.Y+o[1]))
+		r, cov, e := sampler.ElevationAt(ctx, domain.NewWGS84Coordinate(lon, p.Y+o[1]))
 		if e != nil {
 			if errors.Is(e, domain.ErrNotFound) {
 				return horn3x3{}, false, nil
 			}
 			return horn3x3{}, false, e
 		}
-		if !present {
+		// Slope/aspect need a full window of MEASURED heights: a nodata neighbor
+		// (water) and one outside the DEM are both unusable here, so the gradient
+		// is reported as absent rather than computed from a substituted 0 m.
+		if cov != output.ElevationMeasured {
 			return horn3x3{}, false, nil
 		}
 		z[i] = r.Meters

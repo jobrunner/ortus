@@ -145,8 +145,13 @@ type Elevation struct {
 	AccuracyBasis string  // human-readable basis, e.g. "GLO-30 LE90 (absolute)"
 	HorizontalM   float64 // horizontal accuracy (LE90)
 	VerticalDatum string  // e.g. "EGM2008"
-	// SeaLevel is true when no DEM tile covers the point (ocean / outside
-	// coverage); by convention Meters is then 0.
+	// SeaLevel is true when the DEM covers the point but holds no value there —
+	// water it surveyed. Meters is then 0 by convention.
+	//
+	// It is NOT set for a point outside the DEM's footprint: that yields no
+	// Elevation at all. Both used to be folded in here, on the reasoning that
+	// anything uncovered is ocean, which asserted 0 m precisely where the data
+	// ends — and a DEM's edge runs through land as often as through water.
 	SeaLevel     bool
 	SurfaceModel string  // e.g. "DSM" (surface, not bare-earth)
 	License      License // DEM source license/attribution, distinct from the gazetteer's own

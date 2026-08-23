@@ -22,18 +22,20 @@ type planeSampler struct {
 	license    domain.License
 }
 
-func (p planeSampler) ElevationAt(_ context.Context, c domain.Coordinate) (output.ElevationReading, bool, error) {
+func (p planeSampler) ElevationAt(_ context.Context, c domain.Coordinate) (output.ElevationReading, output.ElevationCoverage, error) {
 	if p.err != nil {
-		return output.ElevationReading{}, false, p.err
+		return output.ElevationReading{}, output.ElevationUnknown, p.err
 	}
 	if !p.ok {
-		return output.ElevationReading{}, false, nil
+		return output.ElevationReading{}, output.ElevationUnknown, nil
 	}
 	// East–west meters per degree shrink with latitude (cos), matching the service's
 	// lon/lat↔meters scaling, so eastGradM is genuinely "meters per meter eastward".
 	z := p.northGradM*c.Y*metersPerDegLat + p.eastGradM*c.X*metersPerDegLat*math.Cos(c.Y*math.Pi/180)
-	return output.ElevationReading{Meters: z}, true, nil
+	return output.ElevationReading{Meters: z}, output.ElevationMeasured, nil
 }
+func (p planeSampler) CoveredAt(context.Context, domain.Coordinate) (bool, error) { return p.ok, nil }
+
 func (p planeSampler) License() domain.License { return p.license }
 
 func TestExposureUnwired(t *testing.T) {
@@ -108,11 +110,14 @@ func TestExposureNearPoleReturnsNil(t *testing.T) {
 // sampleWindow doesn't wrap neighbor longitudes across the antimeridian.
 type antimeridianSampler struct{}
 
-func (antimeridianSampler) ElevationAt(_ context.Context, c domain.Coordinate) (output.ElevationReading, bool, error) {
+func (antimeridianSampler) ElevationAt(_ context.Context, c domain.Coordinate) (output.ElevationReading, output.ElevationCoverage, error) {
 	if c.X < -180 || c.X > 180 {
-		return output.ElevationReading{}, false, errors.New("longitude out of WGS84 range")
+		return output.ElevationReading{}, output.ElevationUnknown, errors.New("longitude out of WGS84 range")
 	}
-	return output.ElevationReading{Meters: c.Y * metersPerDegLat * math.Tan(8*math.Pi/180)}, true, nil
+	return output.ElevationReading{Meters: c.Y * metersPerDegLat * math.Tan(8*math.Pi/180)}, output.ElevationMeasured, nil
+}
+func (antimeridianSampler) CoveredAt(context.Context, domain.Coordinate) (bool, error) {
+	return true, nil
 }
 func (antimeridianSampler) License() domain.License { return domain.License{} }
 

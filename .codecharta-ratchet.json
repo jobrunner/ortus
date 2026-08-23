@@ -11,7 +11,7 @@
     "_builtup_gate_note": "application/gazetteer/bearing.go 72→73 and application/gazetteer/service.go 69→74: optional built-up gate for the 'in <place>' decision. bearing.go gains one branch — the 'in' path only runs when builtUpAllows(p) holds. service.go gains SetBuiltUpSampler wiring plus builtUpAllows, which short-circuits to distance-only when no sampler is wired or the point has no built-up coverage, otherwise requires the sampled built-up value to meet the configured minimum (suppresses 'in <village>' on fields/parks within a place's radius), and fails CLOSED on a sampler error (review-requested: an unhealthy raster must not silently re-open an unverified 'in'). Sampler + adapter live in new files (ports/output/builtup.go, adapters/raster/builtup.go, app/builtup.go); per-function caps unchanged. internal/app/app.go ratcheted 83→82 (map re-measure).",
     "_mountains_note": "New gazetteer 'mountains' block (smallest containing range + single-mountain per landform, mirroring islands): application/gazetteer/service.go 0→68 baselined (Mountains + smallestByLandform + mountainFrom + moreSpecific), http/gazetteer.go 0→57 baselined (addMountains + formatMountains + formatMountain). Per-function: gazetteerSections 13→14 and the MCP gazetteer handler 13→14 (one new optional block each, same inline pattern as islands/elevation); the mountains block was extracted to addMountains to keep gazetteerSections at +1 rather than +2.",
     "baseline": {
-      "internal/adapters/raster/repository.go": 149,
+      "internal/adapters/raster/repository.go": 162,
       "internal/adapters/geopackage/repository.go": 128,
       "cmd/gazetteer-fixture/main.go": 103,
       "internal/adapters/telemetry/ringbuffer.go": 91,
@@ -19,7 +19,7 @@
       "internal/application/registry.go": 86,
       "internal/adapters/http/handlers.go": 75,
       "internal/config/config.go": 79,
-      "internal/application/gazetteer/service.go": 76,
+      "internal/application/gazetteer/service.go": 77,
       "_timings_note": "gazetteerSections gained per-section wall-clock timing (a mark() closure + 6 mark() calls) to surface the DEM-derived exposure/elevation enrichment cost that processing_time_ms omits; +1 file complexity (57→58) and +1 function complexity (14→15, = current repo max) for that observability. Sub-functions were not extractable without splitting the section sequence.",
       "internal/adapters/http/gazetteer.go": 58,
       "internal/application/gazetteer/bearing.go": 73,
@@ -27,7 +27,8 @@
       "internal/adapters/watcher/watcher.go": 51,
       "_note_spatialindex": "54 -> 67 (2026-08-23): TableColumns + SpatialLayers, reporting each declared table's columns and which tables are registered feature layers, so the manifest can be checked against the file at startup. Previously a manifest naming a table or column that is not there produced empty results indistinguishable from a legitimate 'nothing found'. Both facts are needed: columns alone do not make a queryable layer, since every read resolves its geometry column through gpkg_geometry_columns first, so a plain SQLite table with the right names would pass a columns-only check and then fail every query. The judgement itself lives in Manifest.VerifyAgainst, deliberately not here — the adapter only reports facts, which is what kept the file from growing further.",
       "_note_handlers": "72 -> 75 (2026-08-23): the gazetteer identity block on /sources (dataset_version/built), field-wise omitted when unset so an absent value is never reported as blank. Three guard clauses for a deployed package that could otherwise not be told apart from any other build of the same file name.",
-      "_note_service": "74 -> 76 (2026-08-23): Capabilities(), reporting which optional blocks the loaded dataset can answer. Every optional block renders null both when absent from the dataset and when the point has no result, and the second is a normal answer since the territory run-out cap — so a package that silently lost a layer looked like correct behavior."
+      "_note_service": "74 -> 77 (2026-08-23): Capabilities(), reporting which optional blocks the loaded dataset can answer, plus the branch that distinguishes a point outside the DEM (no elevation block) from water inside it (sea level). Both exist because a null block used to mean two different things — absent from the dataset, or no result here — and the second is a normal answer since the territory run-out cap.",
+      "_note_raster_repository": "149 -> 162 (2026-08-23): CoverageAt, reporting whether a layer covers a point regardless of whether that pixel holds a value. QueryPoint returns 'no feature' for two unrelated reasons — beyond the raster's footprint, or inside it on a nodata pixel — and for a DEM that difference is water versus unknown. Elevation used to report both as sea level, i.e. it asserted 0 m for ground outside the DEM, which is a confident wrong answer exactly at the coverage edge. The shared layerOf lookup was extracted so the query and coverage paths cannot disagree about where coverage ends; that was worth doing for correctness but did not lower this number, since it moves branches rather than removing them."
     }
   },
   "function_complexity": {
@@ -36,7 +37,7 @@
     "_default_cap_note": "The single most complex FUNCTION in a file (McCabe). This is the real overall-complexity control: a function keeps its complexity wherever it lives, so moving it between files can't game this gate — the only way to pass is to actually simplify the function (or extract cohesive sub-functions). New functions must stay <= 10; the baseline freezes today's offenders at their current max so they can't grow, and should ratchet DOWN as they are simplified. Repo max today is 15.",
     "baseline": {
       "internal/adapters/http/handlers.go": 15,
-      "internal/adapters/raster/repository.go": 15,
+      "internal/adapters/raster/repository.go": 14,
       "internal/app/app.go": 15,
       "cmd/gazetteer-fixture/main.go": 14,
       "internal/adapters/geopackage/repository.go": 13,
@@ -45,7 +46,8 @@
       "internal/adapters/telemetry/ringbuffer.go": 12,
       "internal/app/gazetteer.go": 13,
       "internal/adapters/storage/http.go": 11,
-      "_note_app_gazetteer": "12 -> 13 (2026-08-23): one more guard clause in buildGazetteer for the startup contract check. The check itself was extracted into verifyPackageContract to keep this at +1; the remaining increment is the call site, which cannot be folded into an existing branch."
+      "_note_app_gazetteer": "12 -> 13 (2026-08-23): one more guard clause in buildGazetteer for the startup contract check. The check itself was extracted into verifyPackageContract to keep this at +1; the remaining increment is the call site, which cannot be folded into an existing branch.",
+      "_note_raster_repository": "15 -> 14 (2026-08-23): extracting the shared layerOf lookup out of QueryPoint. Ratcheted DOWN — the file-level sum went up for CoverageAt, but the most complex single function got simpler, which is the metric that cannot be gamed by moving code between files."
     }
   },
   "hotspot": {

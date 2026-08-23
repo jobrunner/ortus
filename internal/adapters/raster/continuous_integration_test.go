@@ -13,6 +13,7 @@ import (
 	"github.com/tingold/gocog"
 
 	"github.com/jobrunner/ortus/internal/domain"
+	"github.com/jobrunner/ortus/internal/ports/output"
 )
 
 // continuousManifest reads the fixture COG (Byte values 100/200/0) as a
@@ -103,17 +104,23 @@ func TestElevationSourceIntegration(t *testing.T) {
 	if es.License().Attribution != "© Test" {
 		t.Errorf("license = %+v, want '© Test'", es.License())
 	}
-	r, ok, err := es.ElevationAt(context.Background(), wgs84c(20, 20))
-	if err != nil || !ok || r.Meters != 100.0 {
-		t.Fatalf("ElevationAt(west) = (%+v,%v,%v), want meters 100/true", r, ok, err)
+	r, cov, err := es.ElevationAt(context.Background(), wgs84c(20, 20))
+	if err != nil || cov != output.ElevationMeasured || r.Meters != 100.0 {
+		t.Fatalf("ElevationAt(west) = (%+v,%v,%v), want meters 100 / measured", r, cov, err)
 	}
 	if r.HasAccuracy {
 		t.Errorf("HasAccuracy = true without an accuracy layer, want false")
 	}
-	// nodata (0) → ok=false, the sea-level convention.
-	r, ok, err = es.ElevationAt(context.Background(), wgs84c(20, -20))
-	if err != nil || ok || r.Meters != 0 {
-		t.Fatalf("ElevationAt(nodata) = (%+v,%v,%v), want meters 0/false", r, ok, err)
+	// A nodata pixel INSIDE the raster reports NoData, which is what the sea-level
+	// convention is keyed on — the raster covers this point and holds no value.
+	r, cov, err = es.ElevationAt(context.Background(), wgs84c(20, -20))
+	if err != nil || cov != output.ElevationNoData || r.Meters != 0 {
+		t.Fatalf("ElevationAt(nodata) = (%+v,%v,%v), want meters 0 / nodata", r, cov, err)
+	}
+	// This fixture spans the whole globe, so it has no "outside" to test; the
+	// nodata pixel is still covered, which is what keys the sea-level reading.
+	if covered, err := es.CoveredAt(context.Background(), wgs84c(20, -20)); err != nil || !covered {
+		t.Errorf("CoveredAt(nodata pixel) = (%v,%v), want true — the raster does cover it", covered, err)
 	}
 }
 
@@ -146,9 +153,9 @@ layers:
 	if err != nil {
 		t.Fatalf("NewElevationSource: %v", err)
 	}
-	r, ok, err := es.ElevationAt(context.Background(), wgs84c(20, 20))
-	if err != nil || !ok {
-		t.Fatalf("ElevationAt = (%+v,%v,%v)", r, ok, err)
+	r, cov, err := es.ElevationAt(context.Background(), wgs84c(20, 20))
+	if err != nil || cov != output.ElevationMeasured {
+		t.Fatalf("ElevationAt = (%+v,%v,%v)", r, cov, err)
 	}
 	if r.Meters != 100.0 {
 		t.Errorf("meters = %v, want 100", r.Meters)
@@ -264,13 +271,36 @@ func TestTiledLayerRouting(t *testing.T) {
 		t.Fatalf("present tile = %+v, want meters 100", got)
 	}
 
-	// Absent tile (N20_E080) → no data, sea-level convention.
+	// Absent tile (N20_E080) → no feature.
 	none, err := repo.QueryPoint(context.Background(), "dem", "elevation", wgs84c(80, 20))
 	if err != nil {
 		t.Fatalf("absent-tile query: %v", err)
 	}
 	if len(none) != 0 {
 		t.Fatalf("absent tile = %+v, want no feature", none)
+	}
+
+	// The two ways QueryPoint says "no feature" are different facts, and a tiled
+	// DEM is where the difference is real: an absent tile is the coverage edge,
+	// while a nodata pixel inside a present tile is water the DEM surveyed.
+	// CoverageAt is what tells them apart.
+	if covered, err := repo.CoverageAt("dem", "elevation", wgs84c(80, 20)); err != nil || covered {
+		t.Errorf("CoverageAt(absent tile) = (%v,%v), want false — this is the DEM's edge, not sea", covered, err)
+	}
+	if covered, err := repo.CoverageAt("dem", "elevation", wgs84c(20, 20)); err != nil || !covered {
+		t.Errorf("CoverageAt(present tile) = (%v,%v), want true", covered, err)
+	}
+
+	// And the sampler turns that into the tri-state the gazetteer keys on.
+	es, err := repo.NewElevationSource("dem", "elevation", "")
+	if err != nil {
+		t.Fatalf("NewElevationSource: %v", err)
+	}
+	if _, cov, err := es.ElevationAt(context.Background(), wgs84c(80, 20)); err != nil || cov != output.ElevationUnknown {
+		t.Errorf("ElevationAt(absent tile) coverage = %v (err %v), want unknown — NOT sea level", cov, err)
+	}
+	if _, cov, err := es.ElevationAt(context.Background(), wgs84c(20, 20)); err != nil || cov != output.ElevationMeasured {
+		t.Errorf("ElevationAt(present tile) coverage = %v (err %v), want measured", cov, err)
 	}
 }
 

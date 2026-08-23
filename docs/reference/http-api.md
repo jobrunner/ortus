@@ -189,8 +189,9 @@ e.g. "4 km E Würzburg"), and — when a DEM is configured — report the terrai
 exposure (`exposure`: slope + the direction it faces) and the height above sea
 level (`elevation`) at the point. Each part is `null` when it has no result — no
 admin coverage, not on a mapped island/mountain, no anchor within reach, no DEM
-configured, or (for `exposure`) the point or a neighbour lacks DEM coverage. `elevation` differs: outside DEM coverage it is
-not null but uses the sea-level convention (`meters: 0`, `sea_level: true`). The
+configured, or (for `exposure`) the point or a neighbour lacks DEM coverage —
+including `elevation`, which is `null` outside DEM coverage because a point beyond
+the DEM's edge has no known height. The
 response also carries the `wgs84: { lon, lat }` block (as on `/query`). The dataset
 is WGS84; a **projected `srid` (e.g. 3857) is reprojected** to WGS84 before the
 lookup — only an `srid` that can't be transformed to WGS84 is rejected (`422`).
@@ -316,9 +317,19 @@ above sea level (`meters`) at the query point, `vertical_datum` (e.g. `EGM2008`)
 the vertical `accuracy_m` with its `accuracy_basis` (a dataset constant, or a
 per-point value when an accuracy layer such as a Height Error Mask is configured),
 `horizontal_accuracy_m`, `surface_model` (e.g. `DSM`), and `sea_level: true` with
-`meters: 0` where no DEM tile covers the point (ocean / outside coverage). The DEM
-`source` (name/url/attribution) is carried separately from the gazetteer `license`
-because it is a distinct dataset — both attributions must be displayed.
+`meters: 0` where the DEM **covers** the point but holds no value — water it
+surveyed.
+
+A point **outside** the DEM's footprint yields no `elevation` block at all. That
+case used to be reported as `sea_level: true` alongside genuine water, on the
+reasoning that anything uncovered is ocean. It does not hold: a DEM is finite and
+its edge runs through land as often as through water, so the convention asserted
+0 m exactly where it was least entitled to — and a confident wrong height is worse
+than no answer. Use `available.elevation` to tell "no DEM in this deployment" from
+"no height at this point".
+
+The DEM `source` (name/url/attribution) is carried separately from the gazetteer
+`license` because it is a distinct dataset — both attributions must be displayed.
 
 The `exposure` block is the terrain orientation, also DEM-derived (present only
 when a DEM is configured, `null` otherwise and where the point or a neighbour has
