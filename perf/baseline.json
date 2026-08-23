@@ -1,0 +1,184 @@
+{
+  "_comment": "Performance-Vertrag des Gazetteer-Endpunkts. Aufrufzahlen (max_per_trace) sind harte, maschinenunabhaengige Grenzen; Zeitbudgets sind lose Deckel. Aktualisieren nur bewusst via `make perf-gate-update`.",
+  "endpoint": "/api/v1/gazetteer",
+  "coordinates": [
+    [
+      13.624508,
+      49.156937
+    ],
+    [
+      8.256062,
+      45.561055
+    ],
+    [
+      -5.148136,
+      38.109461
+    ],
+    [
+      17.40476,
+      60.695713
+    ],
+    [
+      21.573818,
+      44.590333
+    ],
+    [
+      11.71921,
+      46.199001
+    ],
+    [
+      9.140992,
+      44.56829
+    ],
+    [
+      -4.957263,
+      38.028646
+    ],
+    [
+      13.565896,
+      59.819852
+    ],
+    [
+      26.683557,
+      41.869659
+    ],
+    [
+      9.455693,
+      54.126646
+    ],
+    [
+      11.028128,
+      45.275872
+    ],
+    [
+      -6.981215,
+      39.017381
+    ],
+    [
+      15.333291,
+      57.761695
+    ],
+    [
+      23.208219,
+      42.456331
+    ],
+    [
+      6.677551,
+      51.013245
+    ],
+    [
+      12.363939,
+      45.762602
+    ],
+    [
+      0.714146,
+      41.341397
+    ],
+    [
+      17.1735,
+      56.169324
+    ],
+    [
+      26.112714,
+      47.286233
+    ],
+    [
+      9.805563,
+      54.193758
+    ],
+    [
+      15.947653,
+      46.90922
+    ],
+    [
+      0.923104,
+      40.995495
+    ],
+    [
+      16.996362,
+      56.601759
+    ],
+    [
+      22.240708,
+      44.964794
+    ]
+  ],
+  "group_by": "spatial.layer",
+  "_known_issues": [
+    "SpatialIndex.ResolveChain [admin_levels] laeuft ~235x pro Request: Gazetteer.Bearing loest fuer jeden KNN-Kandidaten die Admin-Elternkette einzeln auf (N+1). Das Budget haelt den Status quo fest, damit es nicht schlimmer wird - es ist keine Billigung. Fix: Kette pro Kandidatenmenge gebuendelt bzw. gecacht aufloesen.",
+    "SpatialIndex.PointInPolygon [admin_levels] laeuft 2x pro Request: Locate und Bearing fragen dieselbe Admin-Zelle unabhaengig ab. Ein Request-scoped Cache wuerde eine der beiden sparen."
+  ],
+  "max_root_p95_ms": 410,
+  "budgets": [
+    {
+      "name": "Gazetteer.Bearing",
+      "max_per_trace": 1,
+      "max_p95_ms": 260
+    },
+    {
+      "name": "Gazetteer.Elevation",
+      "max_per_trace": 1,
+      "max_p95_ms": 1
+    },
+    {
+      "name": "Gazetteer.Exposure",
+      "max_per_trace": 1,
+      "max_p95_ms": 2
+    },
+    {
+      "name": "Gazetteer.Islands",
+      "max_per_trace": 1,
+      "max_p95_ms": 1
+    },
+    {
+      "name": "Gazetteer.Locate",
+      "max_per_trace": 1,
+      "max_p95_ms": 190
+    },
+    {
+      "name": "Gazetteer.Mountains",
+      "max_per_trace": 1,
+      "max_p95_ms": 7
+    },
+    {
+      "name": "SpatialIndex.Azimuth",
+      "max_per_trace": 1,
+      "max_p95_ms": 1
+    },
+    {
+      "name": "SpatialIndex.PointInPolygon",
+      "group": "admin_levels",
+      "max_per_trace": 2,
+      "max_p95_ms": 200
+    },
+    {
+      "name": "SpatialIndex.PointInPolygon",
+      "group": "islands",
+      "max_per_trace": 1,
+      "max_p95_ms": 1
+    },
+    {
+      "name": "SpatialIndex.PointInPolygon",
+      "group": "mountains",
+      "max_per_trace": 1,
+      "max_p95_ms": 7
+    },
+    {
+      "name": "SpatialIndex.QueryKNN",
+      "group": "places",
+      "max_per_trace": 5.64,
+      "max_p95_ms": 20
+    },
+    {
+      "name": "SpatialIndex.ResolveChain",
+      "group": "admin_levels",
+      "max_per_trace": 234.91,
+      "max_p95_ms": 1
+    },
+    {
+      "name": "raster.QueryPoint",
+      "max_per_trace": 9.68,
+      "max_p95_ms": 2
+    }
+  ]
+}
