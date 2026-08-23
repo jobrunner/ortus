@@ -416,3 +416,43 @@ func TestTiledConcurrentQueries(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+// TestCoverageRejectsSubPixelSliverOutsideEdges pins the west/north edge case.
+//
+// PixelFromPoint used to cast to int, which truncates TOWARD ZERO: a point just
+// west of the raster (or just north of it) computed a small negative pixel and
+// truncated to 0, landing inside the image. The bounds check `px < 0` then could
+// not reject it, so a sub-pixel sliver read as covered — while the east and south
+// edges rejected correctly, making the bug asymmetric and easy to miss. That
+// directly defeats the point of CoverageAt, whose whole job is to be honest at
+// the coverage boundary.
+func TestCoverageRejectsSubPixelSliverOutsideEdges(t *testing.T) {
+	repo, _ := openBundleForTest(t, continuousManifest)
+
+	// The fixture spans the globe: -180..180 / -90..90 at 1.40625°/px. A point a
+	// fraction of a pixel outside the west or north edge is outside the footprint.
+	for _, tc := range []struct {
+		name     string
+		lon, lat float64
+	}{
+		{"just west of the western edge", -180.2, 0},
+		{"just north of the northern edge", 0, 90.2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			covered, err := repo.CoverageAt("regions", "main", wgs84c(tc.lon, tc.lat))
+			if err != nil {
+				t.Fatalf("CoverageAt: %v", err)
+			}
+			if covered {
+				t.Error("reported as covered, but the point is outside the raster")
+			}
+			got, err := repo.QueryPoint(context.Background(), "regions", "main", wgs84c(tc.lon, tc.lat))
+			if err != nil {
+				t.Fatalf("QueryPoint: %v", err)
+			}
+			if len(got) != 0 {
+				t.Errorf("QueryPoint returned %+v for an out-of-footprint point", got)
+			}
+		})
+	}
+}

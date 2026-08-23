@@ -1,6 +1,8 @@
 package gocog
 
 import (
+	"math"
+
 	"github.com/paulmach/orb"
 )
 
@@ -53,8 +55,15 @@ func (c *COG) PixelFromPoint(point orb.Point, overview int) (int, int) {
 		return 0, 0
 	}
 
-	pixelX := int((point[0] - imgBounds.Min[0]) / geoWidth * float64(meta.Width))
-	pixelY := int((imgBounds.Max[1] - point[1]) / geoHeight * float64(meta.Height)) // Y is inverted
+	// math.Floor, not a plain int() cast: a cast truncates TOWARD ZERO, so a point
+	// just west of Min[0] (or just north of Max[1]) computes a small NEGATIVE pixel
+	// and truncates to 0 — landing inside the image. Callers bounds-check with
+	// `px < 0 || px >= Width`, which then cannot reject it, so a sub-pixel sliver
+	// along the west and north edges reads as covered while the east and south
+	// edges reject correctly. Flooring makes the value genuinely negative there and
+	// the existing checks work as intended.
+	pixelX := int(math.Floor((point[0] - imgBounds.Min[0]) / geoWidth * float64(meta.Width)))
+	pixelY := int(math.Floor((imgBounds.Max[1] - point[1]) / geoHeight * float64(meta.Height))) // Y is inverted
 
 	return pixelX, pixelY
 }
