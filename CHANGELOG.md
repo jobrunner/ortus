@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0](https://github.com/jobrunner/ortus/compare/v1.4.1...v1.5.0) (2026-08-23)
+
+
+### Features
+
+* **gazetteer:** verify the package contract, report availability and identity ([245fa8d](https://github.com/jobrunner/ortus/commit/245fa8d45b6a48f78e01ff026e10414fb342f9dd))
+
+
+### Bug Fixes
+
+* **gazetteer:** catch a stale geometry registration and the hardcoded fid ([dea4c82](https://github.com/jobrunner/ortus/commit/dea4c82f6ad0128a37078c4a5836fb5cf890eec3))
+* **gazetteer:** require a real feature layer, close on failure, merge shared roles ([06a0e37](https://github.com/jobrunner/ortus/commit/06a0e37f961a47f696ebaf802725a49b2b113128))
+
 ## [1.4.1](https://github.com/jobrunner/ortus/compare/v1.4.0...v1.4.1) (2026-08-22)
 
 
