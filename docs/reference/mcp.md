@@ -76,6 +76,7 @@ agent the data it needs to debug ortus from inside a conversation.
 |---|---|
 | `list_traces` | Recent completed traces, newest first. Filters: `min_duration_ms`, `status` (`Ok`/`Error`/`Unset`), `name_contains`, `since_iso`, `limit`. Searches BOTH the success and error pool so error traces can't get drowned out by routine success. |
 | `get_trace` | A single trace by hex `trace_id`, with every span, attributes, events, recorded errors (incl. stack traces from `RecordError`). |
+| `span_summary` | Spans aggregated across traces: per span name the number of calls, **calls per request** (`per_trace`), p50/p95/max and total ms, sorted by total time. Same filters as `list_traces`, plus `group_by` to split one span name by an attribute (e.g. `spatial.layer`). Start here for "where does the time go?" — and read `per_trace` for N+1 patterns: a value in the hundreds means one request issues hundreds of that call, which no percentile reveals. This is the aggregation the performance gate reads, so a gate failure and a manual investigation show identical numbers. |
 | `list_active_spans` | Snapshot of in-flight spans — the answer to "what is currently running / hanging?". Returns `age_ms` per span. |
 | `tracing_stats` | Ring-buffer occupancy, eviction counter, OTLP-exporter error count. Always call this first to confirm tracing is healthy before relying on the others. |
 | `health` | Same content as `GET /health` but as a typed MCP response. |
