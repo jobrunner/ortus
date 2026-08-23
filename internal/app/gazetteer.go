@@ -67,6 +67,16 @@ func (a *App) buildGazetteer(ctx context.Context) error {
 		return fmt.Errorf("opening gazetteer GeoPackage: %w", err)
 	}
 
+	// Check the manifest against the GeoPackage it was paired with. This fails
+	// startup, unlike the SRID probe below, because the two are different kinds of
+	// problem: a bad SRID degrades one feature, whereas a manifest naming a table
+	// or column that is not there means the operator deployed a mismatched pair,
+	// and every affected query would answer "nothing found" indistinguishably from
+	// a legitimate empty result.
+	if err := idx.VerifyContract(ctx, manifest.ExpectedTables()); err != nil {
+		return err
+	}
+
 	// Probe the SRID metadata: if ellipsoidal Distance can't resolve EPSG:4326,
 	// the KNN radius silently drops every row. Warn loudly but don't fail — Locate
 	// (point-in-polygon) still works without it.
@@ -80,6 +90,7 @@ func (a *App) buildGazetteer(ctx context.Context) error {
 		a.Gazetteer.SetNameSources(nameSources)
 	}
 	a.gazetteerLicense = manifest.License
+	a.gazetteerDataset = domain.DatasetInfo{Version: manifest.DatasetVersion, Built: manifest.Built}
 	a.gazetteerClose = idx.Close
 	// Build the bearing policy from the tuning knobs (config) + the constraint
 	// tier (manifest, dataset-bound). Handlers pass this to Bearing().

@@ -22,6 +22,13 @@ func orDefault(v, def string) string {
 
 // manifestYAML is the on-disk shape of ortus-gazetteer.yaml (§4 of the plan).
 type manifestYAML struct {
+	// Identify the BUILT PACKAGE. Purely informational for the query paths, but a
+	// deployed .gpkg is otherwise indistinguishable from any other build, so this
+	// is what lets an operator answer "which vintage is live?" without shell access
+	// to the machine. Absent in packages built before the field existed.
+	DatasetVersion string `yaml:"dataset_version"`
+	Built          string `yaml:"built"`
+
 	Places struct {
 		Layer            string `yaml:"layer"`
 		NameColumn       string `yaml:"name_column"`
@@ -105,6 +112,8 @@ func ParseManifest(data []byte) (Manifest, error) {
 		mtnArea = orDefault(y.Mountains.AreaColumn, "area_km2")
 	}
 	m := Manifest{
+		DatasetVersion:           y.DatasetVersion,
+		Built:                    y.Built,
 		PlacesLayer:              y.Places.Layer,
 		RankColumn:               y.Places.RankColumn,
 		NameColumn:               y.Places.NameColumn,
@@ -165,6 +174,41 @@ func (m Manifest) validate() error {
 		return fmt.Errorf("gazetteer manifest: missing required field(s): %v", missing)
 	}
 	return nil
+}
+
+// ExpectedTables maps each layer the manifest declares to the columns it maps
+// onto that layer, for a startup check against the actual GeoPackage (see
+// GazetteerIndex.VerifyContract).
+//
+// Only declared layers appear: islands and mountains are optional, and an absent
+// block must stay absent here so a manifest that predates those layers keeps
+// working. Optional COLUMNS within a declared layer are included when set —
+// declaring one is a promise that it exists, and a promise worth checking. The
+// column list per layer is what the query paths actually read, so it is the same
+// set whose absence would otherwise surface as an empty or wrong answer.
+func (m Manifest) ExpectedTables() map[string][]string {
+	want := map[string][]string{
+		m.PlacesLayer: {
+			m.RankColumn, m.NameColumn, m.AdminFKColumn, m.CountryColumn,
+			m.NameNativeColumn, m.NameSourceColumn,
+			m.PopulationColumn, m.CapitalColumn, m.NotabilityColumn,
+		},
+		m.AdminLayer: {
+			m.LevelColumn, m.AdminNameColumn, m.ParentFKColumn, m.CountryColumn,
+			m.NameNativeColumn, m.NameSourceColumn,
+		},
+	}
+	if m.IslandsLayer != "" {
+		want[m.IslandsLayer] = []string{m.IslandsNameColumn, m.NameNativeColumn, m.NameSourceColumn}
+	}
+	if m.MountainsLayer != "" {
+		want[m.MountainsLayer] = []string{
+			m.MountainsNameColumn, m.MountainsLandformColumn,
+			m.MountainsElevationColumn, m.MountainsAreaColumn,
+			m.NameNativeColumn, m.NameSourceColumn,
+		}
+	}
+	return want
 }
 
 // levelRefYAML is the on-disk shape of the admin-level sidecar

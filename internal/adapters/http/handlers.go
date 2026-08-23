@@ -141,10 +141,26 @@ func (s *Server) handleListSources(w http.ResponseWriter, r *http.Request) {
 		response[i] = s.formatSource(&sources[i])
 	}
 
-	s.writeJSON(w, http.StatusOK, map[string]interface{}{
+	body := map[string]interface{}{
 		"sources": response,
 		"count":   len(sources),
-	})
+	}
+	// The gazetteer is read out of competition, so it is not one of the sources
+	// above — but it is the largest deployed artifact and the one most likely to
+	// drift from the binary, so its identity belongs on the endpoint an operator
+	// already reaches for. Omitted entirely when the feature is off or the package
+	// predates the fields, rather than reported as an empty object.
+	if !s.gazetteerDataset.IsEmpty() {
+		gz := map[string]interface{}{}
+		if s.gazetteerDataset.Version != "" {
+			gz["dataset_version"] = s.gazetteerDataset.Version
+		}
+		if s.gazetteerDataset.Built != "" {
+			gz["built"] = s.gazetteerDataset.Built
+		}
+		body["gazetteer"] = gz
+	}
+	s.writeJSON(w, http.StatusOK, body)
 }
 
 // handleGetSource returns a specific source.

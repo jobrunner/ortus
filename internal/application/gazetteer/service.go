@@ -38,6 +38,12 @@ type Manifest struct {
 	CapitalColumn    string // e.g. "capital" (OSM capital= rank of the seat)
 	NotabilityColumn string // e.g. "wikidata" (QID; presence = notable)
 
+	// Identity of the built package this manifest ships with (optional; empty in
+	// packages predating the fields). Surfaced by the sources endpoint so a
+	// deployed dataset can be told apart from any other build.
+	DatasetVersion string // e.g. "0.2.0"
+	Built          string // e.g. "2026-08-23"
+
 	// admin_levels layer
 	AdminLayer      string // e.g. "admin_levels"
 	LevelColumn     string // e.g. "admin_level"
@@ -322,6 +328,27 @@ const (
 	landformRange    = "range"    // a mountain range (Gebirgszug) polygon
 	landformMountain = "mountain" // a single-mountain DEM-derived territory
 )
+
+// Capabilities reports which optional blocks this deployment can answer, so an
+// adapter can render "not part of this dataset" distinctly from "no result here".
+//
+// Availability is read from what was actually wired, not from config intent: a
+// declared layer is only usable because VerifyContract confirmed it exists at
+// startup, and elevation/exposure depend on a sampler being set rather than on a
+// path being configured. An inert service (feature disabled) reports everything
+// false.
+func (s *Service) Capabilities() domain.GazetteerCapabilities {
+	if s.ready() != nil {
+		return domain.GazetteerCapabilities{}
+	}
+	return domain.GazetteerCapabilities{
+		Islands:   s.manifest.IslandsLayer != "",
+		Mountains: s.manifest.MountainsLayer != "",
+		Elevation: s.elevation != nil,
+		// Exposure is derived from the same DEM, so it stands or falls with it.
+		Exposure: s.elevation != nil,
+	}
+}
 
 // Mountains returns the smallest (most specific) containing mountain range AND
 // single-mountain territory, selected independently per landform, via a

@@ -33,6 +33,7 @@ type Server struct {
 	gazetteer        input.Gazetteer              // nil ⇒ gazetteer feature disabled (no route, no /query enrichment)
 	bearingPolicy    domain.BearingPolicy         // configured bearing tuning; zero ⇒ use DefaultBearingPolicy
 	gazetteerLicense domain.License               // dataset license/attribution surfaced in the gazetteer block
+	gazetteerDataset domain.DatasetInfo           // built-package identity surfaced by the sources endpoint
 	transformer      output.CoordinateTransformer // reprojects a non-WGS84 query coord to WGS84 for the wgs84 block + gazetteer enrichment; nil ⇒ only WGS84 inputs are enriched
 	logger           *slog.Logger
 	config           config.ServerConfig
@@ -59,6 +60,7 @@ type ServerOptions struct {
 	Gazetteer        input.Gazetteer      // optional; enables the /gazetteer route and the with-gazetteer flag
 	BearingPolicy    domain.BearingPolicy // optional bearing tuning; zero value falls back to DefaultBearingPolicy
 	GazetteerLicense domain.License       // optional dataset license/attribution surfaced in the gazetteer block
+	GazetteerDataset domain.DatasetInfo   // optional built-package identity surfaced by /sources
 	Version          string               // build version shown in the frontend footer (defaults to "dev")
 	// Transformer reprojects a non-WGS84 query coordinate to WGS84 so the response
 	// carries a `wgs84` block and the gazetteer can enrich any SRID. Optional: when
@@ -112,6 +114,7 @@ func NewServer(
 		gazetteer:        opts.Gazetteer,
 		bearingPolicy:    opts.BearingPolicy,
 		gazetteerLicense: opts.GazetteerLicense,
+		gazetteerDataset: opts.GazetteerDataset,
 		transformer:      opts.Transformer,
 		logger:           logger,
 		config:           cfg,

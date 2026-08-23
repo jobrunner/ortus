@@ -410,6 +410,9 @@ paths:
                     loaded_at: "2024-01-15T10:30:00Z"
                     last_queried: "2024-01-15T10:35:00Z"
                 count: 1
+                gazetteer:
+                  dataset_version: "0.2.0"
+                  built: "2026-08-23"
         '500':
           description: Interner Serverfehler
           content:
@@ -972,6 +975,36 @@ components:
                 attribution:
                   type: string
                   description: Anzuzeigender Attributionstext.
+        available:
+          type: object
+          description: >-
+            Welche der optionalen Blöcke dieses Deployment überhaupt beantworten
+            kann. Jeder optionale Block ist in zwei unabhängigen Fällen null: das
+            Feature gehört nicht zu diesem Datensatz (Layer fehlt im Paket, kein
+            DEM verdrahtet), oder es gehört dazu und der Punkt hat einfach kein
+            Ergebnis. Ohne diese Angabe sind beide Fälle nicht unterscheidbar —
+            und der zweite ist normal, denn ein Punkt in der Ebene liegt
+            berechtigt auf keinem Berg. true heißt "dieses Deployment kann den
+            Block beantworten" und sagt nichts darüber, ob der angefragte Punkt
+            ein Ergebnis hat.
+          required:
+            - islands
+            - mountains
+            - exposure
+            - elevation
+          properties:
+            islands:
+              type: boolean
+              description: Islands-Layer ist deklariert und im GeoPackage vorhanden.
+            mountains:
+              type: boolean
+              description: Mountains-Layer ist deklariert und im GeoPackage vorhanden.
+            exposure:
+              type: boolean
+              description: Slope/Aspect ableitbar (setzt dasselbe DEM voraus wie elevation).
+            elevation:
+              type: boolean
+              description: DEM verdrahtet, Höhe kann gesampelt werden.
         timings_ms:
           type: object
           description: >-
@@ -1396,6 +1429,27 @@ components:
         count:
           type: integer
           description: Anzahl der Datenquellen
+        gazetteer:
+          type: object
+          description: >-
+            Identität des geladenen Gazetteer-Pakets. Der Gazetteer wird "außer
+            Konkurrenz" gelesen und ist daher keine der Quellen oben — er ist aber
+            das größte deployte Artefakt und das, das am ehesten von der Binary
+            abdriftet. Der Build-seitige Paket-Check vergleicht nur die Dateien auf
+            der Build-Maschine und kann nicht sehen, was ein Server tatsächlich
+            geladen hat. Fehlt vollständig, wenn das Feature aus ist oder das Paket
+            älter ist als diese Felder (ein leeres Objekt wäre nicht dasselbe wie
+            "keine Angabe").
+          properties:
+            dataset_version:
+              type: string
+              description: Version der Daten (nicht die ortus-Version), z. B. "0.2.0".
+              example: "0.2.0"
+            built:
+              type: string
+              format: date
+              description: Erstellungsdatum des Pakets.
+              example: "2026-08-23"
       required:
         - sources
         - count
