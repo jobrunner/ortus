@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"math"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/jobrunner/ortus/internal/domain"
@@ -112,51 +112,28 @@ func (g *GazetteerIndex) VerifySRID(ctx context.Context) error {
 	return nil
 }
 
-// VerifyContract checks that every table the manifest names exists and carries
-// the columns the manifest maps onto it.
+// TableColumns reports the columns of each named table, keyed by table name. A
+// table that does not exist maps to an empty set rather than being absent, which
+// is the distinction a caller checking a manifest against the file needs — and
+// PRAGMA table_info yields no rows for an unknown table rather than erroring, so
+// the two cases arrive the same way here.
 //
-// ParseManifest can only see the manifest, so it catches a missing mapping but
-// not a wrong one: `layer: does_not_exist` parses fine. Without this probe the
-// mistake surfaces as empty results, because a missing layer is deliberately
-// treated as "no result" so a manifest may outrun the dataset it ships with. That
-// tolerance is right for an absent optional layer and wrong for a typo, and the
-// two are indistinguishable at query time. Checking once at startup separates
-// them: what the manifest declares must exist, what it omits stays optional.
-//
-// want maps table name -> required columns. Callers pass only declared layers, so
-// an omitted optional layer is never checked. Every violation is collected rather
-// than failing on the first, since a schema change usually breaks several at once
-// and one startup should report all of them.
-func (g *GazetteerIndex) VerifyContract(ctx context.Context, want map[string][]string) error {
-	var problems []string
-	for _, table := range sortedKeys(want) {
+// This deliberately reports facts and makes no judgement: deciding which tables
+// and columns *ought* to be present is manifest policy and lives with the
+// manifest (see Manifest.VerifyAgainst), not in the adapter.
+func (g *GazetteerIndex) TableColumns(ctx context.Context, tables []string) (map[string]map[string]struct{}, error) {
+	out := make(map[string]map[string]struct{}, len(tables))
+	for _, table := range slices.Sorted(slices.Values(tables)) {
 		cols, err := g.tableColumns(ctx, table)
 		if err != nil {
-			return fmt.Errorf("gazetteer contract probe on %q: %w", table, err)
+			return nil, fmt.Errorf("reading columns of %q: %w", table, err)
 		}
-		if len(cols) == 0 {
-			problems = append(problems, fmt.Sprintf("table %q declared in the manifest does not exist", table))
-			continue
-		}
-		for _, c := range want[table] {
-			if c == "" {
-				continue
-			}
-			if _, ok := cols[c]; !ok {
-				problems = append(problems, fmt.Sprintf("table %q has no column %q", table, c))
-			}
-		}
+		out[table] = cols
 	}
-	if len(problems) > 0 {
-		return fmt.Errorf("gazetteer manifest does not match the GeoPackage: %s",
-			strings.Join(problems, "; "))
-	}
-	return nil
+	return out, nil
 }
 
-// tableColumns returns the column names of a table, or an empty map when the
-// table does not exist. PRAGMA table_info yields no rows for an unknown table
-// rather than erroring, which is exactly the distinction the caller needs.
+// tableColumns returns the column names of one table, empty when it does not exist.
 func (g *GazetteerIndex) tableColumns(ctx context.Context, table string) (map[string]struct{}, error) {
 	rows, err := g.db.QueryContext(ctx, `SELECT name FROM pragma_table_info(?)`, table)
 	if err != nil {
@@ -172,15 +149,6 @@ func (g *GazetteerIndex) tableColumns(ctx context.Context, table string) (map[st
 		cols[name] = struct{}{}
 	}
 	return cols, rows.Err()
-}
-
-func sortedKeys(m map[string][]string) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	sort.Strings(out)
-	return out
 }
 
 // QueryKNN returns up to k nearest features of a layer within maxKM of p, ordered

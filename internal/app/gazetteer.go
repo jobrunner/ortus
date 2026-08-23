@@ -3,7 +3,9 @@ package app
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
+	"slices"
 
 	"github.com/jobrunner/ortus/internal/adapters/geopackage"
 	"github.com/jobrunner/ortus/internal/application/gazetteer"
@@ -73,7 +75,7 @@ func (a *App) buildGazetteer(ctx context.Context) error {
 	// or column that is not there means the operator deployed a mismatched pair,
 	// and every affected query would answer "nothing found" indistinguishably from
 	// a legitimate empty result.
-	if err := idx.VerifyContract(ctx, manifest.ExpectedTables()); err != nil {
+	if err := verifyPackageContract(ctx, idx, manifest); err != nil {
 		return err
 	}
 
@@ -119,6 +121,18 @@ func (a *App) buildGazetteer(ctx context.Context) error {
 		"salience", strategyName(cfg.Bearing.Salience),
 	)
 	return nil
+}
+
+// verifyPackageContract asks the GeoPackage which columns its tables actually
+// have, then lets the manifest judge whether that satisfies its mappings. The
+// adapter reports facts and the manifest owns the policy, so neither has to know
+// the other's job.
+func verifyPackageContract(ctx context.Context, idx *geopackage.GazetteerIndex, manifest gazetteer.Manifest) error {
+	schema, err := idx.TableColumns(ctx, slices.Sorted(maps.Keys(manifest.ExpectedTables())))
+	if err != nil {
+		return err
+	}
+	return manifest.VerifyAgainst(schema)
 }
 
 // salienceRank is the config value for the legacy class-then-distance strategy.

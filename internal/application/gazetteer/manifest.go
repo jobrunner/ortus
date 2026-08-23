@@ -2,6 +2,9 @@ package gazetteer
 
 import (
 	"fmt"
+	"maps"
+	"slices"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 
@@ -209,6 +212,42 @@ func (m Manifest) ExpectedTables() map[string][]string {
 		}
 	}
 	return want
+}
+
+// VerifyAgainst checks the manifest's mappings against a GeoPackage's actual
+// schema, as reported by the adapter (table name -> column set; an absent table
+// reports an empty set).
+//
+// ParseManifest can only see the manifest, so it catches a missing mapping but
+// never a wrong one: `layer: does_not_exist` parses fine. The mistake then
+// surfaces as empty results, because a missing layer is deliberately treated as
+// "no result" so a manifest may outrun the dataset it ships with. That tolerance
+// is right for an absent optional layer and wrong for a typo, and the two are
+// indistinguishable at query time. Checking once at startup separates them.
+//
+// Every violation is collected rather than failing on the first, since a schema
+// change usually breaks several mappings at once and one startup should report
+// all of them. Unset optional mappings arrive as "" and mean "not declared", not
+// "a column with an empty name".
+func (m Manifest) VerifyAgainst(schema map[string]map[string]struct{}) error {
+	var problems []string
+	for _, table := range slices.Sorted(maps.Keys(m.ExpectedTables())) {
+		cols := schema[table]
+		if len(cols) == 0 {
+			problems = append(problems, fmt.Sprintf("table %q declared in the manifest does not exist", table))
+			continue
+		}
+		for _, c := range m.ExpectedTables()[table] {
+			if _, ok := cols[c]; c != "" && !ok {
+				problems = append(problems, fmt.Sprintf("table %q has no column %q", table, c))
+			}
+		}
+	}
+	if len(problems) > 0 {
+		return fmt.Errorf("gazetteer manifest does not match the GeoPackage: %s",
+			strings.Join(problems, "; "))
+	}
+	return nil
 }
 
 // levelRefYAML is the on-disk shape of the admin-level sidecar
