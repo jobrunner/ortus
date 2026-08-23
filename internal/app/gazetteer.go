@@ -76,6 +76,9 @@ func (a *App) buildGazetteer(ctx context.Context) error {
 	// and every affected query would answer "nothing found" indistinguishably from
 	// a legitimate empty result.
 	if err := verifyPackageContract(ctx, idx, manifest); err != nil {
+		// The handle is already open and a.gazetteerClose is not set yet, so
+		// nothing else would release it: App.New just propagates this error.
+		_ = idx.Close()
 		return err
 	}
 
@@ -132,7 +135,11 @@ func verifyPackageContract(ctx context.Context, idx *geopackage.GazetteerIndex, 
 	if err != nil {
 		return err
 	}
-	return manifest.VerifyAgainst(schema)
+	spatial, err := idx.SpatialLayers(ctx)
+	if err != nil {
+		return err
+	}
+	return manifest.VerifyAgainst(schema, spatial)
 }
 
 // salienceRank is the config value for the legacy class-then-distance strategy.

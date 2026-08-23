@@ -111,7 +111,7 @@ func TestVerifyAgainst_AcceptsAMatchingSchema(t *testing.T) {
 	err = m.VerifyAgainst(schemaOf(map[string][]string{
 		"places":       {"place", "name", "admin_id", "country_iso"},
 		"admin_levels": {"admin_level", "name", "parent_id", "country_iso"},
-	}))
+	}), allSpatial())
 	if err != nil {
 		t.Fatalf("matching schema rejected: %v", err)
 	}
@@ -124,7 +124,7 @@ func TestVerifyAgainst_RejectsAMissingTable(t *testing.T) {
 	err := m.VerifyAgainst(schemaOf(map[string][]string{
 		"places":       {"place", "name", "admin_id", "country_iso"},
 		"admin_levels": {"admin_level", "name", "parent_id", "country_iso"},
-	}))
+	}), allSpatial())
 	if err == nil {
 		t.Fatal("a declared-but-absent table must be rejected")
 	}
@@ -141,7 +141,7 @@ func TestVerifyAgainst_RejectsAMissingColumn(t *testing.T) {
 	err = m.VerifyAgainst(schemaOf(map[string][]string{
 		"places":       {"place", "name", "admin_id"}, // country_iso missing
 		"admin_levels": {"admin_level", "name", "parent_id", "country_iso"},
-	}))
+	}), allSpatial())
 	if err == nil {
 		t.Fatal("a mapped-but-absent column must be rejected")
 	}
@@ -157,7 +157,7 @@ func TestVerifyAgainst_ReportsEveryViolationAtOnce(t *testing.T) {
 	err := m.VerifyAgainst(schemaOf(map[string][]string{
 		"places":       {"place"}, // name, admin_id, country_iso missing
 		"admin_levels": {"admin_level", "name", "parent_id", "country_iso"},
-	}))
+	}), allSpatial())
 	if err == nil {
 		t.Fatal("want an error")
 	}
@@ -178,7 +178,70 @@ func TestVerifyAgainst_IgnoresUndeclaredOptionalLayers(t *testing.T) {
 	if err := m.VerifyAgainst(schemaOf(map[string][]string{
 		"places":       {"place", "name", "admin_id", "country_iso"},
 		"admin_levels": {"admin_level", "name", "parent_id", "country_iso"},
-	})); err != nil {
+	}), allSpatial()); err != nil {
 		t.Fatalf("an undeclared optional layer must not be required: %v", err)
+	}
+}
+
+// allSpatial says "every table named here is a registered feature layer", which is
+// the normal case; the tests that care about registration pass their own set.
+func allSpatial() map[string]struct{} {
+	return map[string]struct{}{"places": {}, "admin_levels": {}, "islands": {}, "mountains": {}}
+}
+
+func TestVerifyAgainst_RejectsATableThatIsNotAFeatureLayer(t *testing.T) {
+	// The columns are all there, but the table is not registered in
+	// gpkg_geometry_columns — so geomColumn would fail and every query with it.
+	m, err := ParseManifest([]byte(minimalManifest))
+	if err != nil {
+		t.Fatalf("ParseManifest: %v", err)
+	}
+	err = m.VerifyAgainst(schemaOf(map[string][]string{
+		"places":       {"place", "name", "admin_id", "country_iso"},
+		"admin_levels": {"admin_level", "name", "parent_id", "country_iso"},
+	}), map[string]struct{}{"admin_levels": {}}) // places not registered
+	if err == nil {
+		t.Fatal("a table with the right columns but no geometry registration must be rejected")
+	}
+	if !strings.Contains(err.Error(), "not registered as a GeoPackage feature layer") {
+		t.Errorf("the error should say why, got: %v", err)
+	}
+}
+
+func TestExpectedTables_MergesRolesSharingOneTable(t *testing.T) {
+	// Nothing stops a manifest pointing two roles at one table. Assigning per role
+	// would drop the first role's columns from the check; they must be merged.
+	m, err := ParseManifest([]byte(`
+places:
+  layer: everything
+  rank_column: place
+  name_column: name
+  admin_fk: admin_id
+  country_column: country_iso
+admin:
+  layer: everything
+  level_column: admin_level
+  name_column: name
+  parent_fk: parent_id
+`))
+	if err != nil {
+		t.Fatalf("ParseManifest: %v", err)
+	}
+	cols := m.ExpectedTables()["everything"]
+	for _, want := range []string{"place", "admin_id", "admin_level", "parent_id"} {
+		if !slices.Contains(cols, want) {
+			t.Errorf("column %q from one of the two roles was dropped: %v", want, cols)
+		}
+	}
+	// And the merged set is actually enforced: a table missing a places-only
+	// column must still fail even though the admin role is satisfied.
+	err = m.VerifyAgainst(schemaOf(map[string][]string{
+		"everything": {"name", "country_iso", "admin_level", "parent_id"}, // no place/admin_id
+	}), map[string]struct{}{"everything": {}})
+	if err == nil {
+		t.Fatal("a shared table missing a places column must be rejected")
+	}
+	if !strings.Contains(err.Error(), `no column "place"`) {
+		t.Errorf("error should name the dropped role's column, got: %v", err)
 	}
 }

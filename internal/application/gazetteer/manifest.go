@@ -190,27 +190,30 @@ func (m Manifest) validate() error {
 // column list per layer is what the query paths actually read, so it is the same
 // set whose absence would otherwise surface as an empty or wrong answer.
 func (m Manifest) ExpectedTables() map[string][]string {
-	want := map[string][]string{
-		m.PlacesLayer: {
-			m.RankColumn, m.NameColumn, m.AdminFKColumn, m.CountryColumn,
-			m.NameNativeColumn, m.NameSourceColumn,
-			m.PopulationColumn, m.CapitalColumn, m.NotabilityColumn,
-		},
-		m.AdminLayer: {
-			m.LevelColumn, m.AdminNameColumn, m.ParentFKColumn, m.CountryColumn,
-			m.NameNativeColumn, m.NameSourceColumn,
-		},
-	}
-	if m.IslandsLayer != "" {
-		want[m.IslandsLayer] = []string{m.IslandsNameColumn, m.NameNativeColumn, m.NameSourceColumn}
-	}
-	if m.MountainsLayer != "" {
-		want[m.MountainsLayer] = []string{
-			m.MountainsNameColumn, m.MountainsLandformColumn,
-			m.MountainsElevationColumn, m.MountainsAreaColumn,
-			m.NameNativeColumn, m.NameSourceColumn,
+	want := map[string][]string{}
+	// Roles are APPENDED per table, never assigned: nothing stops a manifest from
+	// pointing two roles at one table (a merged dataset, or simply a copy-paste),
+	// and assigning would then silently drop the first role's columns from the
+	// check — turning a mismatch back into the deferred query-time failure this
+	// exists to prevent.
+	add := func(layer string, cols ...string) {
+		if layer == "" {
+			return
 		}
+		want[layer] = append(want[layer], cols...)
 	}
+	add(m.PlacesLayer,
+		m.RankColumn, m.NameColumn, m.AdminFKColumn, m.CountryColumn,
+		m.NameNativeColumn, m.NameSourceColumn,
+		m.PopulationColumn, m.CapitalColumn, m.NotabilityColumn)
+	add(m.AdminLayer,
+		m.LevelColumn, m.AdminNameColumn, m.ParentFKColumn, m.CountryColumn,
+		m.NameNativeColumn, m.NameSourceColumn)
+	add(m.IslandsLayer, m.IslandsNameColumn, m.NameNativeColumn, m.NameSourceColumn)
+	add(m.MountainsLayer,
+		m.MountainsNameColumn, m.MountainsLandformColumn,
+		m.MountainsElevationColumn, m.MountainsAreaColumn,
+		m.NameNativeColumn, m.NameSourceColumn)
 	return want
 }
 
@@ -229,15 +232,26 @@ func (m Manifest) ExpectedTables() map[string][]string {
 // change usually breaks several mappings at once and one startup should report
 // all of them. Unset optional mappings arrive as "" and mean "not declared", not
 // "a column with an empty name".
-func (m Manifest) VerifyAgainst(schema map[string]map[string]struct{}) error {
+func (m Manifest) VerifyAgainst(schema map[string]map[string]struct{}, spatial map[string]struct{}) error {
 	var problems []string
-	for _, table := range slices.Sorted(maps.Keys(m.ExpectedTables())) {
+	want := m.ExpectedTables()
+	for _, table := range slices.Sorted(maps.Keys(want)) {
 		cols := schema[table]
 		if len(cols) == 0 {
 			problems = append(problems, fmt.Sprintf("table %q declared in the manifest does not exist", table))
 			continue
 		}
-		for _, c := range m.ExpectedTables()[table] {
+		// Columns alone do not make a queryable layer: every read resolves its
+		// geometry column via gpkg_geometry_columns first. A plain SQLite table
+		// with the right names would pass a columns-only check and then fail
+		// every query with "layer not found".
+		if _, ok := spatial[table]; !ok {
+			problems = append(problems, fmt.Sprintf(
+				"table %q exists but is not registered as a GeoPackage feature layer "+
+					"(no gpkg_geometry_columns row), so every query on it would fail", table))
+			continue
+		}
+		for _, c := range want[table] {
 			if _, ok := cols[c]; c != "" && !ok {
 				problems = append(problems, fmt.Sprintf("table %q has no column %q", table, c))
 			}

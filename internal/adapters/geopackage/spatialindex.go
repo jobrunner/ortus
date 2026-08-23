@@ -133,6 +133,31 @@ func (g *GazetteerIndex) TableColumns(ctx context.Context, tables []string) (map
 	return out, nil
 }
 
+// SpatialLayers reports which tables are registered as GeoPackage feature layers,
+// i.e. have a row in gpkg_geometry_columns.
+//
+// Having the columns is not enough to be queryable: every read resolves its
+// geometry column through that table first (see geomColumn) and fails with
+// ErrLayerNotFound without it. So a plain SQLite table carrying the right column
+// names would satisfy a columns-only check and then fail every query — which is
+// exactly the silent mismatch the startup check exists to prevent.
+func (g *GazetteerIndex) SpatialLayers(ctx context.Context) (map[string]struct{}, error) {
+	rows, err := g.db.QueryContext(ctx, "SELECT table_name FROM gpkg_geometry_columns")
+	if err != nil {
+		return nil, fmt.Errorf("reading gpkg_geometry_columns: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	out := map[string]struct{}{}
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		out[name] = struct{}{}
+	}
+	return out, rows.Err()
+}
+
 // tableColumns returns the column names of one table, empty when it does not exist.
 func (g *GazetteerIndex) tableColumns(ctx context.Context, table string) (map[string]struct{}, error) {
 	rows, err := g.db.QueryContext(ctx, `SELECT name FROM pragma_table_info(?)`, table)
