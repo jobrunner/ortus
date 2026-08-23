@@ -90,3 +90,25 @@ func TestGazetteer_AvailabilityIsIndependentOfWhetherAPointHasData(t *testing.T)
 		t.Error("availability must not depend on the per-point result")
 	}
 }
+
+// TestGazetteer_OptionalBlocksArePresentAsNull pins the JSON shape the docs
+// promise: absence is a null VALUE, never an omitted key. The handler seeds every
+// optional block with nil, so a client can read `body.elevation === null` without
+// first testing for the key — and a reviewer reading "no block at all" would have
+// implemented a distinction the endpoint does not make.
+func TestGazetteer_OptionalBlocksArePresentAsNull(t *testing.T) {
+	body := gazetteerBody(t, fakeGazetteer{
+		loc: sampleLocality(), fix: sampleFix(),
+		caps: &domain.GazetteerCapabilities{Islands: true, Mountains: true, Elevation: true, Exposure: true},
+	})
+	for _, key := range []string{"islands", "mountains", "exposure", "elevation"} {
+		v, present := body[key]
+		if !present {
+			t.Errorf("key %q is missing; absence must be expressed as null, not by omitting it", key)
+			continue
+		}
+		if v != nil {
+			t.Errorf("%q = %v, want null for this fake", key, v)
+		}
+	}
+}

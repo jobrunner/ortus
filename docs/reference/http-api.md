@@ -191,7 +191,8 @@ level (`elevation`) at the point. Each part is `null` when it has no result — 
 admin coverage, not on a mapped island/mountain, no anchor within reach, no DEM
 configured, or (for `exposure`) the point or a neighbour lacks DEM coverage —
 including `elevation`, which is `null` outside DEM coverage because a point beyond
-the DEM's edge has no known height. The
+the DEM's edge has no known height. Every one of these keys is always present in
+the response; absence is expressed as `null`, never by omitting the field. The
 response also carries the `wgs84: { lon, lat }` block (as on `/query`). The dataset
 is WGS84; a **projected `srid` (e.g. 3857) is reprojected** to WGS84 before the
 lookup — only an `srid` that can't be transformed to WGS84 is rejected (`422`).
@@ -320,7 +321,8 @@ per-point value when an accuracy layer such as a Height Error Mask is configured
 `meters: 0` where the DEM **covers** the point but holds no value — water it
 surveyed.
 
-A point **outside** the DEM's footprint yields no `elevation` block at all. That
+A point **outside** the DEM's footprint yields `"elevation": null` — the key is
+always present, so this is a null value rather than an omitted field. That
 case used to be reported as `sea_level: true` alongside genuine water, on the
 reasoning that anything uncovered is ocean. It does not hold: a DEM is finite and
 its edge runs through land as often as through water, so the convention asserted

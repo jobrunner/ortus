@@ -924,9 +924,10 @@ components:
             Höhe über NN am Abfragepunkt, aus einem kontinuierlichen Höhen-Raster
             (DEM).
 
-            null bedeutet **keine Aussage**: entweder ist kein DEM konfiguriert —
-            dann meldet `available.elevation` false — oder der Punkt liegt
-            außerhalb der DEM-Abdeckung. Letzteres galt früher als
+            Der Schlüssel ist immer vorhanden; `null` bedeutet **keine Aussage**:
+            entweder ist kein DEM konfiguriert — dann meldet `available.elevation`
+            false — oder der Punkt liegt außerhalb der DEM-Abdeckung. Letzteres
+            galt früher als
             `sea_level: true`; das war eine Konvention, die nicht trägt, denn der
             Rand eines DEM verläuft ebenso oft durch Land wie durch Wasser, und
             0 m wurde damit genau dort behauptet, wo die Daten enden.
@@ -963,8 +964,10 @@ components:
             sea_level:
               type: boolean
               description: >-
-                true, wenn keine DEM-Kachel den Punkt abdeckt; meters ist dann 0
-                (Meeresspiegel-Konvention).
+                true, wenn das DEM den Punkt **abdeckt** und dort keinen Wert hat —
+                vermessenes Wasser; meters ist dann 0 (Meeresspiegel-Konvention).
+                Für einen Punkt AUSSERHALB der DEM-Abdeckung ist stattdessen der
+                gesamte elevation-Block null, denn dort ist die Höhe unbekannt.
             surface_model:
               type: string
               description: >-
