@@ -9,12 +9,19 @@ import (
 	"time"
 
 	"github.com/jobrunner/ortus/internal/domain"
+	"github.com/jobrunner/ortus/internal/ports/input"
 )
 
 // handleGazetteer serves the dedicated reverse-geocoding + bearing endpoint
 // (GET /api/v1/gazetteer). It is registered only when the gazetteer feature is
 // wired; otherwise the route does not exist.
 func (s *Server) handleGazetteer(w http.ResponseWriter, r *http.Request) {
+	// Open a request-scoped point-in-polygon cache. Locate and Bearing both ask
+	// which admin polygons contain the point; without a scope that identical query
+	// runs twice per request, which measured as the response's largest single cost.
+	// The scope lives exactly as long as this request.
+	r = r.WithContext(input.WithPointInPolygonCache(r.Context()))
+
 	params, err := s.parseQueryParams(r)
 	if err != nil {
 		s.writeError(w, http.StatusBadRequest, err.Error())

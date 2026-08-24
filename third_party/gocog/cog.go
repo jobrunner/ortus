@@ -475,20 +475,42 @@ func (c *COG) decompressTileRaw(data []byte, compression uint16, ifd *IFD, tileW
 		}
 
 		// Attempt LZW decompression
-		// Try LSB first (TIFF standard), fall back to MSB if that fails
 		var decompressed []byte
 		var err error
 
-		// Try LSB order first
-		reader := lzw.NewReader(bytes.NewReader(data), lzw.LSB, 8)
-		decompressed, err = io.ReadAll(reader)
-		reader.Close()
-
+		// Try both bit orders and keep whichever actually yields a full tile.
+		//
+		// The old control flow retried MSB only when LSB returned an *error*, and
+		// that is not the only way a wrong-order decode fails: it can also
+		// terminate cleanly on a stray end-of-information code and simply return
+		// too few bytes. Then the retry was skipped and the tile failed with
+		// "insufficient data" even though the other order decodes it perfectly.
+		//
+		// Reproduced on the Copernicus DEM accuracy tiles: of 225 tiles in
+		// tiles_acc/N39_W001.tif, 224 fail LSB with an error (so the old fallback
+		// worked) and exactly one — tile 27 — returns 8 bytes with err == nil.
+		// MSB returns its full 131072. That single tile made the whole accuracy
+		// layer unusable. Treating short output as a failed attempt, not as a
+		// result, is what makes the fallback cover both ways an attempt can fail.
+		tryOrder := func(order lzw.Order) ([]byte, error) {
+			reader := lzw.NewReader(bytes.NewReader(data), order, 8)
+			defer func() { _ = reader.Close() }()
+			out, readErr := io.ReadAll(reader)
+			if readErr != nil {
+				return nil, readErr
+			}
+			if len(out) < expectedSize {
+				return nil, fmt.Errorf("short decode: %d of %d bytes", len(out), expectedSize)
+			}
+			return out, nil
+		}
+		// TIFF LZW is MSB-first by specification, so that order goes first; LSB
+		// stays as a fallback for files written against the other convention.
+		decompressed, err = tryOrder(lzw.MSB)
 		if err != nil {
-			// LSB failed, try MSB order
-			reader = lzw.NewReader(bytes.NewReader(data), lzw.MSB, 8)
-			decompressed, err = io.ReadAll(reader)
-			reader.Close()
+			if lsb, lsbErr := tryOrder(lzw.LSB); lsbErr == nil {
+				decompressed, err = lsb, nil
+			}
 		}
 
 		if err != nil {

@@ -2,10 +2,13 @@ package gazetteer
 
 import (
 	"context"
+	"errors"
 	"math"
 	"testing"
 
 	"github.com/jobrunner/ortus/internal/domain"
+	"github.com/jobrunner/ortus/internal/ports/input"
+	"github.com/jobrunner/ortus/internal/ports/output"
 )
 
 // geoFeat builds an admin feature carrying only the columns countryOf reads.
@@ -109,11 +112,179 @@ func TestGatherCandidatesSkipsZeroRadius(t *testing.T) {
 	// Rank-mode policy: only ClassCity has a reach; town/village -> GatherRadiusKM 0 -> skipped.
 	pol := domain.BearingPolicy{Reach: map[domain.PlaceClass]float64{domain.ClassCity: 60}}
 	p := domain.NewWGS84Coordinate(10.0, 50.0)
-	cands, err := svc.gatherCandidates(context.Background(), p, pol, 0, false, "")
+	cands, err := svc.gatherCandidates(context.Background(), p, pol, insideConstraint{})
 	if err != nil {
 		t.Fatalf("gatherCandidates: %v", err)
 	}
 	if len(cands) != 1 || cands[0].Place.Class != domain.ClassCity {
 		t.Fatalf("want only the city candidate (town/village skipped at radius 0), got %d: %+v", len(cands), cands)
 	}
+}
+
+// countingIndex wraps a fakeIndex and counts the batched chain calls, so a test can
+// assert on the NUMBER of round-trips rather than only on the result.
+type countingIndex struct {
+	fakeIndex
+	chainCalls *int
+	seedsSeen  *int
+	pipCalls   *int
+}
+
+func (c countingIndex) PointInPolygon(ctx context.Context, layer string, p domain.Coordinate) ([]domain.Feature, error) {
+	if c.pipCalls != nil {
+		*c.pipCalls++
+	}
+	return c.fakeIndex.PointInPolygon(ctx, layer, p)
+}
+
+func (c countingIndex) ResolveChains(ctx context.Context, layer string, fromFIDs []int64, cols output.AdminColumns) (map[int64][]output.AdminRow, error) {
+	*c.chainCalls++
+	*c.seedsSeen += len(fromFIDs)
+	return c.fakeIndex.ResolveChains(ctx, layer, fromFIDs, cols)
+}
+
+// TestGatherCandidatesResolvesChainsInOneBatch is the regression test for the N+1
+// that cost 234 SpatiaLite round-trips and ~700 ms per bearing request: the tier
+// constraint used to resolve each candidate's admin lineage with its own query.
+//
+// It asserts the round-trip COUNT, not the duration — the count is a property of
+// the code and does not move with machine speed, so this fails deterministically
+// the moment the per-candidate query returns.
+func TestGatherCandidatesResolvesChainsInOneBatch(t *testing.T) {
+	const perClass = 12
+	knn := map[string][]domain.Feature{}
+	chains := map[int64][]output.AdminRow{}
+	for ci, class := range []string{"city", "town", "village"} {
+		feats := make([]domain.Feature, 0, perClass)
+		for i := range perClass {
+			// A distinct admin id per place, so deduplication cannot mask a
+			// per-candidate query as a single batched one.
+			adminID := int64(ci*100 + i + 1)
+			feats = append(feats, placeFeature(class, "P", int(adminID), 10.0+float64(i)*0.01))
+			chains[adminID] = []output.AdminRow{
+				{FID: adminID, Level: 8, CountryISO: "DE"},
+				{FID: 7, Level: 4, CountryISO: "DE"}, // shared state-level ancestor
+			}
+		}
+		knn[class] = feats
+	}
+
+	calls, seeds := 0, 0
+	idx := countingIndex{
+		fakeIndex:  fakeIndex{knn: knn, chains: chains},
+		chainCalls: &calls,
+		seedsSeen:  &seeds,
+	}
+	svc := NewService(idx, testManifest(), mapResolver{{"DE", 4}: "state", {"DE", 8}: "municipality"}, nil, true)
+	pol := domain.BearingPolicy{Reach: map[domain.PlaceClass]float64{
+		domain.ClassCity: 60, domain.ClassTown: 60, domain.ClassVillage: 60,
+	}, ConstraintTier: "state"}
+
+	cands, err := svc.gatherCandidates(context.Background(), domain.NewWGS84Coordinate(10.0, 50.0), pol,
+		insideConstraint{constrained: true, ancestor: 7, tier: "state"})
+	if err != nil {
+		t.Fatalf("gatherCandidates: %v", err)
+	}
+	if calls != 1 {
+		t.Errorf("ResolveChains called %d times, want exactly 1 — the lineage lookup must be batched across all classes", calls)
+	}
+	if seeds < perClass*3 {
+		t.Errorf("batch carried %d seeds, want >= %d — every candidate's lineage must be in the one call", seeds, perClass*3)
+	}
+	// All candidates share ancestor 7, so the guard must admit every one of them:
+	// batching must not change which anchors qualify.
+	if len(cands) != perClass*3 {
+		t.Errorf("admitted %d candidates, want %d", len(cands), perClass*3)
+	}
+}
+
+// TestGatherCandidatesSkipsChainQueryWhenUnconstrained pins that an inactive
+// constraint issues no lineage query at all, rather than a batch of zero.
+func TestGatherCandidatesSkipsChainQueryWhenUnconstrained(t *testing.T) {
+	calls, seeds := 0, 0
+	idx := countingIndex{
+		fakeIndex: fakeIndex{knn: map[string][]domain.Feature{
+			"city": {placeFeature("city", "C", 1, 10.05)},
+		}},
+		chainCalls: &calls,
+		seedsSeen:  &seeds,
+	}
+	svc := NewService(idx, testManifest(), mapResolver{{"DE", 4}: "state", {"DE", 8}: "municipality"}, nil, true)
+	pol := domain.BearingPolicy{Reach: map[domain.PlaceClass]float64{domain.ClassCity: 60}}
+
+	if _, err := svc.gatherCandidates(context.Background(), domain.NewWGS84Coordinate(10.0, 50.0), pol,
+		insideConstraint{}); err != nil {
+		t.Fatalf("gatherCandidates: %v", err)
+	}
+	if calls != 0 {
+		t.Errorf("ResolveChains called %d times with no active constraint, want 0", calls)
+	}
+}
+
+// TestAdminPointInPolygonIsSharedWithinARequest pins the request-scoped cache.
+// Locate and Bearing both need the containing admin polygons; without the cache
+// that identical query ran twice per request and was the response's largest
+// single cost. Counted, not timed, so the assertion is deterministic.
+func TestAdminPointInPolygonIsSharedWithinARequest(t *testing.T) {
+	newSvc := func(pip *int) *Service {
+		idx := countingIndex{
+			fakeIndex: fakeIndex{
+				pip: []domain.Feature{adminFeature("4", "Bayern"), adminFeature("8", "Würzburg")},
+				knn: map[string][]domain.Feature{"city": {placeFeature("city", "Würzburg", 1, 9.9)}},
+			},
+			pipCalls: pip,
+		}
+		svc := NewService(idx, testManifest(), mapResolver{{"DE", 4}: "state", {"DE", 8}: "municipality"}, nil, true)
+		return svc
+	}
+	p := domain.NewWGS84Coordinate(10.0, 50.0)
+	pol := domain.BearingPolicy{Reach: map[domain.PlaceClass]float64{domain.ClassCity: 60}}
+
+	t.Run("with a scope the query runs once", func(t *testing.T) {
+		calls := 0
+		svc := newSvc(&calls)
+		ctx := input.WithPointInPolygonCache(context.Background())
+		if _, err := svc.Locate(ctx, p); err != nil {
+			t.Fatalf("Locate: %v", err)
+		}
+		if _, err := svc.Bearing(ctx, p, pol); err != nil && !errors.Is(err, domain.ErrNotFound) {
+			t.Fatalf("Bearing: %v", err)
+		}
+		if calls != 1 {
+			t.Errorf("admin PointInPolygon ran %d times, want 1", calls)
+		}
+	})
+
+	// Without a scope the service must keep working, just without the saving —
+	// a caller that does not open one (a test, a direct embedder) is not broken.
+	t.Run("without a scope it is a pass-through", func(t *testing.T) {
+		calls := 0
+		svc := newSvc(&calls)
+		ctx := context.Background()
+		if _, err := svc.Locate(ctx, p); err != nil {
+			t.Fatalf("Locate: %v", err)
+		}
+		if _, err := svc.Bearing(ctx, p, pol); err != nil && !errors.Is(err, domain.ErrNotFound) {
+			t.Fatalf("Bearing: %v", err)
+		}
+		if calls != 2 {
+			t.Errorf("admin PointInPolygon ran %d times without a scope, want 2", calls)
+		}
+	})
+
+	// A different coordinate must not be answered from the cache.
+	t.Run("a different point is not served from the cache", func(t *testing.T) {
+		calls := 0
+		svc := newSvc(&calls)
+		ctx := input.WithPointInPolygonCache(context.Background())
+		if _, err := svc.Locate(ctx, p); err != nil {
+			t.Fatalf("Locate: %v", err)
+		}
+		if _, err := svc.Locate(ctx, domain.NewWGS84Coordinate(11.0, 51.0)); err != nil {
+			t.Fatalf("Locate(other): %v", err)
+		}
+		if calls != 2 {
+			t.Errorf("admin PointInPolygon ran %d times for two distinct points, want 2", calls)
+		}
+	})
 }

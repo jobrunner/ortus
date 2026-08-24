@@ -65,6 +65,8 @@ func NewSyncService(registry sourceSyncer, interval time.Duration, tracer output
 }
 
 // Start begins the periodic sync scheduler.
+//
+//tracecheck:ignore Start only launches the run goroutine and returns immediately; a span here would close before any work happens and would misparent the loop's own spans. The work is traced in doSync.
 func (s *SyncService) Start(ctx context.Context) {
 	s.logger.Info("starting sync service", "interval", s.interval)
 

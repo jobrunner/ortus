@@ -62,8 +62,20 @@ sampled trace context is honoured (W3C `traceparent` + `tracestate`).
 
 ## What gets traced
 
-Every named operation produces a span; a coverage test in
-`internal/adapters/telemetry/coverage_test.go` enforces the full list below.
+Every named operation produces a span, guarded by two complementary gates:
+
+- **`internal/adapters/telemetry/coverage_test.go`** drives the paths and asserts
+  the spans below really reach the ring buffer. Its list is hand-maintained.
+- **`make trace-coverage`** (`tools/tracecheck`) derives the requirement from the
+  code: every exported `ctx` method of an application service and every method of
+  a `Traced*` decorator must open a span. Exemptions need an in-code
+  `//tracecheck:ignore <reason>`.
+
+The second exists because the first can only check what somebody remembered to
+add. The gazetteer shipped six service methods with no spans at all; nothing was
+red, and the gap only surfaced when a trace of a slow request showed 828 of
+829 ms as empty space. A hand-maintained list cannot catch what is missing from
+it — so the static gate derives the list instead.
 
 | Span name                              | Where                          | Notable attributes                                       |
 |----------------------------------------|--------------------------------|----------------------------------------------------------|
@@ -98,9 +110,21 @@ Every named operation produces a span; a coverage test in
 | `HealthService.GetHealthDetails`       | `internal/application`         | `health.sources_{loaded,ready}`                         |
 | `HealthService.GetSourceHealth`       | `internal/application`         | `health.sources.count`                                  |
 | `SyncService.do{Sync,SyncWithResult}`  | `internal/application`         | `sync.trigger` (`scheduled` \| `manual`)                 |
+| `Gazetteer.{Locate,Islands,Mountains,Bearing,Exposure,Elevation}` | `internal/application/gazetteer` | `geo.{lon,lat}` (one span per response section) |
+| `SpatialIndex.PointInPolygon`          | `internal/adapters/geopackage` | `spatial.layer`, `spatial.result.count`                  |
+| `SpatialIndex.QueryKNN`                | `internal/adapters/geopackage` | `spatial.layer`, `spatial.knn.{k,max_km,filtered,filter_column,filter_values}`, `spatial.result.count` |
+| `SpatialIndex.ResolveChains`           | `internal/adapters/geopackage` | `spatial.layer`, `spatial.chains.{seeds,resolved}` (batched: one call per request, not one per candidate) |
+| `SpatialIndex.{DistanceKM,Azimuth}`    | `internal/adapters/geopackage` | —                                                        |
 
 In addition, the HTTP recovery middleware records any panic on the active
 span (with stack trace) and marks the span status as Error.
+
+The `Gazetteer.*` spans open *before* readiness and coordinate validation, so a
+rejected request is traced too — a request that fails validation is otherwise the
+one that vanishes from the trace and gets debugged blind. They carry the query
+coordinate (`geo.lon`/`geo.lat`), because a slow section is not actionable without
+knowing which point produced it; tracing is off by default, so this records query
+coordinates only where an operator switched it on.
 
 Every span carries the resource attributes `service.name`,
 `service.version` (if built with `-ldflags`), `deployment.environment`,
@@ -111,6 +135,31 @@ plus any `tracing.attributes:` entries.
 When tracing is active, the HTTP request log includes `trace_id` and
 `span_id`, so a log line can be jumped to the trace in Jaeger/Tempo (or the
 in-memory buffer) directly.
+
+## Reading traces from an AI agent
+
+Span data is reachable over MCP, so debugging and perf work need neither Grafana
+nor a hand-written trace client. Enable **both** flags on the instance:
+
+```yaml
+tracing: { enabled: true, service_name: ortus }
+mcp:     { enabled: true, host: 127.0.0.1 }     # loopback needs no token
+```
+
+`.mcp.json` in the repo root already points an agent at that endpoint, and
+`.claude/settings.json` enables it without a prompt:
+
+```json
+{ "mcpServers": { "ortus": { "type": "http", "url": "http://127.0.0.1:9091/mcp" } } }
+```
+
+The endpoint is loopback, so it needs no token and is the same for everyone; a
+deployment on another host sets `ORTUS_MCP_TOKEN` and its own URL instead.
+
+Start with [`span_summary`](mcp.md#diagnostic-tools) — per span name it gives
+calls per request, percentiles and total time, sorted by cost. The `per_trace`
+field is what identifies N+1 patterns; the response's own `timings_ms` block
+bounds a section but cannot show what runs inside it.
 
 ## How the MCP server reads it
 

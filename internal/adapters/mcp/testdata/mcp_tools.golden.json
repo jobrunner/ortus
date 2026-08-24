@@ -157,6 +157,39 @@
     }
   },
   {
+    "name": "span_summary",
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "group_by": {
+          "description": "span attribute to split each span name by, e.g. 'spatial.layer' or 'raster.layer'",
+          "type": "string"
+        },
+        "limit": {
+          "description": "maximum number of traces to aggregate (default 50)",
+          "type": "integer"
+        },
+        "min_duration_ms": {
+          "description": "only aggregate traces whose duration is at least this many milliseconds",
+          "type": "number"
+        },
+        "name_contains": {
+          "description": "substring match against the root span name (case-insensitive)",
+          "type": "string"
+        },
+        "since_iso": {
+          "description": "only aggregate traces that ended at or after this RFC3339 timestamp",
+          "type": "string"
+        },
+        "status": {
+          "description": "filter by OTel status code: 'Ok', 'Error', or 'Unset'",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  {
     "name": "tracing_stats",
     "input_schema": {
       "type": "object"

@@ -141,5 +141,8 @@
   "enabledPlugins": {
     "commit-commands@claude-plugins-official": true,
     "context7@claude-plugins-official": true
-  }
+  },
+  "enabledMcpjsonServers": [
+    "ortus"
+  ]
 }

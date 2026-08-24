@@ -10,14 +10,61 @@ import (
 	"github.com/jobrunner/ortus/internal/ports/input"
 )
 
-// registerDiagnosticTools mounts the five read-only tools that let an
+// registerDiagnosticTools mounts the six read-only tools that let an
 // AI agent inspect ortus' tracing ring buffer and health.
 func registerDiagnosticTools(srv *mcp.Server, deps Deps, logger *slog.Logger) {
 	addListTraces(srv, deps, logger)
 	addGetTrace(srv, deps, logger)
+	addSpanSummary(srv, deps, logger)
 	addListActiveSpans(srv, deps, logger)
 	addTracingStats(srv, deps, logger)
 	addHealth(srv, deps, logger)
+}
+
+// ---- span_summary ----------------------------------------------------------
+
+type spanSummaryIn struct {
+	MinDurationMS float64 `json:"min_duration_ms,omitempty" jsonschema:"only aggregate traces whose duration is at least this many milliseconds"`
+	Status        string  `json:"status,omitempty" jsonschema:"filter by OTel status code: 'Ok', 'Error', or 'Unset'"`
+	NameContains  string  `json:"name_contains,omitempty" jsonschema:"substring match against the root span name (case-insensitive)"`
+	SinceISO      string  `json:"since_iso,omitempty" jsonschema:"only aggregate traces that ended at or after this RFC3339 timestamp"`
+	Limit         int     `json:"limit,omitempty" jsonschema:"maximum number of traces to aggregate (default 50)"`
+	GroupBy       string  `json:"group_by,omitempty" jsonschema:"span attribute to split each span name by, e.g. 'spatial.layer' or 'raster.layer'"`
+}
+
+func addSpanSummary(srv *mcp.Server, deps Deps, _ *slog.Logger) {
+	mcp.AddTool(srv, &mcp.Tool{
+		Name: "span_summary",
+		Description: "Aggregate spans across recent traces: per span name, how many " +
+			"times it ran, how often per trace, and how much total/p50/p95 time it " +
+			"took — sorted by total time, so the dominant cost is first. " +
+			"This is the tool for 'where does the time go?' and for spotting N+1 " +
+			"patterns: a per_trace value in the hundreds means one request issues " +
+			"hundreds of that call. Use group_by to split by an attribute " +
+			"(e.g. 'spatial.layer') when one span name covers several layers.",
+	}, func(_ toolCtx, _ *callRequest, in spanSummaryIn) (*callResult, input.SpanSummary, error) {
+		if deps.Telemetry == nil {
+			return nil, input.SpanSummary{}, fmt.Errorf("tracing is disabled — set tracing.enabled in ortus config")
+		}
+		limit := in.Limit
+		if limit <= 0 {
+			limit = 50
+		}
+		filter := input.TraceFilter{
+			MinDuration:  time.Duration(in.MinDurationMS * float64(time.Millisecond)),
+			Status:       in.Status,
+			NameContains: in.NameContains,
+			Limit:        limit,
+		}
+		if in.SinceISO != "" {
+			t, err := time.Parse(time.RFC3339, in.SinceISO)
+			if err != nil {
+				return nil, input.SpanSummary{}, fmt.Errorf("invalid since_iso %q: %w", in.SinceISO, err)
+			}
+			filter.Since = t
+		}
+		return nil, input.SummarizeSpans(deps.Telemetry.ListTraces(filter), in.GroupBy), nil
+	})
 }
 
 // ---- list_traces -----------------------------------------------------------

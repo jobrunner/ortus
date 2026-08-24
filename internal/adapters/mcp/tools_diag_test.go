@@ -130,6 +130,63 @@ func TestDiagTools_WithTraces(t *testing.T) {
 	}
 }
 
+// span_summary is the tool a perf investigation starts from, and the one the
+// performance gate reads. Its per_trace field is what distinguishes "one slow
+// query" from "hundreds of fast ones", so that is what this asserts.
+func TestSpanSummary_AggregatesAndGroups(t *testing.T) {
+	deps, tr := diagDeps(t)
+
+	// One root with three child spans that share a name but differ by attribute,
+	// mirroring the real shape: one span name covering several spatial layers.
+	ctx, root := tr.Start(context.Background(), "GET /api/v1/gazetteer")
+	for _, layer := range []string{"admin_levels", "admin_levels", "islands"} {
+		_, child := tr.Start(ctx, "SpatialIndex.PointInPolygon",
+			output.WithAttributes(output.String("spatial.layer", layer)))
+		child.End()
+	}
+	root.End()
+
+	session := serveDeps(t, deps)
+
+	res := callTool(t, session, "span_summary", map[string]any{
+		"name_contains": "gazetteer",
+		"group_by":      "spatial.layer",
+	})
+	if res.IsError {
+		t.Fatalf("span_summary errored: %v", res.Content)
+	}
+	out := toolJSON(t, res)
+	if traces, _ := out["traces"].(float64); traces < 1 {
+		t.Fatalf("traces = %v, want >= 1", traces)
+	}
+
+	spans, ok := out["spans"].([]any)
+	if !ok || len(spans) == 0 {
+		t.Fatalf("expected span stats, got %v", out["spans"])
+	}
+	perTrace := map[string]float64{}
+	for _, s := range spans {
+		m, _ := s.(map[string]any)
+		name, _ := m["name"].(string)
+		group, _ := m["group"].(string)
+		pt, _ := m["per_trace"].(float64)
+		perTrace[name+"/"+group] = pt
+	}
+	// The two admin_levels calls must aggregate into one stat with per_trace=2,
+	// while islands stays separate at 1 — that is the grouping doing its job.
+	if got := perTrace["SpatialIndex.PointInPolygon/admin_levels"]; got != 2 {
+		t.Errorf("admin_levels per_trace = %v, want 2 (got stats: %v)", got, perTrace)
+	}
+	if got := perTrace["SpatialIndex.PointInPolygon/islands"]; got != 1 {
+		t.Errorf("islands per_trace = %v, want 1 (got stats: %v)", got, perTrace)
+	}
+
+	// An unparsable timestamp is a handler error, not a silently empty summary.
+	if res := callTool(t, session, "span_summary", map[string]any{"since_iso": "nope"}); !res.IsError {
+		t.Error("span_summary with invalid since_iso should be an error")
+	}
+}
+
 func TestDiagTools_ActiveSpansTruncated(t *testing.T) {
 	deps, tr := diagDeps(t)
 	session := serveDeps(t, deps)
@@ -195,6 +252,7 @@ func TestDiagTools_TracingDisabled(t *testing.T) {
 	}{
 		{"list_traces", nil},
 		{"get_trace", map[string]any{"trace_id": "x"}},
+		{"span_summary", nil},
 		{"list_active_spans", nil},
 	} {
 		if res := callTool(t, session, tc.name, tc.args); !res.IsError {

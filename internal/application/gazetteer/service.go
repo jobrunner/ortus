@@ -130,6 +130,71 @@ type Service struct {
 
 	builtUp      output.BuiltUpSampler // optional; nil ⇒ "in {X}" uses distance alone (no built-up gate)
 	builtUpMinM2 float64               // min built-up value for a point to count as "in" a settlement
+
+	tracer output.Tracer // never nil; NoOpTracer until SetTracer wires a real one
+}
+
+// SetTracer wires the tracer used for the per-section spans. Until it is called
+// the service traces into NoOpTracer, so tracing stays entirely optional.
+func (s *Service) SetTracer(t output.Tracer) {
+	if t == nil {
+		t = output.NoOpTracer{}
+	}
+	s.tracer = t
+}
+
+// adminContaining returns the admin polygons covering p, served from the
+// request-scoped cache when the adapter opened one.
+//
+// Locate and Bearing both need this and are deliberately independent, so without
+// the cache every request ran the same query twice — the largest single cost in
+// the response. Without a scope this is a plain pass-through, so behavior is
+// unchanged for any caller that does not open one.
+func (s *Service) adminContaining(ctx context.Context, p domain.Coordinate) ([]domain.Feature, error) {
+	cache := input.PointInPolygonCacheFrom(ctx)
+	if features, ok := cache.Get(s.manifest.AdminLayer, p); ok {
+		return features, nil
+	}
+	features, err := s.index.PointInPolygon(ctx, s.manifest.AdminLayer, p)
+	if err != nil {
+		return nil, err
+	}
+	cache.Put(s.manifest.AdminLayer, p, features)
+	return features, nil
+}
+
+// beginSection opens the span for one gazetteer section and runs the preamble
+// every section shares (readiness, then coordinate validation).
+//
+// The span opens *before* the checks so a rejected request is traced too — a
+// request that fails validation is exactly the kind that otherwise vanishes from
+// a trace and gets debugged blind. On error the span is already ended and the
+// returned Span is nil, so callers must return immediately rather than defer.
+//
+// The coordinate goes on the span because a slow section is not actionable
+// without knowing which point produced it. Tracing is opt-in
+// (tracing.enabled=false by default), so this records query coordinates only
+// where an operator has switched tracing on.
+func (s *Service) beginSection(ctx context.Context, name string, p domain.Coordinate) (context.Context, output.Span, error) {
+	ctx, span := s.tracer.Start(ctx, "Gazetteer."+name,
+		output.WithAttributes(
+			output.Float64("geo.lon", p.X),
+			output.Float64("geo.lat", p.Y),
+		),
+	)
+	if err := s.ready(); err != nil {
+		span.RecordError(err)
+		span.SetStatus(output.StatusError, "gazetteer not ready")
+		span.End()
+		return ctx, nil, err
+	}
+	if err := requireWGS84(p); err != nil {
+		span.RecordError(err)
+		span.SetStatus(output.StatusError, "coordinate not WGS84")
+		span.End()
+		return ctx, nil, err
+	}
+	return ctx, span, nil
 }
 
 // SetNameSources wires the optional name-source resolver so resolved name
@@ -205,7 +270,14 @@ func NewService(index output.SpatialIndex, manifest Manifest, levels LevelResolv
 	if strategy == nil {
 		strategy = RankedSalience{}
 	}
-	return &Service{index: index, manifest: manifest, levels: levels, salience: strategy, enabled: enabled}
+	return &Service{
+		index:    index,
+		manifest: manifest,
+		levels:   levels,
+		salience: strategy,
+		enabled:  enabled,
+		tracer:   output.NoOpTracer{},
+	}
 }
 
 // Locate reverse-geocodes a coordinate to its administrative hierarchy. It uses a
@@ -213,13 +285,12 @@ func NewService(index output.SpatialIndex, manifest Manifest, levels LevelResolv
 // containing the point across levels — then orders them most-local-first and
 // enriches each with its semantic meaning from the level resolver.
 func (s *Service) Locate(ctx context.Context, p domain.Coordinate) (*domain.Locality, error) {
-	if err := s.ready(); err != nil {
+	ctx, span, err := s.beginSection(ctx, "Locate", p)
+	if err != nil {
 		return nil, err
 	}
-	if err := requireWGS84(p); err != nil {
-		return nil, err
-	}
-	features, err := s.index.PointInPolygon(ctx, s.manifest.AdminLayer, p)
+	defer span.End()
+	features, err := s.adminContaining(ctx, p)
 	if err != nil {
 		return nil, err
 	}
@@ -278,12 +349,11 @@ func (s *Service) Locate(ctx context.Context, p domain.Coordinate) (*domain.Loca
 // islands block. Island lookup is independent of admin coverage: a point on a
 // small island outside any admin polygon still resolves its island name.
 func (s *Service) Islands(ctx context.Context, p domain.Coordinate) ([]domain.Island, error) {
-	if err := s.ready(); err != nil {
+	ctx, span, err := s.beginSection(ctx, "Islands", p)
+	if err != nil {
 		return nil, err
 	}
-	if err := requireWGS84(p); err != nil {
-		return nil, err
-	}
+	defer span.End()
 	if s.manifest.IslandsLayer == "" {
 		return nil, nil // islands not configured — omit from the response
 	}
@@ -358,12 +428,11 @@ func (s *Service) Capabilities() domain.GazetteerCapabilities {
 // null mountains block. Like islands, a missing layer degrades to (nil, nil) so
 // a manifest that outruns the deployed dataset does not error.
 func (s *Service) Mountains(ctx context.Context, p domain.Coordinate) (*domain.MountainResult, error) {
-	if err := s.ready(); err != nil {
+	ctx, span, err := s.beginSection(ctx, "Mountains", p)
+	if err != nil {
 		return nil, err
 	}
-	if err := requireWGS84(p); err != nil {
-		return nil, err
-	}
+	defer span.End()
 	if s.manifest.MountainsLayer == "" {
 		return nil, nil // mountains not configured — omit from the response
 	}
@@ -459,12 +528,11 @@ func moreSpecific(aArea float64, aName string, bArea float64, bName string) bool
 // A null block therefore means "no answer here", which is only distinguishable
 // from "no DEM at all" via the response's availability flags.
 func (s *Service) Elevation(ctx context.Context, p domain.Coordinate) (*domain.Elevation, error) {
-	if err := s.ready(); err != nil {
+	ctx, span, err := s.beginSection(ctx, "Elevation", p)
+	if err != nil {
 		return nil, err
 	}
-	if err := requireWGS84(p); err != nil {
-		return nil, err
-	}
+	defer span.End()
 	if s.elevation == nil {
 		return nil, nil // feature not wired — omit from the response
 	}
