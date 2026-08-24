@@ -3,6 +3,7 @@ package gazetteer
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -54,7 +55,10 @@ func (s *Service) Bearing(ctx context.Context, p domain.Coordinate, pol domain.B
 	if err != nil {
 		return nil, err
 	}
-	best, ok := s.salience.Select(cands, pol)
+	best, ok, err := s.bestAdmitted(ctx, cands, pol, ic)
+	if err != nil {
+		return nil, err
+	}
 	if !ok {
 		return nil, fmt.Errorf("bearing (%v): %w", p, domain.ErrNotFound)
 	}
@@ -87,33 +91,22 @@ type insideConstraint struct {
 // whose wider radius also reaches). ok is false when no class qualifies (open country /
 // between settlements).
 //
-// Every class's candidates are collected before any are filtered, so the
-// boundary-tier check runs once for the whole set instead of once per candidate.
-// QueryKNN orders nearest-first within a class, but the winner is the overall
-// nearest admitted candidate, so the flat scan below is equivalent to the previous
-// per-class scan. The explicit distance check does not rely on the index honoring
-// the KNN radius bound.
+// Every class's candidates are collected before any are filtered, then sorted by
+// distance and admitted lazily — a candidate's admin lineage is only fetched once
+// every nearer one has been rejected. QueryKNN orders nearest-first within a
+// class, but the winner is the overall nearest admitted candidate, so the flat
+// ordering below is equivalent to the previous per-class scan.
 func (s *Service) placeInsideOf(ctx context.Context, p domain.Coordinate, pol domain.BearingPolicy, ic insideConstraint) (Candidate, bool, error) {
 	cands, err := s.insideCandidates(ctx, p, pol)
 	if err != nil {
 		return Candidate{}, false, err
 	}
 
-	guard, err := s.newTierGuard(ctx, ic, cands)
-	if err != nil {
-		return Candidate{}, false, err
-	}
-	var best Candidate
-	found := false
-	for _, c := range cands {
-		if !guard.admits(c.Place) {
-			continue
-		}
-		if !found || c.DistanceKM < best.DistanceKM {
-			best, found = c, true
-		}
-	}
-	return best, found, nil
+	// Nearest first, then the same lazy admission the anchor search uses: the
+	// nearest admitted candidate is the answer, so a candidate further out only
+	// needs its lineage if every nearer one was rejected.
+	sort.SliceStable(cands, func(i, j int) bool { return cands[i].DistanceKM < cands[j].DistanceKM })
+	return s.firstAdmitted(ctx, cands, ic)
 }
 
 // insideCandidates collects, across all classes, the places whose own class
@@ -149,61 +142,33 @@ func (s *Service) insideCandidates(ctx context.Context, p domain.Coordinate, pol
 // the boundary constraint is active — the same boundary-tier ancestor as the query
 // point.
 //
-// It exists to turn an N+1 into a single query: the tier check needs each
-// candidate's admin lineage, and resolving that one candidate at a time meant 234
-// SpatiaLite round-trips per bearing request.
+// The two guards are separate methods because they cost wildly different things:
+// admitsCountry is a field comparison, while admitsTier needs the candidate's
+// admin lineage from the database. Callers therefore filter by country for free
+// first, and pay for lineages one candidate at a time, in preference order, via
+// firstAdmitted.
 //
-// Measured honestly, batching removed the round-trips but NOT the time — the same
-// ~690 ms now sits in one span instead of 234. So the cost is the chain walking
-// itself, not the per-query overhead, and this change is a prerequisite for fixing
-// that rather than the fix. What it does buy: 234 fewer connection acquisitions
-// per request, which is what made throughput collapse under concurrency, and a
-// single span to attribute the remaining cost to.
+// The history is worth keeping: this started as one query per candidate (234
+// round-trips per request), became one batched query for all of them (round-trips
+// gone, elapsed time unchanged — the walking was the cost, not the overhead), and
+// only ranking first made it cheap (142.5 -> 3.5 ms p95, because the top-ranked
+// candidate almost always settles the question alone).
 type tierGuard struct {
 	ic     insideConstraint
 	levels LevelResolver
 	chains map[int64][]output.AdminRow
 }
 
-// newTierGuard resolves the lineage of every candidate's admin unit in one call.
-// When the constraint is inactive no lineage is needed, so no query is issued.
-//
-// A failed batch aborts the request, exactly as a failed single walk used to: a
-// transient index failure must not quietly admit a cross-tier anchor or turn into
-// a spurious "not found".
-func (s *Service) newTierGuard(ctx context.Context, ic insideConstraint, cands []Candidate) (tierGuard, error) {
-	g := tierGuard{ic: ic, levels: s.levels}
-	if !ic.constrained || len(cands) == 0 {
-		return g, nil
-	}
-	fids := make([]int64, 0, len(cands))
-	for _, c := range cands {
-		if c.Place.AdminID != 0 {
-			fids = append(fids, c.Place.AdminID)
-		}
-	}
-	if len(fids) == 0 {
-		return g, nil
-	}
-	chains, err := s.index.ResolveChains(ctx, s.manifest.AdminLayer, fids, output.AdminColumns{
-		ParentFK: s.manifest.ParentFKColumn,
-		Level:    s.manifest.LevelColumn,
-		Country:  s.manifest.CountryColumn,
-	})
-	if err != nil {
-		return tierGuard{}, err
-	}
-	g.chains = chains
-	return g, nil
+// admitsCountry applies the guard that needs no database round-trip, so callers
+// can narrow the candidate set for free before paying for any lineage.
+func (g tierGuard) admitsCountry(place domain.Place) bool {
+	return g.ic.country == "" || place.CountryISO == g.ic.country
 }
 
-// admits reports whether a place may be used as an anchor (or named as the
-// settlement the point is "in"). A place with unknown admin (AdminID 0) is
-// excluded under an active constraint because its lineage cannot be verified.
-func (g tierGuard) admits(place domain.Place) bool {
-	if g.ic.country != "" && place.CountryISO != g.ic.country {
-		return false
-	}
+// admitsTier answers the boundary-tier question for a place whose lineage is
+// already resolved. A place with unknown admin (AdminID 0) is excluded under an
+// active constraint because its lineage cannot be verified.
+func (g tierGuard) admitsTier(place domain.Place) bool {
 	if !g.ic.constrained {
 		return true
 	}
@@ -218,6 +183,13 @@ func (g tierGuard) admits(place domain.Place) bool {
 		}
 	}
 	return false
+}
+
+// admits reports whether a place may be used as an anchor (or named as the
+// settlement the point is "in"). A place with unknown admin (AdminID 0) is
+// excluded under an active constraint because its lineage cannot be verified.
+func (g tierGuard) admits(place domain.Place) bool {
+	return g.admitsCountry(place) && g.admitsTier(place)
 }
 
 // gatherCandidates collects the constraint-satisfying candidates of each class, up to
@@ -237,20 +209,104 @@ func (s *Service) gatherCandidates(ctx context.Context, p domain.Coordinate, pol
 		}
 		raw = append(raw, cs...)
 	}
-	// One batched lineage resolve for every class's candidates together, then the
-	// guards run in memory. Filtering per class would reintroduce one query per
-	// class-set; filtering per candidate is what cost 234 queries per request.
-	guard, err := s.newTierGuard(ctx, ic, raw)
-	if err != nil {
-		return nil, err
-	}
+	// Only the same-country guard runs here: it is a field comparison and costs
+	// nothing. The boundary-tier guard needs a lineage per candidate and is
+	// applied later, one candidate at a time, in preference order.
+	guard := tierGuard{ic: ic, levels: s.levels}
 	cands := make([]Candidate, 0, len(raw))
 	for _, c := range raw {
-		if guard.admits(c.Place) {
+		if guard.admitsCountry(c.Place) {
 			cands = append(cands, c)
 		}
 	}
 	return cands, nil
+}
+
+// bestAdmitted returns the highest-ranked candidate that also satisfies the
+// boundary-tier constraint, resolving admin lineages lazily.
+//
+// The old code resolved every candidate's lineage and then ranked the survivors:
+// 300-400 lineages per request to answer a question the top-ranked candidate
+// almost always settles on its own. Ranking is pure arithmetic, so doing it first
+// costs nothing and changes no outcome — the first candidate that passes is
+// exactly the one the previous order produced.
+//
+// Lineages are fetched in growing batches (1, then 16, then 256, …) so the common
+// case is a single query for a single id, while a point near a state border —
+// where many candidates are rejected — still converges in a handful of queries
+// rather than one per candidate.
+func (s *Service) bestAdmitted(ctx context.Context, cands []Candidate, pol domain.BearingPolicy, ic insideConstraint) (Candidate, bool, error) {
+	if !ic.constrained {
+		best, ok := s.salience.Select(cands, pol)
+		return best, ok, nil
+	}
+	return s.firstAdmitted(ctx, s.salience.Order(cands, pol), ic)
+}
+
+// firstAdmitted returns the first candidate in the given order that satisfies the
+// boundary-tier constraint, resolving admin lineages lazily.
+//
+// The caller decides what "first" means — best-scoring for an anchor, nearest for
+// the "in {X}" decision — and both get the same saving: a candidate is only paid
+// for once everything ahead of it has been rejected.
+//
+// Lineages are fetched in growing batches (1, then 16, then 256, …) so the common
+// case is a single query for a single id, while a point near a state border —
+// where many candidates are rejected — still converges in a handful of queries
+// rather than one per candidate.
+func (s *Service) firstAdmitted(ctx context.Context, ordered []Candidate, ic insideConstraint) (Candidate, bool, error) {
+	guard := tierGuard{ic: ic, levels: s.levels, chains: map[int64][]output.AdminRow{}}
+	const batchGrowth = 16
+	for i, batch := 0, 1; i < len(ordered); batch *= batchGrowth {
+		end := min(i+batch, len(ordered))
+		if ic.constrained {
+			if err := s.resolveInto(ctx, guard.chains, ordered[i:end]); err != nil {
+				return Candidate{}, false, err
+			}
+		}
+		for ; i < end; i++ {
+			if guard.admits(ordered[i].Place) {
+				return ordered[i], true, nil
+			}
+		}
+	}
+	return Candidate{}, false, nil
+}
+
+// resolveInto fetches the admin lineage of every candidate in the slice that is
+// not already known, adding the results to chains.
+func (s *Service) resolveInto(ctx context.Context, chains map[int64][]output.AdminRow, cands []Candidate) error {
+	// Claiming each id in chains as it is collected deduplicates against both what
+	// is already resolved and what this batch has already picked up — candidates
+	// frequently share an admin unit. The adapter dedupes seeds before querying,
+	// but the tracing decorator records the count it was HANDED, so duplicates
+	// would make spatial.chains.seeds describe work that never happened.
+	fids := make([]int64, 0, len(cands))
+	for _, c := range cands {
+		id := c.Place.AdminID
+		if _, known := chains[id]; id == 0 || known {
+			continue
+		}
+		chains[id] = nil // claimed; overwritten below if the layer has a row
+		fids = append(fids, id)
+	}
+	if len(fids) == 0 {
+		return nil
+	}
+	resolved, err := s.index.ResolveChains(ctx, s.manifest.AdminLayer, fids, output.AdminColumns{
+		ParentFK: s.manifest.ParentFKColumn,
+		Level:    s.manifest.LevelColumn,
+		Country:  s.manifest.CountryColumn,
+	})
+	if err != nil {
+		return err
+	}
+	// Ids the layer had no row for keep their nil claim, so a later batch does not
+	// ask for them again.
+	for fid, chain := range resolved {
+		chains[fid] = chain
+	}
+	return nil
 }
 
 // candidatesInClass returns the places of a class within its gather radius that also

@@ -143,22 +143,24 @@ func (c countingIndex) ResolveChains(ctx context.Context, layer string, fromFIDs
 	return c.fakeIndex.ResolveChains(ctx, layer, fromFIDs, cols)
 }
 
-// TestGatherCandidatesResolvesChainsInOneBatch is the regression test for the N+1
-// that cost 234 SpatiaLite round-trips and ~700 ms per bearing request: the tier
-// constraint used to resolve each candidate's admin lineage with its own query.
+// TestBearingResolvesOnlyWhatItNeeds is the regression test for the lineage N+1.
 //
-// It asserts the round-trip COUNT, not the duration — the count is a property of
-// the code and does not move with machine speed, so this fails deterministically
-// the moment the per-candidate query returns.
-func TestGatherCandidatesResolvesChainsInOneBatch(t *testing.T) {
+// The boundary-tier check needs a database round-trip per candidate's admin
+// lineage. The old code resolved ALL of them (300-400 per request in the real
+// dataset) and then ranked the survivors. Ranking is pure arithmetic, so ranking
+// first and resolving lazily gives the same winner for a fraction of the queries.
+//
+// This asserts the round-trip COUNT, not a duration: it is a property of the code
+// and does not move with machine speed.
+func TestBearingResolvesOnlyWhatItNeeds(t *testing.T) {
 	const perClass = 12
 	knn := map[string][]domain.Feature{}
 	chains := map[int64][]output.AdminRow{}
 	for ci, class := range []string{"city", "town", "village"} {
 		feats := make([]domain.Feature, 0, perClass)
 		for i := range perClass {
-			// A distinct admin id per place, so deduplication cannot mask a
-			// per-candidate query as a single batched one.
+			// A distinct admin id per place, so nothing is saved by deduplication
+			// alone — only by not asking in the first place.
 			adminID := int64(ci*100 + i + 1)
 			feats = append(feats, placeFeature(class, "P", int(adminID), 10.0+float64(i)*0.01))
 			chains[adminID] = []output.AdminRow{
@@ -179,28 +181,103 @@ func TestGatherCandidatesResolvesChainsInOneBatch(t *testing.T) {
 	pol := domain.BearingPolicy{Reach: map[domain.PlaceClass]float64{
 		domain.ClassCity: 60, domain.ClassTown: 60, domain.ClassVillage: 60,
 	}, ConstraintTier: "state"}
+	ic := insideConstraint{constrained: true, ancestor: 7, tier: "state"}
+	p := domain.NewWGS84Coordinate(10.0, 50.0)
 
-	cands, err := svc.gatherCandidates(context.Background(), domain.NewWGS84Coordinate(10.0, 50.0), pol,
-		insideConstraint{constrained: true, ancestor: 7, tier: "state"})
+	cands, err := svc.gatherCandidates(context.Background(), p, pol, ic)
 	if err != nil {
 		t.Fatalf("gatherCandidates: %v", err)
 	}
-	if calls != 1 {
-		t.Errorf("ResolveChains called %d times, want exactly 1 — the lineage lookup must be batched across all classes", calls)
+	// Gathering must not touch the database at all any more.
+	if calls != 0 {
+		t.Errorf("gatherCandidates issued %d lineage queries, want 0 — the tier guard is applied later", calls)
 	}
-	if seeds < perClass*3 {
-		t.Errorf("batch carried %d seeds, want >= %d — every candidate's lineage must be in the one call", seeds, perClass*3)
-	}
-	// All candidates share ancestor 7, so the guard must admit every one of them:
-	// batching must not change which anchors qualify.
 	if len(cands) != perClass*3 {
-		t.Errorf("admitted %d candidates, want %d", len(cands), perClass*3)
+		t.Fatalf("gathered %d candidates, want %d", len(cands), perClass*3)
+	}
+
+	best, ok, err := svc.bestAdmitted(context.Background(), cands, pol, ic)
+	if err != nil {
+		t.Fatalf("bestAdmitted: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected an admitted candidate — every candidate shares ancestor 7")
+	}
+	// All candidates qualify here, so the top-ranked one settles it: one query for
+	// one id, not 36.
+	if calls != 1 || seeds != 1 {
+		t.Errorf("resolved %d ids in %d queries, want 1 in 1 — only the top candidate should be checked", seeds, calls)
+	}
+
+	// The winner must be the one the old filter-then-rank order produced.
+	guard := tierGuard{ic: ic, levels: svc.levels, chains: chains}
+	var admitted []Candidate
+	for _, c := range cands {
+		if guard.admits(c.Place) {
+			admitted = append(admitted, c)
+		}
+	}
+	want, _ := svc.salience.Select(admitted, pol)
+	if best != want {
+		t.Errorf("winner changed: got %+v, want %+v", best.Place.Name, want.Place.Name)
+	}
+}
+
+// When the leading candidates are rejected, the walk must keep going and still
+// find the best admitted one — in a handful of batched queries, not one per
+// candidate.
+func TestBearingWalksPastRejectedCandidates(t *testing.T) {
+	const n = 30
+	feats := make([]domain.Feature, 0, n)
+	chains := map[int64][]output.AdminRow{}
+	for i := range n {
+		adminID := int64(i + 1)
+		// Nearest first; only the farthest sits in the query's state, so every
+		// nearer candidate has to be rejected before it is reached.
+		feats = append(feats, placeFeature("city", "P", int(adminID), 10.0+float64(i)*0.01))
+		ancestor := int64(99) // wrong state
+		if i == n-1 {
+			ancestor = 7
+		}
+		chains[adminID] = []output.AdminRow{
+			{FID: adminID, Level: 8, CountryISO: "DE"},
+			{FID: ancestor, Level: 4, CountryISO: "DE"},
+		}
+	}
+
+	calls, seeds := 0, 0
+	idx := countingIndex{
+		fakeIndex:  fakeIndex{knn: map[string][]domain.Feature{"city": feats}, chains: chains},
+		chainCalls: &calls,
+		seedsSeen:  &seeds,
+	}
+	svc := NewService(idx, testManifest(), mapResolver{{"DE", 4}: "state", {"DE", 8}: "municipality"}, nil, true)
+	pol := domain.BearingPolicy{Reach: map[domain.PlaceClass]float64{domain.ClassCity: 60}, ConstraintTier: "state"}
+	ic := insideConstraint{constrained: true, ancestor: 7, tier: "state"}
+
+	cands, err := svc.gatherCandidates(context.Background(), domain.NewWGS84Coordinate(10.0, 50.0), pol, ic)
+	if err != nil {
+		t.Fatalf("gatherCandidates: %v", err)
+	}
+	best, ok, err := svc.bestAdmitted(context.Background(), cands, pol, ic)
+	if err != nil {
+		t.Fatalf("bestAdmitted: %v", err)
+	}
+	if !ok {
+		t.Fatal("the one in-state candidate must still be found")
+	}
+	if best.Place.AdminID != int64(n) {
+		t.Errorf("wrong winner: admin %d, want %d", best.Place.AdminID, n)
+	}
+	// Growing batches: 1, then 16, then 256 covers 30 candidates in three queries.
+	if calls > 3 {
+		t.Errorf("took %d lineage queries for %d candidates, want <= 3 — batches must grow", calls, n)
 	}
 }
 
 // TestGatherCandidatesSkipsChainQueryWhenUnconstrained pins that an inactive
 // constraint issues no lineage query at all, rather than a batch of zero.
-func TestGatherCandidatesSkipsChainQueryWhenUnconstrained(t *testing.T) {
+func TestBearingSkipsChainQueryWhenUnconstrained(t *testing.T) {
 	calls, seeds := 0, 0
 	idx := countingIndex{
 		fakeIndex: fakeIndex{knn: map[string][]domain.Feature{
@@ -212,9 +289,12 @@ func TestGatherCandidatesSkipsChainQueryWhenUnconstrained(t *testing.T) {
 	svc := NewService(idx, testManifest(), mapResolver{{"DE", 4}: "state", {"DE", 8}: "municipality"}, nil, true)
 	pol := domain.BearingPolicy{Reach: map[domain.PlaceClass]float64{domain.ClassCity: 60}}
 
-	if _, err := svc.gatherCandidates(context.Background(), domain.NewWGS84Coordinate(10.0, 50.0), pol,
-		insideConstraint{}); err != nil {
+	cands, err := svc.gatherCandidates(context.Background(), domain.NewWGS84Coordinate(10.0, 50.0), pol, insideConstraint{})
+	if err != nil {
 		t.Fatalf("gatherCandidates: %v", err)
+	}
+	if _, _, err := svc.bestAdmitted(context.Background(), cands, pol, insideConstraint{}); err != nil {
+		t.Fatalf("bestAdmitted: %v", err)
 	}
 	if calls != 0 {
 		t.Errorf("ResolveChains called %d times with no active constraint, want 0", calls)

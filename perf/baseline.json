@@ -105,15 +105,17 @@
   ],
   "group_by": "spatial.layer",
   "_known_issues": [
-    "SpatialIndex.ResolveChains skaliert linear mit der Seed-Zahl (300-400 Kandidaten pro Request, ~0.25 ms je Seed). Die Query ist optimal geplant; der naechste Hebel ist die Kandidatenzahl selbst (CandidateLimit pro Klasse) — das ist eine Semantik-Entscheidung, keine Optimierung.",
-    "QueryKNN [places] laeuft 5.6x pro Request: drei Klassen fuer die inside-Pruefung und drei fuer das Kandidaten-Sammeln, jeweils mit eigenem Radius. Eine einzige Query ueber alle Klassen waere moeglich, wuerde aber mehr Zeilen liefern und die per-Klasse-Radien nach Go verlagern."
+    "Die Zeitbudgets sind an einer WARMEN Instanz gemessen (erster Lauf nach dem Start verworfen). Der Kaltstart ist deutlich langsamer — SpatialIndex.PointInPolygon[admin_levels] lag bei 74.7 ms p95 im ersten Lauf gegen 18-24 ms in allen folgenden, weil der SQLite-Page-Cache erst gefuellt werden muss. Deshalb pruefen Zeiten ohnehin nur mit Faktor-3-Toleranz; wer den Kaltstart messen will, braucht eine eigene Baseline.",
+    "SpatialIndex.ResolveChains: max_per_trace ist bewusst 1.5 statt 1.0. Die Ketten werden in wachsenden Stapeln (1, 16, 256) aufgeloest — der bestbewertete Kandidat entscheidet die Grenz-Pruefung fast immer allein (gemessen: 16 von 20 Aufrufen mit genau 1 Seed), nur nahe einer Landesgrenze folgt ein zweiter Stapel. Ein Wert deutlich ueber 1.5 waere eine echte Regression.",
+    "QueryKNN [places] laeuft 5.6x pro Request: drei Ortsklassen fuer die inside-Pruefung und drei fuer das Kandidaten-Sammeln, jeweils mit eigenem Radius.",
+    "CompositeSalience sammelt mit einem flachen Radius (DefaultCandidateRadiusKM=120) und ignoriert die klassenspezifischen Reichweiten (Dorf 5 km, Stadt 18 km, Grossstadt 60 km). Die Ketten-Aufloesung ist davon nicht mehr betroffen (lazy), die KNN-Zeilenzahl schon."
   ],
-  "max_root_p95_ms": 170,
+  "max_root_p95_ms": 70,
   "budgets": [
     {
       "name": "Gazetteer.Bearing",
       "max_per_trace": 1,
-      "max_p95_ms": 150
+      "max_p95_ms": 50
     },
     {
       "name": "Gazetteer.Elevation",
@@ -123,7 +125,7 @@
     {
       "name": "Gazetteer.Exposure",
       "max_per_trace": 1,
-      "max_p95_ms": 5
+      "max_p95_ms": 1
     },
     {
       "name": "Gazetteer.Islands",
@@ -133,7 +135,7 @@
     {
       "name": "Gazetteer.Locate",
       "max_per_trace": 1,
-      "max_p95_ms": 30
+      "max_p95_ms": 50
     },
     {
       "name": "Gazetteer.Mountains",
@@ -149,7 +151,7 @@
       "name": "SpatialIndex.PointInPolygon",
       "group": "admin_levels",
       "max_per_trace": 1,
-      "max_p95_ms": 30
+      "max_p95_ms": 50
     },
     {
       "name": "SpatialIndex.PointInPolygon",
@@ -172,13 +174,13 @@
     {
       "name": "SpatialIndex.ResolveChains",
       "group": "admin_levels",
-      "max_per_trace": 1,
-      "max_p95_ms": 140
+      "max_per_trace": 1.5,
+      "max_p95_ms": 6
     },
     {
       "name": "raster.QueryPoint",
       "max_per_trace": 9.68,
-      "max_p95_ms": 2
+      "max_p95_ms": 1
     }
   ]
 }
