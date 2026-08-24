@@ -3,6 +3,7 @@ package geopackage
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"math"
 	"slices"
@@ -206,7 +207,9 @@ func (g *GazetteerIndex) QueryKNN(ctx context.Context, layer string, p domain.Co
 	}
 	rtree := rtreeName(layer, geom)
 	query, args := buildKNNQuery(layer, geom, tableExists(ctx, g.db, rtree), p, k, maxKM, f)
-	feats, err := g.runFeatureQuery(ctx, layer, geom, query, args...)
+	// KNN keeps the geometry: the places layer is points (tiny WKT) and the caller
+	// parses the coordinate out of it.
+	feats, err := g.runFeatureQuery(ctx, layer, geom, true, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -236,7 +239,11 @@ func (g *GazetteerIndex) PointInPolygon(ctx context.Context, layer string, p dom
 	rtree := rtreeName(layer, geom)
 	var b strings.Builder
 	var args []any
-	fmt.Fprintf(&b, `SELECT t.*, AsText(CastAutomagic(t."%s")) FROM "%s" t`, geom, layer)
+	// Attributes only, no AsText: none of this port's callers reads a polygon's
+	// geometry, and serializing one is the query's dominant cost — admin polygons
+	// run to 10 MB, and on a real lookup AsText took 70 of the 80 ms. The blob
+	// itself is cheap to read, so t.* stays.
+	fmt.Fprintf(&b, `SELECT t.* FROM "%s" t`, layer)
 	if tableExists(ctx, g.db, rtree) {
 		fmt.Fprintf(&b, ` JOIN "%s" r ON t.rowid = r.id WHERE r.minx <= ? AND r.maxx >= ? AND r.miny <= ? AND r.maxy >= ? AND `, rtree)
 		args = append(args, p.X, p.X, p.Y, p.Y)
@@ -245,7 +252,7 @@ func (g *GazetteerIndex) PointInPolygon(ctx context.Context, layer string, p dom
 	}
 	fmt.Fprintf(&b, `ST_Covers(CastAutomagic(t."%s"), GeomFromText(?, ?))`, geom)
 	args = append(args, p.WKT(), p.SRID)
-	features, err := g.runFeatureQuery(ctx, layer, geom, b.String(), args...)
+	features, err := g.runFeatureQuery(ctx, layer, geom, false, b.String(), args...)
 	if err != nil {
 		return nil, err
 	}
@@ -265,46 +272,42 @@ func (g *GazetteerIndex) PointInPolygon(ctx context.Context, layer string, p dom
 // time did not change, so the walking itself is the cost. It removes 234
 // connection acquisitions per request, which matters under concurrency.
 func (g *GazetteerIndex) ResolveChains(ctx context.Context, layer string, fromFIDs []int64, cols output.AdminColumns) (map[int64][]output.AdminRow, error) {
-	if len(fromFIDs) == 0 {
-		return map[int64][]output.AdminRow{}, nil
-	}
-	// Deduplicate: candidates frequently share an admin parent, and a repeated
-	// seed would walk the same chain twice inside the query.
-	seeds := make([]int64, 0, len(fromFIDs))
-	seen := make(map[int64]struct{}, len(fromFIDs))
-	for _, fid := range fromFIDs {
-		if fid == 0 {
-			continue // no admin unit; the caller treats these as unverifiable
-		}
-		if _, dup := seen[fid]; dup {
-			continue
-		}
-		seen[fid] = struct{}{}
-		seeds = append(seeds, fid)
-	}
+	seeds := dedupeFIDs(fromFIDs)
 	if len(seeds) == 0 {
 		return map[int64][]output.AdminRow{}, nil
 	}
+	ids, err := json.Marshal(seeds)
+	if err != nil {
+		return nil, err
+	}
 
-	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(seeds)), ",")
+	// The seed set arrives as ONE json_each parameter rather than N placeholders.
+	// With a placeholder per id the SQL text grew to 300-400 parameters in a real
+	// bearing request and changed on every call, so SQLite parsed and planned a
+	// large statement each time. Measured, that halved this query (p95 141 -> 91 ms).
+	//
+	// Caching a prepared statement on top of the now-stable text was tried and
+	// bought nothing measurable, so it is deliberately absent: the cost was the
+	// statement's SIZE, not the repeated preparation.
+	//
+	// The CTE carries the seed id through every step so one query can walk
+	// hundreds of chains and still attribute each row to the chain it belongs to.
 	var b strings.Builder
-	// %[1]=layer, %[2]=parentFK, %[3]=level, %[4]=name, %[5]=country, %[6]=placeholders.
-	fmt.Fprintf(&b, `WITH RECURSIVE chain(seed, fid, parent_id, lvl, name, country_iso, depth) AS (
-		SELECT fid, fid, COALESCE(%[2]q, 0), CAST(%[3]q AS INTEGER), %[4]q, %[5]q, 0
-		FROM %[1]q WHERE fid IN (%[6]s)
+	fmt.Fprintf(&b, `WITH RECURSIVE seeds(id) AS (
+		SELECT value FROM json_each(?)
+	), chain(seed, fid, parent_id, lvl, country_iso, depth) AS (
+		SELECT t.fid, t.fid, COALESCE(t.%[2]q, 0), CAST(t.%[3]q AS INTEGER), t.%[4]q, 0
+		FROM %[1]q t JOIN seeds s ON t.fid = s.id
 		UNION ALL
-		SELECT chain.seed, a.fid, COALESCE(a.%[2]q, 0), CAST(a.%[3]q AS INTEGER), a.%[4]q, a.%[5]q, chain.depth + 1
+		SELECT chain.seed, a.fid, COALESCE(a.%[2]q, 0), CAST(a.%[3]q AS INTEGER), a.%[4]q, chain.depth + 1
 		FROM %[1]q a JOIN chain ON a.fid = chain.parent_id
 		WHERE chain.parent_id <> 0 AND chain.depth < 32
 	)
-	SELECT seed, fid, parent_id, lvl, name, country_iso FROM chain ORDER BY seed, depth`,
-		layer, cols.ParentFK, cols.Level, cols.Name, cols.Country, placeholders)
+	SELECT seed, fid, parent_id, lvl, country_iso FROM chain ORDER BY seed, depth`,
+		layer, cols.ParentFK, cols.Level, cols.Country)
 
-	args := make([]any, len(seeds))
-	for i, fid := range seeds {
-		args[i] = fid
-	}
-	rows, err := g.db.QueryContext(ctx, b.String(), args...)
+	rows, err := g.db.QueryContext(ctx, b.String(), string(ids))
+
 	if err != nil {
 		return nil, &domain.QueryError{Layer: layer, Err: err}
 	}
@@ -315,20 +318,37 @@ func (g *GazetteerIndex) ResolveChains(ctx context.Context, layer string, fromFI
 		var (
 			seed, fid, parent int64
 			lvl               sql.NullInt64
-			name, iso         sql.NullString
+			iso               sql.NullString
 		)
-		if err := rows.Scan(&seed, &fid, &parent, &lvl, &name, &iso); err != nil {
+		if err := rows.Scan(&seed, &fid, &parent, &lvl, &iso); err != nil {
 			return nil, err
 		}
 		out[seed] = append(out[seed], output.AdminRow{
 			FID:        fid,
 			ParentFID:  parent,
 			Level:      int(lvl.Int64),
-			Name:       name.String,
 			CountryISO: iso.String,
 		})
 	}
 	return out, rows.Err()
+}
+
+// dedupeFIDs drops zeros and duplicates. Candidates frequently share an admin
+// parent, and a repeated seed would walk the same chain twice inside the query.
+func dedupeFIDs(fids []int64) []int64 {
+	out := make([]int64, 0, len(fids))
+	seen := make(map[int64]struct{}, len(fids))
+	for _, fid := range fids {
+		if fid == 0 {
+			continue // no admin unit; the caller treats these as unverifiable
+		}
+		if _, dup := seen[fid]; dup {
+			continue
+		}
+		seen[fid] = struct{}{}
+		out = append(out, fid)
+	}
+	return out
 }
 
 // DistanceKM returns the ellipsoidal distance between two coordinates in km,
@@ -362,8 +382,9 @@ func (g *GazetteerIndex) Azimuth(ctx context.Context, from, to domain.Coordinate
 }
 
 // runFeatureQuery executes a feature query and maps each row to a domain.Feature
-// via the shared scanFeature (last selected column is the geometry WKT).
-func (g *GazetteerIndex) runFeatureQuery(ctx context.Context, layer, geom, query string, args ...any) ([]domain.Feature, error) {
+// via the shared scanFeature. wktLast says whether the query selected a trailing
+// AsText(geometry) column; see buildFeature for why this cannot be inferred.
+func (g *GazetteerIndex) runFeatureQuery(ctx context.Context, layer, geom string, wktLast bool, query string, args ...any) ([]domain.Feature, error) {
 	rows, err := g.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, &domain.QueryError{Layer: layer, Err: err}
@@ -376,7 +397,7 @@ func (g *GazetteerIndex) runFeatureQuery(ctx context.Context, layer, geom, query
 	}
 	var features []domain.Feature
 	for rows.Next() {
-		f, err := scanFeature(rows, columns, layer, geom)
+		f, err := scanFeature(rows, columns, layer, geom, wktLast)
 		if err != nil {
 			return nil, err
 		}
@@ -390,34 +411,35 @@ func (g *GazetteerIndex) runFeatureQuery(ctx context.Context, layer, geom, query
 // exact-distance radius/order are always applied.
 func buildKNNQuery(layer, geom string, hasRtree bool, p domain.Coordinate, k int, maxKM float64, f *output.Filter) (query string, args []any) {
 	distExpr := fmt.Sprintf(`Distance(CastAutomagic(t.%q), MakePoint(?, ?, 4326), 1)`, geom)
-	var b strings.Builder
+	var inner strings.Builder
 	// Project the exact distance (meters) alongside the row so QueryKNN returns it
 	// without a follow-up DistanceKM query per candidate. Its two placeholders come
 	// first in the SELECT clause, so their args lead the slice.
-	fmt.Fprintf(&b, `SELECT t.*, %s AS %q, AsText(CastAutomagic(t."%s")) FROM "%s" t`, distExpr, knnDistColumn, geom, layer)
+	fmt.Fprintf(&inner, `SELECT t.*, %s AS %q, AsText(CastAutomagic(t."%s")) FROM "%s" t`, distExpr, knnDistColumn, geom, layer)
 	args = append(args, p.X, p.Y)
 	if hasRtree {
 		minX, maxX, minY, maxY := knnBBox(p, maxKM)
-		fmt.Fprintf(&b, ` JOIN %q r ON t.rowid = r.id`, rtreeName(layer, geom))
-		b.WriteString(` WHERE r.maxx >= ? AND r.minx <= ? AND r.maxy >= ? AND r.miny <= ?`)
+		fmt.Fprintf(&inner, ` JOIN %q r ON t.rowid = r.id`, rtreeName(layer, geom))
+		inner.WriteString(` WHERE r.maxx >= ? AND r.minx <= ? AND r.maxy >= ? AND r.miny <= ?`)
 		args = append(args, minX, maxX, minY, maxY)
 	} else {
-		b.WriteString(` WHERE 1 = 1`)
+		inner.WriteString(` WHERE 1 = 1`)
 	}
 	if f != nil && len(f.Values) > 0 {
 		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(f.Values)), ",")
-		fmt.Fprintf(&b, ` AND t."%s" IN (%s)`, f.Column, placeholders)
+		fmt.Fprintf(&inner, ` AND t."%s" IN (%s)`, f.Column, placeholders)
 		args = append(args, f.Values...)
 	}
-	fmt.Fprintf(&b, ` AND %s <= ?`, distExpr)
-	args = append(args, p.X, p.Y, maxKM*1000)
-	// ORDER BY references the projected alias (SQLite resolves it to the SELECT
-	// column) rather than repeating distExpr — one fewer distance evaluation and
-	// two fewer placeholders. The WHERE radius above must keep the expression:
-	// SQLite does not allow output aliases in WHERE.
-	fmt.Fprintf(&b, ` ORDER BY %q ASC LIMIT ?`, knnDistColumn)
-	args = append(args, k)
-	return b.String(), args
+
+	// The radius filter and the ordering both run on the OUTER query, against the
+	// already-projected distance. Spelling the distance expression out in WHERE
+	// (SQLite does not allow an output alias there) made SpatiaLite evaluate the
+	// ellipsoidal Distance twice per candidate row inside the bounding box —
+	// measured, that doubled the query: 20 ms against 10 ms on a dense point.
+	query = fmt.Sprintf(`SELECT * FROM (%s) WHERE %q <= ? ORDER BY %q ASC LIMIT ?`,
+		inner.String(), knnDistColumn, knnDistColumn)
+	args = append(args, maxKM*1000, k)
+	return query, args
 }
 
 // knnBBox returns a lon/lat bounding box of half-side maxKM around p, used as the

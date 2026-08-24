@@ -406,23 +406,25 @@ func Defaults() {
 	viper.SetDefault("query.sqlite.cache_mode", "private")
 	viper.SetDefault("query.sqlite.busy_timeout_ms", 5000)
 	viper.SetDefault("query.sqlite.journal_mode", "")
-	// Bounded on purpose, and 2 is the measured optimum rather than a guess.
+	// Bounded on purpose: 0 means "unlimited" to database/sql, and with
+	// cache=private every connection carries its own SQLite page cache, so an
+	// unbounded pool multiplies caches instead of sharing one and throughput falls
+	// as concurrency rises.
 	//
-	// 0 means "unlimited" to database/sql, and with cache=private every connection
-	// carries its own SQLite page cache — so load multiplied caches instead of
-	// sharing one, and throughput fell as concurrency rose. Measured on a 4.8 GB
-	// gazetteer at 8 concurrent clients (120 requests, 0 errors):
+	// The optimum depends on how much work each query does, and it MOVED when the
+	// queries got cheaper — worth knowing before re-tuning this. Measured on the
+	// same 4.8 GB gazetteer, 160 requests, 0 errors:
 	//
-	//	conns  req/s   p50      p95
-	//	    1    9.6   823 ms  1448 ms   fully serialized: no collapse, but no gain
-	//	    2   10.8   711 ms  1253 ms   best — the only value that gains from concurrency
-	//	    4    7.3   977 ms  2072 ms
-	//	    8    4.7  1484 ms  4689 ms
+	//	                        before query fixes   after (WKT/Distance/batching)
+	//	conns=2   c=4/c=8            10.8 req/s          19.6 / 22.2 req/s
+	//	conns=4   c=4/c=8             7.3 req/s          22.8 / 23.8 req/s  ← best
+	//	conns=8   c=4/c=8             4.7 req/s          22.9 / 14.7 req/s
+	//	conns=16  c=4/c=8               —                23.6 / 15.1 req/s
 	//
-	// Fewer connections gave more throughput, monotonically. Deployments with
-	// small packages (where the whole file fits in cache many times over) may do
-	// better with a higher value; this is the right default for the large ones.
-	viper.SetDefault("query.sqlite.max_open_conns", 2)
+	// With the expensive per-row work gone, less page-cache pressure per query
+	// means the pool can be wider before it hurts; 8 and up still collapse at
+	// higher concurrency. 4 is the measured optimum for large packages.
+	viper.SetDefault("query.sqlite.max_open_conns", 4)
 	viper.SetDefault("query.sqlite.max_idle_conns", 4)
 	viper.SetDefault("query.batch.max_points", 10000)
 	viper.SetDefault("query.batch.max_sync_points", 1000)

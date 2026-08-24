@@ -177,7 +177,6 @@ func (s *Service) newTierGuard(ctx context.Context, ic insideConstraint, cands [
 	chains, err := s.index.ResolveChains(ctx, s.manifest.AdminLayer, fids, output.AdminColumns{
 		ParentFK: s.manifest.ParentFKColumn,
 		Level:    s.manifest.LevelColumn,
-		Name:     s.manifest.AdminNameColumn,
 		Country:  s.manifest.CountryColumn,
 	})
 	if err != nil {

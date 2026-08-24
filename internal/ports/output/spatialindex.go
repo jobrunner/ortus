@@ -63,17 +63,18 @@ type Filter struct {
 type AdminColumns struct {
 	ParentFK string // FK to the broader enclosing unit (walked)
 	Level    string // admin level (text, cast to int)
-	Name     string // native unit name
 	Country  string // ISO 3166-1 alpha-2 code
 }
 
 // AdminRow is a raw administrative-unit row from the spatial store, used to build
 // the domain admin hierarchy. ParentFID is 0 when the unit has no parent (the top
 // of the chain, e.g. a country with no imported super-unit).
+// The unit's name is deliberately absent: the only operation that walks chains
+// is the boundary-tier guard, which needs the level, the country and the id — and
+// selecting a name column no caller reads is work per row for nothing.
 type AdminRow struct {
 	FID        int64
 	ParentFID  int64
 	Level      int
-	Name       string
 	CountryISO string
 }
