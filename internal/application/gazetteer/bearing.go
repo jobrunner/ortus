@@ -91,12 +91,11 @@ type insideConstraint struct {
 // whose wider radius also reaches). ok is false when no class qualifies (open country /
 // between settlements).
 //
-// Every class's candidates are collected before any are filtered, so the
-// boundary-tier check runs once for the whole set instead of once per candidate.
-// QueryKNN orders nearest-first within a class, but the winner is the overall
-// nearest admitted candidate, so the flat scan below is equivalent to the previous
-// per-class scan. The explicit distance check does not rely on the index honoring
-// the KNN radius bound.
+// Every class's candidates are collected before any are filtered, then sorted by
+// distance and admitted lazily — a candidate's admin lineage is only fetched once
+// every nearer one has been rejected. QueryKNN orders nearest-first within a
+// class, but the winner is the overall nearest admitted candidate, so the flat
+// ordering below is equivalent to the previous per-class scan.
 func (s *Service) placeInsideOf(ctx context.Context, p domain.Coordinate, pol domain.BearingPolicy, ic insideConstraint) (Candidate, bool, error) {
 	cands, err := s.insideCandidates(ctx, p, pol)
 	if err != nil {
@@ -143,16 +142,17 @@ func (s *Service) insideCandidates(ctx context.Context, p domain.Coordinate, pol
 // the boundary constraint is active — the same boundary-tier ancestor as the query
 // point.
 //
-// It exists to turn an N+1 into a single query: the tier check needs each
-// candidate's admin lineage, and resolving that one candidate at a time meant 234
-// SpatiaLite round-trips per bearing request.
+// The two guards are separate methods because they cost wildly different things:
+// admitsCountry is a field comparison, while admitsTier needs the candidate's
+// admin lineage from the database. Callers therefore filter by country for free
+// first, and pay for lineages one candidate at a time, in preference order, via
+// firstAdmitted.
 //
-// Measured honestly, batching removed the round-trips but NOT the time — the same
-// ~690 ms now sits in one span instead of 234. So the cost is the chain walking
-// itself, not the per-query overhead, and this change is a prerequisite for fixing
-// that rather than the fix. What it does buy: 234 fewer connection acquisitions
-// per request, which is what made throughput collapse under concurrency, and a
-// single span to attribute the remaining cost to.
+// The history is worth keeping: this started as one query per candidate (234
+// round-trips per request), became one batched query for all of them (round-trips
+// gone, elapsed time unchanged — the walking was the cost, not the overhead), and
+// only ranking first made it cheap (142.5 -> 3.5 ms p95, because the top-ranked
+// candidate almost always settles the question alone).
 type tierGuard struct {
 	ic     insideConstraint
 	levels LevelResolver
@@ -276,13 +276,26 @@ func (s *Service) firstAdmitted(ctx context.Context, ordered []Candidate, ic ins
 // resolveInto fetches the admin lineage of every candidate in the slice that is
 // not already known, adding the results to chains.
 func (s *Service) resolveInto(ctx context.Context, chains map[int64][]output.AdminRow, cands []Candidate) error {
+	// Deduplicate within the batch too, not just against what is already known:
+	// candidates frequently share an admin unit, and although the adapter dedupes
+	// seeds before querying, the tracing decorator records the count it was HANDED.
+	// Passing duplicates would inflate spatial.chains.seeds and make the telemetry
+	// describe work that never happened.
 	fids := make([]int64, 0, len(cands))
+	pending := make(map[int64]struct{}, len(cands))
 	for _, c := range cands {
-		if id := c.Place.AdminID; id != 0 {
-			if _, known := chains[id]; !known {
-				fids = append(fids, id)
-			}
+		id := c.Place.AdminID
+		if id == 0 {
+			continue
 		}
+		if _, known := chains[id]; known {
+			continue
+		}
+		if _, dup := pending[id]; dup {
+			continue
+		}
+		pending[id] = struct{}{}
+		fids = append(fids, id)
 	}
 	if len(fids) == 0 {
 		return nil

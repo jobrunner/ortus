@@ -196,15 +196,27 @@ func DefaultCompositeSalience() CompositeSalience {
 // Order implements SalienceStrategy: by score descending, nearer first on a tie —
 // the same comparison Select makes.
 func (c CompositeSalience) Order(cands []Candidate, _ domain.BearingPolicy) []Candidate {
-	out := make([]Candidate, len(cands))
-	copy(out, cands)
-	sort.SliceStable(out, func(i, j int) bool {
-		si, sj := c.score(out[i]), c.score(out[j])
-		if si != sj {
-			return si > sj
+	// Score once per candidate, not once per comparison: sorting makes O(n log n)
+	// comparisons, so scoring inside the comparator would evaluate the log10 term
+	// roughly 19x more often than needed on a full 750-candidate set.
+	type scored struct {
+		cand  Candidate
+		score float64
+	}
+	tmp := make([]scored, len(cands))
+	for i, cand := range cands {
+		tmp[i] = scored{cand: cand, score: c.score(cand)}
+	}
+	sort.SliceStable(tmp, func(i, j int) bool {
+		if tmp[i].score != tmp[j].score {
+			return tmp[i].score > tmp[j].score
 		}
-		return nearer(out[i], out[j])
+		return nearer(tmp[i].cand, tmp[j].cand)
 	})
+	out := make([]Candidate, len(tmp))
+	for i := range tmp {
+		out[i] = tmp[i].cand
+	}
 	return out
 }
 
