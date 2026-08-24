@@ -27,7 +27,7 @@ func (s *Service) Bearing(ctx context.Context, p domain.Coordinate, pol domain.B
 	defer span.End()
 	// The admin point-in-polygon gives the query's country (same-country anchor guard)
 	// and the boundary-constraint tier ancestor.
-	containing, err := s.index.PointInPolygon(ctx, s.manifest.AdminLayer, p)
+	containing, err := s.adminContaining(ctx, p)
 	if err != nil {
 		return nil, err
 	}

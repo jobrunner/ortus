@@ -143,6 +143,26 @@ func (s *Service) SetTracer(t output.Tracer) {
 	s.tracer = t
 }
 
+// adminContaining returns the admin polygons covering p, served from the
+// request-scoped cache when the adapter opened one.
+//
+// Locate and Bearing both need this and are deliberately independent, so without
+// the cache every request ran the same query twice — the largest single cost in
+// the response. Without a scope this is a plain pass-through, so behavior is
+// unchanged for any caller that does not open one.
+func (s *Service) adminContaining(ctx context.Context, p domain.Coordinate) ([]domain.Feature, error) {
+	cache := input.PointInPolygonCacheFrom(ctx)
+	if features, ok := cache.Get(s.manifest.AdminLayer, p); ok {
+		return features, nil
+	}
+	features, err := s.index.PointInPolygon(ctx, s.manifest.AdminLayer, p)
+	if err != nil {
+		return nil, err
+	}
+	cache.Put(s.manifest.AdminLayer, p, features)
+	return features, nil
+}
+
 // beginSection opens the span for one gazetteer section and runs the preamble
 // every section shares (readiness, then coordinate validation).
 //
@@ -270,7 +290,7 @@ func (s *Service) Locate(ctx context.Context, p domain.Coordinate) (*domain.Loca
 		return nil, err
 	}
 	defer span.End()
-	features, err := s.index.PointInPolygon(ctx, s.manifest.AdminLayer, p)
+	features, err := s.adminContaining(ctx, p)
 	if err != nil {
 		return nil, err
 	}

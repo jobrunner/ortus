@@ -406,18 +406,23 @@ func Defaults() {
 	viper.SetDefault("query.sqlite.cache_mode", "private")
 	viper.SetDefault("query.sqlite.busy_timeout_ms", 5000)
 	viper.SetDefault("query.sqlite.journal_mode", "")
-	// Bounded on purpose. 0 means "unlimited" to database/sql, and with
-	// cache=private every connection carries its own SQLite page cache — so under
-	// load the pool multiplied caches instead of sharing one. Measured on a 4.8 GB
-	// gazetteer: unbounded gave 3.4 req/s at 8 concurrent clients (down from 7.0
-	// sequential), while capping the pool at 2 restored 5.2 req/s and cut p50 from
-	// 1377 ms to 755 ms. Throughput fell as concurrency rose — the pool was the
-	// reason, not the queries.
+	// Bounded on purpose, and 2 is the measured optimum rather than a guess.
 	//
-	// 4 is a compromise, not the measured optimum (2 was best on that machine): it
-	// keeps some read parallelism for smaller datasets while still bounding cache
-	// multiplication. Deployments with large packages should tune it down.
-	viper.SetDefault("query.sqlite.max_open_conns", 4)
+	// 0 means "unlimited" to database/sql, and with cache=private every connection
+	// carries its own SQLite page cache — so load multiplied caches instead of
+	// sharing one, and throughput fell as concurrency rose. Measured on a 4.8 GB
+	// gazetteer at 8 concurrent clients (120 requests, 0 errors):
+	//
+	//	conns  req/s   p50      p95
+	//	    1    9.6   823 ms  1448 ms   fully serialized: no collapse, but no gain
+	//	    2   10.8   711 ms  1253 ms   best — the only value that gains from concurrency
+	//	    4    7.3   977 ms  2072 ms
+	//	    8    4.7  1484 ms  4689 ms
+	//
+	// Fewer connections gave more throughput, monotonically. Deployments with
+	// small packages (where the whole file fits in cache many times over) may do
+	// better with a higher value; this is the right default for the large ones.
+	viper.SetDefault("query.sqlite.max_open_conns", 2)
 	viper.SetDefault("query.sqlite.max_idle_conns", 4)
 	viper.SetDefault("query.batch.max_points", 10000)
 	viper.SetDefault("query.batch.max_sync_points", 1000)

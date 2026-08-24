@@ -105,15 +105,16 @@
   ],
   "group_by": "spatial.layer",
   "_known_issues": [
-    "SpatialIndex.PointInPolygon [admin_levels] laeuft 2x pro Request und ist damit der groesste Einzelposten: Locate und Bearing fragen dieselbe Admin-Zelle unabhaengig ab. Fix offen — die Loesung braucht eine request-scoped Weitergabe zwischen den beiden Sektionen.",
-    "SpatialIndex.ResolveChains braucht ~690 ms fuer einen Aufruf. Das Buendeln hat 235 Roundtrips auf 1 reduziert, die Laufzeit aber nicht — die Kettenwanderung selbst ist der Kostentreiber, nicht der Overhead. Naechster Schritt: Query-Plan des rekursiven CTE pruefen (Index auf parent_id?)."
+    "SpatialIndex.PointInPolygon [admin_levels] ist mit ~1260 ms auf 25 Requests der groesste Einzelposten. Der doppelte Aufruf ist behoben (request-scoped Cache), aber die eine verbleibende Query ist selbst teuer — naechster Schritt: Query-Plan / R-Tree-Nutzung der Admin-Ebene pruefen.",
+    "SpatialIndex.ResolveChains braucht ~130 ms p95 fuer einen Aufruf. Das Buendeln hat 235 Roundtrips auf 1 reduziert; die Kettenwanderung selbst bleibt der Kostentreiber. Naechster Schritt: Index auf parent_id pruefen.",
+    "gocog: der LZW-Decode der DEM-Genauigkeitskacheln (accuracy_layer) ist UNGEPRUEFT. Der err-only-Fallback ist korrigiert, die Ursache aber nicht belegt."
   ],
-  "max_root_p95_ms": 450,
+  "max_root_p95_ms": 240,
   "budgets": [
     {
       "name": "Gazetteer.Bearing",
       "max_per_trace": 1,
-      "max_p95_ms": 270
+      "max_p95_ms": 160
     },
     {
       "name": "Gazetteer.Elevation",
@@ -123,7 +124,7 @@
     {
       "name": "Gazetteer.Exposure",
       "max_per_trace": 1,
-      "max_p95_ms": 4
+      "max_p95_ms": 2
     },
     {
       "name": "Gazetteer.Islands",
@@ -133,12 +134,12 @@
     {
       "name": "Gazetteer.Locate",
       "max_per_trace": 1,
-      "max_p95_ms": 210
+      "max_p95_ms": 190
     },
     {
       "name": "Gazetteer.Mountains",
       "max_per_trace": 1,
-      "max_p95_ms": 10
+      "max_p95_ms": 7
     },
     {
       "name": "SpatialIndex.Azimuth",
@@ -148,7 +149,7 @@
     {
       "name": "SpatialIndex.PointInPolygon",
       "group": "admin_levels",
-      "max_per_trace": 2,
+      "max_per_trace": 1,
       "max_p95_ms": 190
     },
     {
@@ -161,19 +162,19 @@
       "name": "SpatialIndex.PointInPolygon",
       "group": "mountains",
       "max_per_trace": 1,
-      "max_p95_ms": 10
+      "max_p95_ms": 7
     },
     {
       "name": "SpatialIndex.QueryKNN",
       "group": "places",
       "max_per_trace": 5.64,
-      "max_p95_ms": 30
+      "max_p95_ms": 20
     },
     {
       "name": "SpatialIndex.ResolveChains",
       "group": "admin_levels",
       "max_per_trace": 1,
-      "max_p95_ms": 190
+      "max_p95_ms": 170
     },
     {
       "name": "raster.QueryPoint",

@@ -2,10 +2,12 @@ package gazetteer
 
 import (
 	"context"
+	"errors"
 	"math"
 	"testing"
 
 	"github.com/jobrunner/ortus/internal/domain"
+	"github.com/jobrunner/ortus/internal/ports/input"
 	"github.com/jobrunner/ortus/internal/ports/output"
 )
 
@@ -125,6 +127,14 @@ type countingIndex struct {
 	fakeIndex
 	chainCalls *int
 	seedsSeen  *int
+	pipCalls   *int
+}
+
+func (c countingIndex) PointInPolygon(ctx context.Context, layer string, p domain.Coordinate) ([]domain.Feature, error) {
+	if c.pipCalls != nil {
+		*c.pipCalls++
+	}
+	return c.fakeIndex.PointInPolygon(ctx, layer, p)
 }
 
 func (c countingIndex) ResolveChains(ctx context.Context, layer string, fromFIDs []int64, cols output.AdminColumns) (map[int64][]output.AdminRow, error) {
@@ -209,4 +219,72 @@ func TestGatherCandidatesSkipsChainQueryWhenUnconstrained(t *testing.T) {
 	if calls != 0 {
 		t.Errorf("ResolveChains called %d times with no active constraint, want 0", calls)
 	}
+}
+
+// TestAdminPointInPolygonIsSharedWithinARequest pins the request-scoped cache.
+// Locate and Bearing both need the containing admin polygons; without the cache
+// that identical query ran twice per request and was the response's largest
+// single cost. Counted, not timed, so the assertion is deterministic.
+func TestAdminPointInPolygonIsSharedWithinARequest(t *testing.T) {
+	newSvc := func(pip *int) *Service {
+		idx := countingIndex{
+			fakeIndex: fakeIndex{
+				pip: []domain.Feature{adminFeature("4", "Bayern"), adminFeature("8", "Würzburg")},
+				knn: map[string][]domain.Feature{"city": {placeFeature("city", "Würzburg", 1, 9.9)}},
+			},
+			pipCalls: pip,
+		}
+		svc := NewService(idx, testManifest(), mapResolver{{"DE", 4}: "state", {"DE", 8}: "municipality"}, nil, true)
+		return svc
+	}
+	p := domain.NewWGS84Coordinate(10.0, 50.0)
+	pol := domain.BearingPolicy{Reach: map[domain.PlaceClass]float64{domain.ClassCity: 60}}
+
+	t.Run("with a scope the query runs once", func(t *testing.T) {
+		calls := 0
+		svc := newSvc(&calls)
+		ctx := input.WithPointInPolygonCache(context.Background())
+		if _, err := svc.Locate(ctx, p); err != nil {
+			t.Fatalf("Locate: %v", err)
+		}
+		if _, err := svc.Bearing(ctx, p, pol); err != nil && !errors.Is(err, domain.ErrNotFound) {
+			t.Fatalf("Bearing: %v", err)
+		}
+		if calls != 1 {
+			t.Errorf("admin PointInPolygon ran %d times, want 1", calls)
+		}
+	})
+
+	// Without a scope the service must keep working, just without the saving —
+	// a caller that does not open one (a test, a direct embedder) is not broken.
+	t.Run("without a scope it is a pass-through", func(t *testing.T) {
+		calls := 0
+		svc := newSvc(&calls)
+		ctx := context.Background()
+		if _, err := svc.Locate(ctx, p); err != nil {
+			t.Fatalf("Locate: %v", err)
+		}
+		if _, err := svc.Bearing(ctx, p, pol); err != nil && !errors.Is(err, domain.ErrNotFound) {
+			t.Fatalf("Bearing: %v", err)
+		}
+		if calls != 2 {
+			t.Errorf("admin PointInPolygon ran %d times without a scope, want 2", calls)
+		}
+	})
+
+	// A different coordinate must not be answered from the cache.
+	t.Run("a different point is not served from the cache", func(t *testing.T) {
+		calls := 0
+		svc := newSvc(&calls)
+		ctx := input.WithPointInPolygonCache(context.Background())
+		if _, err := svc.Locate(ctx, p); err != nil {
+			t.Fatalf("Locate: %v", err)
+		}
+		if _, err := svc.Locate(ctx, domain.NewWGS84Coordinate(11.0, 51.0)); err != nil {
+			t.Fatalf("Locate(other): %v", err)
+		}
+		if calls != 2 {
+			t.Errorf("admin PointInPolygon ran %d times for two distinct points, want 2", calls)
+		}
+	})
 }

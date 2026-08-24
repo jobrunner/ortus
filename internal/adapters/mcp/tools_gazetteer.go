@@ -7,6 +7,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jobrunner/ortus/internal/domain"
+	"github.com/jobrunner/ortus/internal/ports/input"
 )
 
 // gazetteerIn is the input for the gazetteer tool: a coordinate, as WGS84 lon/lat
@@ -313,6 +314,11 @@ func addGazetteer(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 			},
 		}
 		prov := newProvenanceSet()
+
+		// Same request-scoped point-in-polygon cache the HTTP handler opens: Locate
+		// and Bearing below both need the containing admin polygons, and without a
+		// scope that query runs twice per tool call.
+		ctx = input.WithPointInPolygonCache(ctx)
 
 		loc, err := deps.Gazetteer.Locate(ctx, coord)
 		switch {
