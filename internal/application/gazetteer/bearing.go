@@ -276,25 +276,18 @@ func (s *Service) firstAdmitted(ctx context.Context, ordered []Candidate, ic ins
 // resolveInto fetches the admin lineage of every candidate in the slice that is
 // not already known, adding the results to chains.
 func (s *Service) resolveInto(ctx context.Context, chains map[int64][]output.AdminRow, cands []Candidate) error {
-	// Deduplicate within the batch too, not just against what is already known:
-	// candidates frequently share an admin unit, and although the adapter dedupes
-	// seeds before querying, the tracing decorator records the count it was HANDED.
-	// Passing duplicates would inflate spatial.chains.seeds and make the telemetry
-	// describe work that never happened.
+	// Claiming each id in chains as it is collected deduplicates against both what
+	// is already resolved and what this batch has already picked up — candidates
+	// frequently share an admin unit. The adapter dedupes seeds before querying,
+	// but the tracing decorator records the count it was HANDED, so duplicates
+	// would make spatial.chains.seeds describe work that never happened.
 	fids := make([]int64, 0, len(cands))
-	pending := make(map[int64]struct{}, len(cands))
 	for _, c := range cands {
 		id := c.Place.AdminID
-		if id == 0 {
+		if _, known := chains[id]; id == 0 || known {
 			continue
 		}
-		if _, known := chains[id]; known {
-			continue
-		}
-		if _, dup := pending[id]; dup {
-			continue
-		}
-		pending[id] = struct{}{}
+		chains[id] = nil // claimed; overwritten below if the layer has a row
 		fids = append(fids, id)
 	}
 	if len(fids) == 0 {
@@ -308,15 +301,10 @@ func (s *Service) resolveInto(ctx context.Context, chains map[int64][]output.Adm
 	if err != nil {
 		return err
 	}
+	// Ids the layer had no row for keep their nil claim, so a later batch does not
+	// ask for them again.
 	for fid, chain := range resolved {
 		chains[fid] = chain
-	}
-	// Ids the layer has no row for are recorded as empty, so a second batch does
-	// not ask for them again.
-	for _, fid := range fids {
-		if _, ok := chains[fid]; !ok {
-			chains[fid] = nil
-		}
 	}
 	return nil
 }
