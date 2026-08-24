@@ -94,27 +94,9 @@ type insideConstraint struct {
 // per-class scan. The explicit distance check does not rely on the index honoring
 // the KNN radius bound.
 func (s *Service) placeInsideOf(ctx context.Context, p domain.Coordinate, pol domain.BearingPolicy, ic insideConstraint) (Candidate, bool, error) {
-	var cands []Candidate
-	for _, c := range salienceClasses {
-		r := pol.InsideRadiusKM(c)
-		if r <= 0 {
-			continue
-		}
-		near, err := s.index.QueryKNN(ctx, s.manifest.PlacesLayer, p, insideCandidateK, r,
-			&output.Filter{Column: s.manifest.RankColumn, Values: []any{c.String()}})
-		if err != nil {
-			return Candidate{}, false, err
-		}
-		for i := range near {
-			if near[i].DistanceKM > r {
-				continue
-			}
-			place, ok := s.placeFromFeature(&near[i].Feature)
-			if !ok {
-				continue
-			}
-			cands = append(cands, Candidate{Place: place, DistanceKM: near[i].DistanceKM})
-		}
+	cands, err := s.insideCandidates(ctx, p, pol)
+	if err != nil {
+		return Candidate{}, false, err
 	}
 
 	guard, err := s.newTierGuard(ctx, ic, cands)
@@ -132,6 +114,35 @@ func (s *Service) placeInsideOf(ctx context.Context, p domain.Coordinate, pol do
 		}
 	}
 	return best, found, nil
+}
+
+// insideCandidates collects, across all classes, the places whose own class
+// inside-radius covers p. The explicit distance check does not rely on the index
+// honoring the KNN radius bound.
+func (s *Service) insideCandidates(ctx context.Context, p domain.Coordinate, pol domain.BearingPolicy) ([]Candidate, error) {
+	var cands []Candidate
+	for _, c := range salienceClasses {
+		r := pol.InsideRadiusKM(c)
+		if r <= 0 {
+			continue
+		}
+		near, err := s.index.QueryKNN(ctx, s.manifest.PlacesLayer, p, insideCandidateK, r,
+			&output.Filter{Column: s.manifest.RankColumn, Values: []any{c.String()}})
+		if err != nil {
+			return nil, err
+		}
+		for i := range near {
+			if near[i].DistanceKM > r {
+				continue
+			}
+			place, ok := s.placeFromFeature(&near[i].Feature)
+			if !ok {
+				continue
+			}
+			cands = append(cands, Candidate{Place: place, DistanceKM: near[i].DistanceKM})
+		}
+	}
+	return cands, nil
 }
 
 // tierGuard applies the anchor guards to a candidate set: same country, and — when

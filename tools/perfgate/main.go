@@ -98,25 +98,33 @@ func main() {
 		bl.GroupBy = *groupBy
 	}
 
-	// Read-only mode: the same span_summary call the gate makes, for use during an
-	// analysis. It exists so nobody reimplements the aggregation in a throwaway
-	// script when the native MCP tools are unavailable — the server code is the
-	// same, so the numbers are comparable with a gate run.
 	if *summarize {
-		since := time.Now().UTC().Add(-time.Duration(*sinceMin) * time.Minute)
-		summary, err := fetchSummary(*mcpURL, bl, since)
-		if err != nil {
-			fatal("reading spans over MCP: %v", err)
-		}
-		report(bl, summary, nil)
+		runSummarize(bl, *mcpURL, *sinceMin)
 		return
 	}
+	runGate(bl, *base, *mcpURL, *path, *update, *countSlack, *timeSlack)
+}
 
-	// Drive the fixed request set. Sequential on purpose: the gate measures the
-	// shape of one request, and concurrency would only add scheduling noise to
-	// the per-span numbers it compares.
+// runSummarize prints the current span summary without driving requests or
+// checking budgets. It makes the same span_summary call the gate does, so nobody
+// has to reimplement the aggregation in a throwaway script when the native MCP
+// tools are unavailable.
+func runSummarize(bl *Baseline, mcpURL string, sinceMin float64) {
+	since := time.Now().UTC().Add(-time.Duration(sinceMin) * time.Minute)
+	summary, err := fetchSummary(mcpURL, bl, since)
+	if err != nil {
+		fatal("reading spans over MCP: %v", err)
+	}
+	report(bl, summary, nil)
+}
+
+// runGate drives the committed request set, reads the resulting spans back and
+// compares them against the baseline (or rewrites it when update is set).
+func runGate(bl *Baseline, base, mcpURL, path string, update bool, countSlack, timeSlack float64) {
+	// Sequential on purpose: the gate measures the shape of one request, and
+	// concurrency would only add scheduling noise to the per-span numbers.
 	since := time.Now().UTC()
-	okCount, err := drive(context.Background(), *base, bl)
+	okCount, err := drive(context.Background(), base, bl)
 	if err != nil {
 		fatal("driving requests: %v", err)
 	}
@@ -125,7 +133,7 @@ func main() {
 			okCount, len(bl.Coordinates))
 	}
 
-	summary, err := fetchSummary(*mcpURL, bl, since)
+	summary, err := fetchSummary(mcpURL, bl, since)
 	if err != nil {
 		fatal("reading spans over MCP: %v", err)
 	}
@@ -133,16 +141,16 @@ func main() {
 		fatal("no traces captured — is tracing.enabled set on the target instance?")
 	}
 
-	if *update {
-		if err := writeBaseline(*path, bl, summary); err != nil {
+	if update {
+		if err := writeBaseline(path, bl, summary); err != nil {
 			fatal("writing baseline: %v", err)
 		}
 		fmt.Printf("✅ Baseline aktualisiert: %s (%d Traces, %d Span-Budgets)\n",
-			*path, summary.Traces, len(summary.Spans))
+			path, summary.Traces, len(summary.Spans))
 		return
 	}
 
-	violations := check(bl, summary, *countSlack, *timeSlack)
+	violations := check(bl, summary, countSlack, timeSlack)
 	report(bl, summary, violations)
 	if len(violations) > 0 {
 		os.Exit(1)
