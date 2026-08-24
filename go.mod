@@ -17,7 +17,7 @@ require (
 	github.com/google/jsonschema-go v0.4.3
 	github.com/gorilla/mux v1.8.1
 	github.com/libdns/azure v0.5.0
-	github.com/mattn/go-sqlite3 v1.14.49
+	github.com/mattn/go-sqlite3 v1.14.50
 	github.com/modelcontextprotocol/go-sdk v1.7.0
 	github.com/paulmach/orb v0.13.0
 	github.com/prometheus/client_golang v1.24.1
