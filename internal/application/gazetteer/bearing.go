@@ -54,7 +54,10 @@ func (s *Service) Bearing(ctx context.Context, p domain.Coordinate, pol domain.B
 	if err != nil {
 		return nil, err
 	}
-	best, ok := s.salience.Select(cands, pol)
+	best, ok, err := s.bestAdmitted(ctx, cands, pol, ic)
+	if err != nil {
+		return nil, err
+	}
 	if !ok {
 		return nil, fmt.Errorf("bearing (%v): %w", p, domain.ErrNotFound)
 	}
@@ -165,6 +168,32 @@ type tierGuard struct {
 	chains map[int64][]output.AdminRow
 }
 
+// admitsCountry applies the guard that needs no database round-trip, so callers
+// can narrow the candidate set for free before paying for any lineage.
+func (g tierGuard) admitsCountry(place domain.Place) bool {
+	return g.ic.country == "" || place.CountryISO == g.ic.country
+}
+
+// admitsTier answers the boundary-tier question for a place whose lineage is
+// already resolved. A place with unknown admin (AdminID 0) is excluded under an
+// active constraint because its lineage cannot be verified.
+func (g tierGuard) admitsTier(place domain.Place) bool {
+	if !g.ic.constrained {
+		return true
+	}
+	if place.AdminID == 0 {
+		return false
+	}
+	// First unit in the chain whose level maps to the tier decides — the same
+	// most-local-wins rule the per-candidate walk used.
+	for _, r := range g.chains[place.AdminID] {
+		if eq, ok := g.levels.Resolve(r.CountryISO, r.Level); ok && eq.Equivalent == g.ic.tier {
+			return r.FID == g.ic.ancestor
+		}
+	}
+	return false
+}
+
 // newTierGuard resolves the lineage of every candidate's admin unit in one call.
 // When the constraint is inactive no lineage is needed, so no query is issued.
 //
@@ -201,23 +230,7 @@ func (s *Service) newTierGuard(ctx context.Context, ic insideConstraint, cands [
 // settlement the point is "in"). A place with unknown admin (AdminID 0) is
 // excluded under an active constraint because its lineage cannot be verified.
 func (g tierGuard) admits(place domain.Place) bool {
-	if g.ic.country != "" && place.CountryISO != g.ic.country {
-		return false
-	}
-	if !g.ic.constrained {
-		return true
-	}
-	if place.AdminID == 0 {
-		return false
-	}
-	// First unit in the chain whose level maps to the tier decides — the same
-	// most-local-wins rule the per-candidate walk used.
-	for _, r := range g.chains[place.AdminID] {
-		if eq, ok := g.levels.Resolve(r.CountryISO, r.Level); ok && eq.Equivalent == g.ic.tier {
-			return r.FID == g.ic.ancestor
-		}
-	}
-	return false
+	return g.admitsCountry(place) && g.admitsTier(place)
 }
 
 // gatherCandidates collects the constraint-satisfying candidates of each class, up to
@@ -237,20 +250,88 @@ func (s *Service) gatherCandidates(ctx context.Context, p domain.Coordinate, pol
 		}
 		raw = append(raw, cs...)
 	}
-	// One batched lineage resolve for every class's candidates together, then the
-	// guards run in memory. Filtering per class would reintroduce one query per
-	// class-set; filtering per candidate is what cost 234 queries per request.
-	guard, err := s.newTierGuard(ctx, ic, raw)
-	if err != nil {
-		return nil, err
-	}
+	// Only the same-country guard runs here: it is a field comparison and costs
+	// nothing. The boundary-tier guard needs a lineage per candidate and is
+	// applied later, one candidate at a time, in preference order.
+	guard := tierGuard{ic: ic, levels: s.levels}
 	cands := make([]Candidate, 0, len(raw))
 	for _, c := range raw {
-		if guard.admits(c.Place) {
+		if guard.admitsCountry(c.Place) {
 			cands = append(cands, c)
 		}
 	}
 	return cands, nil
+}
+
+// bestAdmitted returns the highest-ranked candidate that also satisfies the
+// boundary-tier constraint, resolving admin lineages lazily.
+//
+// The old code resolved every candidate's lineage and then ranked the survivors:
+// 300-400 lineages per request to answer a question the top-ranked candidate
+// almost always settles on its own. Ranking is pure arithmetic, so doing it first
+// costs nothing and changes no outcome — the first candidate that passes is
+// exactly the one the previous order produced.
+//
+// Lineages are fetched in growing batches (1, then 16, then 256, …) so the common
+// case is a single query for a single id, while a point near a state border —
+// where many candidates are rejected — still converges in a handful of queries
+// rather than one per candidate.
+func (s *Service) bestAdmitted(ctx context.Context, cands []Candidate, pol domain.BearingPolicy, ic insideConstraint) (Candidate, bool, error) {
+	if !ic.constrained {
+		best, ok := s.salience.Select(cands, pol)
+		return best, ok, nil
+	}
+	ordered := s.salience.Order(cands, pol)
+	guard := tierGuard{ic: ic, levels: s.levels, chains: map[int64][]output.AdminRow{}}
+
+	const batchGrowth = 16
+	for i, batch := 0, 1; i < len(ordered); batch *= batchGrowth {
+		end := min(i+batch, len(ordered))
+		if err := s.resolveInto(ctx, guard.chains, ordered[i:end]); err != nil {
+			return Candidate{}, false, err
+		}
+		for ; i < end; i++ {
+			if guard.admitsTier(ordered[i].Place) {
+				return ordered[i], true, nil
+			}
+		}
+	}
+	return Candidate{}, false, nil
+}
+
+// resolveInto fetches the admin lineage of every candidate in the slice that is
+// not already known, adding the results to chains.
+func (s *Service) resolveInto(ctx context.Context, chains map[int64][]output.AdminRow, cands []Candidate) error {
+	fids := make([]int64, 0, len(cands))
+	for _, c := range cands {
+		if id := c.Place.AdminID; id != 0 {
+			if _, known := chains[id]; !known {
+				fids = append(fids, id)
+			}
+		}
+	}
+	if len(fids) == 0 {
+		return nil
+	}
+	resolved, err := s.index.ResolveChains(ctx, s.manifest.AdminLayer, fids, output.AdminColumns{
+		ParentFK: s.manifest.ParentFKColumn,
+		Level:    s.manifest.LevelColumn,
+		Country:  s.manifest.CountryColumn,
+	})
+	if err != nil {
+		return err
+	}
+	for fid, chain := range resolved {
+		chains[fid] = chain
+	}
+	// Ids the layer has no row for are recorded as empty, so a second batch does
+	// not ask for them again.
+	for _, fid := range fids {
+		if _, ok := chains[fid]; !ok {
+			chains[fid] = nil
+		}
+	}
+	return nil
 }
 
 // candidatesInClass returns the places of a class within its gather radius that also

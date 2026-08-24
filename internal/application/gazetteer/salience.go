@@ -2,6 +2,7 @@ package gazetteer
 
 import (
 	"math"
+	"sort"
 
 	"github.com/jobrunner/ortus/internal/domain"
 )
@@ -21,6 +22,18 @@ type Candidate struct {
 type SalienceStrategy interface {
 	// Select returns the best anchor; ok is false when none is eligible.
 	Select(cands []Candidate, pol domain.BearingPolicy) (best Candidate, ok bool)
+
+	// Order returns the candidates in preference order, best first — the order in
+	// which Select would pick them if the winner kept being removed.
+	//
+	// It exists so the caller can apply an expensive filter lazily: the boundary
+	// constraint needs a database round-trip per candidate's admin lineage, and
+	// resolving all of them meant 300-400 lineages per request to answer a
+	// question the top candidate almost always settles. Scoring is pure
+	// arithmetic, so ordering first and resolving second is free and lossless —
+	// the first candidate that passes the filter is the same one the old
+	// filter-then-select order would have produced.
+	Order(cands []Candidate, pol domain.BearingPolicy) []Candidate
 }
 
 // RankedSalience is the default strategy: a candidate is eligible when its
@@ -29,6 +42,30 @@ type SalienceStrategy interface {
 // lexicographically smaller name for determinism. Branch-free over the reach
 // table — adding a class is a policy entry, not a code path.
 type RankedSalience struct{}
+
+// Order implements SalienceStrategy by repeatedly taking what Select would take
+// and removing it. RankedSalience has two selection rules (nearest-prominent,
+// then most-salient), so deriving the order from Select itself is what keeps the
+// two definitions from drifting apart.
+func (r RankedSalience) Order(cands []Candidate, pol domain.BearingPolicy) []Candidate {
+	rest := make([]Candidate, len(cands))
+	copy(rest, cands)
+	out := make([]Candidate, 0, len(cands))
+	for len(rest) > 0 {
+		best, ok := r.Select(rest, pol)
+		if !ok {
+			break // the remainder is ineligible under both rules
+		}
+		out = append(out, best)
+		for i := range rest {
+			if rest[i] == best {
+				rest = append(rest[:i], rest[i+1:]...)
+				break
+			}
+		}
+	}
+	return out
+}
 
 // Select implements SalienceStrategy. It first applies the proximity override —
 // if a town-or-larger anchor is within PreferNearestKM, the nearest such wins
@@ -154,6 +191,21 @@ func DefaultCompositeSalience() CompositeSalience {
 			"yes": 2.0, "2": 2.0, "3": 1.5, "4": 1.2, "5": 0.6, "6": 0.4, "7": 0.2,
 		},
 	}
+}
+
+// Order implements SalienceStrategy: by score descending, nearer first on a tie —
+// the same comparison Select makes.
+func (c CompositeSalience) Order(cands []Candidate, _ domain.BearingPolicy) []Candidate {
+	out := make([]Candidate, len(cands))
+	copy(out, cands)
+	sort.SliceStable(out, func(i, j int) bool {
+		si, sj := c.score(out[i]), c.score(out[j])
+		if si != sj {
+			return si > sj
+		}
+		return nearer(out[i], out[j])
+	})
+	return out
 }
 
 // Select implements SalienceStrategy: the highest-scoring candidate wins, ties broken
