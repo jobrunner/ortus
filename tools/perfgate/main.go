@@ -79,12 +79,37 @@ func main() {
 		update     = flag.Bool("update", false, "rewrite the baseline from this run instead of checking it")
 		countSlack = flag.Float64("count-slack", 1.0, "multiplier applied to committed call-count limits")
 		timeSlack  = flag.Float64("time-slack", 3.0, "multiplier applied to committed duration ceilings")
+		summarize  = flag.Bool("summarize", false, "only read and print the current span summary; drive no requests and check no budgets")
+		sinceMin   = flag.Float64("since-min", 15, "with -summarize: how many minutes back to aggregate")
+		groupBy    = flag.String("group-by", "", "override the baseline's group_by attribute (analysis aid, e.g. spatial.chain.from_fid)")
 	)
 	flag.Parse()
 
 	bl, err := loadBaseline(*path)
 	if err != nil {
 		fatal("baseline: %v", err)
+	}
+	// An override only makes sense while analyzing: a gate run must use the
+	// grouping its budgets were written against, or the budgets would not match.
+	if *groupBy != "" {
+		if !*summarize {
+			fatal("-group-by only applies with -summarize; a gate run must use the baseline's grouping")
+		}
+		bl.GroupBy = *groupBy
+	}
+
+	// Read-only mode: the same span_summary call the gate makes, for use during an
+	// analysis. It exists so nobody reimplements the aggregation in a throwaway
+	// script when the native MCP tools are unavailable — the server code is the
+	// same, so the numbers are comparable with a gate run.
+	if *summarize {
+		since := time.Now().UTC().Add(-time.Duration(*sinceMin) * time.Minute)
+		summary, err := fetchSummary(*mcpURL, bl, since)
+		if err != nil {
+			fatal("reading spans over MCP: %v", err)
+		}
+		report(bl, summary, nil)
+		return
 	}
 
 	// Drive the fixed request set. Sequential on purpose: the gate measures the
@@ -202,7 +227,12 @@ func fetchSummary(endpoint string, bl *Baseline, since time.Time) (input.SpanSum
 	res, err := session.CallTool(ctx, &mcp.CallToolParams{
 		Name: "span_summary",
 		Arguments: map[string]any{
-			"since_iso":     since.Format(time.RFC3339),
+			// Nanosecond precision matters: at second granularity the window also
+			// catches traces from just before the run, and extra traces *dilute*
+			// per_trace — so the gate would under-report call counts and could miss
+			// the very regression it exists to catch. Measured: a diluted window
+			// reported 218 calls/request where the exact one reported 234.9.
+			"since_iso":     since.Format(time.RFC3339Nano),
 			"name_contains": bl.Endpoint,
 			"group_by":      bl.GroupBy,
 			"limit":         len(bl.Coordinates) + 10,
@@ -283,7 +313,10 @@ func check(bl *Baseline, s input.SpanSummary, countSlack, timeSlack float64) []v
 func report(bl *Baseline, s input.SpanSummary, violations []violation) {
 	fmt.Printf("perfgate: %d Traces, Request-p50 %.0f ms, p95 %.0f ms (Budget-p95 %.0f ms)\n",
 		s.Traces, s.RootP50MS, s.RootP95MS, bl.MaxRootP95MS)
-	fmt.Printf("%-42s %10s %10s %10s\n", "Span", "Aufr./Req", "p95 ms", "Summe ms")
+	// "Aufr./Trace" and the trace count are shown together on purpose: per_trace
+	// divides by the traces that reach the span, so without the count next to it
+	// the number reads as an average over all requests and misleads.
+	fmt.Printf("%-42s %11s %7s %9s %9s\n", "Span", "Aufr./Trace", "Traces", "p95 ms", "Summe ms")
 	for _, st := range s.Spans {
 		label := st.Name
 		if st.Group != "" {
@@ -292,7 +325,7 @@ func report(bl *Baseline, s input.SpanSummary, violations []violation) {
 		if len(label) > 42 {
 			label = label[:39] + "..."
 		}
-		fmt.Printf("%-42s %10.1f %10.1f %10.1f\n", label, st.PerTrace, st.P95MS, st.TotalMS)
+		fmt.Printf("%-42s %11.1f %7d %9.1f %9.1f\n", label, st.PerTrace, st.Traces, st.P95MS, st.TotalMS)
 	}
 	if len(violations) == 0 {
 		fmt.Println("\n✅ perfgate ok — alle Span-Budgets eingehalten.")

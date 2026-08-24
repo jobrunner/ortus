@@ -89,28 +89,29 @@ func (t *TracedSpatialIndex) PointInPolygon(ctx context.Context, layer string, p
 	return res, nil
 }
 
-// ResolveChain implements SpatialIndex.
-func (t *TracedSpatialIndex) ResolveChain(ctx context.Context, layer string, fromFID int64, cols output.AdminColumns) ([]output.AdminRow, error) {
-	ctx, span := t.tracer.Start(ctx, "SpatialIndex.ResolveChain",
+// ResolveChains implements SpatialIndex.
+func (t *TracedSpatialIndex) ResolveChains(ctx context.Context, layer string, fromFIDs []int64, cols output.AdminColumns) (map[int64][]output.AdminRow, error) {
+	ctx, span := t.tracer.Start(ctx, "SpatialIndex.ResolveChains",
 		output.WithSpanKind(output.SpanKindClient),
 		output.WithAttributes(
 			output.String("spatial.layer", layer),
-			output.Int64("spatial.chain.from_fid", fromFID),
+			// The seed count is the batch's size. Watching it stay ~1 span per
+			// request while this number grows is how you tell batching is working
+			// rather than quietly falling back to per-id calls.
+			output.Int("spatial.chains.seeds", len(fromFIDs)),
 		),
 	)
 	defer span.End()
 
-	rows, err := t.inner.ResolveChain(ctx, layer, fromFID, cols)
+	chains, err := t.inner.ResolveChains(ctx, layer, fromFIDs, cols)
 	if err != nil {
 		span.RecordError(err)
-		span.SetStatus(output.StatusError, "chain walk failed")
+		span.SetStatus(output.StatusError, "batched chain walk failed")
 		return nil, err
 	}
-	// The chain length is the number of parent hops actually walked — one query
-	// per level, so this is the span's cost driver.
-	span.SetAttributes(output.Int("spatial.chain.length", len(rows)))
+	span.SetAttributes(output.Int("spatial.chains.resolved", len(chains)))
 	span.SetStatus(output.StatusOK, "")
-	return rows, nil
+	return chains, nil
 }
 
 // DistanceKM implements SpatialIndex.

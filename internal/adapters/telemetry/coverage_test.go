@@ -33,8 +33,8 @@ func (coverageIndex) PointInPolygon(context.Context, string, domain.Coordinate) 
 	return nil, nil
 }
 
-func (coverageIndex) ResolveChain(context.Context, string, int64, output.AdminColumns) ([]output.AdminRow, error) {
-	return nil, nil
+func (coverageIndex) ResolveChains(context.Context, string, []int64, output.AdminColumns) (map[int64][]output.AdminRow, error) {
+	return map[int64][]output.AdminRow{}, nil
 }
 
 func (coverageIndex) DistanceKM(context.Context, domain.Coordinate, domain.Coordinate) (float64, error) {
@@ -131,7 +131,7 @@ func TestTracingCoverage_AllPathsProduceSpans(t *testing.T) {
 		// SpatialIndex decorator
 		"SpatialIndex.PointInPolygon",
 		"SpatialIndex.QueryKNN",
-		"SpatialIndex.ResolveChain",
+		"SpatialIndex.ResolveChains",
 		"SpatialIndex.DistanceKM",
 		"SpatialIndex.Azimuth",
 	}
@@ -254,8 +254,8 @@ func TestTracingCoverage_AllPathsProduceSpans(t *testing.T) {
 		if _, err := idx.QueryKNN(ctx, "places", a, 5, 30, nil); err != nil {
 			t.Fatalf("QueryKNN: %v", err)
 		}
-		if _, err := idx.ResolveChain(ctx, "admin_levels", 1, output.AdminColumns{}); err != nil {
-			t.Fatalf("ResolveChain: %v", err)
+		if _, err := idx.ResolveChains(ctx, "admin_levels", []int64{1}, output.AdminColumns{}); err != nil {
+			t.Fatalf("ResolveChains: %v", err)
 		}
 	})
 

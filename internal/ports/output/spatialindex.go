@@ -25,11 +25,17 @@ type SpatialIndex interface {
 	// their un-tiled originals.
 	PointInPolygon(ctx context.Context, layer string, p domain.Coordinate) ([]domain.Feature, error)
 
-	// ResolveChain walks a layer's parent_id links from a starting feature id up
-	// to the top of the hierarchy, returning each unit in order (most-local first).
-	// cols names the columns to walk/select, so the walk stays manifest-driven
-	// rather than assuming fixed column names.
-	ResolveChain(ctx context.Context, layer string, fromFID int64, cols AdminColumns) ([]AdminRow, error)
+	// ResolveChains is ResolveChain for many starting ids in one round-trip,
+	// returning each id's chain (most-local first). Ids with no row are absent
+	// from the result rather than mapping to an empty chain, so a caller can tell
+	// "no such unit" from "a unit with no parents".
+	//
+	// This exists because the single-id form is an N+1: the bearing constraint has
+	// to check every candidate place's lineage, and doing that one query at a time
+	// meant 234 round-trips per request. Measured, batching removed the round-trips
+	// but not the elapsed time — the walking is the cost, not the overhead — so
+	// treat this as removing connection pressure, not as a latency fix.
+	ResolveChains(ctx context.Context, layer string, fromFIDs []int64, cols AdminColumns) (map[int64][]AdminRow, error)
 
 	// DistanceKM returns the ellipsoidal distance between two coordinates in km.
 	DistanceKM(ctx context.Context, a, b domain.Coordinate) (float64, error)

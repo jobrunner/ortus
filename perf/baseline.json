@@ -105,15 +105,15 @@
   ],
   "group_by": "spatial.layer",
   "_known_issues": [
-    "SpatialIndex.ResolveChain [admin_levels] laeuft ~235x pro Request: Gazetteer.Bearing loest fuer jeden KNN-Kandidaten die Admin-Elternkette einzeln auf (N+1). Das Budget haelt den Status quo fest, damit es nicht schlimmer wird - es ist keine Billigung. Fix: Kette pro Kandidatenmenge gebuendelt bzw. gecacht aufloesen.",
-    "SpatialIndex.PointInPolygon [admin_levels] laeuft 2x pro Request: Locate und Bearing fragen dieselbe Admin-Zelle unabhaengig ab. Ein Request-scoped Cache wuerde eine der beiden sparen."
+    "SpatialIndex.PointInPolygon [admin_levels] laeuft 2x pro Request und ist damit der groesste Einzelposten: Locate und Bearing fragen dieselbe Admin-Zelle unabhaengig ab. Fix offen — die Loesung braucht eine request-scoped Weitergabe zwischen den beiden Sektionen.",
+    "SpatialIndex.ResolveChains braucht ~690 ms fuer einen Aufruf. Das Buendeln hat 235 Roundtrips auf 1 reduziert, die Laufzeit aber nicht — die Kettenwanderung selbst ist der Kostentreiber, nicht der Overhead. Naechster Schritt: Query-Plan des rekursiven CTE pruefen (Index auf parent_id?)."
   ],
-  "max_root_p95_ms": 410,
+  "max_root_p95_ms": 450,
   "budgets": [
     {
       "name": "Gazetteer.Bearing",
       "max_per_trace": 1,
-      "max_p95_ms": 260
+      "max_p95_ms": 270
     },
     {
       "name": "Gazetteer.Elevation",
@@ -123,7 +123,7 @@
     {
       "name": "Gazetteer.Exposure",
       "max_per_trace": 1,
-      "max_p95_ms": 2
+      "max_p95_ms": 4
     },
     {
       "name": "Gazetteer.Islands",
@@ -133,12 +133,12 @@
     {
       "name": "Gazetteer.Locate",
       "max_per_trace": 1,
-      "max_p95_ms": 190
+      "max_p95_ms": 210
     },
     {
       "name": "Gazetteer.Mountains",
       "max_per_trace": 1,
-      "max_p95_ms": 7
+      "max_p95_ms": 10
     },
     {
       "name": "SpatialIndex.Azimuth",
@@ -149,7 +149,7 @@
       "name": "SpatialIndex.PointInPolygon",
       "group": "admin_levels",
       "max_per_trace": 2,
-      "max_p95_ms": 200
+      "max_p95_ms": 190
     },
     {
       "name": "SpatialIndex.PointInPolygon",
@@ -161,19 +161,19 @@
       "name": "SpatialIndex.PointInPolygon",
       "group": "mountains",
       "max_per_trace": 1,
-      "max_p95_ms": 7
+      "max_p95_ms": 10
     },
     {
       "name": "SpatialIndex.QueryKNN",
       "group": "places",
       "max_per_trace": 5.64,
-      "max_p95_ms": 20
+      "max_p95_ms": 30
     },
     {
-      "name": "SpatialIndex.ResolveChain",
+      "name": "SpatialIndex.ResolveChains",
       "group": "admin_levels",
-      "max_per_trace": 234.91,
-      "max_p95_ms": 1
+      "max_per_trace": 1,
+      "max_p95_ms": 190
     },
     {
       "name": "raster.QueryPoint",

@@ -57,11 +57,17 @@ func (f fakeBuiltUp) BuiltUpAt(context.Context, domain.Coordinate) (value float6
 func (f fakeIndex) PointInPolygon(context.Context, string, domain.Coordinate) ([]domain.Feature, error) {
 	return f.pip, f.pipErr
 }
-func (f fakeIndex) ResolveChain(_ context.Context, _ string, fromFID int64, _ output.AdminColumns) ([]output.AdminRow, error) {
+func (f fakeIndex) ResolveChains(_ context.Context, _ string, fromFIDs []int64, _ output.AdminColumns) (map[int64][]output.AdminRow, error) {
 	if f.chainErr != nil {
 		return nil, f.chainErr
 	}
-	return f.chains[fromFID], nil
+	out := map[int64][]output.AdminRow{}
+	for _, fid := range fromFIDs {
+		if chain, ok := f.chains[fid]; ok {
+			out[fid] = chain
+		}
+	}
+	return out, nil
 }
 func (f fakeIndex) DistanceKM(_ context.Context, a, b domain.Coordinate) (float64, error) {
 	return equirectKM(a, b), nil

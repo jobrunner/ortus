@@ -17,9 +17,17 @@ type SpanStat struct {
 	Name string `json:"name"`
 	// Group is the value of the group-by attribute (e.g. the "spatial.layer" a
 	// query hit). Empty when not grouping, or when a span lacks the attribute.
-	Group    string  `json:"group,omitempty"`
-	Spans    int     `json:"spans"`
-	Traces   int     `json:"traces"`
+	Group string `json:"group,omitempty"`
+	Spans int    `json:"spans"`
+	// Traces counts the traces that contain this span — NOT the traces in the
+	// window. A span on a conditional code path appears in fewer.
+	Traces int `json:"traces"`
+	// PerTrace is Spans/Traces: calls per trace *that reaches this span*, not per
+	// request in the window. That is deliberate — it keeps the amplification
+	// undiluted by requests that skip the path, which is what an N+1 detector
+	// needs. Read it together with Traces: "234.9 calls in each of 11 traces" is
+	// a different statement from "103.4 calls averaged over all 25", and both are
+	// derivable, but only the first localizes the defect.
 	PerTrace float64 `json:"per_trace"`
 	TotalMS  float64 `json:"total_ms"`
 	MeanMS   float64 `json:"mean_ms"`

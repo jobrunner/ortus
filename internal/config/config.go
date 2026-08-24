@@ -406,7 +406,18 @@ func Defaults() {
 	viper.SetDefault("query.sqlite.cache_mode", "private")
 	viper.SetDefault("query.sqlite.busy_timeout_ms", 5000)
 	viper.SetDefault("query.sqlite.journal_mode", "")
-	viper.SetDefault("query.sqlite.max_open_conns", 0)
+	// Bounded on purpose. 0 means "unlimited" to database/sql, and with
+	// cache=private every connection carries its own SQLite page cache — so under
+	// load the pool multiplied caches instead of sharing one. Measured on a 4.8 GB
+	// gazetteer: unbounded gave 3.4 req/s at 8 concurrent clients (down from 7.0
+	// sequential), while capping the pool at 2 restored 5.2 req/s and cut p50 from
+	// 1377 ms to 755 ms. Throughput fell as concurrency rose — the pool was the
+	// reason, not the queries.
+	//
+	// 4 is a compromise, not the measured optimum (2 was best on that machine): it
+	// keeps some read parallelism for smaller datasets while still bounding cache
+	// multiplication. Deployments with large packages should tune it down.
+	viper.SetDefault("query.sqlite.max_open_conns", 4)
 	viper.SetDefault("query.sqlite.max_idle_conns", 4)
 	viper.SetDefault("query.batch.max_points", 10000)
 	viper.SetDefault("query.batch.max_sync_points", 1000)

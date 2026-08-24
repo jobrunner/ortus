@@ -479,16 +479,34 @@ func (c *COG) decompressTileRaw(data []byte, compression uint16, ifd *IFD, tileW
 		var decompressed []byte
 		var err error
 
-		// Try LSB order first
-		reader := lzw.NewReader(bytes.NewReader(data), lzw.LSB, 8)
-		decompressed, err = io.ReadAll(reader)
-		reader.Close()
-
+		// Try both bit orders and keep whichever actually yields a full tile.
+		//
+		// The order matters and the old control flow got it wrong: it retried MSB
+		// only when LSB returned an *error*. A decode with the wrong bit order can
+		// also terminate cleanly on a stray end-of-information code and simply
+		// return too few bytes — in which case the retry was skipped and the tile
+		// failed with "insufficient data" even though the other order would have
+		// worked. Treating short output as a failed attempt, not as a result, is
+		// what makes the fallback actually cover both ways an attempt can fail.
+		tryOrder := func(order lzw.Order) ([]byte, error) {
+			reader := lzw.NewReader(bytes.NewReader(data), order, 8)
+			defer func() { _ = reader.Close() }()
+			out, readErr := io.ReadAll(reader)
+			if readErr != nil {
+				return nil, readErr
+			}
+			if len(out) < expectedSize {
+				return nil, fmt.Errorf("short decode: %d of %d bytes", len(out), expectedSize)
+			}
+			return out, nil
+		}
+		// TIFF LZW is MSB-first by specification, so that order goes first; LSB
+		// stays as a fallback for files written against the other convention.
+		decompressed, err = tryOrder(lzw.MSB)
 		if err != nil {
-			// LSB failed, try MSB order
-			reader = lzw.NewReader(bytes.NewReader(data), lzw.MSB, 8)
-			decompressed, err = io.ReadAll(reader)
-			reader.Close()
+			if lsb, lsbErr := tryOrder(lzw.LSB); lsbErr == nil {
+				decompressed, err = lsb, nil
+			}
 		}
 
 		if err != nil {

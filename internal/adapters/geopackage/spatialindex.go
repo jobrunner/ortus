@@ -255,42 +255,72 @@ func (g *GazetteerIndex) PointInPolygon(ctx context.Context, layer string, p dom
 	return dedupFeaturesByProperties(features), nil
 }
 
-// ResolveChain walks a layer's parent-FK links from a starting feature id up to
-// the top of the hierarchy, returning each unit in order (most-local first). The
-// column names come from cols, so the walk is manifest-driven; the CTE's own
-// aliases stay fixed. fid is the GeoPackage feature id (ogr convention). The
-// depth guard bounds the walk so malformed data (a cycle) cannot loop forever.
-func (g *GazetteerIndex) ResolveChain(ctx context.Context, layer string, fromFID int64, cols output.AdminColumns) ([]output.AdminRow, error) {
+// ResolveChains walks many parent-FK chains in a single recursive CTE, keyed by
+// the id each chain started from.
+//
+// The CTE carries the seed id through every step, which is the whole trick: one
+// query can walk hundreds of chains and still attribute each row to the request
+// it belongs to. The alternative — one call per id — meant 234 round-trips per
+// bearing request. Note what this does and does not buy: measured, the elapsed
+// time did not change, so the walking itself is the cost. It removes 234
+// connection acquisitions per request, which matters under concurrency.
+func (g *GazetteerIndex) ResolveChains(ctx context.Context, layer string, fromFIDs []int64, cols output.AdminColumns) (map[int64][]output.AdminRow, error) {
+	if len(fromFIDs) == 0 {
+		return map[int64][]output.AdminRow{}, nil
+	}
+	// Deduplicate: candidates frequently share an admin parent, and a repeated
+	// seed would walk the same chain twice inside the query.
+	seeds := make([]int64, 0, len(fromFIDs))
+	seen := make(map[int64]struct{}, len(fromFIDs))
+	for _, fid := range fromFIDs {
+		if fid == 0 {
+			continue // no admin unit; the caller treats these as unverifiable
+		}
+		if _, dup := seen[fid]; dup {
+			continue
+		}
+		seen[fid] = struct{}{}
+		seeds = append(seeds, fid)
+	}
+	if len(seeds) == 0 {
+		return map[int64][]output.AdminRow{}, nil
+	}
+
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(seeds)), ",")
 	var b strings.Builder
-	// %[1]=layer, %[2]=parentFK, %[3]=level, %[4]=name, %[5]=country (all %q-quoted identifiers).
-	fmt.Fprintf(&b, `WITH RECURSIVE chain(fid, parent_id, lvl, name, country_iso, depth) AS (
-		SELECT fid, COALESCE(%[2]q, 0), CAST(%[3]q AS INTEGER), %[4]q, %[5]q, 0
-		FROM %[1]q WHERE fid = ?
+	// %[1]=layer, %[2]=parentFK, %[3]=level, %[4]=name, %[5]=country, %[6]=placeholders.
+	fmt.Fprintf(&b, `WITH RECURSIVE chain(seed, fid, parent_id, lvl, name, country_iso, depth) AS (
+		SELECT fid, fid, COALESCE(%[2]q, 0), CAST(%[3]q AS INTEGER), %[4]q, %[5]q, 0
+		FROM %[1]q WHERE fid IN (%[6]s)
 		UNION ALL
-		SELECT a.fid, COALESCE(a.%[2]q, 0), CAST(a.%[3]q AS INTEGER), a.%[4]q, a.%[5]q, chain.depth + 1
+		SELECT chain.seed, a.fid, COALESCE(a.%[2]q, 0), CAST(a.%[3]q AS INTEGER), a.%[4]q, a.%[5]q, chain.depth + 1
 		FROM %[1]q a JOIN chain ON a.fid = chain.parent_id
 		WHERE chain.parent_id <> 0 AND chain.depth < 32
 	)
-	SELECT fid, parent_id, lvl, name, country_iso FROM chain ORDER BY depth`,
-		layer, cols.ParentFK, cols.Level, cols.Name, cols.Country)
+	SELECT seed, fid, parent_id, lvl, name, country_iso FROM chain ORDER BY seed, depth`,
+		layer, cols.ParentFK, cols.Level, cols.Name, cols.Country, placeholders)
 
-	rows, err := g.db.QueryContext(ctx, b.String(), fromFID)
+	args := make([]any, len(seeds))
+	for i, fid := range seeds {
+		args[i] = fid
+	}
+	rows, err := g.db.QueryContext(ctx, b.String(), args...)
 	if err != nil {
 		return nil, &domain.QueryError{Layer: layer, Err: err}
 	}
 	defer func() { _ = rows.Close() }()
 
-	var chain []output.AdminRow
+	out := make(map[int64][]output.AdminRow, len(seeds))
 	for rows.Next() {
 		var (
-			fid, parent int64
-			lvl         sql.NullInt64
-			name, iso   sql.NullString
+			seed, fid, parent int64
+			lvl               sql.NullInt64
+			name, iso         sql.NullString
 		)
-		if err := rows.Scan(&fid, &parent, &lvl, &name, &iso); err != nil {
+		if err := rows.Scan(&seed, &fid, &parent, &lvl, &name, &iso); err != nil {
 			return nil, err
 		}
-		chain = append(chain, output.AdminRow{
+		out[seed] = append(out[seed], output.AdminRow{
 			FID:        fid,
 			ParentFID:  parent,
 			Level:      int(lvl.Int64),
@@ -298,7 +328,7 @@ func (g *GazetteerIndex) ResolveChain(ctx context.Context, layer string, fromFID
 			CountryISO: iso.String,
 		})
 	}
-	return chain, rows.Err()
+	return out, rows.Err()
 }
 
 // DistanceKM returns the ellipsoidal distance between two coordinates in km,

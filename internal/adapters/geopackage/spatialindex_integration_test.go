@@ -262,14 +262,15 @@ func TestGazetteerIndex_PointInPolygonBoundaryInclusive(t *testing.T) {
 	}
 }
 
-func TestGazetteerIndex_ResolveChain(t *testing.T) {
+func TestGazetteerIndex_ResolveChains(t *testing.T) {
 	idx := openFixtureIndex(t, true)
-	chain, err := idx.ResolveChain(context.Background(), "admin_levels", 3, output.AdminColumns{
+	chains, err := idx.ResolveChains(context.Background(), "admin_levels", []int64{3}, output.AdminColumns{
 		ParentFK: "parent_id", Level: "admin_level", Name: "name", Country: "country_iso",
 	})
 	if err != nil {
-		t.Fatalf("ResolveChain: %v", err)
+		t.Fatalf("ResolveChains: %v", err)
 	}
+	chain := chains[3]
 	if len(chain) != 3 {
 		t.Fatalf("chain length = %d, want 3", len(chain))
 	}

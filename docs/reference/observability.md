@@ -113,7 +113,7 @@ it — so the static gate derives the list instead.
 | `Gazetteer.{Locate,Islands,Mountains,Bearing,Exposure,Elevation}` | `internal/application/gazetteer` | `geo.{lon,lat}` (one span per response section) |
 | `SpatialIndex.PointInPolygon`          | `internal/adapters/geopackage` | `spatial.layer`, `spatial.result.count`                  |
 | `SpatialIndex.QueryKNN`                | `internal/adapters/geopackage` | `spatial.layer`, `spatial.knn.{k,max_km,filtered,filter_column,filter_values}`, `spatial.result.count` |
-| `SpatialIndex.ResolveChain`            | `internal/adapters/geopackage` | `spatial.layer`, `spatial.chain.{from_fid,length}`       |
+| `SpatialIndex.ResolveChains`           | `internal/adapters/geopackage` | `spatial.layer`, `spatial.chains.{seeds,resolved}` (batched: one call per request, not one per candidate) |
 | `SpatialIndex.{DistanceKM,Azimuth}`    | `internal/adapters/geopackage` | —                                                        |
 
 In addition, the HTTP recovery middleware records any panic on the active

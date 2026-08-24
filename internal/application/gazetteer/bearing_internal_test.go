@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/jobrunner/ortus/internal/domain"
+	"github.com/jobrunner/ortus/internal/ports/output"
 )
 
 // geoFeat builds an admin feature carrying only the columns countryOf reads.
@@ -109,11 +110,103 @@ func TestGatherCandidatesSkipsZeroRadius(t *testing.T) {
 	// Rank-mode policy: only ClassCity has a reach; town/village -> GatherRadiusKM 0 -> skipped.
 	pol := domain.BearingPolicy{Reach: map[domain.PlaceClass]float64{domain.ClassCity: 60}}
 	p := domain.NewWGS84Coordinate(10.0, 50.0)
-	cands, err := svc.gatherCandidates(context.Background(), p, pol, 0, false, "")
+	cands, err := svc.gatherCandidates(context.Background(), p, pol, insideConstraint{})
 	if err != nil {
 		t.Fatalf("gatherCandidates: %v", err)
 	}
 	if len(cands) != 1 || cands[0].Place.Class != domain.ClassCity {
 		t.Fatalf("want only the city candidate (town/village skipped at radius 0), got %d: %+v", len(cands), cands)
+	}
+}
+
+// countingIndex wraps a fakeIndex and counts the batched chain calls, so a test can
+// assert on the NUMBER of round-trips rather than only on the result.
+type countingIndex struct {
+	fakeIndex
+	chainCalls *int
+	seedsSeen  *int
+}
+
+func (c countingIndex) ResolveChains(ctx context.Context, layer string, fromFIDs []int64, cols output.AdminColumns) (map[int64][]output.AdminRow, error) {
+	*c.chainCalls++
+	*c.seedsSeen += len(fromFIDs)
+	return c.fakeIndex.ResolveChains(ctx, layer, fromFIDs, cols)
+}
+
+// TestGatherCandidatesResolvesChainsInOneBatch is the regression test for the N+1
+// that cost 234 SpatiaLite round-trips and ~700 ms per bearing request: the tier
+// constraint used to resolve each candidate's admin lineage with its own query.
+//
+// It asserts the round-trip COUNT, not the duration — the count is a property of
+// the code and does not move with machine speed, so this fails deterministically
+// the moment the per-candidate query returns.
+func TestGatherCandidatesResolvesChainsInOneBatch(t *testing.T) {
+	const perClass = 12
+	knn := map[string][]domain.Feature{}
+	chains := map[int64][]output.AdminRow{}
+	for ci, class := range []string{"city", "town", "village"} {
+		feats := make([]domain.Feature, 0, perClass)
+		for i := range perClass {
+			// A distinct admin id per place, so deduplication cannot mask a
+			// per-candidate query as a single batched one.
+			adminID := int64(ci*100 + i + 1)
+			feats = append(feats, placeFeature(class, "P", int(adminID), 10.0+float64(i)*0.01))
+			chains[adminID] = []output.AdminRow{
+				{FID: adminID, Level: 8, CountryISO: "DE"},
+				{FID: 7, Level: 4, CountryISO: "DE"}, // shared state-level ancestor
+			}
+		}
+		knn[class] = feats
+	}
+
+	calls, seeds := 0, 0
+	idx := countingIndex{
+		fakeIndex:  fakeIndex{knn: knn, chains: chains},
+		chainCalls: &calls,
+		seedsSeen:  &seeds,
+	}
+	svc := NewService(idx, testManifest(), mapResolver{{"DE", 4}: "state", {"DE", 8}: "municipality"}, nil, true)
+	pol := domain.BearingPolicy{Reach: map[domain.PlaceClass]float64{
+		domain.ClassCity: 60, domain.ClassTown: 60, domain.ClassVillage: 60,
+	}, ConstraintTier: "state"}
+
+	cands, err := svc.gatherCandidates(context.Background(), domain.NewWGS84Coordinate(10.0, 50.0), pol,
+		insideConstraint{constrained: true, ancestor: 7, tier: "state"})
+	if err != nil {
+		t.Fatalf("gatherCandidates: %v", err)
+	}
+	if calls != 1 {
+		t.Errorf("ResolveChains called %d times, want exactly 1 — the lineage lookup must be batched across all classes", calls)
+	}
+	if seeds < perClass*3 {
+		t.Errorf("batch carried %d seeds, want >= %d — every candidate's lineage must be in the one call", seeds, perClass*3)
+	}
+	// All candidates share ancestor 7, so the guard must admit every one of them:
+	// batching must not change which anchors qualify.
+	if len(cands) != perClass*3 {
+		t.Errorf("admitted %d candidates, want %d", len(cands), perClass*3)
+	}
+}
+
+// TestGatherCandidatesSkipsChainQueryWhenUnconstrained pins that an inactive
+// constraint issues no lineage query at all, rather than a batch of zero.
+func TestGatherCandidatesSkipsChainQueryWhenUnconstrained(t *testing.T) {
+	calls, seeds := 0, 0
+	idx := countingIndex{
+		fakeIndex: fakeIndex{knn: map[string][]domain.Feature{
+			"city": {placeFeature("city", "C", 1, 10.05)},
+		}},
+		chainCalls: &calls,
+		seedsSeen:  &seeds,
+	}
+	svc := NewService(idx, testManifest(), mapResolver{{"DE", 4}: "state", {"DE", 8}: "municipality"}, nil, true)
+	pol := domain.BearingPolicy{Reach: map[domain.PlaceClass]float64{domain.ClassCity: 60}}
+
+	if _, err := svc.gatherCandidates(context.Background(), domain.NewWGS84Coordinate(10.0, 50.0), pol,
+		insideConstraint{}); err != nil {
+		t.Fatalf("gatherCandidates: %v", err)
+	}
+	if calls != 0 {
+		t.Errorf("ResolveChains called %d times with no active constraint, want 0", calls)
 	}
 }

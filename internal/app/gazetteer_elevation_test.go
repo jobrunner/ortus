@@ -29,8 +29,8 @@ func (noopIndex) QueryKNN(context.Context, string, domain.Coordinate, int, float
 func (noopIndex) PointInPolygon(context.Context, string, domain.Coordinate) ([]domain.Feature, error) {
 	return nil, nil
 }
-func (noopIndex) ResolveChain(context.Context, string, int64, output.AdminColumns) ([]output.AdminRow, error) {
-	return nil, nil
+func (noopIndex) ResolveChains(context.Context, string, []int64, output.AdminColumns) (map[int64][]output.AdminRow, error) {
+	return map[int64][]output.AdminRow{}, nil
 }
 func (noopIndex) DistanceKM(context.Context, domain.Coordinate, domain.Coordinate) (float64, error) {
 	return 0, nil

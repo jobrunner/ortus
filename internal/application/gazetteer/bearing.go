@@ -50,7 +50,7 @@ func (s *Service) Bearing(ctx context.Context, p domain.Coordinate, pol domain.B
 		}
 	}
 	// Otherwise, a directional bearing to the most salient nearby anchor.
-	cands, err := s.gatherCandidates(ctx, p, pol, ancestor, constrained, queryCountry)
+	cands, err := s.gatherCandidates(ctx, p, pol, ic)
 	if err != nil {
 		return nil, err
 	}
@@ -86,69 +86,128 @@ type insideConstraint struct {
 // nearest qualifier wins (standing in a village names the village, not a larger town
 // whose wider radius also reaches). ok is false when no class qualifies (open country /
 // between settlements).
+//
+// Every class's candidates are collected before any are filtered, so the
+// boundary-tier check runs once for the whole set instead of once per candidate.
+// QueryKNN orders nearest-first within a class, but the winner is the overall
+// nearest admitted candidate, so the flat scan below is equivalent to the previous
+// per-class scan. The explicit distance check does not rely on the index honoring
+// the KNN radius bound.
 func (s *Service) placeInsideOf(ctx context.Context, p domain.Coordinate, pol domain.BearingPolicy, ic insideConstraint) (Candidate, bool, error) {
-	var best Candidate
-	found := false
+	var cands []Candidate
 	for _, c := range salienceClasses {
 		r := pol.InsideRadiusKM(c)
 		if r <= 0 {
 			continue
 		}
-		cand, ok, err := s.nearestInClassWithin(ctx, p, c, r, ic)
+		near, err := s.index.QueryKNN(ctx, s.manifest.PlacesLayer, p, insideCandidateK, r,
+			&output.Filter{Column: s.manifest.RankColumn, Values: []any{c.String()}})
 		if err != nil {
 			return Candidate{}, false, err
 		}
-		if ok && (!found || cand.DistanceKM < best.DistanceKM) {
-			best, found = cand, true
+		for i := range near {
+			if near[i].DistanceKM > r {
+				continue
+			}
+			place, ok := s.placeFromFeature(&near[i].Feature)
+			if !ok {
+				continue
+			}
+			cands = append(cands, Candidate{Place: place, DistanceKM: near[i].DistanceKM})
 		}
 	}
-	return best, found, nil
-}
 
-// nearestInClassWithin returns the nearest place of class c within radiusKM of p that
-// passes the inside constraint. QueryKNN orders results nearest-first (SpatialIndex
-// contract), so scanning while keeping the minimum is equivalent to taking the first
-// admitted hit — the loop continues only to skip candidates the constraint rejects. The
-// explicit distance check does not rely on the index honoring the KNN radius bound.
-func (s *Service) nearestInClassWithin(ctx context.Context, p domain.Coordinate, c domain.PlaceClass, radiusKM float64, ic insideConstraint) (Candidate, bool, error) {
-	near, err := s.index.QueryKNN(ctx, s.manifest.PlacesLayer, p, insideCandidateK, radiusKM,
-		&output.Filter{Column: s.manifest.RankColumn, Values: []any{c.String()}})
+	guard, err := s.newTierGuard(ctx, ic, cands)
 	if err != nil {
 		return Candidate{}, false, err
 	}
 	var best Candidate
 	found := false
-	for i := range near {
-		d := near[i].DistanceKM
-		if d > radiusKM {
+	for _, c := range cands {
+		if !guard.admits(c.Place) {
 			continue
 		}
-		place, ok := s.placeFromFeature(&near[i].Feature)
-		if !ok {
-			continue
-		}
-		admit, admitErr := s.admits(ctx, place, ic)
-		if admitErr != nil {
-			return Candidate{}, false, admitErr
-		}
-		if admit && (!found || d < best.DistanceKM) {
-			best, found = Candidate{Place: place, DistanceKM: d}, true
+		if !found || c.DistanceKM < best.DistanceKM {
+			best, found = c, true
 		}
 	}
 	return best, found, nil
 }
 
-// admits reports whether a place may be named as the settlement the point is "in":
-// same country (skipped when the query country is unknown), and — when constrained —
-// sharing the query point's boundary-tier ancestor.
-func (s *Service) admits(ctx context.Context, place domain.Place, ic insideConstraint) (bool, error) {
-	if ic.country != "" && place.CountryISO != ic.country {
-		return false, nil
+// tierGuard applies the anchor guards to a candidate set: same country, and — when
+// the boundary constraint is active — the same boundary-tier ancestor as the query
+// point.
+//
+// It exists to turn an N+1 into a single query: the tier check needs each
+// candidate's admin lineage, and resolving that one candidate at a time meant 234
+// SpatiaLite round-trips per bearing request.
+//
+// Measured honestly, batching removed the round-trips but NOT the time — the same
+// ~690 ms now sits in one span instead of 234. So the cost is the chain walking
+// itself, not the per-query overhead, and this change is a prerequisite for fixing
+// that rather than the fix. What it does buy: 234 fewer connection acquisitions
+// per request, which is what made throughput collapse under concurrency, and a
+// single span to attribute the remaining cost to.
+type tierGuard struct {
+	ic     insideConstraint
+	levels LevelResolver
+	chains map[int64][]output.AdminRow
+}
+
+// newTierGuard resolves the lineage of every candidate's admin unit in one call.
+// When the constraint is inactive no lineage is needed, so no query is issued.
+//
+// A failed batch aborts the request, exactly as a failed single walk used to: a
+// transient index failure must not quietly admit a cross-tier anchor or turn into
+// a spurious "not found".
+func (s *Service) newTierGuard(ctx context.Context, ic insideConstraint, cands []Candidate) (tierGuard, error) {
+	g := tierGuard{ic: ic, levels: s.levels}
+	if !ic.constrained || len(cands) == 0 {
+		return g, nil
 	}
-	if !ic.constrained {
-		return true, nil
+	fids := make([]int64, 0, len(cands))
+	for _, c := range cands {
+		if c.Place.AdminID != 0 {
+			fids = append(fids, c.Place.AdminID)
+		}
 	}
-	return s.sameTier(ctx, place.AdminID, ic.ancestor, ic.tier)
+	if len(fids) == 0 {
+		return g, nil
+	}
+	chains, err := s.index.ResolveChains(ctx, s.manifest.AdminLayer, fids, output.AdminColumns{
+		ParentFK: s.manifest.ParentFKColumn,
+		Level:    s.manifest.LevelColumn,
+		Name:     s.manifest.AdminNameColumn,
+		Country:  s.manifest.CountryColumn,
+	})
+	if err != nil {
+		return tierGuard{}, err
+	}
+	g.chains = chains
+	return g, nil
+}
+
+// admits reports whether a place may be used as an anchor (or named as the
+// settlement the point is "in"). A place with unknown admin (AdminID 0) is
+// excluded under an active constraint because its lineage cannot be verified.
+func (g tierGuard) admits(place domain.Place) bool {
+	if g.ic.country != "" && place.CountryISO != g.ic.country {
+		return false
+	}
+	if !g.ic.constrained {
+		return true
+	}
+	if place.AdminID == 0 {
+		return false
+	}
+	// First unit in the chain whose level maps to the tier decides — the same
+	// most-local-wins rule the per-candidate walk used.
+	for _, r := range g.chains[place.AdminID] {
+		if eq, ok := g.levels.Resolve(r.CountryISO, r.Level); ok && eq.Equivalent == g.ic.tier {
+			return r.FID == g.ic.ancestor
+		}
+	}
+	return false
 }
 
 // gatherCandidates collects the constraint-satisfying candidates of each class, up to
@@ -156,17 +215,30 @@ func (s *Service) admits(ctx context.Context, place domain.Place, ic insideConst
 // gather radius (and later selects the nearest eligible); CompositeSalience uses a wider
 // flat CandidateRadiusKM and lets its score decide. Either way the salience strategy
 // picks the winner.
-func (s *Service) gatherCandidates(ctx context.Context, p domain.Coordinate, pol domain.BearingPolicy, ancestor int64, constrained bool, country string) ([]Candidate, error) {
-	var cands []Candidate
+func (s *Service) gatherCandidates(ctx context.Context, p domain.Coordinate, pol domain.BearingPolicy, ic insideConstraint) ([]Candidate, error) {
+	var raw []Candidate
 	for _, class := range salienceClasses {
 		if pol.GatherRadiusKM(class) <= 0 {
 			continue
 		}
-		cs, err := s.candidatesInClass(ctx, p, class, pol, ancestor, constrained, country)
+		cs, err := s.candidatesInClass(ctx, p, class, pol)
 		if err != nil {
 			return nil, err
 		}
-		cands = append(cands, cs...)
+		raw = append(raw, cs...)
+	}
+	// One batched lineage resolve for every class's candidates together, then the
+	// guards run in memory. Filtering per class would reintroduce one query per
+	// class-set; filtering per candidate is what cost 234 queries per request.
+	guard, err := s.newTierGuard(ctx, ic, raw)
+	if err != nil {
+		return nil, err
+	}
+	cands := make([]Candidate, 0, len(raw))
+	for _, c := range raw {
+		if guard.admits(c.Place) {
+			cands = append(cands, c)
+		}
 	}
 	return cands, nil
 }
@@ -174,31 +246,20 @@ func (s *Service) gatherCandidates(ctx context.Context, p domain.Coordinate, pol
 // candidatesInClass returns the places of a class within its gather radius that also
 // satisfy the boundary constraint (when in force), each paired with its distance,
 // nearest first. Empty when none qualify.
-func (s *Service) candidatesInClass(ctx context.Context, p domain.Coordinate, class domain.PlaceClass, pol domain.BearingPolicy, ancestor int64, constrained bool, country string) ([]Candidate, error) {
+// The guards (same country, boundary tier) are NOT applied here — the caller runs
+// them over all classes at once, so the lineage lookup they need is a single
+// batched query rather than one per candidate.
+func (s *Service) candidatesInClass(ctx context.Context, p domain.Coordinate, class domain.PlaceClass, pol domain.BearingPolicy) ([]Candidate, error) {
 	near, err := s.index.QueryKNN(ctx, s.manifest.PlacesLayer, p, pol.CandidateLimit(), pol.GatherRadiusKM(class),
 		&output.Filter{Column: s.manifest.RankColumn, Values: []any{class.String()}})
 	if err != nil {
 		return nil, err
 	}
-	var out []Candidate
+	out := make([]Candidate, 0, len(near))
 	for i := range near {
 		place, ok := s.placeFromFeature(&near[i].Feature)
 		if !ok {
 			continue
-		}
-		// Same-country guard (see Bearing): drop anchors outside the query's country.
-		// Skipped only when the query country is unknown (no containing polygon).
-		if country != "" && place.CountryISO != country {
-			continue
-		}
-		if constrained {
-			same, err := s.sameTier(ctx, place.AdminID, ancestor, pol.ConstraintTier)
-			if err != nil {
-				return nil, err
-			}
-			if !same {
-				continue
-			}
 		}
 		// Distance is already computed by the KNN query (same ellipsoidal metric as
 		// DistanceKM), so no per-candidate distance round-trip is needed.
@@ -256,32 +317,6 @@ func (s *Service) countryOf(containing []domain.Feature) string {
 		}
 	}
 	return best
-}
-
-// sameTier reports whether a place's admin chain reaches the same tier ancestor
-// as the query point. A place with unknown admin (AdminID 0) is excluded (can't
-// verify), but a real ResolveChain error is returned rather than silently
-// dropping the candidate — else a transient index failure could quietly admit a
-// cross-tier anchor or turn into a spurious ErrNotFound.
-func (s *Service) sameTier(ctx context.Context, placeAdminID, ancestorFID int64, tier string) (bool, error) {
-	if placeAdminID == 0 {
-		return false, nil
-	}
-	chain, err := s.index.ResolveChain(ctx, s.manifest.AdminLayer, placeAdminID, output.AdminColumns{
-		ParentFK: s.manifest.ParentFKColumn,
-		Level:    s.manifest.LevelColumn,
-		Name:     s.manifest.AdminNameColumn,
-		Country:  s.manifest.CountryColumn,
-	})
-	if err != nil {
-		return false, err
-	}
-	for _, r := range chain {
-		if eq, ok := s.levels.Resolve(r.CountryISO, r.Level); ok && eq.Equivalent == tier {
-			return r.FID == ancestorFID, nil
-		}
-	}
-	return false, nil
 }
 
 // placeFromFeature maps a places-layer feature to a domain.Place, parsing the

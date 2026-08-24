@@ -66,11 +66,15 @@ func (s stubIndex) PointInPolygon(context.Context, string, domain.Coordinate) ([
 	return []domain.Feature{{}}, nil
 }
 
-func (s stubIndex) ResolveChain(context.Context, string, int64, output.AdminColumns) ([]output.AdminRow, error) {
+func (s stubIndex) ResolveChains(_ context.Context, _ string, fromFIDs []int64, _ output.AdminColumns) (map[int64][]output.AdminRow, error) {
 	if s.err != nil {
 		return nil, s.err
 	}
-	return []output.AdminRow{{}, {}, {}}, nil
+	out := map[int64][]output.AdminRow{}
+	for _, fid := range fromFIDs {
+		out[fid] = []output.AdminRow{{}, {}, {}}
+	}
+	return out, nil
 }
 
 func (s stubIndex) DistanceKM(context.Context, domain.Coordinate, domain.Coordinate) (float64, error) {
@@ -93,7 +97,7 @@ func TestTracedSpatialIndexRecordsLayerAndCounts(t *testing.T) {
 	if _, err := idx.QueryKNN(ctx, "places", p, 5, 30, &output.Filter{Column: "place", Values: []any{"town", "city"}}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := idx.ResolveChain(ctx, "admin_levels", 42, output.AdminColumns{}); err != nil {
+	if _, err := idx.ResolveChains(ctx, "admin_levels", []int64{42, 43}, output.AdminColumns{}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -139,11 +143,16 @@ func TestTracedSpatialIndexRecordsLayerAndCounts(t *testing.T) {
 	}
 
 	chain := tr.spans[2]
-	if chain.attrs["spatial.chain.length"] != 3 {
-		t.Errorf("chain.length = %v, want 3", chain.attrs["spatial.chain.length"])
+	if chain.name != "SpatialIndex.ResolveChains" {
+		t.Errorf("name = %q", chain.name)
 	}
-	if chain.attrs["spatial.chain.from_fid"] != int64(42) {
-		t.Errorf("chain.from_fid = %v, want 42", chain.attrs["spatial.chain.from_fid"])
+	// Seeds in, chains out: the pair is what shows the batch is actually batching
+	// rather than degenerating into one call per id.
+	if chain.attrs["spatial.chains.seeds"] != 2 {
+		t.Errorf("chains.seeds = %v, want 2", chain.attrs["spatial.chains.seeds"])
+	}
+	if chain.attrs["spatial.chains.resolved"] != 2 {
+		t.Errorf("chains.resolved = %v, want 2", chain.attrs["spatial.chains.resolved"])
 	}
 }
 

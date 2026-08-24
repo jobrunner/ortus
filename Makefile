@@ -258,6 +258,9 @@ PERF_MCP  ?= http://127.0.0.1:9091/mcp
 perf-gate: ## Performance-Gate gegen perf/baseline.json (PERF_BASE=… PERF_MCP=…)
 	@$(GO) run ./tools/perfgate -base $(PERF_BASE) -mcp $(PERF_MCP) -baseline perf/baseline.json
 
+trace-summary: ## Span-Zusammenfassung einer laufenden Instanz über MCP lesen (Analyse, kein Gate)
+	@$(GO) run ./tools/perfgate -mcp $(PERF_MCP) -baseline perf/baseline.json -summarize
+
 perf-gate-update: ## Performance-Baseline bewusst neu schreiben (Review erforderlich!)
 	@$(GO) run ./tools/perfgate -base $(PERF_BASE) -mcp $(PERF_MCP) -baseline perf/baseline.json -update
 
