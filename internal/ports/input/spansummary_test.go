@@ -59,10 +59,10 @@ func TestSummarizeSortsByTotalTime(t *testing.T) {
 func TestPerTraceRevealsRepeatedCalls(t *testing.T) {
 	var spans []CapturedSpan
 	for i := 0; i < 512; i++ {
-		spans = append(spans, span("SpatialIndex.ResolveChain", 1.4, nil))
+		spans = append(spans, span("SpatialIndex.ResolveChains", 1.4, nil))
 	}
 	s := SummarizeSpans([]*CapturedTrace{trace("a", 1114, spans...)}, "")
-	st := find(t, s, "SpatialIndex.ResolveChain", "")
+	st := find(t, s, "SpatialIndex.ResolveChains", "")
 	if st.Spans != 512 || st.Traces != 1 {
 		t.Fatalf("want 512 spans in 1 trace, got %d in %d", st.Spans, st.Traces)
 	}

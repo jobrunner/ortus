@@ -146,12 +146,15 @@ tracing: { enabled: true, service_name: ortus }
 mcp:     { enabled: true, host: 127.0.0.1 }     # loopback needs no token
 ```
 
-Then point the agent at it. `.mcp.json` is intentionally *not* committed (the
-endpoint is machine-local); create it in the repo root:
+`.mcp.json` in the repo root already points an agent at that endpoint, and
+`.claude/settings.json` enables it without a prompt:
 
 ```json
 { "mcpServers": { "ortus": { "type": "http", "url": "http://127.0.0.1:9091/mcp" } } }
 ```
+
+The endpoint is loopback, so it needs no token and is the same for everyone; a
+deployment on another host sets `ORTUS_MCP_TOKEN` and its own URL instead.
 
 Start with [`span_summary`](mcp.md#diagnostic-tools) — per span name it gives
 calls per request, percentiles and total time, sorted by cost. The `per_trace`

@@ -373,7 +373,24 @@ func writeBaseline(path string, bl *Baseline, s input.SpanSummary) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, append(raw, '\n'), 0o600)
+	// Write through the same os.Root the read side uses. The path comes from a
+	// flag, and having one side confined to the repository while the other writes
+	// wherever it is pointed would make the confinement decorative.
+	root, err := os.OpenRoot(".")
+	if err != nil {
+		return err
+	}
+	defer func() { _ = root.Close() }()
+
+	file, err := root.Create(filepath.Clean(path))
+	if err != nil {
+		return err
+	}
+	if _, err := file.Write(append(raw, '\n')); err != nil {
+		_ = file.Close()
+		return err
+	}
+	return file.Close()
 }
 
 // roundUp gives the committed ceilings a readable granularity so a baseline diff
