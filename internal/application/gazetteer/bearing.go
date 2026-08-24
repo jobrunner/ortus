@@ -3,6 +3,7 @@ package gazetteer
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -102,21 +103,11 @@ func (s *Service) placeInsideOf(ctx context.Context, p domain.Coordinate, pol do
 		return Candidate{}, false, err
 	}
 
-	guard, err := s.newTierGuard(ctx, ic, cands)
-	if err != nil {
-		return Candidate{}, false, err
-	}
-	var best Candidate
-	found := false
-	for _, c := range cands {
-		if !guard.admits(c.Place) {
-			continue
-		}
-		if !found || c.DistanceKM < best.DistanceKM {
-			best, found = c, true
-		}
-	}
-	return best, found, nil
+	// Nearest first, then the same lazy admission the anchor search uses: the
+	// nearest admitted candidate is the answer, so a candidate further out only
+	// needs its lineage if every nearer one was rejected.
+	sort.SliceStable(cands, func(i, j int) bool { return cands[i].DistanceKM < cands[j].DistanceKM })
+	return s.firstAdmitted(ctx, cands, ic)
 }
 
 // insideCandidates collects, across all classes, the places whose own class
@@ -194,38 +185,6 @@ func (g tierGuard) admitsTier(place domain.Place) bool {
 	return false
 }
 
-// newTierGuard resolves the lineage of every candidate's admin unit in one call.
-// When the constraint is inactive no lineage is needed, so no query is issued.
-//
-// A failed batch aborts the request, exactly as a failed single walk used to: a
-// transient index failure must not quietly admit a cross-tier anchor or turn into
-// a spurious "not found".
-func (s *Service) newTierGuard(ctx context.Context, ic insideConstraint, cands []Candidate) (tierGuard, error) {
-	g := tierGuard{ic: ic, levels: s.levels}
-	if !ic.constrained || len(cands) == 0 {
-		return g, nil
-	}
-	fids := make([]int64, 0, len(cands))
-	for _, c := range cands {
-		if c.Place.AdminID != 0 {
-			fids = append(fids, c.Place.AdminID)
-		}
-	}
-	if len(fids) == 0 {
-		return g, nil
-	}
-	chains, err := s.index.ResolveChains(ctx, s.manifest.AdminLayer, fids, output.AdminColumns{
-		ParentFK: s.manifest.ParentFKColumn,
-		Level:    s.manifest.LevelColumn,
-		Country:  s.manifest.CountryColumn,
-	})
-	if err != nil {
-		return tierGuard{}, err
-	}
-	g.chains = chains
-	return g, nil
-}
-
 // admits reports whether a place may be used as an anchor (or named as the
 // settlement the point is "in"). A place with unknown admin (AdminID 0) is
 // excluded under an active constraint because its lineage cannot be verified.
@@ -281,17 +240,32 @@ func (s *Service) bestAdmitted(ctx context.Context, cands []Candidate, pol domai
 		best, ok := s.salience.Select(cands, pol)
 		return best, ok, nil
 	}
-	ordered := s.salience.Order(cands, pol)
-	guard := tierGuard{ic: ic, levels: s.levels, chains: map[int64][]output.AdminRow{}}
+	return s.firstAdmitted(ctx, s.salience.Order(cands, pol), ic)
+}
 
+// firstAdmitted returns the first candidate in the given order that satisfies the
+// boundary-tier constraint, resolving admin lineages lazily.
+//
+// The caller decides what "first" means — best-scoring for an anchor, nearest for
+// the "in {X}" decision — and both get the same saving: a candidate is only paid
+// for once everything ahead of it has been rejected.
+//
+// Lineages are fetched in growing batches (1, then 16, then 256, …) so the common
+// case is a single query for a single id, while a point near a state border —
+// where many candidates are rejected — still converges in a handful of queries
+// rather than one per candidate.
+func (s *Service) firstAdmitted(ctx context.Context, ordered []Candidate, ic insideConstraint) (Candidate, bool, error) {
+	guard := tierGuard{ic: ic, levels: s.levels, chains: map[int64][]output.AdminRow{}}
 	const batchGrowth = 16
 	for i, batch := 0, 1; i < len(ordered); batch *= batchGrowth {
 		end := min(i+batch, len(ordered))
-		if err := s.resolveInto(ctx, guard.chains, ordered[i:end]); err != nil {
-			return Candidate{}, false, err
+		if ic.constrained {
+			if err := s.resolveInto(ctx, guard.chains, ordered[i:end]); err != nil {
+				return Candidate{}, false, err
+			}
 		}
 		for ; i < end; i++ {
-			if guard.admitsTier(ordered[i].Place) {
+			if guard.admits(ordered[i].Place) {
 				return ordered[i], true, nil
 			}
 		}
