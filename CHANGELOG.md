@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0](https://github.com/jobrunner/ortus/compare/v1.6.0...v1.7.0) (2026-08-24)
+
+
+### Features
+
+* **mcp:** add span_summary so an agent can aggregate spans itself ([2ed85fa](https://github.com/jobrunner/ortus/commit/2ed85fa206df388f48312a71f723d832e09426bc))
+* **perf:** add a hard performance gate on span budgets ([5d440ca](https://github.com/jobrunner/ortus/commit/5d440ca8281480d8cc5b76e5f0c6f8dabcb4999b))
+* **telemetry:** instrument the gazetteer path and gate trace coverage ([ab592c2](https://github.com/jobrunner/ortus/commit/ab592c22cfcfb08d3cd942d642bc33f243da52db))
+
+
+### Bug Fixes
+
+* **gocog:** retry the other LZW bit order on a short decode, not only on an error ([5dfee81](https://github.com/jobrunner/ortus/commit/5dfee8112f8edab145975684600a0d72c0446bb1))
+
+
+### Performance Improvements
+
+* **gazetteer:** batch the boundary-tier lineage lookup and bound the SQLite pool ([b1c8c67](https://github.com/jobrunner/ortus/commit/b1c8c67197031716474bbe0cc2b43ba55c641501))
+* **gazetteer:** share the admin point-in-polygon within a request ([2a17564](https://github.com/jobrunner/ortus/commit/2a175640a2a662039673cbb2715af0a083e4ce11))
+* **gazetteer:** stop serializing polygons, evaluate distance once, shrink the chain query ([b3daf64](https://github.com/jobrunner/ortus/commit/b3daf64b602a3049f220fe39b92689ee0e66ba85))
+
 ## [1.6.0](https://github.com/jobrunner/ortus/compare/v1.5.0...v1.6.0) (2026-08-23)
 
 
