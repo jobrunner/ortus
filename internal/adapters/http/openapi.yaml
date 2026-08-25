@@ -156,7 +156,7 @@ paths:
                   summary: Fehlende Koordinaten
                   value:
                     error: Bad Request
-                    message: "coordinates required: use lon/lat or x/y"
+                    message: "coordinates required: use lon/lat, x/y, or mgrs"
                 invalidLon:
                   summary: Ungültige Longitude
                   value:

@@ -8,7 +8,7 @@ frontend is served at `GET /`.
 **Error responses.** Every error (any non-2xx) uses the same envelope:
 
 ```json
-{ "error": "Bad Request", "message": "coordinates required: use lon/lat or x/y" }
+{ "error": "Bad Request", "message": "coordinates required: use lon/lat, x/y, or mgrs" }
 ```
 
 where `error` is the HTTP status text and `message` is a human-readable detail.

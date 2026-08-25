@@ -74,7 +74,7 @@ func (p batchPoint) coordinate(defaultSRID int) (coord domain.Coordinate, errMsg
 	case p.X != nil && p.Y != nil:
 		c = domain.Coordinate{X: *p.X, Y: *p.Y, SRID: srid}
 	default:
-		return domain.Coordinate{}, "coordinates required: provide lon/lat or x/y"
+		return domain.Coordinate{}, "coordinates required: provide lon/lat, x/y, or mgrs"
 	}
 	if err := c.Validate(); err != nil {
 		return domain.Coordinate{}, err.Error()

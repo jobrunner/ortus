@@ -258,7 +258,7 @@ func (s *Server) parseQueryParams(r *http.Request) (*QueryParams, error) {
 
 	// Validate that we have coordinates
 	if params.Lon == 0 && params.Lat == 0 && params.X == 0 && params.Y == 0 {
-		return nil, errors.New("coordinates required: use lon/lat or x/y")
+		return nil, errors.New("coordinates required: use lon/lat, x/y, or mgrs")
 	}
 
 	// Parse SRID
