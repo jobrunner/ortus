@@ -27,6 +27,7 @@ var (
 	ErrStorageUnavailable    = fmt.Errorf("storage: %w", ErrUnavailable)
 	ErrUnsupportedSource     = fmt.Errorf("source: %w", ErrUnsupported)
 	ErrRateLimited           = errors.New("rate limit exceeded")
+	ErrInvalidMGRS           = fmt.Errorf("mgrs: %w", ErrInvalidInput)
 )
 
 // ValidationError represents a detailed validation error.

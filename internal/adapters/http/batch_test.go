@@ -166,6 +166,65 @@ func TestQueryBatchItemError(t *testing.T) {
 	}
 }
 
+// TestQueryBatchMGRS: a point given as mgrs resolves via its own UTM SRID,
+// independent of the batch-level default SRID, and mixes cleanly with
+// lon/lat points in the same request.
+func TestQueryBatchMGRS(t *testing.T) {
+	srv := newBatchServer(t, nil, 1000, 10000)
+	rec := doBatch(t, srv,
+		`{"points":[{"id":"a","mgrs":"31U CT 03760 87415"},{"id":"b","lon":1,"lat":1}]}`, "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body: %s)", rec.Code, rec.Body.String())
+	}
+	var resp struct {
+		Results []map[string]any `json:"results"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if _, hasErr := resp.Results[0]["error"]; hasErr {
+		t.Fatalf("item 0 (mgrs) should not error, got %v", resp.Results[0])
+	}
+	// 31U CT 03760 87415 decodes to UTM zone 31N (SRID 32631), easting 303760,
+	// northing 5787415 — matches the domain.ParseMGRS test vectors. This test
+	// server has no CoordinateTransformer configured (mock repository), so no
+	// wgs84 block is expected here — that reprojection is covered by the
+	// domain-level ParseMGRS tests and the single-point handler test.
+	c, ok := resp.Results[0]["coordinate"].(map[string]any)
+	if !ok {
+		t.Fatalf("item 0 missing coordinate block: %v", resp.Results[0])
+	}
+	if srid, _ := c["srid"].(float64); srid != 32631 {
+		t.Errorf("item 0 coordinate.srid = %v, want 32631", c["srid"])
+	}
+	if x, _ := c["x"].(float64); x != 303760 {
+		t.Errorf("item 0 coordinate.x = %v, want 303760", c["x"])
+	}
+	if y, _ := c["y"].(float64); y != 5787415 {
+		t.Errorf("item 0 coordinate.y = %v, want 5787415", c["y"])
+	}
+	if _, hasErr := resp.Results[1]["error"]; hasErr {
+		t.Errorf("item 1 (lon/lat) should not error, got %v", resp.Results[1])
+	}
+}
+
+// TestQueryBatchMGRSInvalid: an invalid mgrs string surfaces as a per-item
+// error, not a batch-wide failure.
+func TestQueryBatchMGRSInvalid(t *testing.T) {
+	srv := newBatchServer(t, nil, 1000, 10000)
+	rec := doBatch(t, srv, `{"points":[{"id":"bad","mgrs":"not-mgrs"}]}`, "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	var resp struct {
+		Results []map[string]any `json:"results"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+	if _, hasErr := resp.Results[0]["error"]; !hasErr {
+		t.Errorf("item 0 should carry an error object, got %v", resp.Results[0])
+	}
+}
+
 // TestQueryBatchEmptyPoints: no points → 400.
 func TestQueryBatchEmptyPoints(t *testing.T) {
 	srv := newBatchServer(t, nil, 1000, 10000)

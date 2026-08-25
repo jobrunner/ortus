@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"testing"
 	"time"
@@ -458,6 +459,57 @@ func TestParseQueryParams(t *testing.T) {
 		{
 			name:    "missing coordinates",
 			url:     "/query",
+			wantErr: true,
+		},
+		{
+			name: "mgrs coordinate resolves to its UTM SRID",
+			url:  "/query?mgrs=" + url.QueryEscape("31U CT 03760 87415"),
+			check: func(p *QueryParams) error {
+				if p.X != 303760 {
+					return domain.ErrInvalidCoordinate
+				}
+				if p.Y != 5787415 {
+					return domain.ErrInvalidCoordinate
+				}
+				if p.SRID != 32631 {
+					return domain.ErrInvalidSRID
+				}
+				return nil
+			},
+		},
+		{
+			name: "mgrs without spaces",
+			url:  "/query?mgrs=31UCT0376087415",
+			check: func(p *QueryParams) error {
+				if p.X != 303760 || p.Y != 5787415 || p.SRID != 32631 {
+					return domain.ErrInvalidCoordinate
+				}
+				return nil
+			},
+		},
+		{
+			name: "mgrs southern hemisphere",
+			url:  "/query?mgrs=" + url.QueryEscape("56H LH 34900 52288"),
+			check: func(p *QueryParams) error {
+				if p.SRID != 32756 {
+					return domain.ErrInvalidSRID
+				}
+				return nil
+			},
+		},
+		{
+			name: "mgrs takes precedence over lon/lat in the same request",
+			url:  "/query?mgrs=" + url.QueryEscape("31U CT 03760 87415") + "&lon=1&lat=1",
+			check: func(p *QueryParams) error {
+				if p.X != 303760 || p.Y != 5787415 {
+					return domain.ErrInvalidCoordinate
+				}
+				return nil
+			},
+		},
+		{
+			name:    "invalid mgrs string",
+			url:     "/query?mgrs=not-mgrs",
 			wantErr: true,
 		},
 	}
