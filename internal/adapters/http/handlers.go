@@ -244,42 +244,21 @@ func (s *Server) parseQueryParams(r *http.Request) (*QueryParams, error) {
 
 	q := r.URL.Query()
 
+	// mgrs takes precedence over lon/lat/x/y/srid — it carries its own SRID
+	// (the UTM zone the reference decodes into), so the rest of this
+	// function is skipped entirely for an mgrs request.
+	if mgrs := q.Get("mgrs"); mgrs != "" {
+		return mgrsQueryParams(mgrs, q.Get("properties"))
+	}
+
 	// Parse coordinates (lon/lat or x/y)
-	if lon := q.Get("lon"); lon != "" {
-		v, err := strconv.ParseFloat(lon, 64)
-		if err != nil {
-			return nil, errors.New("invalid lon parameter")
-		}
-		params.Lon = v
-	}
-
-	if lat := q.Get("lat"); lat != "" {
-		v, err := strconv.ParseFloat(lat, 64)
-		if err != nil {
-			return nil, errors.New("invalid lat parameter")
-		}
-		params.Lat = v
-	}
-
-	if x := q.Get("x"); x != "" {
-		v, err := strconv.ParseFloat(x, 64)
-		if err != nil {
-			return nil, errors.New("invalid x parameter")
-		}
-		params.X = v
-	}
-
-	if y := q.Get("y"); y != "" {
-		v, err := strconv.ParseFloat(y, 64)
-		if err != nil {
-			return nil, errors.New("invalid y parameter")
-		}
-		params.Y = v
+	if err := parseDecimalCoordinates(q, params); err != nil {
+		return nil, err
 	}
 
 	// Validate that we have coordinates
 	if params.Lon == 0 && params.Lat == 0 && params.X == 0 && params.Y == 0 {
-		return nil, errors.New("coordinates required: use lon/lat or x/y")
+		return nil, errors.New("coordinates required: use lon/lat, x/y, or mgrs")
 	}
 
 	// Parse SRID

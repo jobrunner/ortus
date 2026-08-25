@@ -52,8 +52,9 @@ paths:
       description: |
         Führt eine Punktabfrage über alle registrierten Datenquellen durch.
 
-        Koordinaten können entweder als `lon/lat` (für WGS84) oder als `x/y`
-        (für andere Koordinatensysteme) angegeben werden.
+        Koordinaten können als `lon/lat` (für WGS84), als `x/y` (für andere
+        Koordinatensysteme) oder als `mgrs` (Military Grid Reference System,
+        siehe dessen Parameterbeschreibung) angegeben werden.
 
         Die Punkt-in-Polygon-Prüfung ist randinklusiv (ST_Covers): ein Punkt, der
         exakt auf der Grenze eines Polygons liegt, gehört zu diesem Polygon. Liegt
@@ -74,6 +75,7 @@ paths:
         - $ref: '#/components/parameters/XParam'
         - $ref: '#/components/parameters/YParam'
         - $ref: '#/components/parameters/SridParam'
+        - $ref: '#/components/parameters/MgrsParam'
         - $ref: '#/components/parameters/PropertiesParam'
         - $ref: '#/components/parameters/WithGazetteerParam'
       responses:
@@ -154,7 +156,7 @@ paths:
                   summary: Fehlende Koordinaten
                   value:
                     error: Bad Request
-                    message: "coordinates required: use lon/lat or x/y"
+                    message: "coordinates required: use lon/lat, x/y, or mgrs"
                 invalidLon:
                   summary: Ungültige Longitude
                   value:
@@ -185,6 +187,7 @@ paths:
         - $ref: '#/components/parameters/XParam'
         - $ref: '#/components/parameters/YParam'
         - $ref: '#/components/parameters/SridParam'
+        - $ref: '#/components/parameters/MgrsParam'
         - $ref: '#/components/parameters/PropertiesParam'
       responses:
         '200':
@@ -296,6 +299,7 @@ paths:
         - $ref: '#/components/parameters/XParam'
         - $ref: '#/components/parameters/YParam'
         - $ref: '#/components/parameters/SridParam'
+        - $ref: '#/components/parameters/MgrsParam'
       responses:
         '200':
           description: Erfolgreiche Abfrage
@@ -655,6 +659,28 @@ components:
         type: integer
         default: 4326
       example: 4326
+
+    MgrsParam:
+      name: mgrs
+      in: query
+      description: |
+        Koordinate als MGRS-Referenz (Military Grid Reference System), variabler
+        Genauigkeit von 1 bis 5 Ziffern je Achse (10 km bis 1 m). Leerzeichen
+        zwischen Zone/Band, 100-km-Quadrat und den Zifferngruppen sind optional
+        ("32UNA0123456789" und "32U NA 01234 56789" sind gleichwertig). Bei
+        geringerer Genauigkeit wird der Südwest-Ursprung der jeweiligen Zelle
+        geliefert, nicht deren Mittelpunkt.
+
+        Ist `mgrs` gesetzt, hat es Vorrang vor `lon`/`lat`/`x`/`y`/`srid` im
+        selben Request — die Zielkoordinate erhält die zur MGRS-Zone passende
+        UTM-SRID (EPSG:32601-32660 nördliche, 32701-32760 südliche Hemisphäre),
+        `srid` wird für diesen Fall ignoriert.
+
+        Nur die UTM-Breitenbänder C-X (±80° Breite) werden unterstützt; die
+        polaren Bänder A, B, Y, Z (UPS-Projektion) sind nicht im Funktionsumfang.
+      schema:
+        type: string
+      example: "32U NA 01234 56789"
 
     PropertiesParam:
       name: properties
@@ -1572,11 +1598,20 @@ components:
       type: object
       description: >-
         Ein Abfragepunkt mit optionaler, vom Client gewählter Echo-id. Koordinaten
-        als lon/lat ODER x/y; ein optionaler srid überschreibt den Batch-srid.
+        als mgrs ODER lon/lat ODER x/y; ein optionaler srid überschreibt den
+        Batch-srid (wirkt nicht auf mgrs — siehe dessen Beschreibung).
       properties:
         id:
           type: string
           description: Opaque Echo-id (Eindeutigkeit ist Sache des Callers; fehlt → 0-basierter Index)
+        mgrs:
+          type: string
+          description: >-
+            MGRS-Referenz, siehe die Beschreibung des mgrs-Query-Parameters bei
+            GET /api/v1/query. Hat Vorrang vor lon/lat und x/y desselben Punkts;
+            der Batch-srid (und ein per-Punkt srid) wird für diesen Punkt
+            ignoriert, da mgrs seine eigene UTM-SRID mitbringt.
+          example: "32U NA 01234 56789"
         lon: { type: number, format: double }
         lat: { type: number, format: double }
         x: { type: number, format: double }

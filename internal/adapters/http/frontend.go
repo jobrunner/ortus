@@ -654,6 +654,7 @@ const frontendHTML = `<!DOCTYPE html>
                         <option value="25833">ETRS89 / UTM Zone 33N (EPSG:25833)</option>
                         <option value="31466">DHDN / Gauß-Krüger Zone 2 (EPSG:31466)</option>
                         <option value="31467">DHDN / Gauß-Krüger Zone 3 (EPSG:31467)</option>
+                        <option value="mgrs">MGRS (Military Grid Reference System)</option>
                     </select>
                 </div>
 
@@ -666,6 +667,10 @@ const frontendHTML = `<!DOCTYPE html>
                         <label for="coordX" id="labelX">Längengrad (Lon)</label>
                         <input type="text" id="coordX" name="x" placeholder="z.B. 13.405" inputmode="decimal" required>
                     </div>
+                </div>
+                <div class="form-group" id="groupMgrs" style="display:none">
+                    <label for="coordMgrs" id="labelMgrs">MGRS</label>
+                    <input type="text" id="coordMgrs" name="mgrs" placeholder="32U NA 01234 56789" autocomplete="off">
                 </div>
 
                 <div class="btn-row">
@@ -716,6 +721,8 @@ const frontendHTML = `<!DOCTYPE html>
             const groupX = document.getElementById('groupX');
             const groupY = document.getElementById('groupY');
             const coordGrid = document.getElementById('coordGrid');
+            const groupMgrs = document.getElementById('groupMgrs');
+            const coordMgrs = document.getElementById('coordMgrs');
             const labelX = document.getElementById('labelX');
             const labelY = document.getElementById('labelY');
             const submitBtn = document.getElementById('submitBtn');
@@ -769,18 +776,30 @@ const frontendHTML = `<!DOCTYPE html>
             }
             applyFieldOrder(sridSelect.value);
 
-            // Update labels when SRID changes
+            // Update labels when SRID changes. MGRS has no numeric SRID and no
+            // separate X/Y fields — it swaps coordGrid out for a single text field
+            // (groupMgrs) instead of reusing coordX/coordY.
             sridSelect.addEventListener('change', function() {
-                const config = sridConfig[this.value] || sridConfig['4326'];
-                labelX.textContent = config.xLabel;
-                labelY.textContent = config.yLabel;
-                coordX.placeholder = config.xPlaceholder;
-                coordY.placeholder = config.yPlaceholder;
-                applyFieldOrder(this.value);
+                const isMgrs = this.value === 'mgrs';
+                groupMgrs.style.display = isMgrs ? '' : 'none';
+                coordGrid.style.display = isMgrs ? 'none' : '';
+                coordMgrs.required = isMgrs;
+                coordX.required = !isMgrs;
+                coordY.required = !isMgrs;
+
+                if (!isMgrs) {
+                    const config = sridConfig[this.value] || sridConfig['4326'];
+                    labelX.textContent = config.xLabel;
+                    labelY.textContent = config.yLabel;
+                    coordX.placeholder = config.xPlaceholder;
+                    coordY.placeholder = config.yPlaceholder;
+                    applyFieldOrder(this.value);
+                }
 
                 // Clear values when switching coordinate systems
                 coordX.value = '';
                 coordY.value = '';
+                coordMgrs.value = '';
             });
 
             // Smart coordinate paste: pasting a full pair like "35.016132, 32.670024"
@@ -863,6 +882,7 @@ const frontendHTML = `<!DOCTYPE html>
             clearBtn.addEventListener('click', function() {
                 coordX.value = '';
                 coordY.value = '';
+                coordMgrs.value = '';
                 hideError();
                 results.classList.remove('active');
             });
@@ -873,20 +893,31 @@ const frontendHTML = `<!DOCTYPE html>
                 hideError();
 
                 const srid = sridSelect.value;
-                const x = parseFloat(coordX.value.replace(',', '.'));
-                const y = parseFloat(coordY.value.replace(',', '.'));
+                let url;
 
-                if (isNaN(x) || isNaN(y)) {
-                    showError('Bitte geben Sie gültige Koordinaten ein.');
-                    return;
-                }
-
-                // Build query URL with proper URL encoding
-                let url = '/api/v1/query?srid=' + encodeURIComponent(srid);
-                if (srid === '4326') {
-                    url += '&lon=' + encodeURIComponent(x) + '&lat=' + encodeURIComponent(y);
+                if (srid === 'mgrs') {
+                    const mgrs = coordMgrs.value.trim();
+                    if (!mgrs) {
+                        showError('Bitte geben Sie eine gültige MGRS-Koordinate ein.');
+                        return;
+                    }
+                    url = '/api/v1/query?mgrs=' + encodeURIComponent(mgrs);
                 } else {
-                    url += '&x=' + encodeURIComponent(x) + '&y=' + encodeURIComponent(y);
+                    const x = parseFloat(coordX.value.replace(',', '.'));
+                    const y = parseFloat(coordY.value.replace(',', '.'));
+
+                    if (isNaN(x) || isNaN(y)) {
+                        showError('Bitte geben Sie gültige Koordinaten ein.');
+                        return;
+                    }
+
+                    // Build query URL with proper URL encoding
+                    url = '/api/v1/query?srid=' + encodeURIComponent(srid);
+                    if (srid === '4326') {
+                        url += '&lon=' + encodeURIComponent(x) + '&lat=' + encodeURIComponent(y);
+                    } else {
+                        url += '&x=' + encodeURIComponent(x) + '&y=' + encodeURIComponent(y);
+                    }
                 }
 
                 submitBtn.disabled = true;
@@ -934,11 +965,16 @@ const frontendHTML = `<!DOCTYPE html>
 
             function displayResults(data, srid) {
                 // Header info. For WGS84 we show Lat/Lon (the conventional geographic
-                // order). For a projected SRID we show the entered X/Y plus the
-                // reprojected WGS84 lat/lon from the response's wgs84 block.
+                // order). For MGRS input we show the same Lat/Lon, from the response's
+                // wgs84 block — the underlying UTM zone/SRID (EPSG:326xx/327xx) isn't
+                // meaningful to a caller who typed an MGRS string. For any other
+                // projected SRID we show the entered X/Y plus the reprojected WGS84
+                // lat/lon from the response's wgs84 block.
                 const coord = data.coordinate;
                 if (srid === '4326') {
                     resultCoord.textContent = 'Lat: ' + coord.y.toFixed(6) + ', Lon: ' + coord.x.toFixed(6);
+                } else if (srid === 'mgrs' && data.wgs84) {
+                    resultCoord.textContent = 'Lat: ' + data.wgs84.lat.toFixed(6) + ', Lon: ' + data.wgs84.lon.toFixed(6);
                 } else {
                     let txt = 'X: ' + coord.x.toFixed(2) + ', Y: ' + coord.y.toFixed(2) + ' (EPSG:' + coord.srid + ')';
                     if (data.wgs84) {

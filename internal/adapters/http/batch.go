@@ -35,6 +35,7 @@ func batchWantsGazetteer(req *batchRequest) bool {
 // fields are pointers so a genuine 0 (e.g. lon 0) is distinguishable from "unset".
 type batchPoint struct {
 	ID   string   `json:"id"`
+	MGRS *string  `json:"mgrs"`
 	Lon  *float64 `json:"lon"`
 	Lat  *float64 `json:"lat"`
 	X    *float64 `json:"x"`
@@ -51,8 +52,14 @@ func firstPositive(v, def int) int {
 }
 
 // coordinate resolves the point to a domain.Coordinate, or returns a non-empty
-// error message (per-item, so the batch continues). lon/lat wins over x/y.
+// error message (per-item, so the batch continues). mgrs wins over lon/lat,
+// which wins over x/y — mgrs carries its own SRID (the UTM zone it decodes
+// into), so the SRID cascade below does not apply to it.
 func (p batchPoint) coordinate(defaultSRID int) (coord domain.Coordinate, errMsg string) {
+	if p.MGRS != nil {
+		return mgrsCoordinate(*p.MGRS)
+	}
+
 	srid := defaultSRID
 	if p.SRID != nil {
 		srid = *p.SRID
@@ -67,12 +74,27 @@ func (p batchPoint) coordinate(defaultSRID int) (coord domain.Coordinate, errMsg
 	case p.X != nil && p.Y != nil:
 		c = domain.Coordinate{X: *p.X, Y: *p.Y, SRID: srid}
 	default:
-		return domain.Coordinate{}, "coordinates required: provide lon/lat or x/y"
+		return domain.Coordinate{}, "coordinates required: provide lon/lat, x/y, or mgrs"
 	}
 	if err := c.Validate(); err != nil {
 		return domain.Coordinate{}, err.Error()
 	}
 	return c, ""
+}
+
+// mgrsCoordinate resolves an mgrs string to its UTM coordinate, mirroring
+// mgrsQueryParams for the single-point endpoint but returning the batch's
+// string-error convention instead of an error value.
+func mgrsCoordinate(mgrs string) (coord domain.Coordinate, errMsg string) {
+	m, err := domain.ParseMGRS(mgrs)
+	if err != nil {
+		return domain.Coordinate{}, err.Error()
+	}
+	srid, err := domain.UTMSRIDForZone(m.Zone, m.Hemisphere)
+	if err != nil {
+		return domain.Coordinate{}, err.Error()
+	}
+	return domain.Coordinate{X: m.Easting, Y: m.Northing, SRID: srid}, ""
 }
 
 func (p batchPoint) idOr(index int) string {

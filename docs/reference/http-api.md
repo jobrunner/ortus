@@ -8,7 +8,7 @@ frontend is served at `GET /`.
 **Error responses.** Every error (any non-2xx) uses the same envelope:
 
 ```json
-{ "error": "Bad Request", "message": "coordinates required: use lon/lat or x/y" }
+{ "error": "Bad Request", "message": "coordinates required: use lon/lat, x/y, or mgrs" }
 ```
 
 where `error` is the HTTP status text and `message` is a human-readable detail.
@@ -20,6 +20,7 @@ where `error` is the HTTP status text and `message` is a human-readable detail.
 ```text
 GET /api/v1/query?lon={longitude}&lat={latitude}
 GET /api/v1/query?x={x}&y={y}&srid={srid}
+GET /api/v1/query?mgrs={mgrsString}
 ```
 
 Query every loaded source for features containing the coordinate.
@@ -29,12 +30,23 @@ Query every loaded source for features containing the coordinate.
 - `lon` / `lat` — WGS84 coordinates (SRID 4326)
 - `x` / `y` — coordinates in the SRID given by `srid`
 - `srid` — coordinate SRID (default 4326)
+- `mgrs` — coordinate as an MGRS (Military Grid Reference System) reference,
+  1–5 digits of precision per axis (10 km down to 1 m); whitespace between the
+  zone/band, 100 km grid square, and digit groups is optional
+  (`"32UNA0123456789"` and `"32U NA 01234 56789"` are equivalent). Takes
+  precedence over `lon`/`lat`/`x`/`y`/`srid` in the same request — the
+  resolved coordinate carries the SRID of the UTM zone it decodes into
+  (EPSG:32601-32660 north, 32701-32760 south), so `srid` is ignored for an
+  `mgrs` request. Only latitude bands C–X (±80°) are supported; the polar
+  bands A, B, Y, Z (UPS projection) are not. Below 5-digit precision, the
+  resolved point is the south-west origin of the grid cell, not its centre.
 - `properties` — comma-separated list of properties to return
 
 ```bash
 curl "http://localhost:8080/api/v1/query?lon=13.405&lat=52.52"
 curl "http://localhost:8080/api/v1/query?x=389283&y=5819450&srid=25832"
 curl "http://localhost:8080/api/v1/query?lon=13.405&lat=52.52&properties=name,population"
+curl "http://localhost:8080/api/v1/query?mgrs=32U+NA+01234+56789"
 ```
 
 **Response**
@@ -128,12 +140,15 @@ a 10 000-point batch is dramatically cheaper than 10 000 requests. Body:
 ```json
 { "srid": 4326, "sources": ["timezones-2026a"], "properties": ["tzid"],
   "with-gazetteer": true,
-  "points": [ {"id":"a","lon":13.405,"lat":52.52}, {"id":"b","x":-1876403.7,"y":3291468.8,"srid":3857} ] }
+  "points": [ {"id":"a","lon":13.405,"lat":52.52}, {"id":"b","x":-1876403.7,"y":3291468.8,"srid":3857},
+              {"id":"c","mgrs":"32U NA 01234 56789"} ] }
 ```
 
-- `points` (required) — each a `lon/lat` **or** `x/y` coordinate with an optional
-  per-point `srid` (overrides the top-level `srid`) and an optional caller-chosen
-  `id` echoed back (uniqueness is the caller's concern; omitted → 0-based index).
+- `points` (required) — each a `mgrs` **or** `lon/lat` **or** `x/y` coordinate
+  with an optional per-point `srid` (overrides the top-level `srid`; ignored
+  for `mgrs`, see the `mgrs` query parameter above) and an optional
+  caller-chosen `id` echoed back (uniqueness is the caller's concern; omitted
+  → 0-based index).
 - `sources` / `properties` (optional) — restrict to those source ids / return only
   those feature properties, exactly like the single-point endpoints.
 - `with-gazetteer` (optional, **default `true`**, consistent with `/query` which is
@@ -179,7 +194,11 @@ Only registered when the [gazetteer feature](configuration.md) is enabled
 ```text
 GET /api/v1/gazetteer?lon={longitude}&lat={latitude}
 GET /api/v1/gazetteer?x={x}&y={y}&srid={srid}
+GET /api/v1/gazetteer?mgrs={mgrsString}
 ```
+
+Accepts the same coordinate parameters as `GET /api/v1/query`, including
+`mgrs` (see its description above).
 
 Reverse-geocode a coordinate to its administrative hierarchy (`admin`), name the
 island(s) containing it (`islands`, when an islands layer is configured), name the

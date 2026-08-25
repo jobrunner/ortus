@@ -16,6 +16,9 @@ func FuzzParseQueryParams(f *testing.F) {
 		"", "lon=1&lat=2", "x=1&y=2&srid=25832", "lon=0&lat=0",
 		"lon=abc", "lat=", "srid=notint", "lon=1e999&lat=2",
 		"properties=a,b,c", "lon=1&lon=2&lat=3", "%zz", "&&&", "lon=NaN&lat=Inf",
+		"mgrs=31U+CT+03760+87415", "mgrs=31UCT0376087415", "mgrs=",
+		"mgrs=not-mgrs", "mgrs=99Z+ZZ+0+0", "mgrs=31U+CT+03760+87415&lon=1&lat=1",
+		"mgrs=%zz", "mgrs=" + string(rune(0)),
 	} {
 		f.Add(q)
 	}
