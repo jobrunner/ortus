@@ -4,7 +4,6 @@ import (
 	"context"
 	"io"
 	"log/slog"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -39,13 +38,13 @@ func TestNewReportsInitFailuresInsteadOfPanicking(t *testing.T) {
 		},
 		{
 			name: "unusable TLS configuration",
-			mangle: func(cfg *config.Config, dir string) {
+			mangle: func(cfg *config.Config, _ string) {
+				// tls.NewServer validates domains, then email. Supplying a domain
+				// and no email fails on the second check — a configuration an
+				// operator can plausibly write, and it reaches the error path
+				// after the cleanup defer, which is what this exercises.
 				cfg.TLS.Enabled = true
 				cfg.TLS.Domains = []string{"example.invalid"}
-				// A cache dir under a regular file cannot be created.
-				blocker := filepath.Join(dir, "blocker")
-				_ = os.WriteFile(blocker, []byte("x"), 0o600)
-				cfg.TLS.CacheDir = filepath.Join(blocker, "acme")
 			},
 			wantSub: "TLS",
 		},
