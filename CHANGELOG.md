@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.1](https://github.com/jobrunner/ortus/compare/v1.7.0...v1.7.1) (2026-08-25)
+
+
+### Bug Fixes
+
+* **app:** report init failures instead of segfaulting on startup ([8fe9a8c](https://github.com/jobrunner/ortus/commit/8fe9a8ca556b93263edbc1450de7ab9e4407d89a))
+* **gazetteer:** apply the Copilot review on the lazy admission ([7802f3b](https://github.com/jobrunner/ortus/commit/7802f3bb55a6e2d0f2519496a8c5ef834ca87f2e))
+
+
+### Performance Improvements
+
+* **gazetteer:** apply the same lazy admission to the "in {X}" decision ([89a1ba4](https://github.com/jobrunner/ortus/commit/89a1ba4ed1782b90ddbec285f9f8afa00b44748d))
+* **gazetteer:** rank candidates before resolving lineages, not after ([047eed8](https://github.com/jobrunner/ortus/commit/047eed820e8bdfe61d1a2428befec1e262779f00))
+
 ## [1.7.0](https://github.com/jobrunner/ortus/compare/v1.6.0...v1.7.0) (2026-08-24)
 
 
