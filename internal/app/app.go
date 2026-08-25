@@ -201,10 +201,19 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (app *App
 	app.Transformer = transformer
 	// If a later init step (TLS, MCP, …) fails, release the transformer so a
 	// failed New doesn't leak its database/sql opener goroutine.
+	//
+	// The cleanup captures its own pointer instead of reading the named `app`
+	// return value. That is not a style choice: every error path below does
+	// `return nil, err`, which assigns nil to the named value *before* deferred
+	// functions run — so reading it here dereferences nil and the process dies
+	// with a segfault instead of reporting why initialization failed. The panic
+	// replaced the actionable error, which is the worst possible failure mode for
+	// a startup problem.
+	partial := app
 	defer func() {
 		if retErr != nil {
-			app.closeTransformer()
-			app.closeGazetteer()
+			partial.closeTransformer()
+			partial.closeGazetteer()
 		}
 	}()
 
