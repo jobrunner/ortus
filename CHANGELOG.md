@@ -10,13 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Features
 
-* **query:** accept MGRS coordinates alongside lon/lat and x/y ([736946f](https://github.com/jobrunner/ortus/commit/736946fa504059593d318b1e8e5006efbe36dc05))
 * **query:** accept MGRS coordinates alongside lon/lat and x/y ([1a0b3ba](https://github.com/jobrunner/ortus/commit/1a0b3ba5c85435e92716de06dc47a83ebb1848f7))
 
 
 ### Bug Fixes
 
-* **http:** mention mgrs in the missing-coordinates error messages ([2b4b1ca](https://github.com/jobrunner/ortus/commit/2b4b1ca68d8cbcb9c185e37f75edc8c3fb1ba9bc))
+* **http:** mention MGRS in the missing-coordinates error messages ([2b4b1ca](https://github.com/jobrunner/ortus/commit/2b4b1ca68d8cbcb9c185e37f75edc8c3fb1ba9bc))
 
 ## [1.7.1](https://github.com/jobrunner/ortus/compare/v1.7.0...v1.7.1) (2026-08-25)
 
