@@ -132,54 +132,27 @@ func (s *Server) handleQueryBatch(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if len(req.Points) == 0 {
-		s.writeError(w, http.StatusBadRequest, "points required: provide at least one point")
-		return
-	}
-	if len(req.Points) > s.batchMaxPoints {
-		s.writeError(w, http.StatusBadRequest, fmt.Sprintf("batch of %d points exceeds the limit of %d", len(req.Points), s.batchMaxPoints))
-		return
-	}
 	stream := prefersNDJSON(r)
-	if !stream && len(req.Points) > s.batchMaxSync {
-		s.writeError(w, http.StatusRequestEntityTooLarge, fmt.Sprintf(
-			"batch of %d points exceeds the sync limit of %d — retry with 'Accept: application/x-ndjson' to stream",
-			len(req.Points), s.batchMaxSync))
-		return
-	}
-
-	if !batchWantsSources(req) && len(req.Sources) > 0 {
-		// Restricting to specific sources while turning the source query off
-		// contradicts itself — reject instead of silently ignoring one of them.
-		s.writeError(w, http.StatusBadRequest, `conflicting options: "with-sources": false cannot be combined with a non-empty "sources" list`)
+	if status, msg := s.batchRequestError(req, stream); msg != "" {
+		s.writeError(w, status, msg)
 		return
 	}
 
 	in := s.resolveBatchInputs(r, req)
 
 	start := time.Now()
-	var sub []*domain.QueryResponse
-	if batchWantsSources(req) {
-		var err error
-		sub, err = s.queryService.QueryBatch(r.Context(), in.valid, req.Sources, req.Properties)
-		if err != nil {
-			s.handleQueryError(w, err) // e.g. unknown source → 404
-			return
-		}
-		if len(sub) != len(in.valid) {
-			// Invariant: QueryBatch returns one response per input coordinate. Guard so a
-			// future divergence fails cleanly instead of panicking on the scatter below.
-			s.writeError(w, http.StatusInternalServerError, "batch query returned an unexpected result count")
-			return
-		}
-	} else {
-		// "with-sources": false skips the PiP query; synthesize empty responses so
-		// every item keeps its shape (coordinate, results: []). Coordinates were
-		// already validated per point in resolveBatchInputs.
-		sub = make([]*domain.QueryResponse, len(in.valid))
-		for k, c := range in.valid {
-			sub[k] = &domain.QueryResponse{Coordinate: c}
-		}
+	// resolveBatchResponses honors the with-sources switch (skip the PiP query,
+	// keep every item's shape) — see with_sources.go.
+	sub, err := s.resolveBatchResponses(r.Context(), req, in.valid)
+	if err != nil {
+		s.handleQueryError(w, err) // e.g. unknown source → 404
+		return
+	}
+	if len(sub) != len(in.valid) {
+		// Invariant: one response per input coordinate. Guard so a future
+		// divergence fails cleanly instead of panicking on the scatter below.
+		s.writeError(w, http.StatusInternalServerError, "batch query returned an unexpected result count")
+		return
 	}
 	responses := make([]*domain.QueryResponse, len(req.Points))
 	for k, origIdx := range in.validIdx {
@@ -231,6 +204,29 @@ func (s *Server) resolveBatchInputs(r *http.Request, req *batchRequest) batchInp
 		in.validIdx = append(in.validIdx, i)
 	}
 	return in
+}
+
+// batchRequestError validates the parsed batch request against the size caps and
+// option rules, returning the HTTP status and a non-empty message for the first
+// violated rule; an empty msg means the request is valid.
+func (s *Server) batchRequestError(req *batchRequest, stream bool) (status int, msg string) {
+	if len(req.Points) == 0 {
+		return http.StatusBadRequest, "points required: provide at least one point"
+	}
+	if len(req.Points) > s.batchMaxPoints {
+		return http.StatusBadRequest, fmt.Sprintf("batch of %d points exceeds the limit of %d", len(req.Points), s.batchMaxPoints)
+	}
+	if !stream && len(req.Points) > s.batchMaxSync {
+		return http.StatusRequestEntityTooLarge, fmt.Sprintf(
+			"batch of %d points exceeds the sync limit of %d — retry with 'Accept: application/x-ndjson' to stream",
+			len(req.Points), s.batchMaxSync)
+	}
+	if !batchWantsSources(req) && len(req.Sources) > 0 {
+		// Restricting to specific sources while turning the source query off
+		// contradicts itself — reject instead of silently ignoring one of them.
+		return http.StatusBadRequest, `conflicting options: "with-sources": false cannot be combined with a non-empty "sources" list`
+	}
+	return 0, ""
 }
 
 // parseBatchRequest decodes and lightly validates the JSON body.
