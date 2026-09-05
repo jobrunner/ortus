@@ -98,7 +98,7 @@ const frontendHTML = `<!DOCTYPE html>
             color: var(--text);
         }
 
-        input, select {
+        input, select, textarea {
             width: 100%;
             padding: 0.625rem 0.75rem;
             font-size: 1rem;
@@ -109,14 +109,21 @@ const frontendHTML = `<!DOCTYPE html>
             transition: border-color 0.15s, box-shadow 0.15s;
         }
 
-        input:focus, select:focus {
+        input:focus, select:focus, textarea:focus {
             outline: none;
             border-color: var(--primary);
             box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
         }
 
-        input::placeholder {
+        input::placeholder, textarea::placeholder {
             color: var(--text-muted);
+        }
+
+        textarea {
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: 0.875rem;
+            resize: vertical;
+            min-height: 10rem;
         }
 
         .coord-grid {
@@ -174,6 +181,106 @@ const frontendHTML = `<!DOCTYPE html>
             gap: 0.5rem;
         }
 
+        /* Tab bar (Einzelkoordinate / Batch) */
+        .tabs {
+            display: flex;
+            gap: 0.25rem;
+            margin-bottom: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .tab {
+            min-height: 44px;
+            padding: 0.625rem 1rem;
+            font-size: 0.9375rem;
+            font-weight: 500;
+            color: var(--text-muted);
+            background: none;
+            border: none;
+            border-bottom: 2px solid transparent;
+            cursor: pointer;
+        }
+
+        .tab:hover {
+            color: var(--text);
+        }
+
+        .tab[aria-selected="true"] {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+        }
+
+        .tab:focus-visible {
+            outline: 2px solid var(--primary);
+            outline-offset: 2px;
+        }
+
+        /* Options accordion (collapsed by default, reuses the source-card
+           expand/collapse mechanics). */
+        .options-card {
+            margin-bottom: 1rem;
+        }
+
+        .options-card .source-content {
+            padding: 0.75rem 1rem;
+        }
+
+        .checkbox-row {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            min-height: 32px;
+            font-weight: 400;
+            margin-bottom: 0;
+            cursor: pointer;
+        }
+
+        .checkbox-row input[type="checkbox"] {
+            width: 1.05rem;
+            height: 1.05rem;
+            margin: 0;
+            accent-color: var(--primary);
+        }
+
+        /* Batch result table */
+        .batch-table-wrap {
+            overflow-x: auto;
+        }
+
+        .batch-table {
+            width: 100%;
+            font-size: 0.8125rem;
+            border-collapse: collapse;
+        }
+
+        .batch-table th, .batch-table td {
+            text-align: left;
+            padding: 0.375rem 0.5rem;
+            border-bottom: 1px solid var(--border);
+            white-space: nowrap;
+        }
+
+        .batch-table th {
+            font-weight: 500;
+            color: var(--text-muted);
+        }
+
+        .batch-table td.batch-err {
+            color: var(--error);
+            white-space: normal;
+        }
+
+        .batch-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .batch-actions .btn {
+            width: auto;
+        }
+
         .loading {
             display: none;
             text-align: center;
@@ -214,11 +321,11 @@ const frontendHTML = `<!DOCTYPE html>
             display: block;
         }
 
-        #results {
+        #results, #batchResults {
             display: none;
         }
 
-        #results.active {
+        #results.active, #batchResults.active {
             display: block;
         }
 
@@ -642,6 +749,19 @@ const frontendHTML = `<!DOCTYPE html>
             <p>Point-in-Polygon Abfrage über Datenquellen</p>
         </header>
 
+        <div class="tabs" role="tablist" aria-label="Abfrage-Modus">
+            <button type="button" class="tab" id="tabSingle" role="tab" aria-selected="true" aria-controls="panelSingle">Einzelkoordinate</button>
+            <button type="button" class="tab" id="tabBatch" role="tab" aria-selected="false" aria-controls="panelBatch" tabindex="-1">Batch</button>
+        </div>
+
+        <div class="error" id="error" role="alert"></div>
+
+        <div class="loading" id="loading" role="status" aria-live="polite">
+            <div class="spinner"></div>
+            <p>Abfrage wird ausgeführt...</p>
+        </div>
+
+        <div id="panelSingle" role="tabpanel" aria-labelledby="tabSingle">
         <div class="card">
             <h2 class="card-title">Koordinaten eingeben</h2>
             <form id="queryForm">
@@ -673,6 +793,23 @@ const frontendHTML = `<!DOCTYPE html>
                     <input type="text" id="coordMgrs" name="mgrs" placeholder="32U NA 01234 56789" autocomplete="off">
                 </div>
 
+                <div class="options-card source-card">
+                    <div class="source-header" role="button" tabindex="0" aria-expanded="false" aria-controls="optionsSingle">
+                        <div class="source-main"><span class="source-name">Optionen</span></div>
+                        <svg class="toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" focusable="false"><path d="M6 9l6 6 6-6"/></svg>
+                    </div>
+                    <div class="source-content" id="optionsSingle">
+                        <label class="checkbox-row" for="withGazetteer">
+                            <input type="checkbox" id="withGazetteer" checked>
+                            Gazetteer (Ort &amp; Umgebung)
+                        </label>
+                        <label class="checkbox-row" for="withSources">
+                            <input type="checkbox" id="withSources" checked>
+                            Datenquellen (Packages)
+                        </label>
+                    </div>
+                </div>
+
                 <div class="btn-row">
                     <button type="submit" class="btn" id="submitBtn">Abfragen</button>
                     <button type="button" class="btn btn-secondary" id="locationBtn" title="Aktuellen Standort verwenden" aria-label="Aktuellen Standort verwenden">
@@ -686,13 +823,6 @@ const frontendHTML = `<!DOCTYPE html>
             </form>
         </div>
 
-        <div class="error" id="error" role="alert"></div>
-
-        <div class="loading" id="loading" role="status" aria-live="polite">
-            <div class="spinner"></div>
-            <p>Abfrage wird ausgeführt...</p>
-        </div>
-
         <div id="results">
             <div class="card">
                 <h2 class="card-title">Ergebnisse</h2>
@@ -702,6 +832,71 @@ const frontendHTML = `<!DOCTYPE html>
                 </div>
                 <div id="resultContent"></div>
             </div>
+        </div>
+        </div>
+
+        <div id="panelBatch" role="tabpanel" aria-labelledby="tabBatch" hidden>
+        <div class="card">
+            <h2 class="card-title">Batch-Abfrage</h2>
+            <form id="batchForm">
+                <div class="form-group">
+                    <label for="batchSrid">Koordinatensystem</label>
+                    <select id="batchSrid" name="batchSrid">
+                        <option value="4326">WGS 84 (EPSG:4326) - GPS</option>
+                        <option value="3857">Web Mercator (EPSG:3857)</option>
+                        <option value="25832">ETRS89 / UTM Zone 32N (EPSG:25832)</option>
+                        <option value="25833">ETRS89 / UTM Zone 33N (EPSG:25833)</option>
+                        <option value="31466">DHDN / Gauß-Krüger Zone 2 (EPSG:31466)</option>
+                        <option value="31467">DHDN / Gauß-Krüger Zone 3 (EPSG:31467)</option>
+                        <option value="mgrs">MGRS (Military Grid Reference System)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="batchInput" id="batchInputLabel">Koordinaten (eine pro Zeile, optional mit vorangestellter id)</label>
+                    <textarea id="batchInput" rows="8" spellcheck="false" autocomplete="off" placeholder="52.52, 13.405&#10;48.137; 11.575&#10;P-001; 47,3769; 8,5417"></textarea>
+                </div>
+
+                <div class="options-card source-card">
+                    <div class="source-header" role="button" tabindex="0" aria-expanded="false" aria-controls="optionsBatch">
+                        <div class="source-main"><span class="source-name">Optionen</span></div>
+                        <svg class="toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" focusable="false"><path d="M6 9l6 6 6-6"/></svg>
+                    </div>
+                    <div class="source-content" id="optionsBatch">
+                        <label class="checkbox-row" for="batchWithGazetteer">
+                            <input type="checkbox" id="batchWithGazetteer" checked>
+                            Gazetteer (Ort &amp; Umgebung)
+                        </label>
+                        <label class="checkbox-row" for="batchWithSources">
+                            <input type="checkbox" id="batchWithSources" checked>
+                            Datenquellen (Packages)
+                        </label>
+                    </div>
+                </div>
+
+                <div class="btn-row">
+                    <button type="submit" class="btn" id="batchSubmitBtn">Abfragen</button>
+                    <button type="button" class="btn btn-secondary" id="batchCsvUploadBtn">CSV hochladen</button>
+                    <button type="button" class="btn btn-secondary" id="batchClearBtn">Leeren</button>
+                </div>
+                <input type="file" id="batchFile" accept=".csv,text/csv" hidden>
+            </form>
+        </div>
+
+        <div id="batchResults">
+            <div class="card">
+                <h2 class="card-title">Batch-Ergebnisse</h2>
+                <div class="result-header" role="status" aria-live="polite">
+                    <span class="result-stats" id="batchStats"></span>
+                </div>
+                <div class="batch-actions">
+                    <button type="button" class="btn btn-secondary" id="batchDownloadBtn">CSV herunterladen</button>
+                    <button type="button" class="btn btn-secondary" id="batchCopyCsvBtn">Als CSV kopieren</button>
+                    <button type="button" class="btn btn-secondary" id="batchCopyJsonBtn">Als JSON kopieren</button>
+                </div>
+                <div class="batch-table-wrap" id="batchTableWrap"></div>
+            </div>
+        </div>
         </div>
 
         <footer>
@@ -734,6 +929,67 @@ const frontendHTML = `<!DOCTYPE html>
             const resultCoord = document.getElementById('resultCoord');
             const resultStats = document.getElementById('resultStats');
             const resultContent = document.getElementById('resultContent');
+            const withGazetteer = document.getElementById('withGazetteer');
+            const withSources = document.getElementById('withSources');
+            const tabSingle = document.getElementById('tabSingle');
+            const tabBatch = document.getElementById('tabBatch');
+            const panelSingle = document.getElementById('panelSingle');
+            const panelBatch = document.getElementById('panelBatch');
+            const batchForm = document.getElementById('batchForm');
+            const batchSrid = document.getElementById('batchSrid');
+            const batchInput = document.getElementById('batchInput');
+            const batchFile = document.getElementById('batchFile');
+            const batchCsvUploadBtn = document.getElementById('batchCsvUploadBtn');
+            const batchClearBtn = document.getElementById('batchClearBtn');
+            const batchSubmitBtn = document.getElementById('batchSubmitBtn');
+            const batchWithGazetteer = document.getElementById('batchWithGazetteer');
+            const batchWithSources = document.getElementById('batchWithSources');
+            const batchResults = document.getElementById('batchResults');
+            const batchStats = document.getElementById('batchStats');
+            const batchTableWrap = document.getElementById('batchTableWrap');
+            const batchDownloadBtn = document.getElementById('batchDownloadBtn');
+            const batchCopyCsvBtn = document.getElementById('batchCopyCsvBtn');
+            const batchCopyJsonBtn = document.getElementById('batchCopyJsonBtn');
+
+            // --- Tabs (Einzelkoordinate / Batch) ---
+            function selectTab(batch) {
+                tabSingle.setAttribute('aria-selected', batch ? 'false' : 'true');
+                tabBatch.setAttribute('aria-selected', batch ? 'true' : 'false');
+                tabSingle.tabIndex = batch ? -1 : 0;
+                tabBatch.tabIndex = batch ? 0 : -1;
+                panelSingle.hidden = batch;
+                panelBatch.hidden = !batch;
+                hideError();
+            }
+            tabSingle.addEventListener('click', function() { selectTab(false); });
+            tabBatch.addEventListener('click', function() { selectTab(true); });
+            [tabSingle, tabBatch].forEach(function(tab) {
+                tab.addEventListener('keydown', function(e) {
+                    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                        e.preventDefault();
+                        const other = tab === tabSingle ? tabBatch : tabSingle;
+                        selectTab(other === tabBatch);
+                        other.focus();
+                    }
+                });
+            });
+
+            // --- Accordions: one binder for the collapsible headers (options cards
+            // now, per-source result cards after each render). ---
+            function bindAccordion(header) {
+                function toggle() {
+                    const isExpanded = header.parentElement.classList.toggle('expanded');
+                    header.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+                }
+                header.addEventListener('click', toggle);
+                header.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+                        e.preventDefault();
+                        toggle();
+                    }
+                });
+            }
+            document.querySelectorAll('.options-card .source-header').forEach(bindAccordion);
 
             // SRID-specific labels and placeholders
             const sridConfig = {
@@ -920,6 +1176,11 @@ const frontendHTML = `<!DOCTYPE html>
                     }
                 }
 
+                // The switches are opt-out (server default: on) — only an unchecked
+                // box adds its parameter.
+                if (!withGazetteer.checked) url += '&with-gazetteer=0';
+                if (!withSources.checked) url += '&with-sources=0';
+
                 submitBtn.disabled = true;
                 loading.classList.add('active');
                 results.classList.remove('active');
@@ -1008,19 +1269,10 @@ const frontendHTML = `<!DOCTYPE html>
                 resultContent.innerHTML = html;
 
                 // Expand/collapse — keyboard-accessible (the header is role="button").
-                document.querySelectorAll('.source-header').forEach(function(header) {
-                    function toggle() {
-                        const isExpanded = header.parentElement.classList.toggle('expanded');
-                        header.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
-                    }
-                    header.addEventListener('click', toggle);
-                    header.addEventListener('keydown', function(e) {
-                        if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
-                            e.preventDefault();
-                            toggle();
-                        }
-                    });
-                });
+                // Scoped to the freshly rendered result content: the static options
+                // accordions are bound once at startup and must not accumulate
+                // duplicate listeners on every render.
+                resultContent.querySelectorAll('.source-header').forEach(bindAccordion);
 
                 results.classList.add('active');
             }
@@ -1329,6 +1581,297 @@ const frontendHTML = `<!DOCTYPE html>
             function httpUrl(u) {
                 return /^https?:\/\//i.test(String(u || '')) ? u : '';
             }
+
+            // ===================== Batch tab =====================
+
+            // The last successful batch response + its input SRID mode, for the
+            // CSV/JSON export buttons.
+            let lastBatch = null;
+
+            // SRID-aware textarea placeholder so the expected line format is visible
+            // before typing: coordinate per line, optional leading id, tolerant
+            // separators (comma/semicolon/space, German decimal comma).
+            const batchPlaceholders = {
+                '4326': '52.52, 13.405\n48.137; 11.575\nP-001; 47,3769; 8,5417',
+                'mgrs': '32U NA 01234 56789\nP-001; 33U VP 12345 67890',
+                'projected': '389524, 5820270\n390100; 5821400\nP-001; 389524; 5820270'
+            };
+            function applyBatchPlaceholder() {
+                batchInput.placeholder = batchPlaceholders[batchSrid.value] || batchPlaceholders.projected;
+            }
+            batchSrid.addEventListener('change', applyBatchPlaceholder);
+            applyBatchPlaceholder();
+
+            // parseBatchLines turns the textarea content into batch points. One
+            // coordinate per line with an optional leading id; a leading header line
+            // (no digits, e.g. "id,lat,lon") is skipped; empty lines are ignored.
+            // Returns {points} or {error} naming the first unreadable line.
+            function parseBatchLines(text, srid) {
+                const isMgrs = srid === 'mgrs';
+                const lines = String(text || '').split(/\r?\n/);
+                const points = [];
+                for (let n = 0; n < lines.length; n++) {
+                    const line = lines[n].trim();
+                    if (!line) continue;
+                    if (points.length === 0 && !/[0-9]/.test(line)) continue; // header line
+                    const p = isMgrs ? parseMgrsLine(line) : parseCoordLine(line, srid);
+                    if (!p) {
+                        return { error: 'Zeile ' + (n + 1) + ' ist nicht lesbar: "' + line + '"' };
+                    }
+                    points.push(p);
+                }
+                if (points.length === 0) {
+                    return { error: 'Keine Koordinaten gefunden — eine Koordinate pro Zeile eintragen (siehe Platzhalter).' };
+                }
+                return { points: points };
+            }
+
+            // One MGRS reference per line, optionally "id; <mgrs>" (or comma).
+            function parseMgrsLine(line) {
+                const parts = line.split(/[;,]/).map(function(s) { return s.trim(); }).filter(Boolean);
+                if (parts.length === 1) return { mgrs: parts[0] };
+                if (parts.length === 2) return { id: parts[0], mgrs: parts[1] };
+                return null;
+            }
+
+            // "lat,lon" (WGS84) / "x,y" (projected), optionally with a leading id —
+            // same separator heuristics as the single-tab smart paste (semicolons
+            // allow German decimal commas inside the numbers).
+            function parseCoordLine(line, srid) {
+                let parts, commaIsDecimal;
+                if (line.indexOf(';') >= 0) {
+                    parts = line.split(';'); commaIsDecimal = true;
+                } else if (line.indexOf(',') >= 0 && line.indexOf('.') >= 0) {
+                    parts = line.split(','); commaIsDecimal = false;
+                } else if (line.indexOf(',') >= 0 && /\s/.test(line)) {
+                    parts = line.split(/\s+/); commaIsDecimal = true;
+                } else if (line.indexOf(',') >= 0) {
+                    parts = line.split(','); commaIsDecimal = false;
+                } else {
+                    parts = line.split(/\s+/); commaIsDecimal = false;
+                }
+                parts = parts.map(function(s) { return s.trim(); }).filter(Boolean);
+                let id = null;
+                if (parts.length >= 3) {
+                    id = parts[0];
+                    parts = parts.slice(1);
+                }
+                if (parts.length < 2) return null;
+                const a = normNum(parts[0], commaIsDecimal);
+                const b = normNum(parts[1], commaIsDecimal);
+                if (a === null || b === null) return null;
+                // Visual order matches the single tab: WGS84 is lat first, projected
+                // systems are x (Rechtswert) first.
+                const p = srid === '4326'
+                    ? { lat: parseFloat(a), lon: parseFloat(b) }
+                    : { x: parseFloat(a), y: parseFloat(b) };
+                if (id !== null) p.id = id;
+                return p;
+            }
+
+            // CSV upload fills the textarea (single source of truth — the user sees
+            // exactly what will be parsed on submit).
+            batchCsvUploadBtn.addEventListener('click', function() { batchFile.click(); });
+            batchFile.addEventListener('change', function() {
+                const f = batchFile.files && batchFile.files[0];
+                if (!f) return;
+                const reader = new FileReader();
+                reader.onload = function() { batchInput.value = String(reader.result || ''); };
+                reader.onerror = function() { showError('CSV-Datei konnte nicht gelesen werden.'); };
+                reader.readAsText(f);
+                batchFile.value = '';
+            });
+
+            batchClearBtn.addEventListener('click', function() {
+                batchInput.value = '';
+                hideError();
+                batchResults.classList.remove('active');
+            });
+
+            batchForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                hideError();
+
+                const srid = batchSrid.value;
+                const parsed = parseBatchLines(batchInput.value, srid);
+                if (parsed.error) {
+                    showError(parsed.error);
+                    return;
+                }
+                const body = { points: parsed.points };
+                if (srid !== 'mgrs' && srid !== '4326') {
+                    body.srid = parseInt(srid, 10);
+                }
+                // Opt-out switches, consistent with the single tab: only send the
+                // field when the box is unchecked (server default: on).
+                if (!batchWithGazetteer.checked) body['with-gazetteer'] = false;
+                if (!batchWithSources.checked) body['with-sources'] = false;
+
+                batchSubmitBtn.disabled = true;
+                loading.classList.add('active');
+                batchResults.classList.remove('active');
+
+                try {
+                    const response = await fetch('/api/v1/query/batch', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(body)
+                    });
+                    if (!response.ok) {
+                        let errorMessage = 'Batch-Abfrage fehlgeschlagen';
+                        try {
+                            const errorData = await response.json();
+                            errorMessage = errorData.message || errorData.error || errorMessage;
+                        } catch (parseErr) {
+                            // Response could not be parsed as JSON
+                        }
+                        throw new Error(errorMessage);
+                    }
+                    let data;
+                    try {
+                        data = await response.json();
+                    } catch (parseErr) {
+                        throw new Error('Die Serverantwort konnte nicht verarbeitet werden.');
+                    }
+                    displayBatchResults(data, srid);
+                } catch (err) {
+                    showError(err.message);
+                } finally {
+                    batchSubmitBtn.disabled = false;
+                    loading.classList.remove('active');
+                }
+            });
+
+            // Compact per-point table: id, coordinate, place summary, feature count
+            // (or the per-point error). Details live in the CSV/JSON exports.
+            function displayBatchResults(data, srid) {
+                lastBatch = { data: data, srid: srid };
+                const items = data.results || [];
+                let errs = 0;
+                items.forEach(function(i) { if (i.error) errs++; });
+                batchStats.textContent = items.length + ' Punkt(e) in ' + data.processing_time_ms + ' ms' +
+                    (errs > 0 ? ' · ' + errs + ' Fehler' : '');
+
+                let html = '<table class="batch-table"><thead><tr>' +
+                    '<th>id</th><th>Koordinate</th><th>Ort</th><th>Features</th>' +
+                    '</tr></thead><tbody>';
+                items.forEach(function(item) {
+                    html += '<tr><td>' + escapeHtml(item.id || '') + '</td>';
+                    if (item.error) {
+                        html += '<td>—</td><td class="batch-err" colspan="2">Fehler: ' +
+                            escapeHtml(item.error.message || 'unbekannt') + '</td>';
+                    } else {
+                        html += '<td>' + escapeHtml(batchCoordText(item)) + '</td>';
+                        html += '<td>' + escapeHtml(batchPlaceSummary(item)) + '</td>';
+                        html += '<td>' + (typeof item.total_features === 'number' ? item.total_features : '—') + '</td>';
+                    }
+                    html += '</tr>';
+                });
+                html += '</tbody></table>';
+                batchTableWrap.innerHTML = html;
+                batchResults.classList.add('active');
+            }
+
+            function batchCoordText(item) {
+                if (item.wgs84) {
+                    return item.wgs84.lat.toFixed(5) + ', ' + item.wgs84.lon.toFixed(5);
+                }
+                if (item.coordinate) {
+                    return item.coordinate.x + ', ' + item.coordinate.y + ' (EPSG:' + item.coordinate.srid + ')';
+                }
+                return '—';
+            }
+
+            // Short place summary: country code + the two most specific admin names.
+            function batchPlaceSummary(item) {
+                const gaz = item.gazetteer;
+                if (!gaz || !gaz.admin) return '';
+                const parts = [];
+                if (gaz.admin.country_iso) parts.push(gaz.admin.country_iso);
+                (gaz.admin.hierarchy || []).slice(-2).forEach(function(u) {
+                    if (u.name) parts.push(u.name);
+                });
+                return parts.join(' · ');
+            }
+
+            // buildBatchCSV flattens the batch response into fixed columns: the echo
+            // id, the input coordinate, the WGS84 coordinate, the per-point error and
+            // a gazetteer summary (country, admin path, elevation, bearing) plus the
+            // PiP feature count. Source properties stay in the JSON export.
+            function buildBatchCSV(data, srid) {
+                const isGeo = srid === '4326' || srid === 'mgrs';
+                const cols = ['id', isGeo ? 'lat' : 'x', isGeo ? 'lon' : 'y',
+                    'wgs84_lat', 'wgs84_lon', 'error', 'country_iso', 'admin_path',
+                    'elevation_m', 'bearing', 'total_features'];
+                const rows = [cols.map(csvField).join(',')];
+                (data.results || []).forEach(function(item) {
+                    const gaz = item.gazetteer || {};
+                    const admin = gaz.admin || {};
+                    let inA = '', inB = '';
+                    if (srid === '4326' && item.coordinate) {
+                        inA = item.coordinate.y; inB = item.coordinate.x;
+                    } else if (srid === 'mgrs' && item.wgs84) {
+                        inA = item.wgs84.lat; inB = item.wgs84.lon;
+                    } else if (item.coordinate) {
+                        inA = item.coordinate.x; inB = item.coordinate.y;
+                    }
+                    const adminPath = (admin.hierarchy || []).map(function(u) { return u.name || ''; }).join(' > ');
+                    let elev = '';
+                    if (gaz.elevation) {
+                        elev = gaz.elevation.sea_level ? 0 :
+                            (typeof gaz.elevation.meters === 'number' ? gaz.elevation.meters : '');
+                    }
+                    rows.push([
+                        item.id || '', inA, inB,
+                        item.wgs84 ? item.wgs84.lat : '', item.wgs84 ? item.wgs84.lon : '',
+                        item.error ? (item.error.message || 'error') : '',
+                        admin.country_iso || '', adminPath, elev,
+                        gaz.bearing ? (gaz.bearing.label || '') : '',
+                        typeof item.total_features === 'number' ? item.total_features : ''
+                    ].map(csvField).join(','));
+                });
+                return rows.join('\r\n') + '\r\n';
+            }
+
+            function csvField(v) {
+                const s = String(v === null || v === undefined ? '' : v);
+                return /[",;\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+            }
+
+            batchDownloadBtn.addEventListener('click', function() {
+                if (!lastBatch) return;
+                const blob = new Blob([buildBatchCSV(lastBatch.data, lastBatch.srid)], { type: 'text/csv;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'ortus-batch.csv';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
+            });
+
+            // Clipboard needs a secure context (HTTPS or localhost) — otherwise show
+            // a clear message instead of failing silently.
+            function copyText(btn, text) {
+                if (!navigator.clipboard || !navigator.clipboard.writeText) {
+                    showError('Die Zwischenablage ist in diesem Kontext nicht verfügbar (HTTPS oder localhost erforderlich).');
+                    return;
+                }
+                navigator.clipboard.writeText(text).then(function() {
+                    const orig = btn.textContent;
+                    btn.textContent = 'Kopiert ✓';
+                    setTimeout(function() { btn.textContent = orig; }, 1500);
+                }, function() {
+                    showError('Kopieren fehlgeschlagen.');
+                });
+            }
+            batchCopyCsvBtn.addEventListener('click', function() {
+                if (lastBatch) copyText(batchCopyCsvBtn, buildBatchCSV(lastBatch.data, lastBatch.srid));
+            });
+            batchCopyJsonBtn.addEventListener('click', function() {
+                if (lastBatch) copyText(batchCopyJsonBtn, JSON.stringify(lastBatch.data, null, 2));
+            });
         })();
     </script>
 </body>
