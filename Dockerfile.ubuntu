@@ -11,7 +11,7 @@ ARG BUILD_DATE=unknown
 # =============================================================================
 # Build stage - dev image includes Go 1.24.4 and all build tools
 # =============================================================================
-FROM ghcr.io/jobrunner/spatialite-base-image:ubuntu-dev-1.5.0 AS builder
+FROM ghcr.io/jobrunner/spatialite-base-image:ubuntu-dev-1.6.2 AS builder
 
 # Re-declare ARGs after FROM
 ARG VERSION
@@ -44,7 +44,7 @@ RUN CGO_ENABLED=1 go build \
 # =============================================================================
 # Runtime stage - minimal runtime image (SAME VERSION!)
 # =============================================================================
-FROM ghcr.io/jobrunner/spatialite-base-image:ubuntu-1.5.0
+FROM ghcr.io/jobrunner/spatialite-base-image:ubuntu-1.6.2
 
 USER root
 

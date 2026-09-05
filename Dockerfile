@@ -15,7 +15,7 @@ ARG BUILD_DATE=unknown
 # =============================================================================
 # Build stage - dev image includes Go 1.24.4 and all build tools
 # =============================================================================
-FROM ghcr.io/jobrunner/spatialite-base-image:alpine-dev-1.5.0 AS builder
+FROM ghcr.io/jobrunner/spatialite-base-image:alpine-dev-1.6.2 AS builder
 
 # Re-declare ARGs after FROM
 ARG VERSION
@@ -48,7 +48,7 @@ RUN CGO_ENABLED=1 go build \
 # =============================================================================
 # Runtime stage - minimal runtime image (SAME VERSION!)
 # =============================================================================
-FROM ghcr.io/jobrunner/spatialite-base-image:alpine-1.5.0
+FROM ghcr.io/jobrunner/spatialite-base-image:alpine-1.6.2
 
 USER root
 
@@ -61,7 +61,7 @@ USER root
 #    was last built (openssl, musl, expat, …), so CVE fixes reach the runtime
 #    without waiting for a base-image rebuild.
 RUN apk del --purge gdal-tools gdal py3-gdal py3-gdal-pyc py3-numpy py3-numpy-pyc \
-        python3 python3-pyc python3-pycache-pyc0 pyc && \
+        py3-numpy-tests python3 python3-pyc python3-pycache-pyc0 pyc && \
     apk upgrade --no-cache
 
 # Create non-root user
