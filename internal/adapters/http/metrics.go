@@ -114,3 +114,10 @@ func (w *statusCaptureWriter) WriteHeader(code int) {
 	w.statusCode = code
 	w.ResponseWriter.WriteHeader(code)
 }
+
+// Unwrap exposes the wrapped writer so http.ResponseController reaches the
+// connection's controls (SetWriteDeadline, Flush) through this middleware —
+// embedding alone only promotes the http.ResponseWriter interface methods, so
+// without this the batch handler could not lift its write deadline and the
+// NDJSON per-line flush was silently inert.
+func (w *statusCaptureWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }

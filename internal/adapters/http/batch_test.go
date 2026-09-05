@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"math"
 	"net/http"
@@ -17,6 +18,7 @@ import (
 	"time"
 
 	"go.opentelemetry.io/otel/metric/noop"
+	tracenoop "go.opentelemetry.io/otel/trace/noop"
 
 	"github.com/jobrunner/ortus/internal/application"
 	"github.com/jobrunner/ortus/internal/config"
@@ -358,5 +360,79 @@ func TestBatchGazetteerOpensPointInPolygonScope(t *testing.T) {
 	}
 	if !gaz.sawScope.Load() {
 		t.Error("batch enrichment ran Locate without a point-in-polygon cache scope")
+	}
+}
+
+// slowGazetteer delays Locate so the batch response outlives a short server
+// write timeout.
+type slowGazetteer struct {
+	fakeGazetteer
+	delay time.Duration
+}
+
+func (s *slowGazetteer) Locate(ctx context.Context, c domain.Coordinate) (*domain.Locality, error) {
+	time.Sleep(s.delay)
+	return s.fakeGazetteer.Locate(ctx, c)
+}
+
+// TestBatchOutlivesServerWriteTimeout: a batch is a deliberately long operation
+// — the handler must lift the server's per-request write deadline so a response
+// that takes longer than server.write_timeout is still delivered instead of the
+// connection being cut mid-request (production: 883 points > 30 s default →
+// the proxy reported 502). Uses a real net/http server because
+// httptest.ResponseRecorder has no deadline to lift.
+func TestBatchOutlivesServerWriteTimeout(t *testing.T) {
+	gaz := &slowGazetteer{fakeGazetteer: fakeGazetteer{loc: sampleLocality(), fix: sampleFix()}, delay: 150 * time.Millisecond}
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	reg := application.NewSourceRegistry(
+		[]output.SpatialSource{&mockRepository{}}, &mockStorage{},
+		noop.NewMeterProvider().Meter("test"), output.NoOpTracer{}, logger, "/tmp")
+	_ = reg.LoadAll(context.Background())
+	health := application.NewHealthService(reg, true, output.NoOpTracer{})
+	query := application.NewQueryService(reg, nil, noop.NewMeterProvider().Meter("test"),
+		output.NoOpTracer{}, logger, application.QueryServiceConfig{})
+	// A non-nil TracerProvider switches the otelmux middleware on, so the test
+	// exercises the FULL production writer chain (otelmux/httpsnoop -> metrics ->
+	// logging) that http.ResponseController must unwrap through.
+	srv := NewServer(
+		config.ServerConfig{Host: "localhost", Port: 8080, ReadTimeout: time.Second, WriteTimeout: time.Second},
+		query, reg, health, nil, logger, false,
+		ServerOptions{Gazetteer: gaz, GazetteerLicense: sampleGazetteerLicense(),
+			TracerProvider: tracenoop.NewTracerProvider(),
+			// Pin the enrichment concurrency the timing below assumes (12 points
+			// à 150 ms in 3 waves > the 300 ms write timeout), independent of the
+			// server default.
+			BatchConcurrency: 4},
+	)
+
+	ts := httptest.NewUnstartedServer(srv.Router())
+	ts.Config.WriteTimeout = 300 * time.Millisecond // shorter than the batch below needs
+	ts.Start()
+	t.Cleanup(ts.Close)
+
+	// 4 points à 150 ms with concurrency 4 in one wave would fit; force several
+	// waves so the response takes clearly longer than the write timeout.
+	var pts []string
+	for i := 0; i < 12; i++ {
+		pts = append(pts, fmt.Sprintf(`{"id":"p%d","lon":9.9,"lat":49.7}`, i))
+	}
+	body := `{"points":[` + strings.Join(pts, ",") + `]}`
+
+	resp, err := ts.Client().Post(ts.URL+"/api/v1/query/batch", "application/json", strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("batch request died (write deadline not lifted?): %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	var out struct {
+		Results []map[string]any `json:"results"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatalf("decode (connection cut mid-response?): %v", err)
+	}
+	if len(out.Results) != 12 {
+		t.Errorf("results = %d, want 12", len(out.Results))
 	}
 }

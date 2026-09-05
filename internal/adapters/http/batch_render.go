@@ -117,7 +117,10 @@ func (s *Server) enrichGazetteerPoint(ctx context.Context, w domain.Coordinate) 
 func (s *Server) streamBatchItems(w http.ResponseWriter, r *http.Request, items []map[string]interface{}) {
 	w.Header().Set("Content-Type", "application/x-ndjson")
 	w.WriteHeader(http.StatusOK)
-	flusher, _ := w.(http.Flusher)
+	// http.ResponseController reaches Flush through middleware wrappers (via
+	// their Unwrap) — a plain w.(http.Flusher) assertion does not, which left
+	// the per-line flush silently inert behind the metrics middleware.
+	rc := http.NewResponseController(w)
 	enc := json.NewEncoder(w)
 	for _, item := range items {
 		if err := r.Context().Err(); err != nil {
@@ -127,8 +130,6 @@ func (s *Server) streamBatchItems(w http.ResponseWriter, r *http.Request, items 
 			s.logger.Debug("batch stream write failed", "error", err)
 			return
 		}
-		if flusher != nil {
-			flusher.Flush()
-		}
+		_ = rc.Flush()
 	}
 }

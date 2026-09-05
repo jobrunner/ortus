@@ -138,6 +138,21 @@ func (s *Server) handleQueryBatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// A batch is a deliberately long operation: lift THIS request's write
+	// deadline (server.write_timeout) so a large batch's response is delivered
+	// instead of the connection being cut mid-request — behind a reverse proxy
+	// that surfaced as a 502 once a batch outlived the 30 s default. Lifted only
+	// AFTER validation, so the fast error responses above keep the normal
+	// protection, and scoped to this endpoint on purpose: every other endpoint
+	// keeps it entirely. A failure is logged (not fatal): without deadline
+	// control the batch still runs, but big responses may be cut again — the
+	// production symptom this exists to prevent (a middleware wrapper missing
+	// Unwrap would cause exactly that; TestBatchOutlivesServerWriteTimeout pins
+	// the full chain).
+	if err := http.NewResponseController(w).SetWriteDeadline(time.Time{}); err != nil {
+		s.logger.Warn("batch: could not lift the response write deadline — large batches may be cut off", "error", err)
+	}
+
 	in := s.resolveBatchInputs(r, req)
 
 	start := time.Now()

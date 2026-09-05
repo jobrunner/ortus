@@ -347,3 +347,8 @@ func (rw *responseWriter) WriteHeader(code int) {
 	rw.statusCode = code
 	rw.ResponseWriter.WriteHeader(code)
 }
+
+// Unwrap exposes the wrapped writer so http.ResponseController reaches the
+// connection's controls (SetWriteDeadline, Flush) through this middleware —
+// embedding alone only promotes the http.ResponseWriter interface methods.
+func (rw *responseWriter) Unwrap() http.ResponseWriter { return rw.ResponseWriter }
