@@ -119,6 +119,15 @@ func (p batchPoint) idOr(index int) string {
 // over a small bounded pool. Delivers a sync JSON object by default, or NDJSON
 // (one result object per line) when the client sends Accept: application/x-ndjson.
 func (s *Server) handleQueryBatch(w http.ResponseWriter, r *http.Request) {
+	// A batch is a deliberately long operation: lift THIS request's write
+	// deadline (server.write_timeout) so a large batch's response is delivered
+	// instead of the connection being cut mid-request — behind a reverse proxy
+	// that surfaced as a 502 once a batch outlived the 30 s default. Scoped to
+	// this endpoint on purpose: every other endpoint keeps the slow-client
+	// protection. The error is ignored — a ResponseWriter without deadline
+	// support simply keeps the configured timeout.
+	_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})
+
 	// Bound the request body so a hostile/huge payload can't force large
 	// allocations before the point-count caps even apply (~512 B/point + headroom).
 	r.Body = http.MaxBytesReader(w, r.Body, int64(s.batchMaxPoints)*512+64*1024)

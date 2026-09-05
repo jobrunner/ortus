@@ -177,7 +177,11 @@ a 10 000-point batch is dramatically cheaper than 10 000 requests. Body:
 **Delivery.** Default is a single JSON object; each result is a single-point
 response plus `id`, `wgs84` and (unless `with-gazetteer:false`) the `gazetteer`
 block. A per-point failure is an `error` object *inside that item* — the batch
-never aborts.
+never aborts. The batch endpoint lifts the server's per-request write deadline
+(`server.write_timeout`) for its own response: a large batch is a deliberately
+long operation and must not be cut off mid-response (behind a reverse proxy
+that surfaced as a 502). All other endpoints keep the configured timeout. Make
+sure any proxy in front of ortus allows equally long upstream responses.
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/query/batch \
