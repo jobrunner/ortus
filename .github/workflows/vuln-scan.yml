@@ -1,14 +1,21 @@
-# Weekly vulnerability scan on master. The regular CI Security job runs
-# on every push and PR; this job runs on a schedule so newly-disclosed
-# CVEs in the Go stdlib (which are continuously published) become visible
-# even when there is no PR activity to trigger them.
+# Weekly vulnerability scans on master. The regular CI Security job runs
+# on every push and PR; these jobs run on a schedule so newly-disclosed
+# CVEs become visible even when there is no PR activity to trigger them.
 #
-# Outcome handling distinguishes three cases:
-#   - findings (govulncheck exit 3, "X vulnerabilities" in JSON)
+# Two jobs:
+#   - scan (govulncheck)  — Go stdlib + module CVEs reachable from the code
+#   - image-scan (trivy)  — the PUBLISHED ghcr.io image (:latest). Catches what
+#     govulncheck cannot: OS packages from the spatialite base image (openssl,
+#     curl, python3, …) and unreachable-but-flagged Go module CVEs. A released
+#     image that was clean at release time rots as new CVEs are disclosed;
+#     this job is what surfaces that without waiting for the next release.
+#
+# Outcome handling distinguishes three cases (both jobs):
+#   - findings (govulncheck exit 3 / trivy JSON has fixable CRITICAL,HIGH)
 #       → open / comment on a `security`-labelled GitHub issue, fail the job
 #   - clean (exit 0)
 #       → succeed silently
-#   - scan error (build failed, network issue, exit other than 0/3)
+#   - scan error (build failed, network issue, unexpected exit)
 #       → fail the job WITHOUT opening an issue, so we don't spam "new CVEs"
 #         when really the scan was broken
 name: Vuln Scan
@@ -98,4 +105,84 @@ jobs:
 
       - name: Fail job if vulnerabilities found
         if: steps.vuln.outputs.rc == '3'
+        run: exit 1
+
+  image-scan:
+    name: trivy (published image)
+    runs-on: ubuntu-latest
+    steps:
+      # Scans :latest — the default (Alpine) image users pull. The -ubuntu
+      # variant shares the Go binary and mostly differs in OS packages; if it
+      # ever needs its own scan, turn this job into a matrix over tags.
+      #
+      # ignore-unfixed: only CVEs with an available fix (Alpine secdb / Go
+      # module release) create an issue — those are actionable via a base-image
+      # bump or `go get`. Unfixed CVEs still show up in the per-PR SARIF scan
+      # in the Security tab.
+      - name: Run Trivy against ghcr.io image (JSON)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: 'ghcr.io/${{ github.repository }}:latest'
+          format: 'json'
+          output: 'trivy-report.json'
+          severity: 'CRITICAL,HIGH'
+          ignore-unfixed: true
+
+      # A trivy failure (registry unreachable, DB download broken) fails the
+      # step above → job fails WITHOUT opening an issue (scan error case).
+      - name: Count findings
+        id: findings
+        run: |
+          count=$(jq '[.Results[]?.Vulnerabilities[]?] | length' trivy-report.json)
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          echo "Fixable CRITICAL/HIGH vulnerabilities: $count"
+
+      - name: Build human-readable report
+        if: steps.findings.outputs.count != '0'
+        run: |
+          jq -r '
+            [.Results[]? | .Target as $t | .Vulnerabilities[]?
+             | {sev: .Severity, id: .VulnerabilityID, pkg: .PkgName,
+                installed: .InstalledVersion, fixed: .FixedVersion, target: $t}]
+            | sort_by(.sev) | .[]
+            | "\(.sev)\t\(.id)\t\(.pkg) \(.installed) → \(.fixed)\t[\(.target)]"
+          ' trivy-report.json > trivy-report.txt
+          cat trivy-report.txt
+
+      - name: Ensure `security` label exists
+        if: steps.findings.outputs.count != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh label create security \
+            --color D93F0B \
+            --description "Security vulnerability or scan finding" \
+            --force
+
+      - name: Open or update security issue
+        if: steps.findings.outputs.count != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          title="Weekly image scan: new CVEs in published Docker image"
+          existing=$(gh issue list \
+            --label security \
+            --state open \
+            --search "$title in:title" \
+            --json number --jq '.[0].number // ""')
+
+          body=$(printf 'Trivy reports %s fixable CRITICAL/HIGH vulnerabilities in `ghcr.io/%s:latest`.\n\n```\n%s\n```\n\n## Fix\n\n- OS packages (apk): rebuild/bump `spatialite-base-image` in the Dockerfiles so the runtime picks up patched Alpine packages.\n- Go modules (gobinary): `go get <module>@<fixed version>` in ortus (Dependabot may already have a PR).\n\nEither way the fix only reaches users with the next ortus release.\n' "${{ steps.findings.outputs.count }}" "${{ github.repository }}" "$(cat trivy-report.txt)")
+
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            gh issue create \
+              --title "$title" \
+              --label security \
+              --body "$body"
+          fi
+
+      - name: Fail job if vulnerabilities found
+        if: steps.findings.outputs.count != '0'
         run: exit 1

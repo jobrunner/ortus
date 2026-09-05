@@ -455,3 +455,19 @@ jobs:
         if: always()
         with:
           sarif_file: 'trivy-results.sarif'
+
+      # Gate: fail the job on fixable CRITICAL/HIGH findings. The SARIF scan
+      # above stays informational (full picture in the Security tab); this
+      # second pass uses ignore-unfixed so CVEs without an upstream/Alpine fix
+      # (e.g. curl CVEs marked "not fixed" in the 3.21 secdb) don't block PRs
+      # that can't do anything about them. The Trivy DB is cached from the
+      # first step, so this pass is cheap.
+      - name: Fail on fixable CRITICAL/HIGH vulnerabilities
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: 'ortus:scan'
+          format: 'table'
+          severity: 'CRITICAL,HIGH'
+          ignore-unfixed: true
+          exit-code: '1'
+          skip-setup-trivy: true
