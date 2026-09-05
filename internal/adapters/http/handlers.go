@@ -37,7 +37,9 @@ func (s *Server) handleQuery(w http.ResponseWriter, r *http.Request) {
 		Properties: params.Properties,
 	}
 
-	response, err := s.queryService.QueryPoint(r.Context(), req)
+	// resolveQueryResponse honors the with-sources switch (skip the PiP query,
+	// keep the response shape) — see with_sources.go.
+	response, err := s.resolveQueryResponse(r, req)
 	if err != nil {
 		s.handleQueryError(w, err)
 		return

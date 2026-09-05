@@ -20,8 +20,11 @@ type batchRequest struct {
 	// WithGazetteer opts per-point gazetteer enrichment in/out. Pointer so an
 	// omitted field (nil) takes the batch default (ON, consistent with /query) and
 	// only an explicit `false` turns it off.
-	WithGazetteer *bool        `json:"with-gazetteer"`
-	Points        []batchPoint `json:"points"`
+	WithGazetteer *bool `json:"with-gazetteer"`
+	// WithSources opts the point-in-polygon query over the source packages in/out,
+	// independent of WithGazetteer. Same pointer convention: nil ⇒ ON.
+	WithSources *bool        `json:"with-sources"`
+	Points      []batchPoint `json:"points"`
 }
 
 // batchWantsGazetteer reports whether per-point gazetteer enrichment is on. It
@@ -29,6 +32,13 @@ type batchRequest struct {
 // which is opt-out — so a caller disables it only by sending "with-gazetteer": false.
 func batchWantsGazetteer(req *batchRequest) bool {
 	return req.WithGazetteer == nil || *req.WithGazetteer
+}
+
+// batchWantsSources reports whether the PiP query over the source packages runs,
+// mirroring the single-point with-sources switch: nil/true ⇒ ON, only an explicit
+// "with-sources": false skips it (items then keep an empty results array).
+func batchWantsSources(req *batchRequest) bool {
+	return req.WithSources == nil || *req.WithSources
 }
 
 // batchPoint is one coordinate with an optional caller-chosen echo id. Coordinate
@@ -122,33 +132,25 @@ func (s *Server) handleQueryBatch(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if len(req.Points) == 0 {
-		s.writeError(w, http.StatusBadRequest, "points required: provide at least one point")
-		return
-	}
-	if len(req.Points) > s.batchMaxPoints {
-		s.writeError(w, http.StatusBadRequest, fmt.Sprintf("batch of %d points exceeds the limit of %d", len(req.Points), s.batchMaxPoints))
-		return
-	}
 	stream := prefersNDJSON(r)
-	if !stream && len(req.Points) > s.batchMaxSync {
-		s.writeError(w, http.StatusRequestEntityTooLarge, fmt.Sprintf(
-			"batch of %d points exceeds the sync limit of %d — retry with 'Accept: application/x-ndjson' to stream",
-			len(req.Points), s.batchMaxSync))
+	if status, msg := s.batchRequestError(req, stream); msg != "" {
+		s.writeError(w, status, msg)
 		return
 	}
 
 	in := s.resolveBatchInputs(r, req)
 
 	start := time.Now()
-	sub, err := s.queryService.QueryBatch(r.Context(), in.valid, req.Sources, req.Properties)
+	// resolveBatchResponses honors the with-sources switch (skip the PiP query,
+	// keep every item's shape) — see with_sources.go.
+	sub, err := s.resolveBatchResponses(r.Context(), req, in.valid)
 	if err != nil {
 		s.handleQueryError(w, err) // e.g. unknown source → 404
 		return
 	}
 	if len(sub) != len(in.valid) {
-		// Invariant: QueryBatch returns one response per input coordinate. Guard so a
-		// future divergence fails cleanly instead of panicking on the scatter below.
+		// Invariant: one response per input coordinate. Guard so a future
+		// divergence fails cleanly instead of panicking on the scatter below.
 		s.writeError(w, http.StatusInternalServerError, "batch query returned an unexpected result count")
 		return
 	}
@@ -202,6 +204,29 @@ func (s *Server) resolveBatchInputs(r *http.Request, req *batchRequest) batchInp
 		in.validIdx = append(in.validIdx, i)
 	}
 	return in
+}
+
+// batchRequestError validates the parsed batch request against the size caps and
+// option rules, returning the HTTP status and a non-empty message for the first
+// violated rule; an empty msg means the request is valid.
+func (s *Server) batchRequestError(req *batchRequest, stream bool) (status int, msg string) {
+	if len(req.Points) == 0 {
+		return http.StatusBadRequest, "points required: provide at least one point"
+	}
+	if len(req.Points) > s.batchMaxPoints {
+		return http.StatusBadRequest, fmt.Sprintf("batch of %d points exceeds the limit of %d", len(req.Points), s.batchMaxPoints)
+	}
+	if !stream && len(req.Points) > s.batchMaxSync {
+		return http.StatusRequestEntityTooLarge, fmt.Sprintf(
+			"batch of %d points exceeds the sync limit of %d — retry with 'Accept: application/x-ndjson' to stream",
+			len(req.Points), s.batchMaxSync)
+	}
+	if !batchWantsSources(req) && len(req.Sources) > 0 {
+		// Restricting to specific sources while turning the source query off
+		// contradicts itself — reject instead of silently ignoring one of them.
+		return http.StatusBadRequest, `conflicting options: "with-sources": false cannot be combined with a non-empty "sources" list`
+	}
+	return 0, ""
 }
 
 // parseBatchRequest decodes and lightly validates the JSON body.

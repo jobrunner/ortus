@@ -25,12 +25,22 @@ status=0
   exit 2
 }
 
+# The counters below use `git grep` (tracked files only), so outside a git
+# worktree (e.g. a source export without .git) every count would silently be 0
+# and the ratchet would pass vacuously — fail fast instead.
+git rev-parse --is-inside-work-tree >/dev/null 2>&1 || {
+  echo "debt-guard: not inside a git worktree — git grep has nothing to scan" >&2
+  exit 2
+}
+
 # count <pattern> — number of matching directive lines in first-party *.go.
-# Tolerant of zero matches: grep exits 1 with no hits, which would abort the
-# pipeline under `set -euo pipefail`, so swallow it and still emit a count.
+# Uses `git grep` so only TRACKED files count: a recursive filesystem grep also
+# scans nested worktrees (.claude/worktrees/…) and untracked scratch files,
+# which double-counts suppressions and fails the ratchet for code that isn't
+# part of the tree. Tolerant of zero matches: git grep exits 1 with no hits,
+# which would abort under `set -euo pipefail`, so swallow it and still count.
 count() {
-  { grep -rn "$1" --include='*.go' . || true; } \
-    | { grep -vc '/\.go/mod/' || true; } | tr -d ' '
+  { git grep -n "$1" -- '*.go' || true; } | { grep -c . || true; } | tr -d ' '
 }
 
 # 1. Suppression budget — count the actual directive forms (//nolint, #nosec),
@@ -52,8 +62,7 @@ fi
 # 2. No new debt markers -----------------------------------------------------
 # Leading-marker form only ("// TODO", "// FIXME:") so prose like "...a bug,"
 # doesn't false-positive.
-markers=$(grep -rnE '//[[:space:]]*(TODO|FIXME|HACK|XXX)([[:space:]:(]|$)' --include='*.go' . \
-  | grep -v '/\.go/mod/' || true)
+markers=$(git grep -nE '//[[:space:]]*(TODO|FIXME|HACK|XXX)([[:space:]:(]|$)' -- '*.go' || true)
 if [ -n "$markers" ]; then
   echo "  ▼ debt-guard: FAIL — debt markers found (keep them out of the tree; track in docs/explanation/technical-debt.md):" >&2
   echo "$markers" | sed 's/^/      /' >&2
@@ -66,7 +75,7 @@ fi
 # Match both quote styles Go allows for a literal extension: interpreted
 # strings ("...") and raw strings (`...`), so the guard can't be sidestepped
 # by switching quotes.
-hard=$(grep -rnE '["`]\.(gpkg|zip)["`]' --include='*.go' internal/adapters/storage/ \
+hard=$(git grep -nE '["`]\.(gpkg|zip)["`]' -- 'internal/adapters/storage/*.go' \
   | grep -v '_test.go' || true)
 if [ -n "$hard" ]; then
   echo "  ▼ debt-guard: FAIL — storage backend hardcodes a source extension; use domain.IsSupportedSourceFile:" >&2

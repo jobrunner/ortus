@@ -92,6 +92,82 @@ func TestRenderFrontendInjectsVersion(t *testing.T) {
 	}
 }
 
+// TestFrontendTabsAndOptions guards the two-tab layout (single coordinate /
+// batch) and the collapsed-by-default options accordion with the independent
+// with-gazetteer / with-sources checkboxes (both checked by default).
+func TestFrontendTabsAndOptions(t *testing.T) {
+	html := frontendHTML
+	for _, marker := range []string{
+		`role="tablist"`,          // accessible tab bar
+		`role="tabpanel"`,         // panels wired to the tabs
+		`>Einzelkoordinate<`,      // tab 1 label
+		`>Batch<`,                 // tab 2 label
+		`id="tabSingle"`,          // tab buttons
+		`id="tabBatch"`,           //
+		`id="panelSingle"`,        // tab panels
+		`id="panelBatch"`,         //
+		`id="withGazetteer"`,      // single-tab option checkboxes
+		`id="withSources"`,        //
+		`id="batchWithGazetteer"`, // batch-tab option checkboxes
+		`id="batchWithSources"`,   //
+		`with-gazetteer=0`,        // unchecked → opt-out param on the query URL
+		`with-sources=0`,          //
+		`body['with-gazetteer']`,  // batch body fields
+		`body['with-sources']`,    //
+	} {
+		if !strings.Contains(html, marker) {
+			t.Errorf("frontend is missing tabs/options marker %q", marker)
+		}
+	}
+	// Both checkboxes default to checked, and the options accordions start closed.
+	for _, id := range []string{"withGazetteer", "withSources", "batchWithGazetteer", "batchWithSources"} {
+		i := strings.Index(html, `id="`+id+`"`)
+		if i < 0 {
+			continue // reported above
+		}
+		// The checked attribute must sit inside the same <input> tag.
+		tagEnd := strings.Index(html[i:], ">")
+		if tagEnd < 0 || !strings.Contains(html[i:i+tagEnd], "checked") {
+			t.Errorf("checkbox %q is not checked by default", id)
+		}
+	}
+	if !strings.Contains(html, `class="options-card`) {
+		t.Errorf("options accordion card missing")
+	}
+	if strings.Contains(html, `class="options-card source-card expanded`) {
+		t.Errorf("options accordion must start closed (no expanded class)")
+	}
+}
+
+// TestFrontendBatchElements guards the batch tab: textarea with a format
+// placeholder, CSV upload, the compact result table and the export buttons
+// (CSV download, copy as CSV, copy as JSON).
+func TestFrontendBatchElements(t *testing.T) {
+	html := frontendHTML
+	for _, marker := range []string{
+		`id="batchInput"`,          // coordinates textarea
+		`52.52, 13.405`,            // placeholder shows the line format
+		`id="batchFile"`,           // hidden file input
+		`accept=".csv,text/csv"`,   // CSV upload
+		`id="batchCsvUploadBtn"`,   // upload button
+		`id="batchSrid"`,           // batch has its own coordinate-system select
+		`id="batchResults"`,        // result area below the form
+		`id="batchDownloadBtn"`,    // CSV download
+		`id="batchCopyCsvBtn"`,     // copy as CSV
+		`id="batchCopyJsonBtn"`,    // copy as JSON
+		`function buildBatchCSV`,   // CSV flattener
+		`admin_path`,               // gazetteer summary column
+		`/api/v1/query/batch`,      // posts to the batch endpoint
+		`function parseBatchLines`, // line parser (id + coordinate, tolerant)
+		`FileReader`,               // client-side CSV read
+		`navigator.clipboard`,      // clipboard copy
+	} {
+		if !strings.Contains(html, marker) {
+			t.Errorf("frontend is missing batch marker %q", marker)
+		}
+	}
+}
+
 // TestFrontendAccessibilityMarkers guards the accessibility affordances so they
 // aren't silently dropped: announced status/error regions, an accessible name on
 // the icon-only location button, keyboard-operable collapsible source headers, and

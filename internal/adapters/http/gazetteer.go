@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/jobrunner/ortus/internal/domain"
@@ -362,20 +361,6 @@ func formatElevation(e *domain.Elevation) map[string]interface{} {
 		}
 	}
 	return out
-}
-
-// gazetteerEnrichmentRequested reports whether /query should attach the gazetteer
-// block. Enrichment is ON by default when the feature is wired; a client opts out
-// only with an explicit falsy with-gazetteer value (0/false/no/off) to skip the
-// extra Locate+Bearing spatial work. Any other value — including an unrecognized
-// one — leaves enrichment on.
-func gazetteerEnrichmentRequested(r *http.Request) bool {
-	switch strings.ToLower(r.URL.Query().Get("with-gazetteer")) {
-	case "0", "false", "no", "off":
-		return false
-	default:
-		return true
-	}
 }
 
 // isWGS84 reports whether a coordinate is WGS84 (EPSG:4326), treating SRID 0 as
