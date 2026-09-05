@@ -1,11 +1,15 @@
 # Dependabot configuration. See:
 # https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
 #
-# Two ecosystems:
+# Ecosystems:
 #   1. github-actions — bumps actions/checkout, actions/setup-go, etc.
 #   2. gomod          — bumps Go modules AND the `toolchain` directive in
 #                       go.mod. This is what keeps us off the next round of
 #                       stdlib CVEs without manual work.
+#   3. docker         — bumps the FROM tags (spatialite-base-image) in the
+#                       Dockerfiles, so base-image rebuilds with patched
+#                       Alpine/Ubuntu packages actually reach the runtime image.
+#   4. gitsubmodule   — bumps the third_party/claude-skills pin.
 #
 # The CI workflows themselves still pin GO_VERSION explicitly; Dependabot
 # does NOT update that. The vuln-scan workflow runs weekly to alert if it
@@ -29,6 +33,20 @@ updates:
       github-actions:
         patterns:
           - "*"
+
+  # Dockerfile FROM tags. Covers Dockerfile, Dockerfile.alpine and
+  # Dockerfile.ubuntu in the repo root. Without this, a rebuilt
+  # spatialite-base-image (the source of most published-image CVEs) never
+  # reaches ortus automatically — the pinned tag just ages.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    labels:
+      - dependencies
+      - docker
 
   - package-ecosystem: gomod
     directory: /
