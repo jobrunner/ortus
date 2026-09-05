@@ -151,11 +151,23 @@ func TestBatchQueryPlanPointsDriveRTree(t *testing.T) {
 	if len(details) == 0 {
 		t.Fatal("empty query plan")
 	}
-	// The first loop is the outer one. json_each (the points) must drive it;
-	// if the R-tree comes first it is being scanned in full.
-	if !strings.Contains(details[0], "json_each") {
+	// EXPLAIN QUERY PLAN lists loops in nesting order, so the FIRST loop row
+	// (SCAN/SEARCH) is the outer loop — that ORDER is the assertion: json_each
+	// (the points) must drive it, else the R-tree is being scanned in full.
+	// (Membership alone — "some top-level row is json_each" — would also hold
+	// for the broken full-scan plan, where all three loops are siblings.)
+	// Skipping non-loop rows (e.g. co-routines, TEMP B-TREE) keeps the test
+	// robust against incidental plan decoration.
+	firstLoop := ""
+	for _, d := range details {
+		if strings.HasPrefix(d, "SCAN") || strings.HasPrefix(d, "SEARCH") {
+			firstLoop = d
+			break
+		}
+	}
+	if !strings.Contains(firstLoop, "json_each") {
 		t.Errorf("outer loop is %q, want the json_each points scan first (R-tree full scan otherwise); full plan:\n%s",
-			details[0], strings.Join(details, "\n"))
+			firstLoop, strings.Join(details, "\n"))
 	}
 }
 
@@ -188,14 +200,15 @@ func TestBatchQueryPointsGeometryOnlyWhenConfigured(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "regions-geo.gpkg")
 	buildFixtureGPKG(t, path)
 	repoGeo := NewRepository(Options{WithGeometry: true})
-	t.Cleanup(func() { _ = repoGeo.Close(ctx, "regions-geo") })
-	if _, err := repoGeo.Open(ctx, path); err != nil {
+	srcGeo, err := repoGeo.Open(ctx, path)
+	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	if err := repoGeo.CreateSpatialIndex(ctx, "regions-geo", "regions"); err != nil {
+	t.Cleanup(func() { _ = repoGeo.Close(ctx, srcGeo.ID) })
+	if err := repoGeo.CreateSpatialIndex(ctx, srcGeo.ID, "regions"); err != nil {
 		t.Fatalf("CreateSpatialIndex: %v", err)
 	}
-	batchGeo, err := repoGeo.QueryPoints(ctx, "regions-geo", "regions", pt)
+	batchGeo, err := repoGeo.QueryPoints(ctx, srcGeo.ID, "regions", pt)
 	if err != nil {
 		t.Fatalf("QueryPoints (with geometry): %v", err)
 	}
