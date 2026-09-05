@@ -3,7 +3,9 @@ package geopackage
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/jobrunner/ortus/internal/domain"
@@ -360,4 +362,123 @@ func equalStrings(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+// TestGazetteerIndex_FilteredKNNUsesAttributeIndex pins the plan choice of the
+// filtered KNN: with a wide radius the R-tree bbox covers a huge share of the
+// layer and SQLite fetches every row in the box before the class filter runs —
+// measured 573 ms vs 4.5 ms per city query (120 km, 422k places, 1.9k cities)
+// on the real dataset. After EnsureAttributeIndex the query must scan the
+// filter column's index instead (INDEXED BY) for wide radii, while narrow radii
+// keep the R-tree plan. Results must be identical either way.
+func TestGazetteerIndex_FilteredKNNUsesAttributeIndex(t *testing.T) {
+	ctx := context.Background()
+	idx := openFixtureIndex(t, true)
+	p := domain.NewWGS84Coordinate(10.05, 50.0)
+	filter := &output.Filter{Column: "place", Values: []any{"city"}}
+
+	// Baseline result BEFORE the index exists (R-tree plan).
+	before, err := idx.QueryKNN(ctx, "places", p, 3, 60, filter)
+	if err != nil {
+		t.Fatalf("QueryKNN before index: %v", err)
+	}
+
+	if err := idx.EnsureAttributeIndex(ctx, "places", "place"); err != nil {
+		t.Fatalf("EnsureAttributeIndex: %v", err)
+	}
+	// Idempotent: a second call must not fail.
+	if err := idx.EnsureAttributeIndex(ctx, "places", "place"); err != nil {
+		t.Fatalf("EnsureAttributeIndex (2nd): %v", err)
+	}
+
+	after, err := idx.QueryKNN(ctx, "places", p, 3, 60, filter)
+	if err != nil {
+		t.Fatalf("QueryKNN after index: %v", err)
+	}
+	if got, want := fmt.Sprint(knnNames(after)), fmt.Sprint(knnNames(before)); got != want {
+		t.Errorf("results changed with attribute index: %s, want %s", got, want)
+	}
+
+	// Wide radius → the plan must scan the attribute index, not the R-tree.
+	plan := knnPlan(t, idx, p, 60, filter)
+	if !strings.Contains(plan, "idx_ortus_places_place") {
+		t.Errorf("wide-radius filtered KNN does not use the attribute index; plan:\n%s", plan)
+	}
+	// Narrow radius → small bbox, the R-tree plan stays.
+	plan = knnPlan(t, idx, p, 5, filter)
+	if strings.Contains(plan, "idx_ortus_places_place") {
+		t.Errorf("narrow-radius filtered KNN should keep the R-tree plan; plan:\n%s", plan)
+	}
+	// Unfiltered → no attribute index involved.
+	plan = knnPlan(t, idx, p, 60, nil)
+	if strings.Contains(plan, "idx_ortus_places_place") {
+		t.Errorf("unfiltered KNN should not use the attribute index; plan:\n%s", plan)
+	}
+}
+
+// knnPlan returns the EXPLAIN QUERY PLAN details of the exact query QueryKNN
+// would run for the given parameters.
+func knnPlan(t *testing.T, idx *GazetteerIndex, p domain.Coordinate, maxKM float64, f *output.Filter) string {
+	t.Helper()
+	ctx := context.Background()
+	query, args := buildKNNQuery("places", "geom", true, p, 3, maxKM, f,
+		idx.filterIndexFor(ctx, "places", f))
+	rows, err := idx.db.QueryContext(ctx, "EXPLAIN QUERY PLAN "+query, args...)
+	if err != nil {
+		t.Fatalf("EXPLAIN QUERY PLAN: %v", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var details []string
+	for rows.Next() {
+		var id, parent, notused int
+		var detail string
+		if err := rows.Scan(&id, &parent, &notused, &detail); err != nil {
+			t.Fatalf("scan: %v", err)
+		}
+		details = append(details, detail)
+	}
+	return strings.Join(details, "\n")
+}
+
+// TestKNNStages pins the growing-radius schedule: a wide KNN starts with a
+// small stage (dense regions find their k nearest within ~15 km, making the
+// R-tree bbox tiny), escalates geometrically and always ends exactly at maxKM.
+func TestKNNStages(t *testing.T) {
+	cases := []struct {
+		maxKM float64
+		want  []float64
+	}{
+		{5, []float64{5}},
+		{15, []float64{15}},
+		{18, []float64{15, 18}},
+		{60, []float64{15, 45, 60}},
+		{120, []float64{15, 45, 120}},
+	}
+	for _, c := range cases {
+		if got := knnStages(c.maxKM); fmt.Sprint(got) != fmt.Sprint(c.want) {
+			t.Errorf("knnStages(%v) = %v, want %v", c.maxKM, got, c.want)
+		}
+	}
+}
+
+// TestGazetteerIndex_KNNEscalatesPastFirstStage: when the first (small) stage
+// holds fewer than k hits, the search must escalate and still return every
+// match within maxKM — the growing radius is an optimization, never a result
+// change. The query point sits ~25-32 km from every fixture place, beyond the
+// first stage.
+func TestGazetteerIndex_KNNEscalatesPastFirstStage(t *testing.T) {
+	idx := openFixtureIndex(t, true)
+	p := domain.NewWGS84Coordinate(10.45, 50.0)
+	got, err := idx.QueryKNN(context.Background(), "places", p, 3, 60, nil)
+	if err != nil {
+		t.Fatalf("QueryKNN: %v", err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("QueryKNN = %d results, want all 3 fixture places (escalation lost matches?)", len(got))
+	}
+	for _, nf := range got {
+		if nf.DistanceKM <= knnStageStartKM {
+			t.Errorf("fixture distance %f unexpectedly within the first stage — test premise broken", nf.DistanceKM)
+		}
+	}
 }

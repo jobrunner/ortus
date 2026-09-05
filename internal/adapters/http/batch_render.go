@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/jobrunner/ortus/internal/domain"
+	"github.com/jobrunner/ortus/internal/ports/input"
 )
 
 // batchGazetteer enriches each valid point with a gazetteer block. It launches a
@@ -89,6 +90,11 @@ func lessTileLocality(a, b domain.Coordinate) bool {
 // nil (and logging, unless the request was canceled) on failure so a single
 // point's error never fails the whole batch.
 func (s *Server) enrichGazetteerPoint(ctx context.Context, w domain.Coordinate) map[string]interface{} {
+	// One PiP-cache scope per point, exactly like the single endpoint
+	// (handleGazetteer) and the MCP tool: Locate and Bearing both ask which admin
+	// polygons contain the point — without the scope that query runs twice per
+	// point. Per point (not per batch) so the cache cannot grow with batch size.
+	ctx = input.WithPointInPolygonCache(ctx)
 	sec, err := s.gazetteerSections(ctx, w)
 	if err != nil {
 		// Suppress the warning for cancellation AND deadline: once the request's
