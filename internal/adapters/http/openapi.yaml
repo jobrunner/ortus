@@ -728,7 +728,10 @@ components:
         z. B. eine reine Gazetteer-Auflösung über `/query` fahren
         (`with-sources=0`) oder — zusammen mit `with-gazetteer=0` — nur die
         Koordinaten-Auflösung (`coordinate`/`wgs84`, etwa für MGRS→WGS84)
-        abrufen. Nicht-falsy Werte lassen die Abfrage an.
+        abrufen. (Der Server ist tolerant und case-insensitiv: die falsy Werte
+        wirken auch groß-/gemischtgeschrieben, und jeder andere Wert — auch ein
+        unbekannter — lässt die Abfrage an; die aufgezählten Werte sind die
+        unterstützten.)
       schema:
         type: string
         enum: ["0", "1", "true", "false", "yes", "no", "on", "off"]
