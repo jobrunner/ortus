@@ -161,6 +161,7 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (app *App
 		JournalMode:   cfg.Query.SQLite.JournalMode,
 		MaxOpenConns:  cfg.Query.SQLite.MaxOpenConns,
 		MaxIdleConns:  cfg.Query.SQLite.MaxIdleConns,
+		WithGeometry:  cfg.Query.WithGeometry,
 	})
 	app.Repository.SetTracer(app.Tracer)
 

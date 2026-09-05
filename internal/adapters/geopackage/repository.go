@@ -77,6 +77,10 @@ type Options struct {
 	JournalMode   string // "" = leave file's mode; e.g. "WAL"
 	MaxOpenConns  int    // 0 = unlimited
 	MaxIdleConns  int    // <=0 = database/sql default
+	// WithGeometry mirrors query.with_geometry: only then do batch queries ask
+	// SQLite to serialize geometry (AsText) — on large polygon layers that
+	// serialization dominates the query cost and is otherwise thrown away.
+	WithGeometry bool
 }
 
 // Repository implements the output.SpatialSource port using SpatiaLite.

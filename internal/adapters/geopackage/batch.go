@@ -67,7 +67,7 @@ func (r *Repository) QueryPoints(ctx context.Context, sourceID, layerName string
 		span.SetStatus(output.StatusError, "marshal points failed")
 		return nil, err
 	}
-	query := buildBatchPointQuery(layer, indexTable)
+	query := buildBatchPointQuery(layer, indexTable, r.opts.WithGeometry)
 	span.SetAttributes(output.String("db.statement", query))
 
 	// Polygon layers bind the layer SRID for the ST_Covers MakePoint; non-polygon
@@ -84,7 +84,7 @@ func (r *Repository) QueryPoints(ctx context.Context, sourceID, layerName string
 	}
 	defer func() { _ = rows.Close() }()
 
-	if err := scanBatchRows(rows, layer, out); err != nil {
+	if err := scanBatchRows(rows, layer, out, r.opts.WithGeometry); err != nil {
 		span.RecordError(err)
 		span.SetStatus(output.StatusError, "scan failed")
 		return nil, err
@@ -140,26 +140,45 @@ func marshalPointsJSON(coords []domain.Coordinate) (string, error) {
 // buildBatchPointQuery builds the set-based query: json_each unrolls the points,
 // the R-tree bbox-prefilters candidates per point, then ST_Covers (polygon layers)
 // confirms. The leading je.idx column maps each row back to its input coordinate.
-func buildBatchPointQuery(layer *domain.Layer, indexTable string) string {
-	// %[1]$s = geom column, %[2]$s = rtree table, %[3]$s = layer table, %[4]$s = the
-	// polygon-only ST_Covers predicate (empty for non-polygon = bbox match only).
+func buildBatchPointQuery(layer *domain.Layer, indexTable string, withGeometry bool) string {
+	// CROSS JOIN is load-bearing: SQLite treats it as a fixed loop order
+	// (https://sqlite.org/optoverview.html#crossjoin), so the points (json_each)
+	// stay the OUTER loop and the R-tree is probed once per point. With a plain
+	// INNER JOIN the planner chose the opposite nesting — a full R-tree scan that
+	// fetched every feature row of the layer, which took seconds per layer on
+	// real soil-map packages and drove batch requests into proxy timeouts.
+	//
+	// %[1]$s = geom column, %[2]$s = rtree table, %[3]$s = layer table; the
+	// polygon-only ST_Covers predicate is appended for polygon layers (non-polygon
+	// layers match on the bbox alone).
+	//
+	// AsText only when geometry is requested (query.with_geometry): serializing
+	// the hits' polygons dominates the batch query on large layers (measured:
+	// 28 MB WKT for 39 hits, 3x the query time) and is discarded otherwise.
 	covers := ""
 	if layer.IsPolygonLayer() {
-		covers = `WHERE ST_Covers(CastAutomagic(t."%[1]s"), MakePoint(je.x, je.y, ?))`
+		covers = `AND ST_Covers(CastAutomagic(t."%[1]s"), MakePoint(je.x, je.y, ?))`
+	}
+	wktCol := ""
+	if withGeometry {
+		wktCol = `, AsText(CastAutomagic(t."%[1]s"))`
 	}
 	return fmt.Sprintf(`
-		SELECT je.idx, t.*, AsText(CastAutomagic(t."%[1]s"))
+		SELECT je.idx, t.*`+wktCol+`
 		FROM (SELECT key AS idx, CAST(value->>'x' AS REAL) AS x, CAST(value->>'y' AS REAL) AS y FROM json_each(?)) je
-		INNER JOIN "%[2]s" r ON r.minx <= je.x AND r.maxx >= je.x AND r.miny <= je.y AND r.maxy >= je.y
-		INNER JOIN "%[3]s" t ON t.rowid = r.id
+		CROSS JOIN "%[2]s" r
+		CROSS JOIN "%[3]s" t
+		WHERE r.minx <= je.x AND r.maxx >= je.x AND r.miny <= je.y AND r.maxy >= je.y
+		  AND t.rowid = r.id
 		`+covers+`
 		ORDER BY je.idx
 	`, layer.GeometryColumn, indexTable, layer.Name) //#nosec G201 -- identifiers from gpkg catalog, double-quoted; SQLite can't parameterize identifiers
 }
 
 // scanBatchRows scans the (idx, feature…) rows and buckets each feature into
-// out[idx], reusing buildFeature for the per-row mapping.
-func scanBatchRows(rows *sql.Rows, layer *domain.Layer, out [][]domain.Feature) error {
+// out[idx], reusing buildFeature for the per-row mapping. wktLast mirrors
+// whether the query appended an AsText(geometry) column (withGeometry).
+func scanBatchRows(rows *sql.Rows, layer *domain.Layer, out [][]domain.Feature, wktLast bool) error {
 	columns, err := rows.Columns()
 	if err != nil {
 		return err
@@ -185,7 +204,7 @@ func scanBatchRows(rows *sql.Rows, layer *domain.Layer, out [][]domain.Feature) 
 		if idx < 0 || int(idx) >= len(out) {
 			continue // defensive: json_each key out of range shouldn't happen
 		}
-		out[idx] = append(out[idx], buildFeature(featCols, vals[1:], layer.Name, layer.GeometryColumn, true))
+		out[idx] = append(out[idx], buildFeature(featCols, vals[1:], layer.Name, layer.GeometryColumn, wktLast))
 	}
 	return rows.Err()
 }
