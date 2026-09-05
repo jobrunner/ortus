@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.1](https://github.com/jobrunner/ortus/compare/v1.8.0...v1.8.1) (2026-09-05)
+
+
+### Miscellaneous Chores
+
+* **deps:** bump the aws-sdk group (4 updates) ([#203](https://github.com/jobrunner/ortus/pull/203))
+* **deps:** bump the azure-sdk group ([#204](https://github.com/jobrunner/ortus/pull/204))
+* **deps:** bump the github-actions group: codeql-action 4.37.9, hadolint-action 3.5.0, setup-java v6 ([#202](https://github.com/jobrunner/ortus/pull/202))
+
 ## [1.8.0](https://github.com/jobrunner/ortus/compare/v1.7.1...v1.8.0) (2026-08-25)
 
 
