@@ -364,18 +364,32 @@ func formatElevation(e *domain.Elevation) map[string]interface{} {
 	return out
 }
 
+// queryFlagOff reports whether the named query parameter carries an explicit
+// falsy value (0/false/no/off, case-insensitive). Anything else — absent or
+// unrecognized included — counts as "on": the /query switches are pure opt-out.
+func queryFlagOff(r *http.Request, name string) bool {
+	switch strings.ToLower(r.URL.Query().Get(name)) {
+	case "0", "false", "no", "off":
+		return true
+	default:
+		return false
+	}
+}
+
 // gazetteerEnrichmentRequested reports whether /query should attach the gazetteer
 // block. Enrichment is ON by default when the feature is wired; a client opts out
-// only with an explicit falsy with-gazetteer value (0/false/no/off) to skip the
-// extra Locate+Bearing spatial work. Any other value — including an unrecognized
-// one — leaves enrichment on.
+// only with an explicit falsy with-gazetteer value to skip the extra
+// Locate+Bearing spatial work.
 func gazetteerEnrichmentRequested(r *http.Request) bool {
-	switch strings.ToLower(r.URL.Query().Get("with-gazetteer")) {
-	case "0", "false", "no", "off":
-		return false
-	default:
-		return true
-	}
+	return !queryFlagOff(r, "with-gazetteer")
+}
+
+// sourcesRequested reports whether /query should run the point-in-polygon query
+// over the loaded source packages. ON by default; an explicit falsy with-sources
+// value skips the PiP work entirely (e.g. for gazetteer-only lookups), leaving
+// results empty. Independent of with-gazetteer.
+func sourcesRequested(r *http.Request) bool {
+	return !queryFlagOff(r, "with-sources")
 }
 
 // isWGS84 reports whether a coordinate is WGS84 (EPSG:4326), treating SRID 0 as

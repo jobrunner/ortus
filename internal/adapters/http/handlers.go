@@ -37,10 +37,22 @@ func (s *Server) handleQuery(w http.ResponseWriter, r *http.Request) {
 		Properties: params.Properties,
 	}
 
-	response, err := s.queryService.QueryPoint(r.Context(), req)
-	if err != nil {
-		s.handleQueryError(w, err)
-		return
+	var response *domain.QueryResponse
+	if sourcesRequested(r) {
+		response, err = s.queryService.QueryPoint(r.Context(), req)
+		if err != nil {
+			s.handleQueryError(w, err)
+			return
+		}
+	} else {
+		// with-sources=0 skips the PiP query entirely; the coordinate must still
+		// be validated here because QueryPoint (the usual validator) never runs.
+		// The response keeps its shape: results stays an empty array.
+		if err := req.Coordinate.Validate(); err != nil {
+			s.handleQueryError(w, err)
+			return
+		}
+		response = &domain.QueryResponse{Coordinate: req.Coordinate}
 	}
 
 	out := s.formatQueryResponse(response)

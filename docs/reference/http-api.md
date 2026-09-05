@@ -3,7 +3,10 @@
 All API endpoints are prefixed with `/api/v1`. Health endpoints live at the root.
 The full OpenAPI 3.0 spec is served at `GET /openapi.json`, with Swagger UI at
 `/docs` (and `/swagger`). When `server.frontend_enabled` is on, a small query
-frontend is served at `GET /`.
+frontend is served at `GET /` — with a single-coordinate tab and a batch tab
+(paste coordinates or upload a CSV, results as a table plus CSV/JSON export),
+both with an options accordion for the `with-gazetteer` / `with-sources`
+switches described below.
 
 **Error responses.** Every error (any non-2xx) uses the same envelope:
 
@@ -96,6 +99,15 @@ that reprojects to WGS84** (the point is reprojected before the lookup, not just
 `false`/`no`/`off`) to skip the extra spatial work; enrichment is best-effort and is
 omitted (never errors the query) if it fails.
 
+**Source query switch (`with-sources`, on by default).** Independent of
+`with-gazetteer`, `?with-sources=0` (or `false`/`no`/`off`) skips the
+point-in-polygon query over the loaded source packages entirely — the response
+keeps its shape (`results` stays an empty array, `total_features` is 0). Use it
+for a gazetteer-only lookup through `/query`, or combine both switches
+(`with-sources=0&with-gazetteer=0`) to get just the coordinate resolution
+(`coordinate` + `wgs84`, e.g. MGRS→WGS84). Any non-falsy value leaves the query
+on.
+
 ```jsonc
 {
   "coordinate": { "x": 13.405, "y": 52.52, "srid": 4326 },
@@ -156,6 +168,11 @@ a 10 000-point batch is dramatically cheaper than 10 000 requests. Body:
   per-point path (not set-based); send `false` to skip it for large PiP-only batches.
   Points are enriched in DEM-tile order so per-point lookups keep the raster tile
   cache warm.
+- `with-sources` (optional, **default `true`**) — run the set-based
+  point-in-polygon query over the source packages, independent of
+  `with-gazetteer`. Send `false` for a gazetteer-only batch; each item then keeps
+  its shape with an empty `results` array. Combining `"with-sources": false` with
+  a non-empty `sources` list is contradictory and rejected with 400.
 
 **Delivery.** Default is a single JSON object; each result is a single-point
 response plus `id`, `wgs84` and (unless `with-gazetteer:false`) the `gazetteer`

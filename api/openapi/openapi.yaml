@@ -78,6 +78,7 @@ paths:
         - $ref: '#/components/parameters/MgrsParam'
         - $ref: '#/components/parameters/PropertiesParam'
         - $ref: '#/components/parameters/WithGazetteerParam'
+        - $ref: '#/components/parameters/WithSourcesParam'
       responses:
         '200':
           description: Erfolgreiche Abfrage
@@ -236,6 +237,10 @@ paths:
         Index) und entspricht sonst einer Einzelpunkt-Antwort plus `wgs84` und —
         standardmäßig (konsistent mit /query, das opt-out ist) — dem `gazetteer`-Block
         (pro Punkt, teurer); mit `with-gazetteer: false` wird er weggelassen.
+        Unabhängig davon überspringt `with-sources: false` die
+        Punkt-in-Polygon-Abfrage über die Datenquellen (jedes Item behält dann
+        `results: []`); zusammen mit einem nicht-leeren `sources` ist das ein
+        Widerspruch und wird mit 400 abgelehnt.
         Ein Fehler an einem einzelnen Punkt erscheint als `error`-Objekt in dessen
         Ergebnis, ohne den ganzen Batch abzubrechen.
       operationId: queryBatch
@@ -705,6 +710,25 @@ components:
         falsy Wert als „an"; die aufgezählten Werte sind die unterstützten.)
         Best-effort: ein Gazetteer-Fehler bricht die eigentliche Abfrage nicht ab
         (der Block entfällt dann).
+      schema:
+        type: string
+        enum: ["0", "1", "true", "false", "yes", "no", "on", "off"]
+        default: "1"
+      example: "0"
+
+    WithSourcesParam:
+      name: with-sources
+      in: query
+      description: |
+        Steuert die Punkt-in-Polygon-Abfrage über die geladenen Datenquellen
+        (Packages). **Standard: an.** Reines Opt-out, unabhängig von
+        `with-gazetteer`: die falsy Werte (`0`/`false`/`no`/`off`) überspringen
+        die PiP-Abfrage komplett — `results` bleibt dann ein leeres Array und
+        `total_features` ist 0, die Antwortform ändert sich nicht. So lässt sich
+        z. B. eine reine Gazetteer-Auflösung über `/query` fahren
+        (`with-sources=0`) oder — zusammen mit `with-gazetteer=0` — nur die
+        Koordinaten-Auflösung (`coordinate`/`wgs84`, etwa für MGRS→WGS84)
+        abrufen. Nicht-falsy Werte lassen die Abfrage an.
       schema:
         type: string
         enum: ["0", "1", "true", "false", "yes", "no", "on", "off"]
@@ -1278,7 +1302,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/QueryResult'
-          description: Ergebnisse pro Datenquelle
+          description: >-
+            Ergebnisse pro Datenquelle. Immer vorhanden — mit `with-sources=0`
+            wird die PiP-Abfrage übersprungen und das Array bleibt leer
+            (`total_features` ist dann 0).
         total_features:
           type: integer
           description: Gesamtanzahl der gefundenen Features
@@ -1640,6 +1667,15 @@ components:
           description: >-
             Gazetteer-Anreicherung pro Punkt. Default true (konsistent mit /query,
             das opt-out ist) — der teure Pfad; mit `false` explizit abschalten.
+        with-sources:
+          type: boolean
+          default: true
+          description: >-
+            Punkt-in-Polygon-Abfrage über die Datenquellen (Packages), unabhängig
+            von `with-gazetteer`. Default true; mit `false` wird sie komplett
+            übersprungen — jedes Item behält seine Form (`results: []`,
+            `total_features: 0`). Nicht mit einem nicht-leeren `sources`
+            kombinierbar (400, Widerspruch).
         points:
           type: array
           items:

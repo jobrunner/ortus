@@ -20,8 +20,11 @@ type batchRequest struct {
 	// WithGazetteer opts per-point gazetteer enrichment in/out. Pointer so an
 	// omitted field (nil) takes the batch default (ON, consistent with /query) and
 	// only an explicit `false` turns it off.
-	WithGazetteer *bool        `json:"with-gazetteer"`
-	Points        []batchPoint `json:"points"`
+	WithGazetteer *bool `json:"with-gazetteer"`
+	// WithSources opts the point-in-polygon query over the source packages in/out,
+	// independent of WithGazetteer. Same pointer convention: nil ⇒ ON.
+	WithSources *bool        `json:"with-sources"`
+	Points      []batchPoint `json:"points"`
 }
 
 // batchWantsGazetteer reports whether per-point gazetteer enrichment is on. It
@@ -29,6 +32,13 @@ type batchRequest struct {
 // which is opt-out — so a caller disables it only by sending "with-gazetteer": false.
 func batchWantsGazetteer(req *batchRequest) bool {
 	return req.WithGazetteer == nil || *req.WithGazetteer
+}
+
+// batchWantsSources reports whether the PiP query over the source packages runs,
+// mirroring the single-point with-sources switch: nil/true ⇒ ON, only an explicit
+// "with-sources": false skips it (items then keep an empty results array).
+func batchWantsSources(req *batchRequest) bool {
+	return req.WithSources == nil || *req.WithSources
 }
 
 // batchPoint is one coordinate with an optional caller-chosen echo id. Coordinate
@@ -138,19 +148,38 @@ func (s *Server) handleQueryBatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !batchWantsSources(req) && len(req.Sources) > 0 {
+		// Restricting to specific sources while turning the source query off
+		// contradicts itself — reject instead of silently ignoring one of them.
+		s.writeError(w, http.StatusBadRequest, `conflicting options: "with-sources": false cannot be combined with a non-empty "sources" list`)
+		return
+	}
+
 	in := s.resolveBatchInputs(r, req)
 
 	start := time.Now()
-	sub, err := s.queryService.QueryBatch(r.Context(), in.valid, req.Sources, req.Properties)
-	if err != nil {
-		s.handleQueryError(w, err) // e.g. unknown source → 404
-		return
-	}
-	if len(sub) != len(in.valid) {
-		// Invariant: QueryBatch returns one response per input coordinate. Guard so a
-		// future divergence fails cleanly instead of panicking on the scatter below.
-		s.writeError(w, http.StatusInternalServerError, "batch query returned an unexpected result count")
-		return
+	var sub []*domain.QueryResponse
+	if batchWantsSources(req) {
+		var err error
+		sub, err = s.queryService.QueryBatch(r.Context(), in.valid, req.Sources, req.Properties)
+		if err != nil {
+			s.handleQueryError(w, err) // e.g. unknown source → 404
+			return
+		}
+		if len(sub) != len(in.valid) {
+			// Invariant: QueryBatch returns one response per input coordinate. Guard so a
+			// future divergence fails cleanly instead of panicking on the scatter below.
+			s.writeError(w, http.StatusInternalServerError, "batch query returned an unexpected result count")
+			return
+		}
+	} else {
+		// "with-sources": false skips the PiP query; synthesize empty responses so
+		// every item keeps its shape (coordinate, results: []). Coordinates were
+		// already validated per point in resolveBatchInputs.
+		sub = make([]*domain.QueryResponse, len(in.valid))
+		for k, c := range in.valid {
+			sub[k] = &domain.QueryResponse{Coordinate: c}
+		}
 	}
 	responses := make([]*domain.QueryResponse, len(req.Points))
 	for k, origIdx := range in.validIdx {
