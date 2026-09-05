@@ -398,7 +398,11 @@ func TestBatchOutlivesServerWriteTimeout(t *testing.T) {
 		config.ServerConfig{Host: "localhost", Port: 8080, ReadTimeout: time.Second, WriteTimeout: time.Second},
 		query, reg, health, nil, logger, false,
 		ServerOptions{Gazetteer: gaz, GazetteerLicense: sampleGazetteerLicense(),
-			TracerProvider: tracenoop.NewTracerProvider()},
+			TracerProvider: tracenoop.NewTracerProvider(),
+			// Pin the enrichment concurrency the timing below assumes (12 points
+			// à 150 ms in 3 waves > the 300 ms write timeout), independent of the
+			// server default.
+			BatchConcurrency: 4},
 	)
 
 	ts := httptest.NewUnstartedServer(srv.Router())

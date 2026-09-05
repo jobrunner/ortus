@@ -119,15 +119,6 @@ func (p batchPoint) idOr(index int) string {
 // over a small bounded pool. Delivers a sync JSON object by default, or NDJSON
 // (one result object per line) when the client sends Accept: application/x-ndjson.
 func (s *Server) handleQueryBatch(w http.ResponseWriter, r *http.Request) {
-	// A batch is a deliberately long operation: lift THIS request's write
-	// deadline (server.write_timeout) so a large batch's response is delivered
-	// instead of the connection being cut mid-request — behind a reverse proxy
-	// that surfaced as a 502 once a batch outlived the 30 s default. Scoped to
-	// this endpoint on purpose: every other endpoint keeps the slow-client
-	// protection. The error is ignored — a ResponseWriter without deadline
-	// support simply keeps the configured timeout.
-	_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})
-
 	// Bound the request body so a hostile/huge payload can't force large
 	// allocations before the point-count caps even apply (~512 B/point + headroom).
 	r.Body = http.MaxBytesReader(w, r.Body, int64(s.batchMaxPoints)*512+64*1024)
@@ -145,6 +136,21 @@ func (s *Server) handleQueryBatch(w http.ResponseWriter, r *http.Request) {
 	if status, msg := s.batchRequestError(req, stream); msg != "" {
 		s.writeError(w, status, msg)
 		return
+	}
+
+	// A batch is a deliberately long operation: lift THIS request's write
+	// deadline (server.write_timeout) so a large batch's response is delivered
+	// instead of the connection being cut mid-request — behind a reverse proxy
+	// that surfaced as a 502 once a batch outlived the 30 s default. Lifted only
+	// AFTER validation, so the fast error responses above keep the normal
+	// protection, and scoped to this endpoint on purpose: every other endpoint
+	// keeps it entirely. A failure is logged (not fatal): without deadline
+	// control the batch still runs, but big responses may be cut again — the
+	// production symptom this exists to prevent (a middleware wrapper missing
+	// Unwrap would cause exactly that; TestBatchOutlivesServerWriteTimeout pins
+	// the full chain).
+	if err := http.NewResponseController(w).SetWriteDeadline(time.Time{}); err != nil {
+		s.logger.Warn("batch: could not lift the response write deadline — large batches may be cut off", "error", err)
 	}
 
 	in := s.resolveBatchInputs(r, req)
