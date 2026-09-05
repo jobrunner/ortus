@@ -12,6 +12,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -326,5 +327,36 @@ func TestLessTileLocalityGroupsByTile(t *testing.T) {
 	// Strictness: a coordinate is never less than itself.
 	if lessTileLocality(pts[0], pts[0]) {
 		t.Error("lessTileLocality must be irreflexive")
+	}
+}
+
+// scopeCheckGazetteer records whether Locate saw a request-scoped PiP cache in
+// its context.
+type scopeCheckGazetteer struct {
+	fakeGazetteer
+	sawScope atomic.Bool
+}
+
+func (s *scopeCheckGazetteer) Locate(ctx context.Context, c domain.Coordinate) (*domain.Locality, error) {
+	if input.PointInPolygonCacheFrom(ctx) != nil {
+		s.sawScope.Store(true)
+	}
+	return s.fakeGazetteer.Locate(ctx, c)
+}
+
+// TestBatchGazetteerOpensPointInPolygonScope: batch enrichment must open the
+// same request-scoped PiP cache the single endpoint opens (handleGazetteer, the
+// MCP tool) — Locate and Bearing both ask which admin polygons contain the
+// point, so without the scope that identical query runs twice per point
+// (measured: 102 PointInPolygon spans for a 51-point batch).
+func TestBatchGazetteerOpensPointInPolygonScope(t *testing.T) {
+	gaz := &scopeCheckGazetteer{fakeGazetteer: fakeGazetteer{loc: sampleLocality(), fix: sampleFix()}}
+	srv := newBatchServer(t, gaz, 1000, 10000)
+	rec := doBatch(t, srv, `{"points":[{"id":"a","lon":9.93,"lat":49.79}]}`, "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body: %s)", rec.Code, rec.Body.String())
+	}
+	if !gaz.sawScope.Load() {
+		t.Error("batch enrichment ran Locate without a point-in-polygon cache scope")
 	}
 }

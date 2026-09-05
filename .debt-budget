@@ -14,4 +14,11 @@
 # gosec G201): the SQL interpolates the layer/geom identifiers (double-quoted) because
 # SQLite cannot parameterize identifiers — the same justified pattern as
 # executePointQuery. One suppression covers the whole query build.
-27
+#
+# 2026-09: +1 for the gazetteer attribute index (geopackage/knn.go
+# EnsureAttributeIndex, gosec G201): CREATE INDEX interpolates the layer/column
+# identifiers (double-quoted, from the startup-verified manifest) because SQLite
+# cannot parameterize identifiers — the established pattern; the index is what
+# keeps wide-radius class-filtered KNN off the R-tree full-box plan (573 ms -> <10 ms
+# per city query).
+28

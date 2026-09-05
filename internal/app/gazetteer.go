@@ -89,6 +89,8 @@ func (a *App) buildGazetteer(ctx context.Context) error {
 		a.Logger.Warn("gazetteer SRID check failed — bearings may return nothing", "error", err)
 	}
 
+	a.ensureRankIndex(ctx, idx, manifest)
+
 	strategy, candidateRadiusKM := bearingStrategy(cfg.Bearing)
 	// The service talks to the index through the tracing decorator so every
 	// SpatiaLite round-trip shows up as a child span; idx itself stays the handle
@@ -226,4 +228,16 @@ func (a *App) closeGazetteer() {
 		a.Logger.Error("gazetteer index close error", "error", err)
 	}
 	a.gazetteerClose = nil
+}
+
+// ensureRankIndex creates the attribute index on the place-rank column: without
+// it, wide-radius class-filtered KNN (the bearing's candidate gather) fetches
+// every row in a ~240 km bbox before the class filter runs (measured 573 ms vs
+// well under 10 ms per city query). Warn but don't fail — e.g. on a read-only
+// file the queries stay correct on the R-tree plan, just slow.
+func (a *App) ensureRankIndex(ctx context.Context, idx *geopackage.GazetteerIndex, manifest gazetteer.Manifest) {
+	if err := idx.EnsureAttributeIndex(ctx, manifest.PlacesLayer, manifest.RankColumn); err != nil {
+		a.Logger.Warn("gazetteer attribute index not available — wide-radius bearing queries will be slow",
+			"layer", manifest.PlacesLayer, "column", manifest.RankColumn, "error", err)
+	}
 }
