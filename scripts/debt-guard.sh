@@ -25,6 +25,14 @@ status=0
   exit 2
 }
 
+# The counters below use `git grep` (tracked files only), so outside a git
+# worktree (e.g. a source export without .git) every count would silently be 0
+# and the ratchet would pass vacuously — fail fast instead.
+git rev-parse --is-inside-work-tree >/dev/null 2>&1 || {
+  echo "debt-guard: not inside a git worktree — git grep has nothing to scan" >&2
+  exit 2
+}
+
 # count <pattern> — number of matching directive lines in first-party *.go.
 # Uses `git grep` so only TRACKED files count: a recursive filesystem grep also
 # scans nested worktrees (.claude/worktrees/…) and untracked scratch files,
