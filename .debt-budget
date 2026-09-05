@@ -15,7 +15,7 @@
 # SQLite cannot parameterize identifiers — the same justified pattern as
 # executePointQuery. One suppression covers the whole query build.
 #
-# 2026-09: +1 for the gazetteer attribute index (spatialindex.go
+# 2026-09: +1 for the gazetteer attribute index (geopackage/knn.go
 # EnsureAttributeIndex, gosec G201): CREATE INDEX interpolates the layer/column
 # identifiers (double-quoted, from the startup-verified manifest) because SQLite
 # cannot parameterize identifiers — the established pattern; the index is what
