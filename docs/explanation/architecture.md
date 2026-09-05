@@ -191,17 +191,24 @@ func TestIntegration_PointQuery(t *testing.T) {
 
 ## Container
 
-Base-Image: `ghcr.io/jobrunner/spatialite-base-image:1.4.0`
+Base-Image: `ghcr.io/jobrunner/spatialite-base-image` (Multi-Stage: `alpine-dev-2.0.0`
+zum Bauen, `alpine-2.0.0` als Runtime; analog die `ubuntu-*`-Variante in
+`Dockerfile.ubuntu`). Seit 2.0.0 enthält das Runtime-Image nur noch den
+SpatiaLite-Stack (kein GDAL/Python), und ein monatlicher Rebuild im
+Basisimage-Repo publiziert die Tags mit frischen OS-Patches neu — ortus
+braucht daher keine eigene Runtime-Härtung mehr; das Trivy-Gate in der CI und
+der wöchentliche Scan des publizierten Images überwachen den Stand. Die
+maßgebliche Struktur steht in `Dockerfile` (vereinfacht):
 
 ```dockerfile
-FROM ghcr.io/jobrunner/spatialite-base-image:1.4.0
+FROM ghcr.io/jobrunner/spatialite-base-image:alpine-dev-2.0.0 AS builder
+# … CGO-Build von ./cmd/ortus …
 
-COPY ortus /usr/local/bin/ortus
-
-USER spatialite
-EXPOSE 8080 9090
-
-ENTRYPOINT ["/usr/local/bin/ortus"]
+FROM ghcr.io/jobrunner/spatialite-base-image:alpine-2.0.0
+COPY --from=builder /build/ortus /app/ortus
+USER ortus
+EXPOSE 8080 443
+ENTRYPOINT ["/app/ortus"]
 ```
 
 ## Weiterführende Dokumentation
