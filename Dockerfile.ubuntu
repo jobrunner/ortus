@@ -48,6 +48,16 @@ FROM ghcr.io/jobrunner/spatialite-base-image:ubuntu-1.5.0
 
 USER root
 
+# Interim hardening until spatialite-base-image ships a slim runtime variant:
+# pull Ubuntu security patches published since the base image was last built.
+# (Unlike the Alpine variant we keep python3 — Ubuntu system tooling depends
+# on it — and curl, which the HEALTHCHECK below uses.)
+# hadolint ignore=DL3005
+RUN apt-get update && \
+    apt-get upgrade -y && \
+    apt-get autoremove -y && \
+    rm -rf /var/lib/apt/lists/*
+
 # Create non-root user
 RUN groupadd -r ortus && useradd -r -g ortus ortus
 

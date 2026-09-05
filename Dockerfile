@@ -52,6 +52,18 @@ FROM ghcr.io/jobrunner/spatialite-base-image:alpine-1.5.0
 
 USER root
 
+# Interim hardening until spatialite-base-image ships a slim runtime variant:
+#  - Drop the GDAL/Python stack. The server never uses it: the ortus binary
+#    links only musl, and mod_spatialite needs proj/geos/librttopo/sqlite-libs
+#    (verified via ldd). ogr2ogr/py3-gdal are build/dev tools
+#    (cmd/gazetteer-fixture) and live in the -dev image.
+#  - apk upgrade pulls Alpine security patches published since the base image
+#    was last built (openssl, musl, expat, …), so CVE fixes reach the runtime
+#    without waiting for a base-image rebuild.
+RUN apk del --purge gdal-tools gdal py3-gdal py3-gdal-pyc py3-numpy py3-numpy-pyc \
+        python3 python3-pyc python3-pycache-pyc0 pyc && \
+    apk upgrade --no-cache
+
 # Create non-root user
 RUN addgroup -S ortus && adduser -S ortus -G ortus
 
