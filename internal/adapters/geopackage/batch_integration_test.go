@@ -3,7 +3,9 @@ package geopackage
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/jobrunner/ortus/internal/domain"
@@ -96,5 +98,111 @@ func TestBatchQueryPointsEmpty(t *testing.T) {
 	}
 	if len(got) != 0 {
 		t.Errorf("empty batch → %d slices, want 0", len(got))
+	}
+}
+
+// TestBatchQueryPlanPointsDriveRTree pins the loop order of the set-based batch
+// query: the points (json_each) must be the OUTER loop so SQLite probes the
+// R-tree once per point. With a plain INNER JOIN the planner instead scans the
+// whole R-tree and fetches every feature row of the layer — on real soil-map
+// layers that turned a 2-point batch into seconds per layer (and into proxy
+// 502s in production). The CROSS JOIN in buildBatchPointQuery forces the order
+// (documented SQLite semantics), so this plan is stable to assert on.
+func TestBatchQueryPlanPointsDriveRTree(t *testing.T) {
+	repo, src := newFixtureRepo(t)
+	ctx := context.Background()
+	if err := repo.CreateSpatialIndex(ctx, "regions", "regions"); err != nil {
+		t.Fatalf("CreateSpatialIndex: %v", err)
+	}
+	layer, ok := src.GetLayer("regions")
+	if !ok {
+		t.Fatal("regions layer missing")
+	}
+
+	repo.mu.RLock()
+	db := repo.connections[src.ID]
+	repo.mu.RUnlock()
+
+	indexTable := fmt.Sprintf("rtree_%s_%s", layer.Name, layer.GeometryColumn)
+	query := buildBatchPointQuery(layer, indexTable, false)
+	args := []interface{}{`[{"x":2,"y":2},{"x":8,"y":2}]`}
+	if layer.IsPolygonLayer() {
+		args = append(args, layer.SRID)
+	}
+
+	rows, err := db.QueryContext(ctx, "EXPLAIN QUERY PLAN "+query, args...)
+	if err != nil {
+		t.Fatalf("EXPLAIN QUERY PLAN: %v", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var details []string
+	for rows.Next() {
+		var id, parent, notused int
+		var detail string
+		if err := rows.Scan(&id, &parent, &notused, &detail); err != nil {
+			t.Fatalf("scan plan row: %v", err)
+		}
+		details = append(details, detail)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("plan rows: %v", err)
+	}
+	if len(details) == 0 {
+		t.Fatal("empty query plan")
+	}
+	// The first loop is the outer one. json_each (the points) must drive it;
+	// if the R-tree comes first it is being scanned in full.
+	if !strings.Contains(details[0], "json_each") {
+		t.Errorf("outer loop is %q, want the json_each points scan first (R-tree full scan otherwise); full plan:\n%s",
+			details[0], strings.Join(details, "\n"))
+	}
+}
+
+// TestBatchQueryPointsGeometryOnlyWhenConfigured: serializing geometry (AsText)
+// is the dominant cost of the batch query on large polygon layers (measured:
+// 28 MB of WKT for 39 hits, 3x the query time) — and the HTTP layer throws the
+// WKT away unless query.with_geometry is on. So the batch path must only ask
+// SQLite for AsText when the repository is configured to deliver geometry.
+func TestBatchQueryPointsGeometryOnlyWhenConfigured(t *testing.T) {
+	ctx := context.Background()
+	pt := []domain.Coordinate{domain.NewCoordinate(2, 2, 4326)} // inside "west"
+
+	// Default: no geometry configured → WKT stays empty (AsText not computed).
+	repo, _ := newFixtureRepo(t)
+	if err := repo.CreateSpatialIndex(ctx, "regions", "regions"); err != nil {
+		t.Fatalf("CreateSpatialIndex: %v", err)
+	}
+	batch, err := repo.QueryPoints(ctx, "regions", "regions", pt)
+	if err != nil {
+		t.Fatalf("QueryPoints: %v", err)
+	}
+	if len(batch[0]) == 0 {
+		t.Fatal("expected a hit at (2,2)")
+	}
+	if wkt := batch[0][0].Geometry.WKT; wkt != "" {
+		t.Errorf("default (no geometry): WKT should be empty, got %d bytes", len(wkt))
+	}
+
+	// WithGeometry: WKT is delivered.
+	path := filepath.Join(t.TempDir(), "regions-geo.gpkg")
+	buildFixtureGPKG(t, path)
+	repoGeo := NewRepository(Options{WithGeometry: true})
+	t.Cleanup(func() { _ = repoGeo.Close(ctx, "regions-geo") })
+	if _, err := repoGeo.Open(ctx, path); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if err := repoGeo.CreateSpatialIndex(ctx, "regions-geo", "regions"); err != nil {
+		t.Fatalf("CreateSpatialIndex: %v", err)
+	}
+	batchGeo, err := repoGeo.QueryPoints(ctx, "regions-geo", "regions", pt)
+	if err != nil {
+		t.Fatalf("QueryPoints (with geometry): %v", err)
+	}
+	if len(batchGeo[0]) == 0 {
+		t.Fatal("expected a hit at (2,2) with geometry")
+	}
+	if batchGeo[0][0].Geometry.WKT == "" {
+		t.Errorf("WithGeometry: WKT should be delivered, got empty")
 	}
 }
