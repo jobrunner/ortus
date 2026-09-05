@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.0](https://github.com/jobrunner/ortus/compare/v1.8.1...v1.9.0) (2026-09-05)
+
+
+### Features
+
+* **frontend:** add batch tab with CSV import/export and query option switches ([ff25f4b](https://github.com/jobrunner/ortus/commit/ff25f4b3af82b129833f59fff732b78a5b5cba5a))
+* **http:** add independent with-sources switch to /query and /query/batch ([c2fb732](https://github.com/jobrunner/ortus/commit/c2fb7323e15ab8d203243a414be96f7acc827416))
+
+
+### Bug Fixes
+
+* **deps:** bump golang.org/x/image to v0.45.0, x/crypto to v0.56.0 ([e7c318f](https://github.com/jobrunner/ortus/commit/e7c318fee051192c030ac3167789f85778327b61))
+* **docker:** bump spatialite-base-image to 1.6.2 (hardened rebuild) ([fba3543](https://github.com/jobrunner/ortus/commit/fba3543a33aeb3dcf37c24c2f18aa3abf7ad9784))
+* **docker:** clean apt cache in the ubuntu runtime upgrade layer ([7a52545](https://github.com/jobrunner/ortus/commit/7a525451e5b85d2ab87eae4292f595321b0eb0b5))
+* **docker:** drop GDAL/Python stack from runtime image, pull security patches ([896a586](https://github.com/jobrunner/ortus/commit/896a5864c5adeda80a27a7fb00a4f57619e2694c))
+* **scripts:** count only tracked files in debt-guard ([5a96363](https://github.com/jobrunner/ortus/commit/5a96363ea4d1bd41e2722fabb90d3f90587d1ff8))
+* **scripts:** fail fast when debt-guard runs outside a git worktree ([a6538de](https://github.com/jobrunner/ortus/commit/a6538de1e7f9e1d6094507cf1326554907f62315))
+
 ## [1.8.1](https://github.com/jobrunner/ortus/compare/v1.8.0...v1.8.1) (2026-09-05)
 
 
