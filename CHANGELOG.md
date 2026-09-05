@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.1](https://github.com/jobrunner/ortus/compare/v1.9.0...v1.9.1) (2026-09-05)
+
+
+### Bug Fixes
+
+* **docker:** move to slim spatialite-base-image 2.0.0, drop interim hardening ([d13b595](https://github.com/jobrunner/ortus/commit/d13b5953e9a0449ea9d3419ec9fe42a96163cec3))
+* **geopackage:** stop the batch PiP query from scanning the whole R-tree ([0593f25](https://github.com/jobrunner/ortus/commit/0593f25ad23781f0696f86a1d5931ce75a7dfdb4))
+
 ## [1.9.0](https://github.com/jobrunner/ortus/compare/v1.8.1...v1.9.0) (2026-09-05)
 
 
