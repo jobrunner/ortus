@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.2](https://github.com/jobrunner/ortus/compare/v1.9.1...v1.9.2) (2026-09-05)
+
+
+### Bug Fixes
+
+* **gazetteer:** make wide-radius candidate gathering batch-viable ([febbf04](https://github.com/jobrunner/ortus/commit/febbf04499a66c51d53d62fef0f339ec03e5d5bf))
+
 ## [1.9.1](https://github.com/jobrunner/ortus/compare/v1.9.0...v1.9.1) (2026-09-05)
 
 
