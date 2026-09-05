@@ -11,7 +11,7 @@ ARG BUILD_DATE=unknown
 # =============================================================================
 # Build stage - dev image includes Go 1.24.4 and all build tools
 # =============================================================================
-FROM ghcr.io/jobrunner/spatialite-base-image:ubuntu-dev-1.6.2 AS builder
+FROM ghcr.io/jobrunner/spatialite-base-image:ubuntu-dev-2.0.0 AS builder
 
 # Re-declare ARGs after FROM
 ARG VERSION
@@ -44,20 +44,16 @@ RUN CGO_ENABLED=1 go build \
 # =============================================================================
 # Runtime stage - minimal runtime image (SAME VERSION!)
 # =============================================================================
-FROM ghcr.io/jobrunner/spatialite-base-image:ubuntu-1.6.2
+FROM ghcr.io/jobrunner/spatialite-base-image:ubuntu-2.0.0
 
 USER root
 
-# Interim hardening until spatialite-base-image ships a slim runtime variant:
-# pull Ubuntu security patches published since the base image was last built.
-# (Unlike the Alpine variant we keep python3 — Ubuntu system tooling depends
-# on it — and curl, which the HEALTHCHECK below uses.)
-# hadolint ignore=DL3005
-RUN apt-get update && \
-    apt-get upgrade -y && \
-    apt-get autoremove -y && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+# Since base image 2.0.0 the runtime ships only the SpatiaLite stack
+# (spatialite-base-image#6; curl stays — the HEALTHCHECK below uses it), and a
+# monthly rebuild republishes the tags with fresh Ubuntu patches. The former
+# interim apt-upgrade hardening block is therefore gone: CVE fixes arrive via
+# base-image bumps (Dependabot) and the monthly rebuild, guarded by the CI
+# Trivy gate and the weekly published-image scan.
 
 # Create non-root user
 RUN groupadd -r ortus && useradd -r -g ortus ortus
