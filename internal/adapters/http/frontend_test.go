@@ -189,3 +189,42 @@ func TestFrontendAccessibilityMarkers(t *testing.T) {
 		}
 	}
 }
+
+// TestFrontendBatchProgress guards the batch tab's streaming consumption: the
+// submit uses the incremental NDJSON mode and drives a real progress bar
+// (points done / points sent) while rows append live — no more indeterminate
+// spinner for batches.
+func TestFrontendBatchProgress(t *testing.T) {
+	html := frontendHTML
+	for _, marker := range []string{
+		`id="batchProgress"`,      // <progress> element
+		`<progress`,               //
+		`id="batchProgressText"`,  // "n / total" label
+		`application/x-ndjson`,    // requests the incremental stream
+		`getReader()`,             // consumes the body incrementally
+		`function appendBatchRow`, // rows append as lines arrive
+		`batchProgress.value`,     // bar advances per line
+	} {
+		if !strings.Contains(html, marker) {
+			t.Errorf("frontend is missing batch progress marker %q", marker)
+		}
+	}
+}
+
+// TestFrontendHumanDurations guards the human-readable duration formatting:
+// milliseconds stay for sub-second values, seconds (one decimal) up to a
+// minute, minutes+seconds beyond — applied to every displayed duration (batch
+// stats, single-query stats, per-source query times).
+func TestFrontendHumanDurations(t *testing.T) {
+	html := frontendHTML
+	for _, marker := range []string{
+		`function formatDuration`,                 // the shared formatter
+		`formatDuration(elapsedMs)`,               // batch stats
+		`formatDuration(data.processing_time_ms)`, // single-query stats
+		`formatDuration(pkg.query_time_ms)`,       // per-source time
+	} {
+		if !strings.Contains(html, marker) {
+			t.Errorf("frontend is missing duration marker %q", marker)
+		}
+	}
+}

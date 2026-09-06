@@ -270,6 +270,26 @@ const frontendHTML = `<!DOCTYPE html>
             white-space: normal;
         }
 
+        .batch-progress {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+
+        .batch-progress progress {
+            flex: 1;
+            height: 0.6rem;
+            accent-color: var(--primary);
+        }
+
+        .batch-progress-text {
+            font-size: 0.8125rem;
+            color: var(--text-muted);
+            font-variant-numeric: tabular-nums;
+            white-space: nowrap;
+        }
+
         .batch-actions {
             display: flex;
             flex-wrap: wrap;
@@ -889,6 +909,10 @@ const frontendHTML = `<!DOCTYPE html>
                 <div class="result-header" role="status" aria-live="polite">
                     <span class="result-stats" id="batchStats"></span>
                 </div>
+                <div class="batch-progress" id="batchProgressWrap" style="display:none" role="status" aria-live="polite">
+                    <progress id="batchProgress" max="100" value="0" aria-label="Batch-Fortschritt" aria-describedby="batchProgressText"></progress>
+                    <span class="batch-progress-text" id="batchProgressText"></span>
+                </div>
                 <div class="batch-actions">
                     <button type="button" class="btn btn-secondary" id="batchDownloadBtn">CSV herunterladen</button>
                     <button type="button" class="btn btn-secondary" id="batchCopyCsvBtn">Als CSV kopieren</button>
@@ -950,6 +974,9 @@ const frontendHTML = `<!DOCTYPE html>
             const batchDownloadBtn = document.getElementById('batchDownloadBtn');
             const batchCopyCsvBtn = document.getElementById('batchCopyCsvBtn');
             const batchCopyJsonBtn = document.getElementById('batchCopyJsonBtn');
+            const batchProgressWrap = document.getElementById('batchProgressWrap');
+            const batchProgress = document.getElementById('batchProgress');
+            const batchProgressText = document.getElementById('batchProgressText');
 
             // --- Tabs (Einzelkoordinate / Batch) ---
             function selectTab(batch) {
@@ -1244,7 +1271,7 @@ const frontendHTML = `<!DOCTYPE html>
                     resultCoord.textContent = txt;
                 }
 
-                resultStats.textContent = data.total_features + ' Feature(s) in ' + data.processing_time_ms + 'ms';
+                resultStats.textContent = data.total_features + ' Feature(s) in ' + formatDuration(data.processing_time_ms);
 
                 let html = '';
 
@@ -1285,7 +1312,7 @@ const frontendHTML = `<!DOCTYPE html>
                 html += '<div class="source-meta">';
                 html += '<span class="badge">' + (pkg.feature_count === 1 ? '1 Feature' : pkg.feature_count + ' Features') + '</span>';
                 html += '<span class="meta-sep" aria-hidden="true">&middot;</span>';
-                html += '<span class="source-time">' + pkg.query_time_ms + ' ms</span>';
+                html += '<span class="source-time">' + formatDuration(pkg.query_time_ms) + '</span>';
                 html += '</div>'; // .source-meta
                 html += '</div>'; // .source-main
                 html += '<svg class="toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" focusable="false"><path d="M6 9l6 6 6-6"/></svg>';
@@ -1550,6 +1577,25 @@ const frontendHTML = `<!DOCTYPE html>
                 return html;
             }
 
+            // formatDuration renders a duration human-readable but still precise:
+            // milliseconds below half a second, seconds with one decimal below a
+            // minute, minutes+seconds beyond ("1m 34s").
+            function formatDuration(ms) {
+                if (ms < 500) {
+                    return Math.round(ms) + ' ms';
+                }
+                const sec = ms / 1000;
+                if (sec < 59.95) {
+                    return sec.toFixed(1) + ' s';
+                }
+                const m = Math.floor(ms / 60000);
+                let s = Math.round((ms % 60000) / 1000);
+                if (s === 60) {
+                    return (m + 1) + 'm 0s';
+                }
+                return m + 'm ' + s + 's';
+            }
+
             function formatValue(value) {
                 if (value === null || value === undefined) return '<em>null</em>';
                 if (typeof value === 'object') return '<code>' + escapeHtml(JSON.stringify(value)) + '</code>';
@@ -1708,13 +1754,17 @@ const frontendHTML = `<!DOCTYPE html>
                 if (!batchWithSources.checked) body['with-sources'] = false;
 
                 batchSubmitBtn.disabled = true;
-                loading.classList.add('active');
-                batchResults.classList.remove('active');
+                const startedAt = performance.now();
+                beginBatchProgress(parsed.points.length);
 
                 try {
+                    // Incremental NDJSON: the server streams one result line per
+                    // point, chunkwise, as soon as it is computed. The client knows
+                    // the total (it sent the points), so lines-read / points-sent IS
+                    // the progress — no extra protocol needed.
                     const response = await fetch('/api/v1/query/batch', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: { 'Content-Type': 'application/json', 'Accept': 'application/x-ndjson' },
                         body: JSON.stringify(body)
                     });
                     if (!response.ok) {
@@ -1727,49 +1777,113 @@ const frontendHTML = `<!DOCTYPE html>
                         }
                         throw new Error(errorMessage);
                     }
-                    let data;
-                    try {
-                        data = await response.json();
-                    } catch (parseErr) {
-                        throw new Error('Die Serverantwort konnte nicht verarbeitet werden.');
-                    }
-                    displayBatchResults(data, srid);
+                    const items = await consumeBatchStream(response, parsed.points.length);
+                    const elapsedMs = Math.round(performance.now() - startedAt);
+                    // Keep the documented sync response shape for the JSON export,
+                    // with the elapsed time measured client-side (the stream itself
+                    // carries no top-level envelope).
+                    lastBatch = { data: { results: items, total: items.length, processing_time_ms: elapsedMs }, srid: srid };
+                    finishBatchProgress(items, parsed.points.length, elapsedMs);
                 } catch (err) {
+                    batchProgressWrap.style.display = 'none';
                     showError(err.message);
                 } finally {
                     batchSubmitBtn.disabled = false;
-                    loading.classList.remove('active');
                 }
             });
 
-            // Compact per-point table: id, coordinate, place summary, feature count
-            // (or the per-point error). Details live in the CSV/JSON exports.
-            function displayBatchResults(data, srid) {
-                lastBatch = { data: data, srid: srid };
-                const items = data.results || [];
+            // beginBatchProgress switches the result card into streaming mode: an
+            // empty table plus a determinate progress bar (done / total) instead of
+            // the indeterminate spinner.
+            function beginBatchProgress(total) {
+                batchStats.textContent = '';
+                batchTableWrap.innerHTML = '<table class="batch-table"><thead><tr>' +
+                    '<th>id</th><th>Koordinate</th><th>Ort</th><th>Features</th>' +
+                    '</tr></thead><tbody id="batchTbody"></tbody></table>';
+                batchProgress.max = total;
+                batchProgress.value = 0;
+                batchProgressText.textContent = '0 / ' + total;
+                batchProgressWrap.style.display = '';
+                batchResults.classList.add('active');
+            }
+
+            // consumeBatchStream reads the NDJSON body incrementally, appending a
+            // table row and advancing the progress bar per line. Falls back to
+            // reading the whole body at once when streaming is unavailable.
+            async function consumeBatchStream(response, total) {
+                const items = [];
+                const handleLine = function(line) {
+                    if (!line.trim()) return;
+                    const item = JSON.parse(line);
+                    items.push(item);
+                    appendBatchRow(item);
+                    batchProgress.value = items.length;
+                    batchProgressText.textContent = items.length + ' / ' + total;
+                };
+                if (!response.body || !response.body.getReader) {
+                    (await response.text()).split('\n').forEach(handleLine);
+                    return items;
+                }
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buf = '';
+                for (;;) {
+                    const chunk = await reader.read();
+                    if (chunk.done) break;
+                    buf += decoder.decode(chunk.value, { stream: true });
+                    let nl;
+                    while ((nl = buf.indexOf('\n')) >= 0) {
+                        handleLine(buf.slice(0, nl));
+                        buf = buf.slice(nl + 1);
+                    }
+                }
+                buf += decoder.decode();
+                // The trailing buffer (no newline) may be an INCOMPLETE fragment
+                // when the server aborted mid-line — tolerate it instead of
+                // throwing, so the items.length < total check can report the
+                // truncation cleanly (complete lines above still throw on real
+                // corruption).
+                if (buf.trim()) {
+                    try {
+                        handleLine(buf);
+                    } catch (fragmentErr) {
+                        // partial trailing line: counted as missing, reported below
+                    }
+                }
+                return items;
+            }
+
+            // appendBatchRow adds one point's compact row: id, coordinate, place
+            // summary, feature count (or the per-point error). Details live in the
+            // CSV/JSON exports.
+            function appendBatchRow(item) {
+                let html = '<td>' + escapeHtml(item.id || '') + '</td>';
+                if (item.error) {
+                    html += '<td>—</td><td class="batch-err" colspan="2">Fehler: ' +
+                        escapeHtml(item.error.message || 'unbekannt') + '</td>';
+                } else {
+                    html += '<td>' + escapeHtml(batchCoordText(item)) + '</td>';
+                    html += '<td>' + escapeHtml(batchPlaceSummary(item)) + '</td>';
+                    html += '<td>' + (typeof item.total_features === 'number' ? item.total_features : '—') + '</td>';
+                }
+                const tr = document.createElement('tr');
+                tr.innerHTML = html;
+                document.getElementById('batchTbody').appendChild(tr);
+            }
+
+            // finishBatchProgress swaps the bar for the summary line. A stream that
+            // ended early (server-side abort) is called out instead of silently
+            // presenting a truncated result as complete.
+            function finishBatchProgress(items, total, elapsedMs) {
+                batchProgressWrap.style.display = 'none';
                 let errs = 0;
                 items.forEach(function(i) { if (i.error) errs++; });
-                batchStats.textContent = items.length + ' Punkt(e) in ' + data.processing_time_ms + ' ms' +
+                batchStats.textContent = items.length + ' Punkt(e) in ' + formatDuration(elapsedMs) +
                     (errs > 0 ? ' · ' + errs + ' Fehler' : '');
-
-                let html = '<table class="batch-table"><thead><tr>' +
-                    '<th>id</th><th>Koordinate</th><th>Ort</th><th>Features</th>' +
-                    '</tr></thead><tbody>';
-                items.forEach(function(item) {
-                    html += '<tr><td>' + escapeHtml(item.id || '') + '</td>';
-                    if (item.error) {
-                        html += '<td>—</td><td class="batch-err" colspan="2">Fehler: ' +
-                            escapeHtml(item.error.message || 'unbekannt') + '</td>';
-                    } else {
-                        html += '<td>' + escapeHtml(batchCoordText(item)) + '</td>';
-                        html += '<td>' + escapeHtml(batchPlaceSummary(item)) + '</td>';
-                        html += '<td>' + (typeof item.total_features === 'number' ? item.total_features : '—') + '</td>';
-                    }
-                    html += '</tr>';
-                });
-                html += '</tbody></table>';
-                batchTableWrap.innerHTML = html;
-                batchResults.classList.add('active');
+                if (items.length < total) {
+                    showError('Der Ergebnis-Stream endete vorzeitig: ' + items.length + ' von ' + total +
+                        ' Punkten empfangen. Serverlog prüfen; die Tabelle zeigt die empfangenen Ergebnisse.');
+                }
             }
 
             function batchCoordText(item) {

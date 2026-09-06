@@ -231,7 +231,12 @@ paths:
 
         Liefert standardmäßig ein JSON-Objekt `{results, total, processing_time_ms}`.
         Mit `Accept: application/x-ndjson` wird stattdessen ein NDJSON-Stream
-        geliefert (ein Ergebnis-Objekt pro Zeile) — für sehr große Batches.
+        geliefert (ein Ergebnis-Objekt pro Zeile) — für sehr große Batches. Der
+        Stream ist inkrementell: die Punkte werden blockweise verarbeitet und
+        jede fertige Zeile sofort gesendet (erste Bytes nach einem Block statt
+        nach dem ganzen Batch), in Eingabe-Reihenfolge. Ein Fehler im ersten
+        Block liefert einen regulären HTTP-Fehler; danach kann ein Fehler den
+        bereits begonnenen Stream nur noch abbrechen.
 
         Jedes Ergebnis trägt die vom Client gewählte `id` (bzw. den 0-basierten
         Index) und entspricht sonst einer Einzelpunkt-Antwort plus `wgs84` und —

@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -434,5 +435,141 @@ func TestBatchOutlivesServerWriteTimeout(t *testing.T) {
 	}
 	if len(out.Results) != 12 {
 		t.Errorf("results = %d, want 12", len(out.Results))
+	}
+}
+
+// gateGazetteer blocks Locate after `free` calls until the gate channel is
+// closed — the deterministic probe for incremental streaming: lines readable
+// while the gate is still closed CANNOT have waited for the full batch.
+type gateGazetteer struct {
+	fakeGazetteer
+	free  int32
+	calls atomic.Int32
+	gate  chan struct{}
+}
+
+func (g *gateGazetteer) Locate(ctx context.Context, c domain.Coordinate) (*domain.Locality, error) {
+	if g.calls.Add(1) > g.free {
+		// Also observe ctx so a canceled request (or a test failing before it
+		// closes the gate) cannot leak a blocked handler goroutine into later
+		// tests (goleak would flag it).
+		select {
+		case <-g.gate:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+	return g.fakeGazetteer.Locate(ctx, c)
+}
+
+// TestBatchNDJSONStreamsIncrementally: the NDJSON mode must emit each chunk as
+// soon as it is computed instead of buffering the whole batch (the old v1
+// trade-off: first byte after the FULL computation — 27 s for 883 points). The
+// gazetteer blocks after the first chunk's points, so reading the first chunk's
+// lines proves they were delivered before the batch finished; order and content
+// must match the input order exactly.
+func TestBatchNDJSONStreamsIncrementally(t *testing.T) {
+	const total = 150 // > batchStreamChunkSize, so at least two chunks
+	gaz := &gateGazetteer{
+		fakeGazetteer: fakeGazetteer{loc: sampleLocality(), fix: sampleFix()},
+		free:          batchStreamChunkSize,
+		gate:          make(chan struct{}),
+	}
+	srv := newBatchServer(t, gaz, 1000, 10000)
+	ts := httptest.NewServer(srv.Router())
+	t.Cleanup(ts.Close)
+
+	var pts []string
+	for i := 0; i < total; i++ {
+		pts = append(pts, fmt.Sprintf(`{"id":"p%03d","lon":9.9,"lat":49.7}`, i))
+	}
+	body := `{"points":[` + strings.Join(pts, ",") + `]}`
+	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/v1/query/batch", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/x-ndjson")
+	resp, err := ts.Client().Do(req)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+
+	scanner := bufio.NewScanner(resp.Body)
+	scanner.Buffer(make([]byte, 0, 1<<20), 1<<20)
+	var ids []string
+	// The first chunk must arrive while the gate still blocks the rest.
+	for len(ids) < batchStreamChunkSize {
+		if !scanner.Scan() {
+			t.Fatalf("stream ended after %d lines while the gate was closed: %v", len(ids), scanner.Err())
+		}
+		var item map[string]any
+		if err := json.Unmarshal(scanner.Bytes(), &item); err != nil {
+			t.Fatalf("line %d: %v", len(ids), err)
+		}
+		ids = append(ids, item["id"].(string))
+	}
+	close(gaz.gate) // release the remaining points
+	for scanner.Scan() {
+		var item map[string]any
+		if err := json.Unmarshal(scanner.Bytes(), &item); err != nil {
+			t.Fatalf("line %d: %v", len(ids), err)
+		}
+		ids = append(ids, item["id"].(string))
+	}
+	if err := scanner.Err(); err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+	if len(ids) != total {
+		t.Fatalf("lines = %d, want %d", len(ids), total)
+	}
+	for i, id := range ids {
+		if want := fmt.Sprintf("p%03d", i); id != want {
+			t.Fatalf("line %d id = %q, want %q (input order must hold across chunks)", i, id, want)
+		}
+	}
+}
+
+// TestBatchNDJSONFirstChunkErrorIsHTTPError: an error the first chunk hits
+// (e.g. an unknown source id) must surface as a proper HTTP error — the stream
+// only starts once the first chunk succeeded.
+func TestBatchNDJSONFirstChunkErrorIsHTTPError(t *testing.T) {
+	srv := newBatchServer(t, nil, 1000, 10000)
+	rec := doBatch(t, srv, `{"sources":["does-not-exist"],"points":[{"id":"a","lon":9.9,"lat":49.7}]}`, "application/x-ndjson")
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404 (body: %s)", rec.Code, rec.Body.String())
+	}
+}
+
+// TestBatchNDJSONIndexIdsSpanChunks: the documented fallback id is the 0-based
+// index of the point in the REQUEST — chunked streaming must offset it, or every
+// chunk would restart at "0" and ids would collide across chunks.
+func TestBatchNDJSONIndexIdsSpanChunks(t *testing.T) {
+	const total = batchStreamChunkSize + 50
+	srv := newBatchServer(t, nil, 1000, 10000)
+	var pts []string
+	for i := 0; i < total; i++ {
+		pts = append(pts, `{"lon":9.9,"lat":49.7}`) // no id → index fallback
+	}
+	rec := doBatch(t, srv, `{"points":[`+strings.Join(pts, ",")+`]}`, "application/x-ndjson")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	scanner := bufio.NewScanner(bytes.NewReader(rec.Body.Bytes()))
+	scanner.Buffer(make([]byte, 0, 1<<20), 1<<20)
+	i := 0
+	for scanner.Scan() {
+		var item map[string]any
+		if err := json.Unmarshal(scanner.Bytes(), &item); err != nil {
+			t.Fatalf("line %d: %v", i, err)
+		}
+		if want := strconv.Itoa(i); item["id"] != want {
+			t.Fatalf("line %d id = %v, want %q (index ids must span chunks)", i, item["id"], want)
+		}
+		i++
+	}
+	if i != total {
+		t.Fatalf("lines = %d, want %d", i, total)
 	}
 }

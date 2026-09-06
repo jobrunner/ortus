@@ -153,30 +153,15 @@ func (s *Server) handleQueryBatch(w http.ResponseWriter, r *http.Request) {
 		s.logger.Warn("batch: could not lift the response write deadline — large batches may be cut off", "error", err)
 	}
 
-	in := s.resolveBatchInputs(r, req)
+	if stream {
+		s.streamBatchChunks(w, r, req)
+		return
+	}
 
 	start := time.Now()
-	// resolveBatchResponses honors the with-sources switch (skip the PiP query,
-	// keep every item's shape) — see with_sources.go.
-	sub, err := s.resolveBatchResponses(r.Context(), req, in.valid)
+	items, err := s.buildBatchChunk(r, req, 0)
 	if err != nil {
-		s.handleQueryError(w, err) // e.g. unknown source → 404
-		return
-	}
-	if len(sub) != len(in.valid) {
-		// Invariant: one response per input coordinate. Guard so a future
-		// divergence fails cleanly instead of panicking on the scatter below.
-		s.writeError(w, http.StatusInternalServerError, "batch query returned an unexpected result count")
-		return
-	}
-	responses := make([]*domain.QueryResponse, len(req.Points))
-	for k, origIdx := range in.validIdx {
-		responses[origIdx] = sub[k]
-	}
-
-	items := s.buildBatchItems(r, req, in.wgs, in.wgsOK, responses, in.itemErr)
-	if stream {
-		s.streamBatchItems(w, r, items)
+		s.handleBatchError(w, err)
 		return
 	}
 	s.writeJSON(w, http.StatusOK, map[string]interface{}{
@@ -261,11 +246,11 @@ func prefersNDJSON(r *http.Request) bool {
 // buildBatchItems assembles one response item per input point (in order): the
 // per-source PiP result + echo id + the wgs84 block, plus the gazetteer block when
 // enrichment was requested. A per-point resolution error becomes an error object.
-func (s *Server) buildBatchItems(r *http.Request, req *batchRequest, wgs []domain.Coordinate, wgsOK []bool, responses []*domain.QueryResponse, itemErr []string) []map[string]interface{} {
+func (s *Server) buildBatchItems(r *http.Request, req *batchRequest, wgs []domain.Coordinate, wgsOK []bool, responses []*domain.QueryResponse, itemErr []string, idOffset int) []map[string]interface{} {
 	gaz := s.batchGazetteer(r, req, wgs, wgsOK, itemErr)
 	items := make([]map[string]interface{}, len(req.Points))
 	for i := range req.Points {
-		id := req.Points[i].idOr(i)
+		id := req.Points[i].idOr(idOffset + i)
 		if itemErr[i] != "" {
 			items[i] = map[string]interface{}{"id": id, "error": map[string]interface{}{"message": itemErr[i]}}
 			continue

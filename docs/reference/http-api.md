@@ -191,7 +191,39 @@ curl -X POST http://localhost:8080/api/v1/query/batch \
 ```
 
 For very large batches, request **NDJSON streaming** with `Accept:
-application/x-ndjson` — one result object per line, streamed incrementally:
+application/x-ndjson` — one result object per line, in input order. The stream
+is genuinely incremental: points are processed in chunks and every finished
+line is flushed immediately, so the first bytes arrive after one chunk
+(~a second) instead of after the whole batch. An error in the first chunk still
+surfaces as a proper HTTP error; once the stream has started, a later error can
+only abort it (check line count against your input).
+
+**Progress without extra protocol:** the client sent the points, so it knows
+the total — lines read ÷ points sent *is* the progress. Minimal browser client:
+
+```js
+const res = await fetch('/api/v1/query/batch', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', 'Accept': 'application/x-ndjson' },
+  body: JSON.stringify({ points }),
+});
+const reader = res.body.getReader(), dec = new TextDecoder();
+let buf = '', done = 0;
+for (;;) {
+  const c = await reader.read();
+  if (c.done) break;
+  buf += dec.decode(c.value, { stream: true });
+  let nl;
+  while ((nl = buf.indexOf('\n')) >= 0) {
+    const item = JSON.parse(buf.slice(0, nl)); buf = buf.slice(nl + 1);
+    progressBar.value = ++done / points.length; // and consume `item`
+  }
+}
+if (done < points.length) console.warn('stream ended early:', done, '/', points.length);
+```
+
+(The built-in frontend's batch tab consumes the stream exactly like this and
+shows a determinate progress bar while rows appear.)
 
 ```bash
 curl -N -X POST http://localhost:8080/api/v1/query/batch \
