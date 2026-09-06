@@ -910,7 +910,7 @@ const frontendHTML = `<!DOCTYPE html>
                     <span class="result-stats" id="batchStats"></span>
                 </div>
                 <div class="batch-progress" id="batchProgressWrap" style="display:none" role="status" aria-live="polite">
-                    <progress id="batchProgress" max="100" value="0"></progress>
+                    <progress id="batchProgress" max="100" value="0" aria-label="Batch-Fortschritt" aria-describedby="batchProgressText"></progress>
                     <span class="batch-progress-text" id="batchProgressText"></span>
                 </div>
                 <div class="batch-actions">
@@ -1838,7 +1838,18 @@ const frontendHTML = `<!DOCTYPE html>
                     }
                 }
                 buf += decoder.decode();
-                if (buf.trim()) handleLine(buf);
+                // The trailing buffer (no newline) may be an INCOMPLETE fragment
+                // when the server aborted mid-line — tolerate it instead of
+                // throwing, so the items.length < total check can report the
+                // truncation cleanly (complete lines above still throw on real
+                // corruption).
+                if (buf.trim()) {
+                    try {
+                        handleLine(buf);
+                    } catch (fragmentErr) {
+                        // partial trailing line: counted as missing, reported below
+                    }
+                }
                 return items;
             }
 
