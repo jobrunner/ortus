@@ -151,12 +151,14 @@ func (s *Server) buildBatchChunk(r *http.Request, req *batchRequest, idOffset in
 // batchStreamChunkSize is how many points the NDJSON stream computes per chunk.
 // Each chunk runs the full pipeline (set-based PiP + per-point gazetteer) and
 // its items are emitted immediately, so the first bytes arrive after ONE chunk
-// (~1-2 s on the real dataset) instead of after the whole batch (27 s for 883
-// points under the old compute-everything-first delivery). Smaller chunks lower
-// the time to first byte but repeat the per-layer query overhead more often;
-// 100 keeps that overhead near-negligible while staying well inside proxy idle
-// timeouts.
-const batchStreamChunkSize = 100
+// instead of after the whole batch (27 s for 883 points under the old
+// compute-everything-first delivery). The chunk size is also the granularity a
+// consumer's progress indicator can move at. Measured on the real 883-point
+// set, the per-chunk query overhead is noise (25er chunks 12.10 s vs. 100er
+// 12.06 s total PiP — the work is per-point linear), so the size is chosen for
+// UX: 25 puts the first lines on the wire after ~1 s and lets a progress bar
+// advance in ~3% steps.
+const batchStreamChunkSize = 25
 
 // streamBatchChunks answers the NDJSON mode incrementally: the request's points
 // are processed in input-order chunks, and every chunk's items are written (and
