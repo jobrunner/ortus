@@ -191,7 +191,12 @@ curl -X POST http://localhost:8080/api/v1/query/batch \
 ```
 
 For very large batches, request **NDJSON streaming** with `Accept:
-application/x-ndjson` — one result object per line, streamed incrementally:
+application/x-ndjson` — one result object per line, in input order. The stream
+is genuinely incremental: points are processed in chunks and every finished
+line is flushed immediately, so the first bytes arrive after one chunk
+(~seconds) instead of after the whole batch. An error in the first chunk still
+surfaces as a proper HTTP error; once the stream has started, a later error can
+only abort it (check line count against your input).
 
 ```bash
 curl -N -X POST http://localhost:8080/api/v1/query/batch \
