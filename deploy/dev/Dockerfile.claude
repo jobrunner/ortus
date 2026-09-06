@@ -8,7 +8,7 @@
 # credentials live in the `claude-auth` volume, seeded once by `make dev-login`
 # and mounted at $HOME/.claude. The entrypoint (claude-entrypoint.sh) seeds the
 # baked plugins/settings into that volume on start without touching credentials.
-FROM ghcr.io/jobrunner/spatialite-base-image:alpine-dev-1.5.0
+FROM ghcr.io/jobrunner/spatialite-base-image:alpine-dev-3.0.1
 
 # The base image runs as the non-root `spatialite` user; installing packages and
 # writing to /usr/local, /opt, and the config dir needs root. This is a dev-only
