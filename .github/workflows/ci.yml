@@ -369,13 +369,14 @@ jobs:
 
   # =============================================================================
   # Docker Build (without push)
-  # PRs: smoke-test alpine + ubuntu on native linux/amd64 only (fast — no QEMU).
+  # PRs: smoke-test alpine + ubuntu on linux/amd64 only (fast).
   # push to main/master: full matrix (all Dockerfiles × amd64 + arm64), since the
   # release images are multi-arch and must be verified before a release cut.
+  # Every leg builds natively — arm64 runs on ubuntu-24.04-arm, no QEMU.
   # =============================================================================
   docker-build:
     name: Docker Build
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.platform == 'linux/arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     needs: [docker-lint, build, version]
     strategy:
       matrix:
@@ -383,12 +384,6 @@ jobs:
         platform: ${{ github.event_name == 'pull_request' && fromJSON('["linux/amd64"]') || fromJSON('["linux/amd64", "linux/arm64"]') }}
     steps:
       - uses: actions/checkout@v7
-
-      # QEMU is only needed to build a foreign architecture (arm64 on an amd64
-      # host); native amd64 builds skip it.
-      - name: Set up QEMU
-        if: matrix.platform == 'linux/arm64'
-        uses: docker/setup-qemu-action@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4

@@ -1,5 +1,15 @@
 # Docker Release Pipeline für ortus
-# Builds and pushes multi-arch Docker images to GitHub Container Registry
+# Builds and pushes multi-arch Docker images to GitHub Container Registry.
+#
+# Each architecture is built natively (ubuntu-latest for amd64,
+# ubuntu-24.04-arm for arm64 — no QEMU emulation), pushed as a per-arch
+# candidate tag (`<variant>-ci-<arch>`), and merged into the final multi-arch
+# manifests with `docker buildx imagetools create`. The merged manifest is
+# what gets signed (cosign keyless).
+#
+# The mutable `<variant>-ci-<arch>` candidate tags are CI-internal; the
+# concurrency group below serializes runs so candidates cannot be overwritten
+# between build and merge.
 name: Docker Release
 
 on:
@@ -16,6 +26,10 @@ on:
         required: false
         default: 'false'
         type: boolean
+
+concurrency:
+  group: docker-release
+  cancel-in-progress: false
 
 env:
   REGISTRY: ghcr.io
@@ -59,25 +73,84 @@ jobs:
           echo "Minor: $MINOR"
 
   # =============================================================================
-  # Build and Push Docker Images - Alpine (default)
+  # Build each variant natively per architecture (no QEMU) and push per-arch
+  # candidate tags
   # =============================================================================
-  docker-alpine:
-    name: Build Alpine Image
-    runs-on: ubuntu-latest
+  build:
+    name: Build ${{ matrix.variant }} (${{ matrix.arch }})
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     needs: [version]
     permissions:
       contents: read
       packages: write    # push image to ghcr.io
-      id-token: write    # cosign keyless signing via OIDC
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
+        variant: [alpine, ubuntu]
+        include:
+          - variant: alpine
+            dockerfile: Dockerfile
+          - variant: ubuntu
+            dockerfile: Dockerfile.ubuntu
     steps:
       - uses: actions/checkout@v7
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
+      - name: Log in to Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # metadata-action only supplies the OCI labels here; the candidate tag
+      # is CI-internal and replaced by the final tags in the merge job.
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=${{ matrix.variant }}-ci-${{ matrix.arch }}
+
+      - name: Build and push per-arch candidate
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/${{ matrix.arch }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=release-${{ matrix.variant }}-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=release-${{ matrix.variant }}-${{ matrix.arch }}
+          # Supply-chain attestations baked into the image manifest; the
+          # imagetools merge below carries them into the final manifest list.
+          provenance: mode=max # SLSA build provenance
+          sbom: true           # SPDX SBOM
+          build-args: |
+            VERSION=${{ needs.version.outputs.version }}
+            COMMIT=${{ github.sha }}
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+
+  # =============================================================================
+  # Merge the per-arch candidates into the final multi-arch manifests and sign
+  # =============================================================================
+  merge:
+    name: Merge and Sign ${{ matrix.variant }}
+    runs-on: ubuntu-latest
+    needs: [build, version]
+    permissions:
+      contents: read
+      packages: write
+      id-token: write    # cosign keyless signing via OIDC
+    strategy:
+      matrix:
+        variant: [alpine, ubuntu]
+    steps:
       - name: Install cosign
         uses: sigstore/cosign-installer@v3
 
@@ -88,8 +161,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata
-        id: meta
+      # Same final tag sets as before the native-arm64 split: the alpine
+      # variant carries the default tags (latest, X.Y.Z, X.Y, X, sha), the
+      # ubuntu variant its -ubuntu counterparts.
+      - name: Extract metadata (alpine tags)
+        id: meta-alpine
+        if: matrix.variant == 'alpine'
         uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
@@ -104,63 +181,9 @@ jobs:
             type=raw,value=alpine
             type=sha,prefix=
 
-      - name: Build and push
-        id: build
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          # Supply-chain attestations baked into the image manifest:
-          provenance: mode=max # SLSA build provenance
-          sbom: true           # SPDX SBOM
-          build-args: |
-            VERSION=${{ needs.version.outputs.version }}
-            COMMIT=${{ github.sha }}
-            BUILD_DATE=${{ github.event.head_commit.timestamp }}
-
-      - name: Sign image (cosign keyless)
-        env:
-          DIGEST: ${{ steps.build.outputs.digest }}
-        run: cosign sign --yes "${REGISTRY}/${IMAGE_NAME}@${DIGEST}"
-
-  # =============================================================================
-  # Build and Push Docker Images - Ubuntu
-  # =============================================================================
-  docker-ubuntu:
-    name: Build Ubuntu Image
-    runs-on: ubuntu-latest
-    needs: [version]
-    permissions:
-      contents: read
-      packages: write
-      id-token: write    # cosign keyless signing via OIDC
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Install cosign
-        uses: sigstore/cosign-installer@v3
-
-      - name: Log in to Container Registry
-        uses: docker/login-action@v4
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata
-        id: meta
+      - name: Extract metadata (ubuntu tags)
+        id: meta-ubuntu
+        if: matrix.variant == 'ubuntu'
         uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
@@ -170,29 +193,30 @@ jobs:
             type=raw,value=${{ needs.version.outputs.major }}-ubuntu
             type=raw,value=ubuntu
 
-      - name: Build and push
-        id: build
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: Dockerfile.ubuntu
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          provenance: mode=max # SLSA build provenance
-          sbom: true           # SPDX SBOM
-          build-args: |
-            VERSION=${{ needs.version.outputs.version }}
-            COMMIT=${{ github.sha }}
-            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+      - name: Create multi-arch manifest
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          VARIANT: ${{ matrix.variant }}
+          TAGS: ${{ matrix.variant == 'alpine' && steps.meta-alpine.outputs.tags || steps.meta-ubuntu.outputs.tags }}
+        run: |
+          set -euo pipefail
+          args=""
+          while IFS= read -r tag; do
+            [ -n "$tag" ] && args="$args -t $tag"
+          done <<< "$TAGS"
+          # shellcheck disable=SC2086
+          docker buildx imagetools create $args \
+            "${IMAGE}:${VARIANT}-ci-amd64" \
+            "${IMAGE}:${VARIANT}-ci-arm64"
 
       - name: Sign image (cosign keyless)
         env:
-          DIGEST: ${{ steps.build.outputs.digest }}
-        run: cosign sign --yes "${REGISTRY}/${IMAGE_NAME}@${DIGEST}"
+          IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          REF: ${{ matrix.variant == 'alpine' && needs.version.outputs.version || format('{0}-ubuntu', needs.version.outputs.version) }}
+        run: |
+          set -euo pipefail
+          DIGEST=$(docker buildx imagetools inspect "${IMAGE}:${REF}" --format '{{json .Manifest}}' | jq -r .digest)
+          cosign sign --yes "${IMAGE}@${DIGEST}"
 
   # =============================================================================
   # Security Scan Published Images
@@ -200,7 +224,7 @@ jobs:
   security-scan:
     name: Security Scan
     runs-on: ubuntu-latest
-    needs: [docker-alpine, version]
+    needs: [merge, version]
     permissions:
       contents: read
       security-events: write   # upload Trivy SARIF
@@ -227,7 +251,7 @@ jobs:
   create-release:
     name: Create Release
     runs-on: ubuntu-latest
-    needs: [docker-alpine, docker-ubuntu, version]
+    needs: [merge, version]
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
     permissions:
       contents: write
