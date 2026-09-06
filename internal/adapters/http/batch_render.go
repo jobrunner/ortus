@@ -129,7 +129,10 @@ func (s *Server) handleBatchError(w http.ResponseWriter, err error) {
 // switch, see with_sources.go), the scatter back to input order, and the item
 // assembly (incl. gazetteer enrichment). It is the shared unit behind the sync
 // response (one call for everything) and the NDJSON stream (one call per chunk).
-func (s *Server) buildBatchChunk(r *http.Request, req *batchRequest) ([]map[string]interface{}, error) {
+// idOffset is the chunk's start index in the ORIGINAL request, so the
+// documented fallback echo id (the point's 0-based request index) stays correct
+// across chunks.
+func (s *Server) buildBatchChunk(r *http.Request, req *batchRequest, idOffset int) ([]map[string]interface{}, error) {
 	in := s.resolveBatchInputs(r, req)
 	sub, err := s.resolveBatchResponses(r.Context(), req, in.valid)
 	if err != nil {
@@ -142,7 +145,7 @@ func (s *Server) buildBatchChunk(r *http.Request, req *batchRequest) ([]map[stri
 	for k, origIdx := range in.validIdx {
 		responses[origIdx] = sub[k]
 	}
-	return s.buildBatchItems(r, req, in.wgs, in.wgsOK, responses, in.itemErr), nil
+	return s.buildBatchItems(r, req, in.wgs, in.wgsOK, responses, in.itemErr, idOffset), nil
 }
 
 // batchStreamChunkSize is how many points the NDJSON stream computes per chunk.
@@ -174,7 +177,7 @@ func (s *Server) streamBatchChunks(w http.ResponseWriter, r *http.Request, req *
 		end := min(start+batchStreamChunkSize, len(req.Points))
 		chunk := *req
 		chunk.Points = req.Points[start:end]
-		items, err := s.buildBatchChunk(r, &chunk)
+		items, err := s.buildBatchChunk(r, &chunk, start)
 		if err != nil {
 			if !headerSent {
 				s.handleBatchError(w, err)

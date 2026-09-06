@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -449,7 +450,14 @@ type gateGazetteer struct {
 
 func (g *gateGazetteer) Locate(ctx context.Context, c domain.Coordinate) (*domain.Locality, error) {
 	if g.calls.Add(1) > g.free {
-		<-g.gate
+		// Also observe ctx so a canceled request (or a test failing before it
+		// closes the gate) cannot leak a blocked handler goroutine into later
+		// tests (goleak would flag it).
+		select {
+		case <-g.gate:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
 	}
 	return g.fakeGazetteer.Locate(ctx, c)
 }
@@ -531,5 +539,37 @@ func TestBatchNDJSONFirstChunkErrorIsHTTPError(t *testing.T) {
 	rec := doBatch(t, srv, `{"sources":["does-not-exist"],"points":[{"id":"a","lon":9.9,"lat":49.7}]}`, "application/x-ndjson")
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404 (body: %s)", rec.Code, rec.Body.String())
+	}
+}
+
+// TestBatchNDJSONIndexIdsSpanChunks: the documented fallback id is the 0-based
+// index of the point in the REQUEST — chunked streaming must offset it, or every
+// chunk would restart at "0" and ids would collide across chunks.
+func TestBatchNDJSONIndexIdsSpanChunks(t *testing.T) {
+	const total = batchStreamChunkSize + 50
+	srv := newBatchServer(t, nil, 1000, 10000)
+	var pts []string
+	for i := 0; i < total; i++ {
+		pts = append(pts, `{"lon":9.9,"lat":49.7}`) // no id → index fallback
+	}
+	rec := doBatch(t, srv, `{"points":[`+strings.Join(pts, ",")+`]}`, "application/x-ndjson")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	scanner := bufio.NewScanner(bytes.NewReader(rec.Body.Bytes()))
+	scanner.Buffer(make([]byte, 0, 1<<20), 1<<20)
+	i := 0
+	for scanner.Scan() {
+		var item map[string]any
+		if err := json.Unmarshal(scanner.Bytes(), &item); err != nil {
+			t.Fatalf("line %d: %v", i, err)
+		}
+		if want := strconv.Itoa(i); item["id"] != want {
+			t.Fatalf("line %d id = %v, want %q (index ids must span chunks)", i, item["id"], want)
+		}
+		i++
+	}
+	if i != total {
+		t.Fatalf("lines = %d, want %d", i, total)
 	}
 }

@@ -159,7 +159,7 @@ func (s *Server) handleQueryBatch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	start := time.Now()
-	items, err := s.buildBatchChunk(r, req)
+	items, err := s.buildBatchChunk(r, req, 0)
 	if err != nil {
 		s.handleBatchError(w, err)
 		return
@@ -246,11 +246,11 @@ func prefersNDJSON(r *http.Request) bool {
 // buildBatchItems assembles one response item per input point (in order): the
 // per-source PiP result + echo id + the wgs84 block, plus the gazetteer block when
 // enrichment was requested. A per-point resolution error becomes an error object.
-func (s *Server) buildBatchItems(r *http.Request, req *batchRequest, wgs []domain.Coordinate, wgsOK []bool, responses []*domain.QueryResponse, itemErr []string) []map[string]interface{} {
+func (s *Server) buildBatchItems(r *http.Request, req *batchRequest, wgs []domain.Coordinate, wgsOK []bool, responses []*domain.QueryResponse, itemErr []string, idOffset int) []map[string]interface{} {
 	gaz := s.batchGazetteer(r, req, wgs, wgsOK, itemErr)
 	items := make([]map[string]interface{}, len(req.Points))
 	for i := range req.Points {
-		id := req.Points[i].idOr(i)
+		id := req.Points[i].idOr(idOffset + i)
 		if itemErr[i] != "" {
 			items[i] = map[string]interface{}{"id": id, "error": map[string]interface{}{"message": itemErr[i]}}
 			continue
