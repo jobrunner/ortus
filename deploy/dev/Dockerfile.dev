@@ -2,7 +2,7 @@
 # deploy/dev/docker-compose.dev.yaml); `air` rebuilds on change. Built on the same
 # SpatiaLite dev base as the production builder so CGO + mod_spatialite work, and
 # with GOPATH/caches placed so the compose volume mounts line up.
-FROM ghcr.io/jobrunner/spatialite-base-image:alpine-dev-1.5.0
+FROM ghcr.io/jobrunner/spatialite-base-image:alpine-dev-3.0.1
 
 # The base image runs as the non-root `spatialite` user; `go install` (to
 # /usr/local/bin) and air writing tmp/ + the build cache need root. Dev-only.

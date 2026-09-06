@@ -98,7 +98,7 @@ dev-gh-login: ## Dev: einmaliger GitHub-Login ins gh-auth Volume (fuer gh CLI + 
 	@docker volume inspect $(DEV_GH_VOL) >/dev/null 2>&1 || docker volume create $(DEV_GH_VOL)
 	@echo "gh startet interaktiv - fuehre 'gh auth login' aus (danach sind gh + GitHub-MCP nutzbar)."
 	docker run --rm -it --user root -e HOME=/root -v $(DEV_GH_VOL):/root/.config/gh \
-		ghcr.io/jobrunner/spatialite-base-image:alpine-dev-1.5.0 \
+		ghcr.io/jobrunner/spatialite-base-image:alpine-dev-3.0.1 \
 		sh -lc "apk add --no-cache github-cli >/dev/null 2>&1 && gh auth login && gh auth setup-git"
 	@echo "GitHub-Login im Volume $(DEV_GH_VOL) gespeichert (gilt fuer alle Features)."
 

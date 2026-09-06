@@ -11,7 +11,7 @@ ARG BUILD_DATE=unknown
 # =============================================================================
 # Build stage - dev image includes Go 1.24.4 and all build tools
 # =============================================================================
-FROM ghcr.io/jobrunner/spatialite-base-image:alpine-dev-2.0.0 AS builder
+FROM ghcr.io/jobrunner/spatialite-base-image:alpine-dev-3.0.1 AS builder
 
 # Re-declare ARGs after FROM
 ARG VERSION
@@ -44,16 +44,18 @@ RUN CGO_ENABLED=1 go build \
 # =============================================================================
 # Runtime stage - minimal runtime image (SAME VERSION!)
 # =============================================================================
-FROM ghcr.io/jobrunner/spatialite-base-image:alpine-2.0.0
+FROM ghcr.io/jobrunner/spatialite-base-image:alpine-3.0.1
 
 USER root
 
 # Since base image 2.0.0 the runtime ships only the SpatiaLite stack (no
 # GDAL/Python — spatialite-base-image#6), and a monthly rebuild republishes
-# the tags with fresh Alpine patches. The former interim apk-del/upgrade
-# hardening block is therefore gone: CVE fixes arrive via base-image bumps
+# the tags with fresh Alpine patches. CVE fixes arrive via base-image bumps
 # (Dependabot) and the monthly rebuild, guarded by the CI Trivy gate and the
 # weekly published-image scan.
+# Since 3.0.0 PROJ and libspatialite are self-built without libcurl (PROJ CDN
+# grid downloads are unavailable) and live under /usr/local/lib — see
+# SPATIALITE_LIBRARY_PATH below.
 
 # Create non-root user
 RUN addgroup -S ortus && adduser -S ortus -G ortus
@@ -72,8 +74,9 @@ RUN chown -R ortus:ortus /app
 
 USER ortus
 
-# Set SpatiaLite library path for the runtime
-ENV SPATIALITE_LIBRARY_PATH=/usr/lib/mod_spatialite.so
+# Set SpatiaLite library path for the runtime (self-built since base image
+# 3.0.0, installed under /usr/local/lib)
+ENV SPATIALITE_LIBRARY_PATH=/usr/local/lib/mod_spatialite.so
 
 # Server configuration via environment variables
 # Override at runtime: docker run -e ORTUS_SERVER_PORT=9090 ortus
