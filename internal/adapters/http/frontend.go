@@ -1271,7 +1271,7 @@ const frontendHTML = `<!DOCTYPE html>
                     resultCoord.textContent = txt;
                 }
 
-                resultStats.textContent = data.total_features + ' Feature(s) in ' + data.processing_time_ms + 'ms';
+                resultStats.textContent = data.total_features + ' Feature(s) in ' + formatDuration(data.processing_time_ms);
 
                 let html = '';
 
@@ -1312,7 +1312,7 @@ const frontendHTML = `<!DOCTYPE html>
                 html += '<div class="source-meta">';
                 html += '<span class="badge">' + (pkg.feature_count === 1 ? '1 Feature' : pkg.feature_count + ' Features') + '</span>';
                 html += '<span class="meta-sep" aria-hidden="true">&middot;</span>';
-                html += '<span class="source-time">' + pkg.query_time_ms + ' ms</span>';
+                html += '<span class="source-time">' + formatDuration(pkg.query_time_ms) + '</span>';
                 html += '</div>'; // .source-meta
                 html += '</div>'; // .source-main
                 html += '<svg class="toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" focusable="false"><path d="M6 9l6 6 6-6"/></svg>';
@@ -1577,6 +1577,25 @@ const frontendHTML = `<!DOCTYPE html>
                 return html;
             }
 
+            // formatDuration renders a duration human-readable but still precise:
+            // milliseconds below half a second, seconds with one decimal below a
+            // minute, minutes+seconds beyond ("1m 34s").
+            function formatDuration(ms) {
+                if (ms < 500) {
+                    return Math.round(ms) + ' ms';
+                }
+                const sec = ms / 1000;
+                if (sec < 59.95) {
+                    return sec.toFixed(1) + ' s';
+                }
+                const m = Math.floor(ms / 60000);
+                let s = Math.round((ms % 60000) / 1000);
+                if (s === 60) {
+                    return (m + 1) + 'm 0s';
+                }
+                return m + 'm ' + s + 's';
+            }
+
             function formatValue(value) {
                 if (value === null || value === undefined) return '<em>null</em>';
                 if (typeof value === 'object') return '<code>' + escapeHtml(JSON.stringify(value)) + '</code>';
@@ -1759,8 +1778,12 @@ const frontendHTML = `<!DOCTYPE html>
                         throw new Error(errorMessage);
                     }
                     const items = await consumeBatchStream(response, parsed.points.length);
-                    lastBatch = { data: { results: items }, srid: srid };
-                    finishBatchProgress(items, parsed.points.length, performance.now() - startedAt);
+                    const elapsedMs = Math.round(performance.now() - startedAt);
+                    // Keep the documented sync response shape for the JSON export,
+                    // with the elapsed time measured client-side (the stream itself
+                    // carries no top-level envelope).
+                    lastBatch = { data: { results: items, total: items.length, processing_time_ms: elapsedMs }, srid: srid };
+                    finishBatchProgress(items, parsed.points.length, elapsedMs);
                 } catch (err) {
                     batchProgressWrap.style.display = 'none';
                     showError(err.message);
@@ -1844,7 +1867,7 @@ const frontendHTML = `<!DOCTYPE html>
                 batchProgressWrap.style.display = 'none';
                 let errs = 0;
                 items.forEach(function(i) { if (i.error) errs++; });
-                batchStats.textContent = items.length + ' Punkt(e) in ' + Math.round(elapsedMs) + ' ms' +
+                batchStats.textContent = items.length + ' Punkt(e) in ' + formatDuration(elapsedMs) +
                     (errs > 0 ? ' · ' + errs + ' Fehler' : '');
                 if (items.length < total) {
                     showError('Der Ergebnis-Stream endete vorzeitig: ' + items.length + ' von ' + total +

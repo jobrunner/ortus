@@ -210,3 +210,21 @@ func TestFrontendBatchProgress(t *testing.T) {
 		}
 	}
 }
+
+// TestFrontendHumanDurations guards the human-readable duration formatting:
+// milliseconds stay for sub-second values, seconds (one decimal) up to a
+// minute, minutes+seconds beyond — applied to every displayed duration (batch
+// stats, single-query stats, per-source query times).
+func TestFrontendHumanDurations(t *testing.T) {
+	html := frontendHTML
+	for _, marker := range []string{
+		`function formatDuration`,                 // the shared formatter
+		`formatDuration(elapsedMs)`,               // batch stats
+		`formatDuration(data.processing_time_ms)`, // single-query stats
+		`formatDuration(pkg.query_time_ms)`,       // per-source time
+	} {
+		if !strings.Contains(html, marker) {
+			t.Errorf("frontend is missing duration marker %q", marker)
+		}
+	}
+}
