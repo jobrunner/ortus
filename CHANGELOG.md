@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.10.0](https://github.com/jobrunner/ortus/compare/v1.9.3...v1.10.0) (2026-09-06)
+
+
+### Features
+
+* **frontend:** determinate batch progress over the incremental NDJSON stream ([5d3c0b6](https://github.com/jobrunner/ortus/commit/5d3c0b663c409dc847bcc449caedc6d060960e3d))
+* **frontend:** human-readable durations, keep the sync envelope in JSON export ([730baf8](https://github.com/jobrunner/ortus/commit/730baf85a1c51a8ce011dd13942fff79ac671c47))
+* **http:** stream batch NDJSON incrementally, chunk by chunk ([3801ed8](https://github.com/jobrunner/ortus/commit/3801ed87a4d3acc20704a689ffa7a285e86b245b))
+
+
+### Bug Fixes
+
+* **frontend:** name the progress bar, tolerate a truncated trailing stream line ([18896b4](https://github.com/jobrunner/ortus/commit/18896b4f28cc510aaa5407110f76d432b17cba12))
+* **http:** keep fallback echo ids request-relative across NDJSON chunks ([7daf538](https://github.com/jobrunner/ortus/commit/7daf5387628f7b7fa0d2fd1ad6a26a0847f54cde))
+
 ## [1.9.3](https://github.com/jobrunner/ortus/compare/v1.9.2...v1.9.3) (2026-09-05)
 
 
