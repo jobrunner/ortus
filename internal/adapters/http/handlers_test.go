@@ -106,6 +106,17 @@ type mockHealthDetails struct {
 }
 
 func newTestServer(_ *mockQueryService, _ *mockSourceRegistry, _ *mockHealthService) *Server {
+	return newTestServerWithConfig(config.ServerConfig{
+		Host:         "localhost",
+		Port:         8080,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 10 * time.Second,
+	})
+}
+
+// newTestServerWithConfig builds the same fake-wired server as newTestServer but
+// lets a test vary the ServerConfig (CORS origins, rate limiting, …).
+func newTestServerWithConfig(cfg config.ServerConfig) *Server {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 
 	// Create real services using mocks
@@ -133,12 +144,7 @@ func newTestServer(_ *mockQueryService, _ *mockSourceRegistry, _ *mockHealthServ
 
 	// Create server
 	srv := NewServer(
-		config.ServerConfig{
-			Host:         "localhost",
-			Port:         8080,
-			ReadTimeout:  10 * time.Second,
-			WriteTimeout: 10 * time.Second,
-		},
+		cfg,
 		realQuery,
 		realRegistry,
 		realHealth,

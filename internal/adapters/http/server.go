@@ -26,6 +26,7 @@ import (
 type Server struct {
 	server           *http.Server
 	router           *mux.Router
+	handler          http.Handler // what is actually served: the router, wrapped in CORS when enabled
 	queryService     input.QueryService
 	registry         input.SourceRegistry
 	health           input.HealthChecker
@@ -153,9 +154,18 @@ func NewServer(
 
 	s.router = s.setupRoutes()
 
+	// CORS wraps the router from OUTSIDE the mux middleware chain — it must not
+	// be an r.Use middleware. mux runs Use-middleware only for requests that
+	// match a route, and a preflight (OPTIONS) matches none of our GET/POST
+	// routes, so an r.Use CORS layer never sees it. See cors.go.
+	s.handler = s.router
+	if cfg.CORS.Enabled() {
+		s.handler = s.corsMiddleware(s.router)
+	}
+
 	s.server = &http.Server{
 		Addr:         cfg.Address(),
-		Handler:      s.router,
+		Handler:      s.handler,
 		ReadTimeout:  cfg.ReadTimeout,
 		WriteTimeout: cfg.WriteTimeout,
 	}
@@ -203,11 +213,10 @@ func (s *Server) setupRoutes() *mux.Router {
 	// That's acceptable — it keeps cardinality bounded with zero extra
 	// code. If we ever want to count unmatched traffic, the fix is to wrap
 	// those handlers with the same middleware chain manually.
-
-	// Add CORS middleware if configured
-	if s.config.CORS.Enabled() {
-		r.Use(s.corsMiddleware)
-	}
+	//
+	// CORS is exactly such a case and is therefore NOT registered here: a
+	// preflight matches no route, so an r.Use CORS middleware would never run
+	// for it. It wraps the whole router in NewServer instead.
 
 	// Health endpoints
 	r.HandleFunc("/health", s.handleHealth).Methods(http.MethodGet)
@@ -255,9 +264,19 @@ func (s *Server) setupRoutes() *mux.Router {
 	return r
 }
 
-// Router returns the mux router.
+// Router returns the mux router. Use it to walk registered routes; to SERVE
+// requests use Handler(), which includes the outer middleware (CORS) the router
+// itself knows nothing about.
 func (s *Server) Router() *mux.Router {
 	return s.router
+}
+
+// Handler returns what the server actually serves: the router plus the outer
+// middleware wrapped around it. Anything that serves requests (the TLS server,
+// tests) must use this — serving Router() directly silently drops CORS, and a
+// preflight test against it would prove nothing.
+func (s *Server) Handler() http.Handler {
+	return s.handler
 }
 
 // Start starts the HTTP server.

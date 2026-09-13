@@ -261,94 +261,55 @@ func TestServer_isOriginAllowed(t *testing.T) {
 	}
 }
 
-// corsTestCase defines a test case for CORS middleware.
+// corsTestCase defines a test case for origin matching on a simple (non-preflight)
+// cross-origin request. Preflight behavior is pinned in cors_preflight_test.go.
 type corsTestCase struct {
 	name                string
 	allowedOrigins      []string
 	requestOrigin       string
-	requestMethod       string
 	expectCORSHeaders   bool
-	expectStatusCode    int
 	expectAllowedOrigin string
 }
 
-// runCORSTest executes a single CORS test case.
+// runCORSTest executes a single CORS test case against the handler the server
+// really serves, so the middleware is exercised in its actual position around
+// the router rather than around a stub.
 func runCORSTest(t *testing.T, tt *corsTestCase) {
 	t.Helper()
 
-	// Create a simple handler that returns 200 OK
-	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
+	srv := newCORSServer(t, tt.allowedOrigins...)
 
-	// Create server with CORS config
-	s := &Server{
-		config: config.ServerConfig{
-			CORS: config.CORSConfig{
-				AllowedOrigins: tt.allowedOrigins,
-			},
-		},
-	}
-
-	// Wrap with CORS middleware
-	handler := s.corsMiddleware(nextHandler)
-
-	// Create request
-	req := httptest.NewRequest(tt.requestMethod, "/api/v1/query", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/sources", nil)
 	if tt.requestOrigin != "" {
 		req.Header.Set("Origin", tt.requestOrigin)
 	}
 
-	// Record response
 	rr := httptest.NewRecorder()
-	handler.ServeHTTP(rr, req)
+	served(t, srv).ServeHTTP(rr, req)
 
-	// Check status code
-	if rr.Code != tt.expectStatusCode {
-		t.Errorf("status code = %d; want %d", rr.Code, tt.expectStatusCode)
+	if rr.Code != http.StatusOK {
+		t.Errorf("status code = %d; want %d", rr.Code, http.StatusOK)
 	}
 
-	// Check CORS headers
-	verifyCORSHeaders(t, rr, tt)
-}
-
-// verifyCORSHeaders checks the CORS headers in the response.
-func verifyCORSHeaders(t *testing.T, rr *httptest.ResponseRecorder, tt *corsTestCase) {
-	t.Helper()
-
 	allowOrigin := rr.Header().Get("Access-Control-Allow-Origin")
-
-	if tt.expectCORSHeaders {
-		verifyExpectedCORSHeaders(t, rr, tt.expectAllowedOrigin)
-	} else if allowOrigin != "" {
+	switch {
+	case tt.expectCORSHeaders:
+		if allowOrigin != tt.expectAllowedOrigin {
+			t.Errorf("Access-Control-Allow-Origin = %q; want %q", allowOrigin, tt.expectAllowedOrigin)
+		}
+		// A simple request carries Allow-Origin and Vary. Allow-Methods,
+		// Allow-Headers and Max-Age are preflight-only per the CORS spec and
+		// are deliberately absent here.
+		if vary := rr.Header().Get("Vary"); vary != "Origin" {
+			t.Errorf("Vary = %q; want %q", vary, "Origin")
+		}
+		for _, h := range []string{"Access-Control-Allow-Methods", "Access-Control-Allow-Headers", "Access-Control-Max-Age"} {
+			if got := rr.Header().Get(h); got != "" {
+				t.Errorf("%s = %q on a simple request; want empty (preflight-only header)", h, got)
+			}
+		}
+	case allowOrigin != "":
 		t.Errorf("expected no CORS headers, but got Access-Control-Allow-Origin = %q", allowOrigin)
-	}
-}
-
-// verifyExpectedCORSHeaders checks that all expected CORS headers are present.
-func verifyExpectedCORSHeaders(t *testing.T, rr *httptest.ResponseRecorder, expectedOrigin string) {
-	t.Helper()
-
-	allowOrigin := rr.Header().Get("Access-Control-Allow-Origin")
-	allowMethods := rr.Header().Get("Access-Control-Allow-Methods")
-	allowHeaders := rr.Header().Get("Access-Control-Allow-Headers")
-	maxAge := rr.Header().Get("Access-Control-Max-Age")
-	vary := rr.Header().Get("Vary")
-
-	if allowOrigin != expectedOrigin {
-		t.Errorf("Access-Control-Allow-Origin = %q; want %q", allowOrigin, expectedOrigin)
-	}
-	if allowMethods != "GET, OPTIONS" {
-		t.Errorf("Access-Control-Allow-Methods = %q; want %q", allowMethods, "GET, OPTIONS")
-	}
-	if allowHeaders != "Accept, Content-Type, Authorization" {
-		t.Errorf("Access-Control-Allow-Headers = %q; want %q", allowHeaders, "Accept, Content-Type, Authorization")
-	}
-	if maxAge != "86400" {
-		t.Errorf("Access-Control-Max-Age = %q; want %q", maxAge, "86400")
-	}
-	if vary != "Origin" {
-		t.Errorf("Vary = %q; want %q", vary, "Origin")
 	}
 }
 
@@ -358,52 +319,33 @@ func TestCORSMiddleware(t *testing.T) {
 			name:                "allowed origin - GET request",
 			allowedOrigins:      []string{"https://example.com"},
 			requestOrigin:       "https://example.com",
-			requestMethod:       http.MethodGet,
 			expectCORSHeaders:   true,
-			expectStatusCode:    http.StatusOK,
-			expectAllowedOrigin: "https://example.com",
-		},
-		{
-			name:                "allowed origin - OPTIONS preflight",
-			allowedOrigins:      []string{"https://example.com"},
-			requestOrigin:       "https://example.com",
-			requestMethod:       http.MethodOptions,
-			expectCORSHeaders:   true,
-			expectStatusCode:    http.StatusNoContent,
 			expectAllowedOrigin: "https://example.com",
 		},
 		{
 			name:                "allowed wildcard origin",
 			allowedOrigins:      []string{"*.example.com"},
 			requestOrigin:       "https://app.example.com",
-			requestMethod:       http.MethodGet,
 			expectCORSHeaders:   true,
-			expectStatusCode:    http.StatusOK,
 			expectAllowedOrigin: "https://app.example.com",
 		},
 		{
 			name:              "not allowed origin - no CORS headers",
 			allowedOrigins:    []string{"https://example.com"},
 			requestOrigin:     "https://evil.com",
-			requestMethod:     http.MethodGet,
 			expectCORSHeaders: false,
-			expectStatusCode:  http.StatusOK,
 		},
 		{
 			name:              "no origin header - no CORS headers",
 			allowedOrigins:    []string{"https://example.com"},
 			requestOrigin:     "",
-			requestMethod:     http.MethodGet,
 			expectCORSHeaders: false,
-			expectStatusCode:  http.StatusOK,
 		},
 		{
 			name:              "empty allowed origins - no CORS headers",
 			allowedOrigins:    []string{},
 			requestOrigin:     "https://example.com",
-			requestMethod:     http.MethodGet,
 			expectCORSHeaders: false,
-			expectStatusCode:  http.StatusOK,
 		},
 	}
 
@@ -415,35 +357,18 @@ func TestCORSMiddleware(t *testing.T) {
 	}
 }
 
-func TestCORSMiddleware_PreflightDoesNotCallNext(t *testing.T) {
-	nextCalled := false
-	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		nextCalled = true
-		w.WriteHeader(http.StatusOK)
-	})
+func TestCORSMiddleware_PreflightDoesNotReachTheHandler(t *testing.T) {
+	srv := newCORSServer(t, "https://example.com")
 
-	s := &Server{
-		config: config.ServerConfig{
-			CORS: config.CORSConfig{
-				AllowedOrigins: []string{"https://example.com"},
-			},
-		},
+	// /api/v1/sources would answer 200 with a JSON body; a preflight must be
+	// short-circuited before it gets there.
+	rec := preflight(t, srv, http.MethodGet, "/api/v1/sources", "https://example.com")
+
+	if rec.Code != http.StatusNoContent {
+		t.Errorf("status code = %d; want %d", rec.Code, http.StatusNoContent)
 	}
-
-	handler := s.corsMiddleware(nextHandler)
-
-	req := httptest.NewRequest(http.MethodOptions, "/api/v1/query", nil)
-	req.Header.Set("Origin", "https://example.com")
-
-	rr := httptest.NewRecorder()
-	handler.ServeHTTP(rr, req)
-
-	if nextCalled {
-		t.Error("OPTIONS preflight request should not call next handler")
-	}
-
-	if rr.Code != http.StatusNoContent {
-		t.Errorf("status code = %d; want %d", rr.Code, http.StatusNoContent)
+	if body := rec.Body.String(); body != "" {
+		t.Errorf("preflight response body = %q; want empty (handler must not run)", body)
 	}
 }
 
