@@ -69,16 +69,6 @@ type ServerConfig struct {
 	ReadyWhenEmpty bool `mapstructure:"ready_when_empty"`
 }
 
-// CORSConfig holds CORS configuration.
-type CORSConfig struct {
-	AllowedOrigins []string `mapstructure:"allowed_origins"` // e.g., ["https://example.com", "*.sub.domain.tld"]
-}
-
-// Enabled returns true if CORS is configured with at least one allowed origin.
-func (c *CORSConfig) Enabled() bool {
-	return len(c.AllowedOrigins) > 0
-}
-
 // RateLimitConfig holds rate limiting configuration.
 type RateLimitConfig struct {
 	Enabled bool    `mapstructure:"enabled"`
@@ -569,6 +559,9 @@ func Load(configPath string) (*Config, error) {
 // Validate validates the configuration.
 func (c *Config) Validate() error {
 	if err := c.validateServer(); err != nil {
+		return err
+	}
+	if err := c.validateCORS(); err != nil {
 		return err
 	}
 	if err := c.validateTLS(); err != nil {

@@ -158,7 +158,8 @@ Priorität: CLI > Umgebungsvariablen > .env > Defaults
 | `ORTUS_SERVER_RATE_LIMIT_RATE` | `100` | Requests/Sekunde |
 | `ORTUS_SERVER_CORS_ALLOWED_ORIGINS` | `[]` | Erlaubte CORS Origins |
 
-CLI-Flag für CORS: `--cors=origin1,*.sub.domain.tld`
+CLI-Flag für CORS: `--cors=https://example.com,https://*.sub.domain.tld` — ein Wildcard
+braucht ein Schema; Schema und Port müssen exakt passen.
 
 Siehe [ADR-0007](decisions/0007-configuration-management.md) für vollständige Liste.
 

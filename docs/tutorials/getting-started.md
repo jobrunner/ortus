@@ -32,7 +32,7 @@ serves on `http://localhost:8080`. Add a custom port and CORS origins if you're
 calling it from a browser app:
 
 ```bash
-./ortus --port=8080 --cors=https://example.com,*.myapp.com
+./ortus --port=8080 --cors=https://example.com,https://*.myapp.com
 ```
 
 ## 3. Run a point query

@@ -2,9 +2,10 @@ package http
 
 import (
 	"net/http"
-	"strings"
 
 	"github.com/gorilla/mux"
+
+	"github.com/jobrunner/ortus/internal/domain"
 )
 
 // corsMaxAgeSeconds is how long a browser may cache a preflight result.
@@ -99,50 +100,19 @@ func (s *Server) isOriginAllowed(origin string) bool {
 	return false
 }
 
-// matchOrigin checks if an origin matches a pattern.
-// Supports exact matches and wildcard patterns like "*.example.com".
+// matchOrigin reports whether an Origin header value matches one configured
+// allow-list pattern. The rules — exact triple, or a wildcard on the leading
+// host label with scheme and port still matching exactly — live in
+// domain.OriginPattern, so config validation and this matcher cannot disagree
+// about what a pattern means.
+//
+// A pattern that does not parse matches nothing. Config validation rejects such
+// patterns at startup (config.validateCORS), so reaching that case means the
+// Server was hand-built in a test.
 func matchOrigin(origin, pattern string) bool {
-	// Exact match
-	if origin == pattern {
-		return true
+	parsed, err := domain.ParseOriginPattern(pattern)
+	if err != nil {
+		return false
 	}
-
-	// Wildcard match (e.g., "*.example.com")
-	if strings.HasPrefix(pattern, "*.") {
-		// Extract the domain suffix from pattern (e.g., ".example.com")
-		suffix := pattern[1:] // Remove the "*" to get ".example.com"
-
-		// Parse origin to get just the host
-		originHost := extractHost(origin)
-
-		// Check if the origin host ends with the suffix
-		// For "*.example.com", we match "sub.example.com" but not "example.com"
-		if strings.HasSuffix(originHost, suffix) && len(originHost) > len(suffix) {
-			return true
-		}
-	}
-
-	return false
-}
-
-// extractHost extracts the host from an origin URL.
-// Example: "https://example.com:8080" returns "example.com".
-func extractHost(origin string) string {
-	// Remove protocol
-	host := origin
-	if idx := strings.Index(host, "://"); idx != -1 {
-		host = host[idx+3:]
-	}
-
-	// Remove port
-	if idx := strings.Index(host, ":"); idx != -1 {
-		host = host[:idx]
-	}
-
-	// Remove path
-	if idx := strings.Index(host, "/"); idx != -1 {
-		host = host[:idx]
-	}
-
-	return host
+	return parsed.MatchesString(origin)
 }
