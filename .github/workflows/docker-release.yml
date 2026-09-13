@@ -260,20 +260,22 @@ jobs:
 
       - name: Check if release exists
         id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.version.outputs.version }}
         run: |
-          if gh release view "v${{ needs.version.outputs.version }}" &> /dev/null; then
+          if gh release view "v$VERSION" &> /dev/null; then
             echo "exists=true" >> $GITHUB_OUTPUT
           else
             echo "exists=false" >> $GITHUB_OUTPUT
           fi
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract changelog for version
         if: steps.check.outputs.exists == 'false'
         id: changelog
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
         run: |
-          VERSION="${{ needs.version.outputs.version }}"
           # Extract the body of this version's section: lines AFTER the
           # `## [VERSION]` heading up to (but not including) the NEXT `## [`
           # heading. (The old `/start/,/end/` range used `/## \[/` as the end

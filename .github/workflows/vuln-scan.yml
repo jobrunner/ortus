@@ -102,8 +102,10 @@ jobs:
 
       - name: Fail with scan-error context
         if: steps.vuln.outputs.rc != '0' && steps.vuln.outputs.rc != '3'
+        env:
+          RC: ${{ steps.vuln.outputs.rc }}
         run: |
-          echo "::error::govulncheck exited with $(cat <<< '${{ steps.vuln.outputs.rc }}') — not a CVE finding, likely a scan error. See log for details."
+          echo "::error::govulncheck exited with $RC — not a CVE finding, likely a scan error. See log for details."
           cat vuln-stderr.txt
           exit 1
 
@@ -170,6 +172,8 @@ jobs:
         if: steps.findings.outputs.count != '0'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FINDING_COUNT: ${{ steps.findings.outputs.count }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
           title="Weekly image scan: new CVEs in published Docker image"
@@ -179,7 +183,7 @@ jobs:
             --search "$title in:title" \
             --json number --jq '.[0].number // ""')
 
-          body=$(printf 'Trivy reports %s fixable CRITICAL/HIGH vulnerabilities in `ghcr.io/%s:latest`.\n\n```\n%s\n```\n\n## Fix\n\n- OS packages (apk): rebuild/bump `spatialite-base-image` in the Dockerfiles so the runtime picks up patched Alpine packages.\n- Go modules (gobinary): `go get <module>@<fixed version>` in ortus (Dependabot may already have a PR).\n\nEither way the fix only reaches users with the next ortus release.\n' "${{ steps.findings.outputs.count }}" "${{ github.repository }}" "$(cat trivy-report.txt)")
+          body=$(printf 'Trivy reports %s fixable CRITICAL/HIGH vulnerabilities in `ghcr.io/%s:latest`.\n\n```\n%s\n```\n\n## Fix\n\n- OS packages (apk): rebuild/bump `spatialite-base-image` in the Dockerfiles so the runtime picks up patched Alpine packages.\n- Go modules (gobinary): `go get <module>@<fixed version>` in ortus (Dependabot may already have a PR).\n\nEither way the fix only reaches users with the next ortus release.\n' "$FINDING_COUNT" "$REPOSITORY" "$(cat trivy-report.txt)")
 
           if [ -n "$existing" ]; then
             gh issue comment "$existing" --body "$body"
