@@ -293,47 +293,71 @@ jobs:
           echo "$NOTES" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
+      # gh, not an action: the runner already ships it, so pulling in
+      # softprops/action-gh-release added a supply-chain dependency for one API
+      # call (zizmor's superfluous-actions audit).
+      #
+      # The notes are written with a QUOTED heredoc. The body contains
+      # backticks and a literal $IMG for the reader to copy — an unquoted
+      # heredoc would run the backticks as command substitution and expand
+      # $IMG to nothing. The three dynamic values therefore go in as
+      # placeholders and are substituted afterwards; both are a registry path
+      # and a semver string, so neither can contain sed's delimiter.
       - name: Create Release
         if: steps.check.outputs.exists == 'false'
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: v${{ needs.version.outputs.version }}
-          name: Release v${{ needs.version.outputs.version }}
-          body: |
-            ## Docker Images
-
-            ```bash
-            # Alpine (default, recommended)
-            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.version.outputs.version }}
-
-            # Ubuntu
-            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.version.outputs.version }}-ubuntu
-            ```
-
-            ## Supply chain
-
-            Both images (Alpine and `-ubuntu`) are signed (cosign keyless) and
-            carry SLSA provenance + SPDX SBOM attestations. The commands below
-            use the default Alpine tag; substitute the `-ubuntu` tag to verify
-            that image the same way.
-
-            ```bash
-            IMG=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.version.outputs.version }}
-
-            # Verify the signature
-            cosign verify "$IMG" \
-              --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-              --certificate-identity-regexp '^https://github.com/${{ github.repository }}/.github/workflows/docker-release.yml@'
-
-            # Inspect SBOM / provenance attestations
-            cosign download sbom "$IMG"
-            docker buildx imagetools inspect "$IMG" --format '{{ json .Provenance }}'
-            ```
-
-            ## Changelog
-
-            ${{ steps.changelog.outputs.notes }}
-          draft: false
-          prerelease: ${{ contains(needs.version.outputs.version, '-') }}
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.version.outputs.version }}
+          IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          REPOSITORY: ${{ github.repository }}
+          NOTES: ${{ steps.changelog.outputs.notes }}
+          PRERELEASE: ${{ contains(needs.version.outputs.version, '-') }}
+        run: |
+          set -euo pipefail
+
+          cat > release-notes.tmpl <<'EOF'
+          ## Docker Images
+
+          ```bash
+          # Alpine (default, recommended)
+          docker pull @IMAGE@:@VERSION@
+
+          # Ubuntu
+          docker pull @IMAGE@:@VERSION@-ubuntu
+          ```
+
+          ## Supply chain
+
+          Both images (Alpine and `-ubuntu`) are signed (cosign keyless) and
+          carry SLSA provenance + SPDX SBOM attestations. The commands below
+          use the default Alpine tag; substitute the `-ubuntu` tag to verify
+          that image the same way.
+
+          ```bash
+          IMG=@IMAGE@:@VERSION@
+
+          # Verify the signature
+          cosign verify "$IMG" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            --certificate-identity-regexp '^https://github.com/@REPOSITORY@/.github/workflows/docker-release.yml@'
+
+          # Inspect SBOM / provenance attestations
+          cosign download sbom "$IMG"
+          docker buildx imagetools inspect "$IMG" --format '{{ json .Provenance }}'
+          ```
+          EOF
+
+          sed -e "s|@IMAGE@|$IMAGE|g" \
+              -e "s|@VERSION@|$VERSION|g" \
+              -e "s|@REPOSITORY@|$REPOSITORY|g" \
+              release-notes.tmpl > release-notes.md
+
+          # The changelog section is appended rather than templated: it is
+          # arbitrary markdown and must not be run through sed.
+          printf '\n## Changelog\n\n%s\n' "$NOTES" >> release-notes.md
+
+          args=(--title "Release v$VERSION" --notes-file release-notes.md)
+          if [ "$PRERELEASE" = "true" ]; then
+            args+=(--prerelease)
+          fi
+          gh release create "v$VERSION" "${args[@]}"
