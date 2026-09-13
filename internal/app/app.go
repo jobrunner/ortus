@@ -274,7 +274,10 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (app *App
 					ClientID:          cfg.TLS.DNS.ClientID,
 				},
 			},
-			app.HTTPServer.Router(),
+			// Handler(), not Router(): CORS wraps the router from outside, so
+			// serving the bare router here would silently give HTTPS clients a
+			// service without CORS.
+			app.HTTPServer.Handler(),
 			logger,
 		)
 		if err != nil {
