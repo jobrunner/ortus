@@ -34,6 +34,17 @@ type OriginPattern struct {
 // host, or a path. A path is not part of an origin; silently dropping one would
 // turn "https://*.example.com/private" into a rule covering every subdomain.
 func ParseOrigin(s string) (Origin, error) {
+	// Browsers send "null" for opaque origins: sandboxed iframes, file://
+	// documents, some cross-site redirects. Allow-listing it would open the API
+	// to any sandboxed document anywhere, and it cannot be narrowed — so it is
+	// refused rather than matched. Reject it here with its own reason; the
+	// generic "needs a scheme" advice would suggest "https://null".
+	if s == "null" {
+		return Origin{}, fmt.Errorf(
+			"the opaque origin \"null\" cannot be allow-listed — it would admit any " +
+				"sandboxed document; grant the real origin instead")
+	}
+
 	scheme, rest, ok := strings.Cut(s, "://")
 	if !ok || scheme == "" {
 		// Show the fix for the shape actually given: a wildcard entry is the

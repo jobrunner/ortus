@@ -40,6 +40,12 @@ func TestParseOrigin(t *testing.T) {
 		{name: "empty port", in: "https://example.com:", wantErr: "port"},
 		{name: "highest valid port", in: "https://example.com:65535", wantScheme: "https", wantHost: "example.com", wantPort: "65535"},
 
+		// Browsers send "null" for opaque origins (sandboxed iframes, file://,
+		// some redirects). Allow-listing it would let any sandboxed document
+		// read the API, so it is refused — but with a reason of its own, not
+		// the misleading "needs a scheme".
+		{name: "null origin", in: "null", wantErr: "opaque"},
+
 		{name: "no scheme", in: "example.com", wantErr: "needs a scheme"},
 		{name: "empty scheme", in: "://example.com", wantErr: "needs a scheme"},
 		{name: "empty host", in: "https://", wantErr: "host"},
