@@ -10,7 +10,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ⚠ BREAKING CHANGES
 
-* **cors:** a wildcard CORS origin must now carry a scheme. Rewrite "*.example.com" as "https://*.example.com" in --cors, ORTUS_SERVER_CORS_ALLOWED_ORIGINS or server.cors.allowed_origins; ortus refuses to start otherwise. Exact origins are unaffected.
+* **cors:** a wildcard CORS origin must now carry a scheme. Rewrite "*.example.com" as "https://*.example.com" in --cors, ORTUS_SERVER_CORS_ALLOWED_ORIGINS or server.cors.allowed_origins; ortus refuses to start otherwise.
+
+#### Migrating CORS origins
+
+A wildcard now covers the leading host label only — scheme and port must match
+exactly, so `https://*.example.com` admits neither `http://sub.example.com`
+(plaintext) nor `https://sub.example.com:8443` (another service on the same
+host). Rewrite every wildcard entry with its scheme.
+
+Exact origins keep working, with three exceptions. These were accepted before
+but could never match a browser `Origin` header, so they were silently dead
+rules; ortus now rejects them at startup and names the fix:
+
+| Entry | Before | Now |
+|---|---|---|
+| `example.com` (no scheme) | accepted, never matched | startup error showing `https://example.com` |
+| `https://example.com:65536`, `:not-a-port` | accepted, never matched | startup error |
+| `null` | allowed via exact comparison | rejected |
+
+`Origin: null` is what browsers send for opaque origins (sandboxed iframes,
+`file://` documents). Allow-listing it would admit any sandboxed document
+anywhere and cannot be narrowed to one site, so it stays refused — grant the
+real origin instead.
 
 ### Bug Fixes
 
@@ -19,9 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * **cors:** reject origins with an unusable port ([c5ecc79](https://github.com/jobrunner/ortus/commit/c5ecc799fbe7befd425ba670c2a61630b5273d41))
 * **cors:** reject trailing text after an IPv6 literal ([154f1d8](https://github.com/jobrunner/ortus/commit/154f1d8596337018265b6b79031b332364cd52dd))
 * **cors:** scope wildcard origins to scheme and port ([5ca99ac](https://github.com/jobrunner/ortus/commit/5ca99ac699bdc1109be5a459b02adea706b24952))
-* **deps:** bump grpc to 1.83.2 for CVE-2026-84445 ([490a331](https://github.com/jobrunner/ortus/commit/490a331eafad4f57eedd42521a9722ff04e0b002))
 * **deps:** bump grpc to 1.83.2 for CVE-2026-84445 ([42e95b2](https://github.com/jobrunner/ortus/commit/42e95b255d7d9d2e7eeb7aa7e803a7b36a886687))
-* **http:** answer CORS preflights by wrapping the router ([25f29b0](https://github.com/jobrunner/ortus/commit/25f29b0de5269395771bd244b81dff01a0f85684))
 * **http:** answer CORS preflights by wrapping the router ([1384fa9](https://github.com/jobrunner/ortus/commit/1384fa9c2011e70dff54675028e9d24138074f7b))
 
 ## [1.10.1](https://github.com/jobrunner/ortus/compare/v1.10.0...v1.10.1) (2026-09-06)
