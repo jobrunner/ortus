@@ -397,10 +397,16 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
+      # The matrix value is passed through env rather than expanded into the
+      # script text: an expansion is substituted before the shell ever sees the
+      # line, so it is the one place where a value can become code. Harmless for
+      # a matrix defined right here, but the habit is what keeps the audit
+      # meaningful where the value is NOT ours.
       - name: Extract variant name
         id: variant
+        env:
+          DOCKERFILE: ${{ matrix.dockerfile }}
         run: |
-          DOCKERFILE="${{ matrix.dockerfile }}"
           if [[ "$DOCKERFILE" == "Dockerfile" ]]; then
             echo "variant=alpine" >> $GITHUB_OUTPUT
           else
