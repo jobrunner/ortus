@@ -81,9 +81,13 @@ func ParseOriginPattern(s string) (OriginPattern, error) {
 	if !strings.Contains(origin.Host, "*") {
 		return OriginPattern{origin: origin}, nil
 	}
-	if !strings.HasPrefix(origin.Host, "*.") || strings.Contains(origin.Host[2:], "*") {
+	// The base host must be present: "https://*." would leave the suffix ".",
+	// which matches any host ending in a dot.
+	base, ok := strings.CutPrefix(origin.Host, "*.")
+	if !ok || base == "" || strings.Contains(base, "*") {
 		return OriginPattern{}, fmt.Errorf(
-			"origin pattern %q: \"*\" must be the whole leading host label (e.g. https://*.example.com)", s)
+			"origin pattern %q: \"*\" must be the whole leading host label of a host "+
+				"(e.g. https://*.example.com)", s)
 	}
 
 	return OriginPattern{

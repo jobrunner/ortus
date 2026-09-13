@@ -107,6 +107,13 @@ func TestParseOriginPatternRejects(t *testing.T) {
 			in:      "https://*",
 			wantErr: "*",
 		},
+		{
+			// "*." passes a naive prefix check but leaves an empty base host,
+			// and the resulting "." suffix would match hosts like "evil.".
+			name:    "wildcard without a base host",
+			in:      "https://*.",
+			wantErr: "*",
+		},
 	}
 
 	for _, tt := range tests {
