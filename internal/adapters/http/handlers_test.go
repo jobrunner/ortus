@@ -17,6 +17,7 @@ import (
 	"github.com/jobrunner/ortus/internal/application"
 	"github.com/jobrunner/ortus/internal/config"
 	"github.com/jobrunner/ortus/internal/domain"
+	"github.com/jobrunner/ortus/internal/ports/input"
 	"github.com/jobrunner/ortus/internal/ports/output"
 )
 
@@ -117,6 +118,20 @@ func newTestServer(_ *mockQueryService, _ *mockSourceRegistry, _ *mockHealthServ
 // newTestServerWithConfig builds the same fake-wired server as newTestServer but
 // lets a test vary the ServerConfig (CORS origins, rate limiting, …).
 func newTestServerWithConfig(cfg config.ServerConfig) *Server {
+	return newTestServerWith(cfg, nil)
+}
+
+// fakeSyncer is enough to make the conditionally-registered POST /sync route
+// exist, so a route walk sees the full writing surface.
+type fakeSyncer struct{}
+
+func (fakeSyncer) TriggerSync(context.Context) (input.SyncResult, error) {
+	return input.SyncResult{}, nil
+}
+
+// newTestServerWith builds the fake-wired server with an optional sync service.
+// Pass one when the test needs the conditionally-registered POST /sync route.
+func newTestServerWith(cfg config.ServerConfig, syncService input.Syncer) *Server {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 
 	// Create real services using mocks
@@ -148,7 +163,7 @@ func newTestServerWithConfig(cfg config.ServerConfig) *Server {
 		realQuery,
 		realRegistry,
 		realHealth,
-		nil, // No sync service for tests
+		syncService, // nil ⇒ POST /sync is not registered
 		logger,
 		false,
 		ServerOptions{},

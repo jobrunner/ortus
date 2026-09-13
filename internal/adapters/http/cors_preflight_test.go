@@ -3,6 +3,7 @@ package http
 import (
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -19,15 +20,43 @@ import (
 
 const corsTestOrigin = "https://app.example.com"
 
+// newCORSServer wires a sync service on purpose: POST /api/v1/sync is
+// registered conditionally, and without it the route walk below would miss a
+// writing endpoint that production does serve.
 func newCORSServer(t *testing.T, origins ...string) *Server {
 	t.Helper()
-	return newTestServerWithConfig(config.ServerConfig{
+	return newTestServerWith(config.ServerConfig{
 		Host:         "localhost",
 		Port:         8080,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 		CORS:         config.CORSConfig{AllowedOrigins: origins},
-	})
+	}, fakeSyncer{})
+}
+
+// assertPreflightHeaders checks everything a browser needs before it will send
+// a JSON POST: the origin, the method, AND the request-headers/max-age pair.
+// Allow-Headers matters because the preflight advertises Content-Type; without
+// it the browser rejects the request even though status and origin look right.
+func assertPreflightHeaders(t *testing.T, rec *httptest.ResponseRecorder, method string) {
+	t.Helper()
+
+	if rec.Code != http.StatusNoContent {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusNoContent)
+	}
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != corsTestOrigin {
+		t.Errorf("Access-Control-Allow-Origin = %q, want %q", got, corsTestOrigin)
+	}
+	if got := rec.Header().Get("Access-Control-Allow-Methods"); !strings.Contains(got, method) {
+		t.Errorf("Access-Control-Allow-Methods = %q, missing %q", got, method)
+	}
+	if got := rec.Header().Get("Access-Control-Allow-Headers"); !strings.Contains(got, "Content-Type") {
+		t.Errorf("Access-Control-Allow-Headers = %q, missing Content-Type — a JSON POST "+
+			"would still be blocked", got)
+	}
+	if got := rec.Header().Get("Access-Control-Max-Age"); got != corsMaxAgeSeconds {
+		t.Errorf("Access-Control-Max-Age = %q, want %q", got, corsMaxAgeSeconds)
+	}
 }
 
 // served returns what the server hands to net/http — the router plus whatever
@@ -56,15 +85,7 @@ func TestCORSPreflightForBatchIsAnswered(t *testing.T) {
 
 	rec := preflight(t, srv, http.MethodPost, "/api/v1/query/batch", corsTestOrigin)
 
-	if rec.Code != http.StatusNoContent {
-		t.Errorf("status = %d, want %d", rec.Code, http.StatusNoContent)
-	}
-	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != corsTestOrigin {
-		t.Errorf("Access-Control-Allow-Origin = %q, want %q", got, corsTestOrigin)
-	}
-	if got := rec.Header().Get("Access-Control-Allow-Methods"); !strings.Contains(got, http.MethodPost) {
-		t.Errorf("Access-Control-Allow-Methods = %q, missing POST", got)
-	}
+	assertPreflightHeaders(t, rec, http.MethodPost)
 }
 
 // Every writing route must preflight correctly, derived from the route table so
@@ -97,19 +118,17 @@ func TestCORSPreflightForEveryWritingRoute(t *testing.T) {
 		t.Fatal("no writing routes found — the walk is broken, not the service")
 	}
 
+	// Both writing routes production serves must be present, or this test would
+	// pass while covering less than it claims.
+	for _, want := range []string{"/api/v1/query/batch", "/api/v1/sync"} {
+		if !slices.ContainsFunc(ops, func(o op) bool { return o.path == want }) {
+			t.Errorf("route walk missed %s — the fixture no longer registers it", want)
+		}
+	}
+
 	for _, o := range ops {
 		t.Run(o.method+" "+o.path, func(t *testing.T) {
-			rec := preflight(t, srv, o.method, o.path, corsTestOrigin)
-
-			if rec.Code != http.StatusNoContent {
-				t.Errorf("status = %d, want 204", rec.Code)
-			}
-			if got := rec.Header().Get("Access-Control-Allow-Origin"); got != corsTestOrigin {
-				t.Errorf("Access-Control-Allow-Origin = %q, want %q", got, corsTestOrigin)
-			}
-			if got := rec.Header().Get("Access-Control-Allow-Methods"); !strings.Contains(got, o.method) {
-				t.Errorf("Access-Control-Allow-Methods = %q, missing %q", got, o.method)
-			}
+			assertPreflightHeaders(t, preflight(t, srv, o.method, o.path, corsTestOrigin), o.method)
 		})
 	}
 }
