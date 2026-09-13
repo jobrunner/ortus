@@ -338,11 +338,20 @@ jobs:
       # shellcheck integration is filtered to severity=error so style
       # suggestions like SC2086 ("quote to prevent word splitting") don't
       # gate every PR. Real bugs and security issues are still caught.
+      # The two -ignore patterns work around STALE bundled metadata, not a real
+      # problem: actionlint ships a snapshot of popular actions' inputs, and its
+      # snapshot of create-github-app-token predates `client-id`. The action's
+      # own action.yml defines `client-id` and marks `app-id` with
+      # deprecationMessage "Use 'client-id' instead", so the workflow is correct
+      # and the linter is behind. Keep the patterns pinned to this one action —
+      # drop them once actionlint's metadata catches up.
       - name: Run actionlint
         run: |
           curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash \
             | bash -s -- 1.7.12
-          ./actionlint -color -shellcheck="-S error"
+          ./actionlint -color -shellcheck="-S error" \
+            -ignore 'input "client-id" is not defined in action "actions/create-github-app-token' \
+            -ignore 'missing input "app-id" which is required by action "actions/create-github-app-token'
 
       # Drift guard: an action version tag written into a *comment* silently goes
       # stale when Dependabot bumps the real `uses:` line (as a stale gitleaks
