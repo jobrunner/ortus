@@ -2,9 +2,10 @@ package http
 
 import (
 	"net/http"
-	"strings"
 
 	"github.com/gorilla/mux"
+
+	"github.com/jobrunner/ortus/internal/domain"
 )
 
 // corsMaxAgeSeconds is how long a browser may cache a preflight result.
@@ -99,58 +100,19 @@ func (s *Server) isOriginAllowed(origin string) bool {
 	return false
 }
 
-// matchOrigin checks if an origin matches a pattern: either exactly, or as a
-// "https://*.example.com" wildcard covering subdomains (but not the bare domain).
+// matchOrigin reports whether an Origin header value matches one configured
+// allow-list pattern. The rules — exact triple, or a wildcard on the leading
+// host label with scheme and port still matching exactly — live in
+// domain.OriginPattern, so config validation and this matcher cannot disagree
+// about what a pattern means.
 //
-// Only the host label is wildcarded. Scheme and port must match exactly, so
-// "https://*.example.com" admits neither "http://sub.example.com" (plaintext)
-// nor "https://sub.example.com:8443" (a different service on the same host) —
-// an origin IS the scheme/host/port triple, and widening it silently would hand
-// responses to servers the operator never listed.
-//
-// A scheme-less wildcard ("*.example.com") therefore matches nothing: its empty
-// scheme cannot equal the scheme a browser sends. Config validation rejects that
-// form at startup (config.validateCORS) rather than letting it fail silently
-// here.
+// A pattern that does not parse matches nothing. Config validation rejects such
+// patterns at startup (config.validateCORS), so reaching that case means the
+// Server was hand-built in a test.
 func matchOrigin(origin, pattern string) bool {
-	// Exact match
-	if origin == pattern {
-		return true
-	}
-
-	oScheme, oHost, oPort := splitOrigin(origin)
-	pScheme, pHost, pPort := splitOrigin(pattern)
-
-	if oScheme != pScheme || oPort != pPort {
+	parsed, err := domain.ParseOriginPattern(pattern)
+	if err != nil {
 		return false
 	}
-	if !strings.HasPrefix(pHost, "*.") {
-		return false
-	}
-
-	suffix := pHost[1:] // "*.example.com" -> ".example.com"
-	// Requiring more than the suffix keeps "example.com" itself out; keeping the
-	// leading dot keeps "notexample.com" out.
-	return strings.HasSuffix(oHost, suffix) && len(oHost) > len(suffix)
-}
-
-// splitOrigin breaks an origin (or a wildcard pattern) into scheme, host and
-// port. Example: "https://example.com:8080" → ("https", "example.com", "8080").
-func splitOrigin(origin string) (scheme, host, port string) {
-	rest := origin
-
-	if idx := strings.Index(rest, "://"); idx != -1 {
-		scheme, rest = rest[:idx], rest[idx+3:]
-	}
-	// A path is not part of an origin, but tolerate one rather than letting it
-	// bleed into the host comparison.
-	if idx := strings.Index(rest, "/"); idx != -1 {
-		rest = rest[:idx]
-	}
-	// LastIndex, so an IPv6 literal's inner colons stay with the host.
-	if idx := strings.LastIndex(rest, ":"); idx != -1 {
-		rest, port = rest[:idx], rest[idx+1:]
-	}
-
-	return scheme, rest, port
+	return parsed.MatchesString(origin)
 }

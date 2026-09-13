@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/spf13/viper"
+
+	"github.com/jobrunner/ortus/internal/domain"
 )
 
 // Storage type constants.
@@ -713,25 +715,17 @@ func (c *Config) validateServer() error {
 	return nil
 }
 
-// validateCORS rejects wildcard origins written without a scheme.
+// validateCORS rejects allow-list entries that are not well-formed origins.
 //
-// An origin is a scheme/host/port triple, and the wildcard covers only the host
-// label — so "*.example.com" has no scheme to compare against and matches
-// nothing at runtime. Earlier versions accepted that form and ignored scheme and
-// port, which let "https://*.example.com" admit plaintext "http://" origins.
-// Now that matching is strict, silently keeping a pattern that can never match
-// would turn a config typo into CORS that is simply off, with no signal. Fail at
-// startup and say how to fix it instead.
+// The rules live in domain.ParseOriginPattern, which is also what the HTTP
+// adapter matches with — one definition, so a pattern accepted here cannot mean
+// something else at runtime. Matching is strict about scheme and port, which
+// means a pattern like "*.example.com" (no scheme) can never match; accepting it
+// would leave CORS silently switched off, so it fails at startup instead.
 func (c *Config) validateCORS() error {
 	for _, origin := range c.Server.CORS.AllowedOrigins {
-		if !strings.Contains(origin, "*") {
-			continue
-		}
-		if !strings.Contains(origin, "://") {
-			return fmt.Errorf(
-				"server.cors.allowed_origins: wildcard origin %q needs a scheme — "+
-					"write it as https://*.%s (scheme and port must match exactly)",
-				origin, strings.TrimPrefix(origin, "*."))
+		if _, err := domain.ParseOriginPattern(origin); err != nil {
+			return fmt.Errorf("server.cors.allowed_origins: %w", err)
 		}
 	}
 	return nil
