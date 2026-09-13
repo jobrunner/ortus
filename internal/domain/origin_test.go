@@ -46,6 +46,12 @@ func TestParseOrigin(t *testing.T) {
 		// the misleading "needs a scheme".
 		{name: "null origin", in: "null", wantErr: "opaque"},
 
+		// Text after the closing bracket is neither host nor port. It used to
+		// land in Port unvalidated, leaving an entry that no browser origin can
+		// ever match.
+		{name: "text after IPv6 literal", in: "https://[::1]typo", wantErr: "after the IPv6 literal"},
+		{name: "unbalanced closing only", in: "https://[::1]:", wantErr: "port"},
+
 		{name: "no scheme", in: "example.com", wantErr: "needs a scheme"},
 		{name: "empty scheme", in: "://example.com", wantErr: "needs a scheme"},
 		{name: "empty host", in: "https://", wantErr: "host"},

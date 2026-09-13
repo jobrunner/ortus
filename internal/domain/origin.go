@@ -56,7 +56,10 @@ func ParseOrigin(s string) (Origin, error) {
 		return Origin{}, fmt.Errorf("origin %q must not contain a path", s)
 	}
 
-	host, port, hasPort := splitHostPort(rest)
+	host, port, hasPort, err := splitHostPort(rest)
+	if err != nil {
+		return Origin{}, fmt.Errorf("origin %q: %w", s, err)
+	}
 	if host == "" {
 		return Origin{}, fmt.Errorf("origin %q needs a host", s)
 	}
@@ -75,20 +78,26 @@ func ParseOrigin(s string) (Origin, error) {
 // IPv6 literal intact — its colons belong to the address, not to a port.
 // hasPort distinguishes "no port given" from a port that is present but empty
 // ("example.com:"), which is malformed rather than a default.
-func splitHostPort(hostPort string) (host, port string, hasPort bool) {
+func splitHostPort(hostPort string) (host, port string, hasPort bool, err error) {
 	if after, found := strings.CutPrefix(hostPort, "["); found {
 		literal, rest, closed := strings.Cut(after, "]")
 		if !closed {
-			return hostPort, "", false // unbalanced: treat the whole thing as the host
+			return hostPort, "", false, nil // unbalanced: treat the whole thing as the host
 		}
-		p, found := strings.CutPrefix(rest, ":")
-		return "[" + literal + "]", p, found
+		// Only ":port" may follow the literal. Anything else is neither host
+		// nor port; letting it through would leave an entry no browser origin
+		// can match.
+		if rest != "" && !strings.HasPrefix(rest, ":") {
+			return "", "", false, fmt.Errorf("unexpected %q after the IPv6 literal (expected \":port\" or nothing)", rest)
+		}
+		p, hasP := strings.CutPrefix(rest, ":")
+		return "[" + literal + "]", p, hasP, nil
 	}
 
 	if h, p, found := strings.Cut(hostPort, ":"); found {
-		return h, p, true
+		return h, p, true, nil
 	}
-	return hostPort, "", false
+	return hostPort, "", false, nil
 }
 
 // ParseOriginPattern parses one allow-list entry. A wildcard entry must carry a
