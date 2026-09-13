@@ -71,7 +71,7 @@ type ServerConfig struct {
 
 // CORSConfig holds CORS configuration.
 type CORSConfig struct {
-	AllowedOrigins []string `mapstructure:"allowed_origins"` // e.g., ["https://example.com", "*.sub.domain.tld"]
+	AllowedOrigins []string `mapstructure:"allowed_origins"` // e.g., ["https://example.com", "https://*.sub.domain.tld"]
 }
 
 // Enabled returns true if CORS is configured with at least one allowed origin.
@@ -571,6 +571,9 @@ func (c *Config) Validate() error {
 	if err := c.validateServer(); err != nil {
 		return err
 	}
+	if err := c.validateCORS(); err != nil {
+		return err
+	}
 	if err := c.validateTLS(); err != nil {
 		return err
 	}
@@ -706,6 +709,30 @@ func (c *Config) validateTracing() error {
 func (c *Config) validateServer() error {
 	if c.Server.Port < 1 || c.Server.Port > 65535 {
 		return fmt.Errorf("invalid server port: %d", c.Server.Port)
+	}
+	return nil
+}
+
+// validateCORS rejects wildcard origins written without a scheme.
+//
+// An origin is a scheme/host/port triple, and the wildcard covers only the host
+// label — so "*.example.com" has no scheme to compare against and matches
+// nothing at runtime. Earlier versions accepted that form and ignored scheme and
+// port, which let "https://*.example.com" admit plaintext "http://" origins.
+// Now that matching is strict, silently keeping a pattern that can never match
+// would turn a config typo into CORS that is simply off, with no signal. Fail at
+// startup and say how to fix it instead.
+func (c *Config) validateCORS() error {
+	for _, origin := range c.Server.CORS.AllowedOrigins {
+		if !strings.Contains(origin, "*") {
+			continue
+		}
+		if !strings.Contains(origin, "://") {
+			return fmt.Errorf(
+				"server.cors.allowed_origins: wildcard origin %q needs a scheme — "+
+					"write it as https://*.%s (scheme and port must match exactly)",
+				origin, strings.TrimPrefix(origin, "*."))
+		}
 	}
 	return nil
 }

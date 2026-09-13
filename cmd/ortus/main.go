@@ -97,7 +97,7 @@ func init() {
 	rootCmd.Flags().String("storage-path", "./data", "local storage path")
 
 	// CORS flags
-	rootCmd.Flags().StringSlice("cors", nil, "allowed CORS origins (e.g., https://example.com,*.sub.domain.tld)")
+	rootCmd.Flags().StringSlice("cors", nil, "allowed CORS origins; a wildcard needs a scheme (e.g., https://example.com,https://*.sub.domain.tld)")
 
 	// Query flags
 	rootCmd.Flags().Bool("with-geometry", false, "include geometry in query results")

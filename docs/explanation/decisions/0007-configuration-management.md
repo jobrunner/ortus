@@ -296,7 +296,7 @@ rateLimit:
 
 | Flag | Env-Variable | Beschreibung |
 |------|--------------|--------------|
-| `--cors` | `ORTUS_SERVER_CORS_ALLOWED_ORIGINS` | Erlaubte CORS Origins, z.B. `--cors=https://example.com,*.sub.domain.tld` |
+| `--cors` | `ORTUS_SERVER_CORS_ALLOWED_ORIGINS` | Erlaubte CORS Origins, z.B. `--cors=https://example.com,https://*.sub.domain.tld` (Wildcard braucht ein Schema) |
 
 ## Referenzen
 

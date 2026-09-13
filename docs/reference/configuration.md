@@ -14,7 +14,7 @@ ortus is configured via CLI flags, environment variables, or a config file.
       --port int              HTTP server port (default 8080)
       --storage-type string   Storage type: local, s3, azure, http (default "local")
       --storage-path string   Local storage path for GeoPackages (default "./data")
-      --cors strings          Allowed CORS origins (e.g. https://example.com,*.sub.domain.tld)
+      --cors strings          Allowed CORS origins; a wildcard needs a scheme (e.g. https://example.com,https://*.sub.domain.tld)
       --tls                   Enable TLS
       --tls-domains strings   TLS domains for Let's Encrypt
       --tls-email string      Email for Let's Encrypt
@@ -83,7 +83,7 @@ server:
   cors:
     allowed_origins:
       - "https://example.com"
-      - "*.myapp.com"
+      - "https://*.myapp.com"
 
 storage:
   type: local

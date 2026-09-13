@@ -26,7 +26,7 @@ services:
     environment:
       ORTUS_STORAGE_LOCAL_PATH: /data
       ORTUS_LOGGING_LEVEL: info
-      ORTUS_SERVER_CORS_ALLOWED_ORIGINS: "https://example.com,*.myapp.com"
+      ORTUS_SERVER_CORS_ALLOWED_ORIGINS: "https://example.com,https://*.myapp.com"
 ```
 
 Released images are signed and carry SBOM + provenance attestations — see the

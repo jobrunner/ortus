@@ -99,50 +99,58 @@ func (s *Server) isOriginAllowed(origin string) bool {
 	return false
 }
 
-// matchOrigin checks if an origin matches a pattern.
-// Supports exact matches and wildcard patterns like "*.example.com".
+// matchOrigin checks if an origin matches a pattern: either exactly, or as a
+// "https://*.example.com" wildcard covering subdomains (but not the bare domain).
+//
+// Only the host label is wildcarded. Scheme and port must match exactly, so
+// "https://*.example.com" admits neither "http://sub.example.com" (plaintext)
+// nor "https://sub.example.com:8443" (a different service on the same host) —
+// an origin IS the scheme/host/port triple, and widening it silently would hand
+// responses to servers the operator never listed.
+//
+// A scheme-less wildcard ("*.example.com") therefore matches nothing: its empty
+// scheme cannot equal the scheme a browser sends. Config validation rejects that
+// form at startup (config.validateCORS) rather than letting it fail silently
+// here.
 func matchOrigin(origin, pattern string) bool {
 	// Exact match
 	if origin == pattern {
 		return true
 	}
 
-	// Wildcard match (e.g., "*.example.com")
-	if strings.HasPrefix(pattern, "*.") {
-		// Extract the domain suffix from pattern (e.g., ".example.com")
-		suffix := pattern[1:] // Remove the "*" to get ".example.com"
+	oScheme, oHost, oPort := splitOrigin(origin)
+	pScheme, pHost, pPort := splitOrigin(pattern)
 
-		// Parse origin to get just the host
-		originHost := extractHost(origin)
-
-		// Check if the origin host ends with the suffix
-		// For "*.example.com", we match "sub.example.com" but not "example.com"
-		if strings.HasSuffix(originHost, suffix) && len(originHost) > len(suffix) {
-			return true
-		}
+	if oScheme != pScheme || oPort != pPort {
+		return false
+	}
+	if !strings.HasPrefix(pHost, "*.") {
+		return false
 	}
 
-	return false
+	suffix := pHost[1:] // "*.example.com" -> ".example.com"
+	// Requiring more than the suffix keeps "example.com" itself out; keeping the
+	// leading dot keeps "notexample.com" out.
+	return strings.HasSuffix(oHost, suffix) && len(oHost) > len(suffix)
 }
 
-// extractHost extracts the host from an origin URL.
-// Example: "https://example.com:8080" returns "example.com".
-func extractHost(origin string) string {
-	// Remove protocol
-	host := origin
-	if idx := strings.Index(host, "://"); idx != -1 {
-		host = host[idx+3:]
+// splitOrigin breaks an origin (or a wildcard pattern) into scheme, host and
+// port. Example: "https://example.com:8080" → ("https", "example.com", "8080").
+func splitOrigin(origin string) (scheme, host, port string) {
+	rest := origin
+
+	if idx := strings.Index(rest, "://"); idx != -1 {
+		scheme, rest = rest[:idx], rest[idx+3:]
+	}
+	// A path is not part of an origin, but tolerate one rather than letting it
+	// bleed into the host comparison.
+	if idx := strings.Index(rest, "/"); idx != -1 {
+		rest = rest[:idx]
+	}
+	// LastIndex, so an IPv6 literal's inner colons stay with the host.
+	if idx := strings.LastIndex(rest, ":"); idx != -1 {
+		rest, port = rest[:idx], rest[idx+1:]
 	}
 
-	// Remove port
-	if idx := strings.Index(host, ":"); idx != -1 {
-		host = host[:idx]
-	}
-
-	// Remove path
-	if idx := strings.Index(host, "/"); idx != -1 {
-		host = host[:idx]
-	}
-
-	return host
+	return scheme, rest, port
 }
