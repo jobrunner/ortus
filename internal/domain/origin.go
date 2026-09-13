@@ -2,6 +2,7 @@ package domain
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -44,9 +45,16 @@ func ParseOrigin(s string) (Origin, error) {
 		return Origin{}, fmt.Errorf("origin %q must not contain a path", s)
 	}
 
-	host, port := splitHostPort(rest)
+	host, port, hasPort := splitHostPort(rest)
 	if host == "" {
 		return Origin{}, fmt.Errorf("origin %q needs a host", s)
+	}
+	// A port outside 1-65535 is one no browser can ever send, so the entry
+	// would be a rule that silently never matches.
+	if hasPort {
+		if n, convErr := strconv.Atoi(port); convErr != nil || n < 1 || n > 65535 {
+			return Origin{}, fmt.Errorf("origin %q has an invalid port %q (expected 1-65535)", s, port)
+		}
 	}
 
 	return Origin{Scheme: scheme, Host: host, Port: port}, nil
@@ -54,19 +62,22 @@ func ParseOrigin(s string) (Origin, error) {
 
 // splitHostPort separates an optional ":port" from a host, leaving a bracketed
 // IPv6 literal intact — its colons belong to the address, not to a port.
-func splitHostPort(hostPort string) (host, port string) {
+// hasPort distinguishes "no port given" from a port that is present but empty
+// ("example.com:"), which is malformed rather than a default.
+func splitHostPort(hostPort string) (host, port string, hasPort bool) {
 	if after, found := strings.CutPrefix(hostPort, "["); found {
 		literal, rest, closed := strings.Cut(after, "]")
 		if !closed {
-			return hostPort, "" // unbalanced: treat the whole thing as the host
+			return hostPort, "", false // unbalanced: treat the whole thing as the host
 		}
-		return "[" + literal + "]", strings.TrimPrefix(rest, ":")
+		p, found := strings.CutPrefix(rest, ":")
+		return "[" + literal + "]", p, found
 	}
 
 	if h, p, found := strings.Cut(hostPort, ":"); found {
-		return h, p
+		return h, p, true
 	}
-	return hostPort, ""
+	return hostPort, "", false
 }
 
 // ParseOriginPattern parses one allow-list entry. A wildcard entry must carry a

@@ -32,6 +32,14 @@ func TestParseOrigin(t *testing.T) {
 			name: "unbalanced bracket stays one host", in: "http://[::1", wantScheme: "http", wantHost: "[::1",
 		},
 
+		// A port a browser can never send makes the entry dead on arrival; the
+		// allow-list must reject it rather than accept a rule that cannot match.
+		{name: "non-numeric port", in: "https://example.com:not-a-port", wantErr: "port"},
+		{name: "port above the range", in: "https://example.com:65536", wantErr: "port"},
+		{name: "port zero", in: "https://example.com:0", wantErr: "port"},
+		{name: "empty port", in: "https://example.com:", wantErr: "port"},
+		{name: "highest valid port", in: "https://example.com:65535", wantScheme: "https", wantHost: "example.com", wantPort: "65535"},
+
 		{name: "no scheme", in: "example.com", wantErr: "needs a scheme"},
 		{name: "empty scheme", in: "://example.com", wantErr: "needs a scheme"},
 		{name: "empty host", in: "https://", wantErr: "host"},
