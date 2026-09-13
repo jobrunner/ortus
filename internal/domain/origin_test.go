@@ -26,6 +26,11 @@ func TestParseOrigin(t *testing.T) {
 		{name: "IPv6 without port", in: "http://[::1]", wantScheme: "http", wantHost: "[::1]"},
 		{name: "IPv6 with port", in: "http://[::1]:8080", wantScheme: "http", wantHost: "[::1]", wantPort: "8080"},
 		{name: "full IPv6 without port", in: "https://[2001:db8::1]", wantScheme: "https", wantHost: "[2001:db8::1]"},
+		{
+			// Malformed, but it must not be torn into a bogus host/port pair —
+			// keep it whole so the comparison simply fails to match.
+			name: "unbalanced bracket stays one host", in: "http://[::1", wantScheme: "http", wantHost: "[::1",
+		},
 
 		{name: "no scheme", in: "example.com", wantErr: "needs a scheme"},
 		{name: "empty scheme", in: "://example.com", wantErr: "needs a scheme"},

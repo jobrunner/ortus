@@ -25,7 +25,6 @@ type OriginPattern struct {
 	origin   Origin
 	wildcard bool   // host was written as "*.<suffix>"
 	suffix   string // ".example.com" — the part after the "*", wildcard only
-	raw      string // as configured, for error messages
 }
 
 // ParseOrigin parses a concrete origin such as "https://example.com:8443".
@@ -80,7 +79,7 @@ func ParseOriginPattern(s string) (OriginPattern, error) {
 	}
 
 	if !strings.Contains(origin.Host, "*") {
-		return OriginPattern{origin: origin, raw: s}, nil
+		return OriginPattern{origin: origin}, nil
 	}
 	if !strings.HasPrefix(origin.Host, "*.") || strings.Contains(origin.Host[2:], "*") {
 		return OriginPattern{}, fmt.Errorf(
@@ -91,12 +90,8 @@ func ParseOriginPattern(s string) (OriginPattern, error) {
 		origin:   origin,
 		wildcard: true,
 		suffix:   origin.Host[1:], // "*.example.com" -> ".example.com"
-		raw:      s,
 	}, nil
 }
-
-// String returns the pattern as it was configured.
-func (p OriginPattern) String() string { return p.raw }
 
 // MatchesString reports whether a raw Origin header value matches the pattern.
 // A malformed origin never matches.

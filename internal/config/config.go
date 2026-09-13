@@ -8,8 +8,6 @@ import (
 	"time"
 
 	"github.com/spf13/viper"
-
-	"github.com/jobrunner/ortus/internal/domain"
 )
 
 // Storage type constants.
@@ -69,16 +67,6 @@ type ServerConfig struct {
 	// initial load pass is done even with zero sources ("no data today"). When
 	// false, readiness additionally requires at least one ready source.
 	ReadyWhenEmpty bool `mapstructure:"ready_when_empty"`
-}
-
-// CORSConfig holds CORS configuration.
-type CORSConfig struct {
-	AllowedOrigins []string `mapstructure:"allowed_origins"` // e.g., ["https://example.com", "https://*.sub.domain.tld"]
-}
-
-// Enabled returns true if CORS is configured with at least one allowed origin.
-func (c *CORSConfig) Enabled() bool {
-	return len(c.AllowedOrigins) > 0
 }
 
 // RateLimitConfig holds rate limiting configuration.
@@ -711,22 +699,6 @@ func (c *Config) validateTracing() error {
 func (c *Config) validateServer() error {
 	if c.Server.Port < 1 || c.Server.Port > 65535 {
 		return fmt.Errorf("invalid server port: %d", c.Server.Port)
-	}
-	return nil
-}
-
-// validateCORS rejects allow-list entries that are not well-formed origins.
-//
-// The rules live in domain.ParseOriginPattern, which is also what the HTTP
-// adapter matches with — one definition, so a pattern accepted here cannot mean
-// something else at runtime. Matching is strict about scheme and port, which
-// means a pattern like "*.example.com" (no scheme) can never match; accepting it
-// would leave CORS silently switched off, so it fails at startup instead.
-func (c *Config) validateCORS() error {
-	for _, origin := range c.Server.CORS.AllowedOrigins {
-		if _, err := domain.ParseOriginPattern(origin); err != nil {
-			return fmt.Errorf("server.cors.allowed_origins: %w", err)
-		}
 	}
 	return nil
 }
