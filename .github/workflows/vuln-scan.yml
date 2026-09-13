@@ -27,14 +27,18 @@ on:
     - cron: '0 6 * * 1'
   workflow_dispatch:
 
+# Least privilege at the workflow level; the two scan jobs add `issues: write`
+# themselves, so nothing that does not open an issue ever carries that scope.
 permissions:
   contents: read
-  issues: write   # to open / comment on the security issue
 
 jobs:
   scan:
     name: govulncheck
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write   # to open / comment on the security issue
     steps:
       - uses: actions/checkout@v7
 
@@ -110,6 +114,9 @@ jobs:
   image-scan:
     name: trivy (published image)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write   # to open / comment on the security issue
     steps:
       # Scans :latest — the default (Alpine) image users pull. The -ubuntu
       # variant shares the Go binary and mostly differs in OS packages; if it

@@ -51,12 +51,19 @@ jobs:
       #
       # client-id, not app-id: both identify the same app, but the action
       # deprecated app-id in v3. The private key is unchanged either way.
+      #
+      # The permission-* inputs narrow the token to what release-please
+      # actually does. Without them it inherits every permission the app's
+      # installation holds, which is far more than this job needs — zizmor's
+      # `github-app` audit flags exactly that.
       - name: Mint GitHub App installation token
         id: app-token
         uses: actions/create-github-app-token@v3
         with:
           client-id: ${{ secrets.RELEASE_PLEASE_APP_CLIENT_ID }}
           private-key: ${{ secrets.RELEASE_PLEASE_APP_KEY }}
+          permission-contents: write      # commit the release PR, push the tag, create the release
+          permission-pull-requests: write # open and update the release PR
 
       - id: rp
         uses: googleapis/release-please-action@v5
