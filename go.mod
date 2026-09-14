@@ -17,8 +17,8 @@ require (
 	github.com/google/jsonschema-go v0.4.3
 	github.com/gorilla/mux v1.8.1
 	github.com/libdns/azure v0.5.0
-	github.com/mattn/go-sqlite3 v1.14.50
-	github.com/modelcontextprotocol/go-sdk v1.7.0
+	github.com/mattn/go-sqlite3 v1.14.52
+	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/paulmach/orb v0.13.0
 	github.com/prometheus/client_golang v1.24.1
 	github.com/spf13/cobra v1.10.2
@@ -39,7 +39,7 @@ require (
 	go.opentelemetry.io/otel/sdk/metric v1.46.0
 	go.opentelemetry.io/otel/trace v1.46.0
 	go.uber.org/goleak v1.3.0
-	golang.org/x/time v0.15.0
+	golang.org/x/time v0.16.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
