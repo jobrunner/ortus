@@ -1,8 +1,11 @@
 package http
 
 import (
+	"bytes"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -68,5 +71,53 @@ func TestCORSAllEntriesUnusableBehavesAsDisabled(t *testing.T) {
 
 	if vary := rec.Header().Values("Vary"); len(vary) != 0 {
 		t.Errorf("Vary = %v, want none when no usable origin is configured", vary)
+	}
+}
+
+// A misspelled scheme is the typo that survives everything else:
+// "htps://app.example.com" is a structurally valid origin, so config validation
+// accepts it and the service starts — then nothing ever matches it. The same
+// file already warns about unusable trusted_proxies entries at startup; the
+// allow-list must not be quieter than that.
+func TestCORSWarnsAboutANonBrowserScheme(t *testing.T) {
+	var logged bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logged, &slog.HandlerOptions{Level: slog.LevelWarn}))
+
+	srv := newTestServerWithLogger(config.ServerConfig{
+		Host:         "localhost",
+		Port:         8080,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		CORS:         config.CORSConfig{AllowedOrigins: []string{"htps://app.example.com"}},
+	}, nil, logger)
+
+	// The entry is kept — it is structurally valid, and the scheme list cannot
+	// be proven exhaustive — but the operator has to hear about it.
+	if got := len(srv.corsPatterns); got != 1 {
+		t.Errorf("len(corsPatterns) = %d, want 1 (a valid-but-odd scheme is kept)", got)
+	}
+	if out := logged.String(); !strings.Contains(out, "scheme") {
+		t.Errorf("nothing logged about the scheme; a typo stays silent. Log was:\n%s", out)
+	}
+}
+
+// An extension origin is legitimate and must not be nagged about.
+func TestCORSDoesNotWarnAboutExtensionSchemes(t *testing.T) {
+	var logged bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logged, &slog.HandlerOptions{Level: slog.LevelWarn}))
+
+	newTestServerWithLogger(config.ServerConfig{
+		Host:         "localhost",
+		Port:         8080,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		CORS: config.CORSConfig{AllowedOrigins: []string{
+			"https://app.example.com",
+			"chrome-extension://abcdefghijklmnop",
+		}},
+	}, nil, logger)
+
+	if out := logged.String(); strings.Contains(out, "scheme") {
+		t.Errorf("warned about a legitimate origin. Log was:\n%s", out)
 	}
 }

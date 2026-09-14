@@ -28,6 +28,26 @@ type OriginPattern struct {
 	suffix   string // ".example.com" — the part after the "*", wildcard only
 }
 
+// browserSchemes are the schemes a browser can actually put in an Origin
+// header: http and https for ordinary pages, plus the extension schemes.
+// Anything else in an allow-list is far more often a typo than an intention.
+var browserSchemes = map[string]bool{
+	"http":                 true,
+	"https":                true,
+	"chrome-extension":     true,
+	"moz-extension":        true,
+	"safari-web-extension": true,
+}
+
+// HasBrowserScheme reports whether the scheme is one a browser can send.
+//
+// A misspelled scheme is the one typo that survives every other check:
+// "htps://example.com" is a structurally valid origin, so it parses, passes
+// validation, and then silently matches nothing. Callers use this to say so
+// — a warning rather than a rejection, because the list above cannot be
+// proven exhaustive for every browser.
+func (o Origin) HasBrowserScheme() bool { return browserSchemes[o.Scheme] }
+
 // ParseOrigin parses a concrete origin such as "https://example.com:8443".
 //
 // It rejects anything that is not a bare origin — a missing scheme, a missing
@@ -137,6 +157,10 @@ func (p OriginPattern) MatchesString(origin string) bool {
 	}
 	return p.Matches(parsed)
 }
+
+// HasBrowserScheme reports whether the pattern's scheme is one a browser can
+// send, so a caller holding a parsed entry need not reach inside it.
+func (p OriginPattern) HasBrowserScheme() bool { return p.origin.HasBrowserScheme() }
 
 // Matches reports whether the origin is covered by the pattern.
 func (p OriginPattern) Matches(o Origin) bool {

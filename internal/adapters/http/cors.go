@@ -105,6 +105,15 @@ func (s *Server) initCORS(origins []string) {
 			s.logger.Warn("ignoring unusable CORS origin pattern", "pattern", raw, "error", err)
 			continue
 		}
+		// A misspelled scheme is the one typo that survives every check:
+		// "htps://example.com" is a structurally valid origin, so it parses and
+		// the service starts — and then matches nothing, for good. Keep the
+		// entry (the scheme list cannot be proven exhaustive) but say so, the
+		// same way invalid trusted_proxies entries are reported.
+		if !pattern.HasBrowserScheme() {
+			s.logger.Warn("CORS origin uses a scheme no browser sends — check for a typo",
+				"pattern", raw, "expected", "http, https, or an extension scheme")
+		}
 		s.corsPatterns = append(s.corsPatterns, pattern)
 	}
 }

@@ -132,8 +132,13 @@ func (fakeSyncer) TriggerSync(context.Context) (input.SyncResult, error) {
 // newTestServerWith builds the fake-wired server with an optional sync service.
 // Pass one when the test needs the conditionally-registered POST /sync route.
 func newTestServerWith(cfg config.ServerConfig, syncService input.Syncer) *Server {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	return newTestServerWithLogger(cfg, syncService,
+		slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError})))
+}
 
+// newTestServerWithLogger lets a test read what the server logged during
+// construction — the only way to assert on a startup warning.
+func newTestServerWithLogger(cfg config.ServerConfig, syncService input.Syncer, logger *slog.Logger) *Server {
 	// Create real services using mocks
 	realRegistry := application.NewSourceRegistry(
 		[]output.SpatialSource{&mockRepository{}},
