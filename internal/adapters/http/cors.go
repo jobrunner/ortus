@@ -90,29 +90,35 @@ func (s *Server) routeAllowsMethod(r *http.Request, method string) bool {
 	return s.router.Match(probe, &match) && match.MatchErr == nil
 }
 
-// isOriginAllowed checks if the given origin matches any allowed pattern.
+// initCORS parses the configured allow-list once, when the server is built.
+// config.validateCORS has already rejected unusable entries at startup, so this
+// normally cannot fail; a Server assembled without that validation (a test, a
+// future caller) drops the offending entry and says so, rather than taking the
+// whole allow-list down or failing silently at request time.
+//
+// Parsing here also keeps the request path a comparison instead of re-parsing
+// every configured pattern on every cross-origin request.
+func (s *Server) initCORS(origins []string) {
+	for _, raw := range origins {
+		pattern, err := domain.ParseOriginPattern(raw)
+		if err != nil {
+			s.logger.Warn("ignoring unusable CORS origin pattern", "pattern", raw, "error", err)
+			continue
+		}
+		s.corsPatterns = append(s.corsPatterns, pattern)
+	}
+}
+
+// isOriginAllowed checks the request's Origin against the pre-parsed allow-list.
+// The rules — exact scheme/host/port triple, or a wildcard on the leading host
+// label with scheme and port still matching exactly — live in
+// domain.OriginPattern, so config validation and this check cannot disagree
+// about what a pattern means.
 func (s *Server) isOriginAllowed(origin string) bool {
-	for _, pattern := range s.config.CORS.AllowedOrigins {
-		if matchOrigin(origin, pattern) {
+	for _, pattern := range s.corsPatterns {
+		if pattern.MatchesString(origin) {
 			return true
 		}
 	}
 	return false
-}
-
-// matchOrigin reports whether an Origin header value matches one configured
-// allow-list pattern. The rules — exact triple, or a wildcard on the leading
-// host label with scheme and port still matching exactly — live in
-// domain.OriginPattern, so config validation and this matcher cannot disagree
-// about what a pattern means.
-//
-// A pattern that does not parse matches nothing. Config validation rejects such
-// patterns at startup (config.validateCORS), so reaching that case means the
-// Server was hand-built in a test.
-func matchOrigin(origin, pattern string) bool {
-	parsed, err := domain.ParseOriginPattern(pattern)
-	if err != nil {
-		return false
-	}
-	return parsed.MatchesString(origin)
 }

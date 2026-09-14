@@ -8,169 +8,9 @@ import (
 	"github.com/jobrunner/ortus/internal/config"
 )
 
-// Origin parsing itself (scheme/host/port, IPv6 literals, rejected forms) is
-// covered by TestParseOrigin in internal/domain, where the rules live. These
-// cases pin the adapter's use of them.
-func TestMatchOrigin(t *testing.T) {
-	tests := []struct {
-		name     string
-		origin   string
-		pattern  string
-		expected bool
-	}{
-		// Exact matches
-		{
-			name:     "exact match https",
-			origin:   "https://example.com",
-			pattern:  "https://example.com",
-			expected: true,
-		},
-		{
-			name:     "exact match with port",
-			origin:   "https://example.com:8080",
-			pattern:  "https://example.com:8080",
-			expected: true,
-		},
-		{
-			name:     "exact match fails - different protocol",
-			origin:   "http://example.com",
-			pattern:  "https://example.com",
-			expected: false,
-		},
-		{
-			name:     "exact match fails - different domain",
-			origin:   "https://other.com",
-			pattern:  "https://example.com",
-			expected: false,
-		},
-		{
-			name:     "exact match fails - different port",
-			origin:   "https://example.com:8080",
-			pattern:  "https://example.com:9090",
-			expected: false,
-		},
-
-		// Wildcard matches. An origin is a scheme/host/port triple; only the
-		// host label is wildcarded, so scheme and port must still match exactly.
-		{
-			name:     "wildcard matches subdomain",
-			origin:   "https://sub.example.com",
-			pattern:  "https://*.example.com",
-			expected: true,
-		},
-		{
-			name:     "wildcard matches deep subdomain",
-			origin:   "https://deep.sub.example.com",
-			pattern:  "https://*.example.com",
-			expected: true,
-		},
-		{
-			name:     "wildcard does not match root domain",
-			origin:   "https://example.com",
-			pattern:  "https://*.example.com",
-			expected: false,
-		},
-		{
-			name:     "wildcard does not match different domain",
-			origin:   "https://sub.other.com",
-			pattern:  "https://*.example.com",
-			expected: false,
-		},
-		{
-			name:     "wildcard with subdomain pattern",
-			origin:   "https://app.sub.domain.tld",
-			pattern:  "https://*.sub.domain.tld",
-			expected: true,
-		},
-		{
-			name:     "wildcard does not match partial",
-			origin:   "https://notexample.com",
-			pattern:  "https://*.example.com",
-			expected: false,
-		},
-
-		// Wildcards must not widen the scheme: admitting http where the
-		// operator wrote https hands responses to a plaintext origin.
-		{
-			name:     "wildcard does not widen https to http",
-			origin:   "http://sub.example.com",
-			pattern:  "https://*.example.com",
-			expected: false,
-		},
-		{
-			name:     "wildcard does not widen http to https",
-			origin:   "https://sub.example.com",
-			pattern:  "http://*.example.com",
-			expected: false,
-		},
-
-		// …nor the port: a different port is a different service on the same host.
-		{
-			name:     "wildcard does not widen to another port",
-			origin:   "https://sub.example.com:8443",
-			pattern:  "https://*.example.com",
-			expected: false,
-		},
-		{
-			name:     "wildcard with port does not match the default port",
-			origin:   "https://sub.example.com",
-			pattern:  "https://*.example.com:8443",
-			expected: false,
-		},
-		{
-			name:     "wildcard with port matches that port",
-			origin:   "http://sub.localhost:3000",
-			pattern:  "http://*.localhost:3000",
-			expected: true,
-		},
-
-		// A scheme-less wildcard is rejected at config validation; if one ever
-		// reaches the matcher it must not match a real (schemed) origin.
-		{
-			name:     "scheme-less wildcard does not match a schemed origin",
-			origin:   "https://sub.example.com",
-			pattern:  "*.example.com",
-			expected: false,
-		},
-
-		// Edge cases
-		{
-			name:     "empty origin",
-			origin:   "",
-			pattern:  "https://example.com",
-			expected: false,
-		},
-		{
-			name:     "empty pattern",
-			origin:   "https://example.com",
-			pattern:  "",
-			expected: false,
-		},
-		{
-			name:     "localhost exact match",
-			origin:   "http://localhost:3000",
-			pattern:  "http://localhost:3000",
-			expected: true,
-		},
-		{
-			name:     "wildcard localhost",
-			origin:   "http://sub.localhost",
-			pattern:  "http://*.localhost",
-			expected: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := matchOrigin(tt.origin, tt.pattern)
-			if result != tt.expected {
-				t.Errorf("matchOrigin(%q, %q) = %v; want %v",
-					tt.origin, tt.pattern, result, tt.expected)
-			}
-		})
-	}
-}
-
+// The matching rules themselves are covered by TestOriginPatternMatches in
+// internal/domain, where they live. This pins the adapter's use of them: the
+// configured allow-list, parsed by initCORS, decides.
 func TestServer_isOriginAllowed(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -224,13 +64,9 @@ func TestServer_isOriginAllowed(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := &Server{
-				config: config.ServerConfig{
-					CORS: config.CORSConfig{
-						AllowedOrigins: tt.allowedOrigins,
-					},
-				},
-			}
+			// Built through NewServer so the check runs against the allow-list
+			// as initCORS parsed it, not against a hand-set field.
+			s := newCORSServer(t, tt.allowedOrigins...)
 
 			result := s.isOriginAllowed(tt.origin)
 			if result != tt.expected {
