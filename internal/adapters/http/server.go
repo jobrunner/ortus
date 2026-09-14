@@ -26,7 +26,8 @@ import (
 type Server struct {
 	server           *http.Server
 	router           *mux.Router
-	handler          http.Handler // what is actually served: the router, wrapped in CORS when enabled
+	handler          http.Handler           // what is actually served: the router, wrapped in CORS when enabled
+	corsPatterns     []domain.OriginPattern // allow-list, parsed once in NewServer
 	queryService     input.QueryService
 	registry         input.SourceRegistry
 	health           input.HealthChecker
@@ -152,6 +153,8 @@ func NewServer(
 		}
 	}
 
+	s.initCORS(cfg.CORS.AllowedOrigins)
+
 	s.router = s.setupRoutes()
 
 	// CORS wraps the router from OUTSIDE the mux middleware chain — it must not
@@ -159,7 +162,7 @@ func NewServer(
 	// match a route, and a preflight (OPTIONS) matches none of our GET/POST
 	// routes, so an r.Use CORS layer never sees it. See cors.go.
 	s.handler = s.router
-	if cfg.CORS.Enabled() {
+	if len(s.corsPatterns) > 0 {
 		s.handler = s.corsMiddleware(s.router)
 	}
 
