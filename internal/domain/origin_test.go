@@ -203,3 +203,59 @@ func TestOriginPatternMatches(t *testing.T) {
 		})
 	}
 }
+
+// A scheme a browser can never send makes the entry dead on arrival — and
+// unlike a missing scheme, a misspelled one ("htps://") is syntactically fine
+// and passes every other check. The domain knows which schemes are real; the
+// caller decides what to do about it.
+func TestOriginHasBrowserScheme(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want bool
+	}{
+		{name: "https", in: "https://example.com", want: true},
+		{name: "http", in: "http://localhost:3000", want: true},
+
+		// Extensions legitimately send these, so they must not be flagged.
+		{name: "chrome extension", in: "chrome-extension://abcdefghijklmnop", want: true},
+		{name: "firefox extension", in: "moz-extension://abcdefghijklmnop", want: true},
+		{name: "safari extension", in: "safari-web-extension://abcdefghijklmnop", want: true},
+
+		{name: "typo in https", in: "htps://example.com"},
+		{name: "typo in http", in: "htp://example.com"},
+		{name: "not a browser scheme", in: "ftp://example.com"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			origin, err := domain.ParseOrigin(tt.in)
+			if err != nil {
+				t.Fatalf("ParseOrigin(%q) error = %v", tt.in, err)
+			}
+			if got := origin.HasBrowserScheme(); got != tt.want {
+				t.Errorf("ParseOrigin(%q).HasBrowserScheme() = %v; want %v", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+// The pattern exposes the same answer, so a caller holding a parsed allow-list
+// entry does not have to reach inside it.
+func TestOriginPatternHasBrowserScheme(t *testing.T) {
+	good, err := domain.ParseOriginPattern("https://*.example.com")
+	if err != nil {
+		t.Fatalf("ParseOriginPattern: %v", err)
+	}
+	if !good.HasBrowserScheme() {
+		t.Error(`"https://*.example.com" reported as a non-browser scheme`)
+	}
+
+	typo, err := domain.ParseOriginPattern("htps://*.example.com")
+	if err != nil {
+		t.Fatalf("ParseOriginPattern: %v", err)
+	}
+	if typo.HasBrowserScheme() {
+		t.Error(`"htps://*.example.com" reported as a browser scheme`)
+	}
+}
