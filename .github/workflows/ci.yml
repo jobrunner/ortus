@@ -481,3 +481,42 @@ jobs:
           ignore-unfixed: true
           exit-code: '1'
           skip-setup-trivy: true
+
+      # The release publishes a second variant from Dockerfile.ubuntu with
+      # its own OS packages; scan and gate it the same way. Kept in this job
+      # (not a matrix) so the required check name stays "Docker Security Scan".
+      - name: Build Ubuntu image for scanning
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile.ubuntu
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: ortus:scan-ubuntu
+
+      - name: Run Trivy vulnerability scanner (Ubuntu)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: 'ortus:scan-ubuntu'
+          format: 'sarif'
+          output: 'trivy-results-ubuntu.sarif'
+          severity: 'CRITICAL,HIGH'
+          skip-setup-trivy: true
+
+      - name: Upload Trivy scan results (Ubuntu) to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v4.38.2
+        if: always() && hashFiles('trivy-results-ubuntu.sarif') != ''
+        with:
+          sarif_file: 'trivy-results-ubuntu.sarif'
+          category: docker-security-ubuntu
+
+      - name: Fail on fixable CRITICAL/HIGH vulnerabilities (Ubuntu)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: 'ortus:scan-ubuntu'
+          format: 'table'
+          severity: 'CRITICAL,HIGH'
+          ignore-unfixed: true
+          exit-code: '1'
+          skip-setup-trivy: true
