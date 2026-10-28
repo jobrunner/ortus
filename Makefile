@@ -10,7 +10,6 @@
 .PHONY: check check-ci verify hooks arch debt debt-guard debt-coverage debt-deadcode
 .PHONY: deps deps-update deps-verify
 .PHONY: doc doc-serve docs docs-serve doc-drift
-.PHONY: release release-dry
 .PHONY: ci-local ci-lint ci-test ci-build ci-dry ci-amd64 ci-check
 
 # Variablen
@@ -317,13 +316,6 @@ docs-serve: ## Doku lokal mit Live-Reload servieren (http://localhost:8000)
 
 doc-drift: ## Doku-Drift-Harness: prüft Code ↔ OpenAPI ↔ Docs (0 = keine Drift)
 	@bash .claude/skills/doc-drift-check/scripts/check-doc-drift.sh
-
-## Release
-release-dry: ## Teste Release (dry-run)
-	goreleaser release --snapshot --clean
-
-release: ## Erstelle Release
-	goreleaser release --clean
 
 ## GitHub Actions lokal (via act)
 ci-local: ## Führe alle CI-Jobs lokal aus (native Architektur)

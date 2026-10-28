@@ -28,8 +28,8 @@ if [[ "$FILE_PATH" =~ \.(md|txt)$ ]] || [[ "$FILE_PATH" =~ README ]]; then
     exit 0
 fi
 
-# Skip hidden files (except .github, .goreleaser, .golangci)
-if [[ "$FILE_PATH" =~ /\. ]] && [[ ! "$FILE_PATH" =~ \.(github|goreleaser|golangci) ]]; then
+# Skip hidden files (except .github, .golangci)
+if [[ "$FILE_PATH" =~ /\. ]] && [[ ! "$FILE_PATH" =~ \.(github|golangci) ]]; then
     exit 0
 fi
 
@@ -77,11 +77,6 @@ fi
 if [[ "$FILENAME" == "Dockerfile" ]] || [[ "$FILENAME" == "docker-compose.yaml" ]]; then
     add_suggestion "Docker configuration changed - update Docker usage documentation"
     add_doc "README.md (Docker section)"
-fi
-
-if [[ "$FILENAME" == ".goreleaser.yml" ]]; then
-    add_suggestion "Release configuration changed - verify release documentation"
-    add_doc "docs/how-to/development-setup.md (Release process)"
 fi
 
 # === Main Application ===
