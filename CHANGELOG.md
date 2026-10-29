@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.2](https://github.com/jobrunner/ortus/compare/v2.0.1...v2.0.2) (2026-10-29)
+
+
+### Bug Fixes
+
+* **deps:** bump Go toolchain to 1.26.10 and x/net to v0.60.0 ([e091b48](https://github.com/jobrunner/ortus/commit/e091b482572ff0bf919dfdf28236427105092733))
+* **deps:** bump x/net to v0.62.0 and fasthttp to v1.70.0 ([684fb57](https://github.com/jobrunner/ortus/commit/684fb5728a190b16bdd2f1e9a66f85569e1c2651))
+* **docker:** bump spatialite base image to 3.0.2 ([0d09f02](https://github.com/jobrunner/ortus/commit/0d09f02a77b034327c10e08d79b45f6bfb85a710))
+* **release:** stop publishing release binaries that cannot start ([5ef4425](https://github.com/jobrunner/ortus/commit/5ef4425fd25d37c2475bfce2fd9d216855055353))
+* **storage:** trace S3 calls via the SDK's native OTel support ([177f55b](https://github.com/jobrunner/ortus/commit/177f55be7f162b2b94fcd9240b283890be508ac1))
+
 ## [2.0.1](https://github.com/jobrunner/ortus/compare/v2.0.0...v2.0.1) (2026-09-14)
 
 
