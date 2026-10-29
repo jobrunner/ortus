@@ -75,8 +75,12 @@ jobs:
             fi
           } >> "$GITHUB_OUTPUT"
 
+      # Upload on every completed scan, clean ones included: code scanning
+      # only closes an alert when a newer analysis no longer reports it.
+      # Uploading on findings only left fixed alerts (#331, #332) open for
+      # weeks. A scan error uploads nothing, so it cannot close real alerts.
       - name: Upload SARIF to GitHub Security tab
-        if: steps.scan.outputs.has_findings == 'true'
+        if: steps.scan.outputs.rc == '0' || steps.scan.outputs.rc == '14'
         uses: github/codeql-action/upload-sarif@v4.38.2
         with:
           sarif_file: zizmor.sarif

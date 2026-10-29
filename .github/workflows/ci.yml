@@ -442,6 +442,11 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
+      # Both release variants are built first, then scanned: building the
+      # second image after Trivy has run would ship Trivy's DB cache
+      # (.cache/trivy in the workspace) into its `COPY . .` build context.
+      # Kept in one job (not a matrix) so the required check name stays
+      # "Docker Security Scan".
       - name: Build image for scanning
         uses: docker/build-push-action@v7
         with:
@@ -451,6 +456,16 @@ jobs:
           push: false
           load: true
           tags: ortus:scan
+
+      - name: Build Ubuntu image for scanning
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile.ubuntu
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: ortus:scan-ubuntu
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@v0.36.0
@@ -466,16 +481,43 @@ jobs:
         with:
           sarif_file: 'trivy-results.sarif'
 
-      # Gate: fail the job on fixable CRITICAL/HIGH findings. The SARIF scan
-      # above stays informational (full picture in the Security tab); this
-      # second pass uses ignore-unfixed so CVEs without an upstream/Alpine fix
-      # (e.g. curl CVEs marked "not fixed" in the 3.21 secdb) don't block PRs
-      # that can't do anything about them. The Trivy DB is cached from the
-      # first step, so this pass is cheap.
+      - name: Run Trivy vulnerability scanner (Ubuntu)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: 'ortus:scan-ubuntu'
+          format: 'sarif'
+          output: 'trivy-results-ubuntu.sarif'
+          severity: 'CRITICAL,HIGH'
+          skip-setup-trivy: true
+
+      - name: Upload Trivy scan results (Ubuntu) to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v4.38.2
+        if: always() && hashFiles('trivy-results-ubuntu.sarif') != ''
+        with:
+          sarif_file: 'trivy-results-ubuntu.sarif'
+          category: docker-security-ubuntu
+
+      # Gates: fail the job on fixable CRITICAL/HIGH findings. The SARIF scans
+      # above stay informational (full picture in the Security tab); these
+      # passes use ignore-unfixed so CVEs without an upstream/distro fix don't
+      # block PRs that can't do anything about them. The Trivy DB is cached
+      # from the first scan, so they are cheap. Both gates run even if the
+      # first fails, so one variant's finding never hides the other's.
       - name: Fail on fixable CRITICAL/HIGH vulnerabilities
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: 'ortus:scan'
+          format: 'table'
+          severity: 'CRITICAL,HIGH'
+          ignore-unfixed: true
+          exit-code: '1'
+          skip-setup-trivy: true
+
+      - name: Fail on fixable CRITICAL/HIGH vulnerabilities (Ubuntu)
+        if: ${{ !cancelled() }}
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: 'ortus:scan-ubuntu'
           format: 'table'
           severity: 'CRITICAL,HIGH'
           ignore-unfixed: true

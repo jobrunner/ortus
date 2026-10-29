@@ -44,3 +44,6 @@ docker-compose*.yml
 *.tmp
 *.log
 .DS_Store
+
+# Tool caches in the workspace (e.g. the Trivy DB in CI)
+.cache/

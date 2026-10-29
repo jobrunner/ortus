@@ -4,7 +4,8 @@
 #
 # Two jobs:
 #   - scan (govulncheck)  — Go stdlib + module CVEs reachable from the code
-#   - image-scan (trivy)  — the PUBLISHED ghcr.io image (:latest). Catches what
+#   - image-scan (trivy)  — the PUBLISHED ghcr.io images (:latest = Alpine and
+#     :ubuntu). Catches what
 #     govulncheck cannot: OS packages from the spatialite base image (openssl,
 #     curl, python3, …) and unreachable-but-flagged Go module CVEs. A released
 #     image that was clean at release time rots as new CVEs are disclosed;
@@ -49,21 +50,22 @@ jobs:
           # against what the build actually uses.
           go-version-file: go.mod
 
-      - name: Run govulncheck (JSON)
+      - name: Run govulncheck
         id: vuln
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest
-          # -json emits structured output even on findings. Exit codes:
+          # Text mode is the only mode whose exit code reports findings:
           #   0 — no vulnerabilities
           #   3 — vulnerabilities found
           #   other — scan failed (build error, network, etc.)
+          # Do NOT switch to -json: it exits 0 even with findings, which kept
+          # this job green from 2026-10-12 to 10-26 while master carried 13
+          # reachable stdlib CVEs.
           set +e
-          govulncheck -json ./... > vuln-report.json 2> vuln-stderr.txt
+          govulncheck ./... > vuln-report.txt 2>&1
           rc=$?
           set -e
           echo "rc=$rc" >> "$GITHUB_OUTPUT"
-          # Also keep a human-readable text report for the issue body.
-          govulncheck ./... > vuln-report.txt 2>&1 || true
 
       - name: Ensure `security` label exists
         if: steps.vuln.outputs.rc == '3'
@@ -89,7 +91,7 @@ jobs:
             --search "$title in:title" \
             --json number --jq '.[0].number // ""')
 
-          body=$(printf 'govulncheck reports vulnerabilities on master.\n\n```\n%s\n```\n\n## Fix\n\nUsually the right action is to bump the `toolchain` directive in `go.mod` to a Go patch version that fixes the listed CVEs, then update `GO_VERSION` in `.github/workflows/{ci,release}.yml` to match. Dependabot may already have an open PR doing this.\n' "$(cat vuln-report.txt)")
+          body=$(printf 'govulncheck reports vulnerabilities on master.\n\n```\n%s\n```\n\n## Fix\n\nUsually the right action is to bump the `toolchain` directive in `go.mod` to a Go patch version that fixes the listed CVEs, then update every `GO_VERSION` in `.github/workflows/*.yml` to match. If the Docker image scan flags the same CVEs, the Go in the `-dev` images of `spatialite-base-image` needs the same bump (its rebuild is gated on it).\n' "$(cat vuln-report.txt)")
 
           if [ -n "$existing" ]; then
             gh issue comment "$existing" --body "$body"
@@ -106,7 +108,7 @@ jobs:
           RC: ${{ steps.vuln.outputs.rc }}
         run: |
           echo "::error::govulncheck exited with $RC — not a CVE finding, likely a scan error. See log for details."
-          cat vuln-stderr.txt
+          cat vuln-report.txt
           exit 1
 
       - name: Fail job if vulnerabilities found
@@ -114,16 +116,23 @@ jobs:
         run: exit 1
 
   image-scan:
-    name: trivy (published image)
+    name: trivy (published image, ${{ matrix.tag }})
     runs-on: ubuntu-latest
     permissions:
       contents: read
       issues: write   # to open / comment on the security issue
+    strategy:
+      fail-fast: false
+      matrix:
+        # Both published variants: they share the Go binary but differ in
+        # every OS package, and the Ubuntu one was never scanned before.
+        tag: [latest, ubuntu]
+    env:
+      # This job has no checkout, so `gh` cannot infer the repository from
+      # a git remote and fails with "not a git repository". That swallowed
+      # three weeks of findings (2026-10-12 → 10-26) without an issue.
+      GH_REPO: ${{ github.repository }}
     steps:
-      # Scans :latest — the default (Alpine) image users pull. The -ubuntu
-      # variant shares the Go binary and mostly differs in OS packages; if it
-      # ever needs its own scan, turn this job into a matrix over tags.
-      #
       # ignore-unfixed: only CVEs with an available fix (Alpine secdb / Go
       # module release) create an issue — those are actionable via a base-image
       # bump or `go get`. Unfixed CVEs still show up in the per-PR SARIF scan
@@ -131,7 +140,7 @@ jobs:
       - name: Run Trivy against ghcr.io image (JSON)
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: 'ghcr.io/${{ github.repository }}:latest'
+          image-ref: 'ghcr.io/${{ github.repository }}:${{ matrix.tag }}'
           format: 'json'
           output: 'trivy-report.json'
           severity: 'CRITICAL,HIGH'
@@ -174,16 +183,17 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           FINDING_COUNT: ${{ steps.findings.outputs.count }}
           REPOSITORY: ${{ github.repository }}
+          TAG: ${{ matrix.tag }}
         run: |
           set -euo pipefail
-          title="Weekly image scan: new CVEs in published Docker image"
+          title="Weekly image scan: new CVEs in published Docker image :${TAG}"
           existing=$(gh issue list \
             --label security \
             --state open \
             --search "$title in:title" \
             --json number --jq '.[0].number // ""')
 
-          body=$(printf 'Trivy reports %s fixable CRITICAL/HIGH vulnerabilities in `ghcr.io/%s:latest`.\n\n```\n%s\n```\n\n## Fix\n\n- OS packages (apk): rebuild/bump `spatialite-base-image` in the Dockerfiles so the runtime picks up patched Alpine packages.\n- Go modules (gobinary): `go get <module>@<fixed version>` in ortus (Dependabot may already have a PR).\n\nEither way the fix only reaches users with the next ortus release.\n' "$FINDING_COUNT" "$REPOSITORY" "$(cat trivy-report.txt)")
+          body=$(printf 'Trivy reports %s fixable CRITICAL/HIGH vulnerabilities in `ghcr.io/%s:%s`.\n\n```\n%s\n```\n\n## Fix\n\n- OS packages (apk): rebuild/bump `spatialite-base-image` in the Dockerfiles so the runtime picks up patched Alpine packages.\n- Go modules (gobinary): `go get <module>@<fixed version>` in ortus (Dependabot may already have a PR).\n\nEither way the fix only reaches users with the next ortus release.\n' "$FINDING_COUNT" "$REPOSITORY" "$TAG" "$(cat trivy-report.txt)")
 
           if [ -n "$existing" ]; then
             gh issue comment "$existing" --body "$body"
