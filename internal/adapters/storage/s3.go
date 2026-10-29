@@ -11,7 +11,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"go.opentelemetry.io/contrib/instrumentation/github.com/aws/aws-sdk-go-v2/otelaws"
+	"github.com/aws/smithy-go/tracing/smithyoteltracing"
+	"go.opentelemetry.io/otel"
 
 	"github.com/jobrunner/ortus/internal/domain"
 	"github.com/jobrunner/ortus/internal/ports/output"
@@ -56,13 +57,16 @@ func NewS3Storage(ctx context.Context, cfg S3Config) (*S3Storage, error) {
 		return nil, err
 	}
 
-	// Wire OTel AWS-SDK middleware. Each S3 API call (GetObject, ListObjectsV2,
-	// HeadObject, ...) becomes its own child span with attempt-number, status,
-	// and error attributes — enough to see retries and per-attempt latency
-	// instead of one aggregate ObjectStorage.* span.
-	otelaws.AppendMiddlewares(&awsCfg.APIOptions)
-
-	var clientOpts []func(*s3.Options)
+	// Wire the SDK's native OTel tracing (smithy-go; replaces the deprecated
+	// otelaws middleware). Each S3 API call (GetObject, ListObjectsV2,
+	// HeadObject, ...) becomes its own child span, with nested spans per
+	// retry attempt — enough to see retries and per-attempt latency instead
+	// of one aggregate ObjectStorage.* span.
+	clientOpts := []func(*s3.Options){
+		func(o *s3.Options) {
+			o.TracerProvider = smithyoteltracing.Adapt(otel.GetTracerProvider())
+		},
+	}
 	if cfg.Endpoint != "" {
 		clientOpts = append(clientOpts, func(o *s3.Options) {
 			o.BaseEndpoint = aws.String(cfg.Endpoint)
