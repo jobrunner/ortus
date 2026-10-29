@@ -206,10 +206,10 @@ nutzt `busybox wget` statt `curl` für den HEALTHCHECK. Die
 maßgebliche Struktur steht in `Dockerfile` (vereinfacht):
 
 ```dockerfile
-FROM ghcr.io/jobrunner/spatialite-base-image:alpine-dev-3.0.1 AS builder
+FROM ghcr.io/jobrunner/spatialite-base-image:alpine-dev-3.0.2 AS builder
 # … CGO-Build von ./cmd/ortus …
 
-FROM ghcr.io/jobrunner/spatialite-base-image:alpine-3.0.1
+FROM ghcr.io/jobrunner/spatialite-base-image:alpine-3.0.2
 COPY --from=builder /build/ortus /app/ortus
 USER ortus
 EXPOSE 8080 443
