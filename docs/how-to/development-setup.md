@@ -197,16 +197,14 @@ make build
 make build-all
 ```
 
-### Release mit GoReleaser
+### Release
 
-```bash
-# Dry-Run
-make release-dry
-
-# Tatsächliches Release (erfordert Tag)
-git tag v1.0.0
-make release
-```
+Releases laufen vollautomatisch über release-please (siehe `CONTRIBUTING.md`):
+Conventional Commits auf `master` erzeugen einen Release-PR; sein Merge taggt
+`vX.Y.Z`, und `docker-release.yml` veröffentlicht die signierten Images
+(Alpine und `-ubuntu`). Eigenständige Binaries gibt es nicht — ortus braucht
+CGO für SpatiaLite und zur Laufzeit `mod_spatialite`, beides bringen die
+Images mit.
 
 ## GitHub Actions lokal validieren
 

@@ -31,9 +31,6 @@
           gotestsum                # Bessere Test-Ausgabe
           go-junit-report          # JUnit Reports
 
-          # Build & Release
-          goreleaser               # Release Automation
-
           # CI/CD
           act                      # GitHub Actions lokal ausführen
           actionlint               # GitHub Actions Linter
