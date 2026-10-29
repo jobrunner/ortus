@@ -476,7 +476,7 @@ jobs:
           severity: 'CRITICAL,HIGH'
 
       - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v4.38.2
+        uses: github/codeql-action/upload-sarif@v4.39.1
         if: always()
         with:
           sarif_file: 'trivy-results.sarif'
@@ -491,7 +491,7 @@ jobs:
           skip-setup-trivy: true
 
       - name: Upload Trivy scan results (Ubuntu) to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v4.38.2
+        uses: github/codeql-action/upload-sarif@v4.39.1
         if: always() && hashFiles('trivy-results-ubuntu.sarif') != ''
         with:
           sarif_file: 'trivy-results-ubuntu.sarif'
