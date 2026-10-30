@@ -48,8 +48,9 @@ make verify-image TAG=2.0.2    # or TAG=2.0.2-ubuntu
    — an image signed by any other workflow or branch fails,
 2. takes the digest from the verified signature (not from a second registry
    lookup),
-3. scans exactly that digest with Trivy and fails on fixable CRITICAL/HIGH
-   findings, the same policy as the CI gate,
+3. scans exactly that digest with Trivy — every published platform
+   (amd64 and arm64), since the host picks its own from the multi-arch index —
+   and fails on fixable CRITICAL/HIGH findings, the same policy as the CI gate,
 4. prints the reference to deploy, e.g.
    `ghcr.io/jobrunner/ortus@sha256:dbbc2f22…`.
 
