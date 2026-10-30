@@ -27,6 +27,10 @@
           golangci-lint            # Meta-Linter
           govulncheck              # Vulnerability Scanner
 
+          # Supply Chain (make verify-image)
+          cosign                   # Image-Signaturen prüfen
+          trivy                    # Image-Scanner (wie das CI-Gate)
+
           # Testing
           gotestsum                # Bessere Test-Ausgabe
           go-junit-report          # JUnit Reports
