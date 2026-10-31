@@ -12,7 +12,7 @@
 #     this job is what surfaces that without waiting for the next release.
 #
 # Outcome handling distinguishes three cases (both jobs):
-#   - findings (govulncheck exit 3 / trivy JSON has fixable CRITICAL,HIGH)
+#   - findings (govulncheck exit 3 / trivy JSON has fixable CRITICAL,HIGH,MEDIUM)
 #       → open / comment on a `security`-labelled GitHub issue, fail the job
 #   - clean (exit 0)
 #       → succeed silently
@@ -143,7 +143,7 @@ jobs:
           image-ref: 'ghcr.io/${{ github.repository }}:${{ matrix.tag }}'
           format: 'json'
           output: 'trivy-report.json'
-          severity: 'CRITICAL,HIGH'
+          severity: 'CRITICAL,HIGH,MEDIUM'
           ignore-unfixed: true
 
       # A trivy failure (registry unreachable, DB download broken) fails the
@@ -153,7 +153,7 @@ jobs:
         run: |
           count=$(jq '[.Results[]?.Vulnerabilities[]?] | length' trivy-report.json)
           echo "count=$count" >> "$GITHUB_OUTPUT"
-          echo "Fixable CRITICAL/HIGH vulnerabilities: $count"
+          echo "Fixable CRITICAL/HIGH/MEDIUM vulnerabilities: $count"
 
       - name: Build human-readable report
         if: steps.findings.outputs.count != '0'
@@ -193,7 +193,7 @@ jobs:
             --search "$title in:title" \
             --json number --jq '.[0].number // ""')
 
-          body=$(printf 'Trivy reports %s fixable CRITICAL/HIGH vulnerabilities in `ghcr.io/%s:%s`.\n\n```\n%s\n```\n\n## Fix\n\n- OS packages (apk): rebuild/bump `spatialite-base-image` in the Dockerfiles so the runtime picks up patched Alpine packages.\n- Go modules (gobinary): `go get <module>@<fixed version>` in ortus (Dependabot may already have a PR).\n\nEither way the fix only reaches users with the next ortus release.\n' "$FINDING_COUNT" "$REPOSITORY" "$TAG" "$(cat trivy-report.txt)")
+          body=$(printf 'Trivy reports %s fixable CRITICAL/HIGH/MEDIUM vulnerabilities in `ghcr.io/%s:%s`.\n\n```\n%s\n```\n\n## Fix\n\n- OS packages (apk): rebuild/bump `spatialite-base-image` in the Dockerfiles so the runtime picks up patched Alpine packages.\n- Go modules (gobinary): `go get <module>@<fixed version>` in ortus (Dependabot may already have a PR).\n\nEither way the fix only reaches users with the next ortus release.\n' "$FINDING_COUNT" "$REPOSITORY" "$TAG" "$(cat trivy-report.txt)")
 
           if [ -n "$existing" ]; then
             gh issue comment "$existing" --body "$body"
