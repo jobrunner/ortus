@@ -336,15 +336,18 @@ jobs:
           ```bash
           IMG=@IMAGE@:@VERSION@
 
-          # Verify the signature
+          # Verify the signature (only the release workflow on master)
           cosign verify "$IMG" \
             --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-            --certificate-identity-regexp '^https://github.com/@REPOSITORY@/.github/workflows/docker-release.yml@'
+            --certificate-identity 'https://github.com/@REPOSITORY@/.github/workflows/docker-release.yml@refs/heads/master'
 
-          # Inspect SBOM / provenance attestations
-          cosign download sbom "$IMG"
+          # Inspect SBOM / provenance attestations (BuildKit, in the image index)
+          docker buildx imagetools inspect "$IMG" --format '{{ json .SBOM }}'
           docker buildx imagetools inspect "$IMG" --format '{{ json .Provenance }}'
           ```
+
+          From a checkout, `make verify-image TAG=@VERSION@` runs the signature
+          check plus a Trivy scan and prints the digest reference to deploy.
           EOF
 
           sed -e "s|@IMAGE@|$IMAGE|g" \

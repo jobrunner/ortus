@@ -5,7 +5,7 @@
 .PHONY: test test-unit test-integration test-coverage test-race test-bench load-test fuzz bench mutation
 .PHONY: load-stack-up load-stack-down load-stack-clean load-serve load-attack
 .PHONY: lint lint-go lint-fix vet
-.PHONY: security-check vuln-check gosec licenses
+.PHONY: security-check vuln-check gosec licenses verify-image
 .PHONY: fmt format fmt-check
 .PHONY: check check-ci verify hooks arch debt debt-guard debt-coverage debt-deadcode
 .PHONY: deps deps-update deps-verify
@@ -182,6 +182,10 @@ vuln-check: ## Prüfe auf bekannte Vulnerabilities
 
 gosec: ## Security Scanner (via golangci-lint)
 	$(GOLINT) run --enable-only gosec ./...
+
+TAG ?= latest
+verify-image: ## Publiziertes Image vor dem Deploy prüfen: Signatur + Trivy, gibt die Digest-Referenz aus (TAG=2.0.2)
+	scripts/verify-image.sh $(TAG)
 
 # Allowed dependency licenses (permissive only). First-party packages are
 # ignored (the repo itself isn't classified by go-licenses).

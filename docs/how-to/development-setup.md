@@ -180,6 +180,15 @@ make deps-verify
 make vuln-check
 ```
 
+### Image vor dem Deploy prüfen
+
+```bash
+# Signatur (nur Docker Release auf master) + Trivy; gibt die Digest-Referenz aus
+make verify-image TAG=2.0.2
+```
+
+cosign und Trivy liefert die Nix-Shell mit. Details: [Run with Docker](run-with-docker.md#verify-before-deploying).
+
 ### Secrets in Code
 
 - Niemals Secrets in den Code committen
