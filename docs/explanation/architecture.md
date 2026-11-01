@@ -192,13 +192,14 @@ func TestIntegration_PointQuery(t *testing.T) {
 
 ## Container
 
-Base-Image: `ghcr.io/jobrunner/spatialite-base-image` (Multi-Stage: `alpine-dev-3.0.1`
-zum Bauen, `alpine-3.0.1` als Runtime; analog die `ubuntu-*`-Variante in
+Base-Image: `ghcr.io/jobrunner/spatialite-base-image` (Multi-Stage: `alpine-dev-3.0.2`
+zum Bauen, `alpine-3.0.2` als Runtime; analog die `ubuntu-*`-Variante in
 `Dockerfile.ubuntu`). Seit 2.0.0 enthält das Runtime-Image nur noch den
 SpatiaLite-Stack (kein GDAL/Python), und ein monatlicher Rebuild im
 Basisimage-Repo publiziert die Tags mit frischen OS-Patches neu — ortus
 braucht daher keine eigene Runtime-Härtung mehr; das Trivy-Gate in der CI und
-der wöchentliche Scan des publizierten Images überwachen den Stand. Seit 3.0.0
+der wöchentliche Scan der publizierten Images (Alpine und Ubuntu) überwachen den
+Stand und schlagen bei fixbaren Findings ab MEDIUM an. Seit 3.0.0
 sind PROJ und libspatialite im Runtime-Image selbst gebaut — ohne libcurl
 (keine PROJ-CDN-Grids) und unter `/usr/local/lib`; `SPATIALITE_LIBRARY_PATH`
 zeigt deshalb auf `/usr/local/lib/mod_spatialite.so`, und die Ubuntu-Variante
