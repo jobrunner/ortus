@@ -10,7 +10,7 @@
 #      from a second registry lookup, so a tag moved between the two steps
 #      cannot slip an unsigned image into the scan or the deploy.
 #   3. Vulnerabilities: trivy scans exactly that digest and fails on fixable
-#      CRITICAL/HIGH/MEDIUM findings (same policy as the CI gate). The digest is a
+#      CRITICAL/HIGH/MEDIUM/LOW findings (same policy as the CI gate). The digest is a
 #      multi-arch index and trivy scans one platform per run, so every
 #      published platform is scanned — the host pulling the digest picks its
 #      own, and that one must have been checked.
@@ -19,14 +19,14 @@
 #
 # Usage: scripts/verify-image.sh [tag]        (default: latest)
 #   IMAGE_REPO   image repository   (default: ghcr.io/jobrunner/ortus)
-#   SEVERITY     trivy severities   (default: CRITICAL,HIGH,MEDIUM)
+#   SEVERITY     trivy severities   (default: CRITICAL,HIGH,MEDIUM,LOW)
 #   PLATFORMS    platforms to scan  (default: linux/amd64 linux/arm64,
 #                as published by docker-release.yml)
 set -euo pipefail
 
 TAG="${1:-latest}"
 IMAGE_REPO="${IMAGE_REPO:-ghcr.io/jobrunner/ortus}"
-SEVERITY="${SEVERITY:-CRITICAL,HIGH,MEDIUM}"
+SEVERITY="${SEVERITY:-CRITICAL,HIGH,MEDIUM,LOW}"
 PLATFORMS="${PLATFORMS:-linux/amd64 linux/arm64}"
 
 # The exact SAN of the signing certificate, read from a real release

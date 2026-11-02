@@ -497,31 +497,33 @@ jobs:
           sarif_file: 'trivy-results-ubuntu.sarif'
           category: docker-security-ubuntu
 
-      # Gates: fail the job on fixable CRITICAL/HIGH/MEDIUM findings (MEDIUM
-      # since 2026-10: a medium CVE can still be exploitable in context, and
-      # with ignore-unfixed every finding here is actionable). The SARIF scans
-      # above stay informational (full picture in the Security tab); these
+      # Gates: fail the job on every fixable finding, CRITICAL down to LOW
+      # (MEDIUM since 2026-10, LOW since 2026-11: a low-rated CVE can still be
+      # exploitable in context, and with ignore-unfixed every finding here is
+      # actionable). The SARIF scans above stay at CRITICAL..MEDIUM and
+      # informational — they include unfixed CVEs, and Ubuntu's long tail of
+      # unfixed LOWs would only bury the Security tab in noise; these
       # passes use ignore-unfixed so CVEs without an upstream/distro fix don't
       # block PRs that can't do anything about them. The Trivy DB is cached
       # from the first scan, so they are cheap. Both gates run even if the
       # first fails, so one variant's finding never hides the other's.
-      - name: Fail on fixable CRITICAL/HIGH/MEDIUM vulnerabilities
+      - name: Fail on fixable CRITICAL/HIGH/MEDIUM/LOW vulnerabilities
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: 'ortus:scan'
           format: 'table'
-          severity: 'CRITICAL,HIGH,MEDIUM'
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW'
           ignore-unfixed: true
           exit-code: '1'
           skip-setup-trivy: true
 
-      - name: Fail on fixable CRITICAL/HIGH/MEDIUM vulnerabilities (Ubuntu)
+      - name: Fail on fixable CRITICAL/HIGH/MEDIUM/LOW vulnerabilities (Ubuntu)
         if: ${{ !cancelled() }}
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: 'ortus:scan-ubuntu'
           format: 'table'
-          severity: 'CRITICAL,HIGH,MEDIUM'
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW'
           ignore-unfixed: true
           exit-code: '1'
           skip-setup-trivy: true
