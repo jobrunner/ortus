@@ -199,7 +199,7 @@ SpatiaLite-Stack (kein GDAL/Python), und ein monatlicher Rebuild im
 Basisimage-Repo publiziert die Tags mit frischen OS-Patches neu — ortus
 braucht daher keine eigene Runtime-Härtung mehr; das Trivy-Gate in der CI und
 der wöchentliche Scan der publizierten Images (Alpine und Ubuntu) überwachen den
-Stand und schlagen bei fixbaren Findings ab MEDIUM an. Seit 3.0.0
+Stand und schlagen bei jedem fixbaren Finding an (bis einschließlich LOW). Seit 3.0.0
 sind PROJ und libspatialite im Runtime-Image selbst gebaut — ohne libcurl
 (keine PROJ-CDN-Grids) und unter `/usr/local/lib`; `SPATIALITE_LIBRARY_PATH`
 zeigt deshalb auf `/usr/local/lib/mod_spatialite.so`, und die Ubuntu-Variante
