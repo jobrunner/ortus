@@ -192,8 +192,8 @@ func TestIntegration_PointQuery(t *testing.T) {
 
 ## Container
 
-Base-Image: `ghcr.io/jobrunner/spatialite-base-image` (Multi-Stage: `alpine-dev-3.0.2`
-zum Bauen, `alpine-3.0.2` als Runtime; analog die `ubuntu-*`-Variante in
+Base-Image: `ghcr.io/jobrunner/spatialite-base-image` (Multi-Stage: `alpine-dev-3.0.4`
+zum Bauen, `alpine-3.0.4` als Runtime; analog die `ubuntu-*`-Variante in
 `Dockerfile.ubuntu`). Seit 2.0.0 enthält das Runtime-Image nur noch den
 SpatiaLite-Stack (kein GDAL/Python), und ein monatlicher Rebuild im
 Basisimage-Repo publiziert die Tags mit frischen OS-Patches neu — ortus
@@ -207,15 +207,39 @@ nutzt `busybox wget` statt `curl` für den HEALTHCHECK. Die
 maßgebliche Struktur steht in `Dockerfile` (vereinfacht):
 
 ```dockerfile
-FROM ghcr.io/jobrunner/spatialite-base-image:alpine-dev-3.0.2 AS builder
+FROM ghcr.io/jobrunner/spatialite-base-image:alpine-dev-3.0.4@sha256:… AS builder
 # … CGO-Build von ./cmd/ortus …
 
-FROM ghcr.io/jobrunner/spatialite-base-image:alpine-3.0.2
+FROM ghcr.io/jobrunner/spatialite-base-image:alpine-3.0.4@sha256:…
 COPY --from=builder /build/ortus /app/ortus
 USER ortus
 EXPOSE 8080 443
 ENTRYPOINT ["/app/ortus"]
 ```
+
+### Wie ein gepatchtes Basisimage in ein ortus-Release kommt
+
+Die `FROM`-Zeilen pinnen Tag **und** Digest. Ein Rebuild im Basisimage-Repo
+publiziert denselben Tag mit neuem Inhalt; ein reiner Tag-Pin würde sich nie
+ändern, ein Digest-Pin ändert sich mit jedem Rebuild. Ab da läuft es ohne
+Handgriff:
+
+1. **Dependabot** (`docker`-Eintrag in `.github/dependabot.yml`, täglich) sieht
+   den neuen Digest oder einen neuen Tag und öffnet *einen* PR für alle sechs
+   `FROM`-Zeilen, als `fix(deps): …`.
+2. **`dependabot-auto-merge.yml`** schaltet Auto-Merge ein. Der PR wird gemergt,
+   sobald die Pflicht-Checks (inklusive Trivy-Gate) grün sind. Gemergt wird mit
+   dem Token der Release-App, denn nur dann laufen auf master release-please
+   und docker-release an. Ein Merge mit `GITHUB_TOKEN` löst keine Workflows aus.
+3. **release-please** öffnet aus dem `fix` einen Patch-Release-PR.
+4. **`auto-release.yml`** mergt diesen Release-PR, wenn seit dem letzten Release
+   ausschließlich Dependabot committet hat. Steckt eine menschliche Änderung im
+   Release, bleibt der Merge beim Menschen.
+5. Der Release-Merge erzeugt Tag und GitHub-Release; `docker-release.yml`
+   publiziert die signierten Images `X.Y.Z` und `X.Y.Z-ubuntu`.
+
+Ein Basisimage-Release mit neuer Major-Version wird nicht automatisch gemergt,
+weil sich dort Pfade und Pakete geändert haben können (siehe 3.0.0).
 
 ## Weiterführende Dokumentation
 

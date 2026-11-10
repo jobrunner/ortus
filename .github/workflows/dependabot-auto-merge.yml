@@ -6,13 +6,20 @@
 # resolved — no --admin override needed.
 #
 # Major bumps are left for manual review (auto-merge is NOT enabled on them).
+#
+# Base-image (docker) bumps are enabled with the release GitHub App's token
+# instead of GITHUB_TOKEN. The merge is then made by the app, and only an
+# app-made merge triggers the push workflows on master: release-please (which
+# opens the release PR that auto-release.yml merges) and docker-release.
+# A GITHUB_TOKEN merge is silently ignored by GitHub's loop prevention — that
+# is how a patched base image used to sit in master without ever shipping.
 name: Dependabot auto-merge
 
 # pull_request_target is required so Dependabot PRs get a read-WRITE token
 # (a plain `pull_request` run gets a read-only token for bot actors and can't
-# merge). Safe here: this workflow never checks out or executes PR HEAD code —
-# it only reads Dependabot metadata and calls the GitHub merge API. So the
-# classic pwn-request footgun does not apply.
+# merge) and the app secrets. Safe here: this workflow never checks out or
+# executes PR HEAD code — it only reads Dependabot metadata and calls the
+# GitHub merge API. So the classic pwn-request footgun does not apply.
 on: pull_request_target  # zizmor: ignore[dangerous-triggers]
 
 # Least privilege; the job needs to enable auto-merge on the PR.
@@ -33,11 +40,26 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
+      # Only for base-image bumps: other ecosystems keep GITHUB_TOKEN. A
+      # github-actions bump edits .github/workflows/, which an app may only
+      # merge with the `workflows` permission — not worth granting here.
+      - name: Mint GitHub App installation token
+        id: app-token
+        if: ${{ steps.meta.outputs.package-ecosystem == 'docker' }}
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ secrets.RELEASE_PLEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_PLEASE_APP_KEY }}
+          permission-contents: write      # merge the PR
+          permission-pull-requests: write # enable auto-merge
+
       # Enable auto-merge for minor/patch (and grouped) updates. The ruleset
-      # allows only merge commits, so request --merge explicitly.
+      # allows only merge commits, so request --merge explicitly. A digest-only
+      # bump (base image rebuilt under the same tag) has no semver update type
+      # and passes this condition too.
       - name: Enable auto-merge (non-major)
         if: ${{ steps.meta.outputs.update-type != 'version-update:semver-major' }}
         run: gh pr merge --auto --merge "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}

@@ -38,15 +38,33 @@ updates:
   # Dockerfile.ubuntu in the repo root. Without this, a rebuilt
   # spatialite-base-image (the source of most published-image CVEs) never
   # reaches ortus automatically — the pinned tag just ages.
+  #
+  # The FROM lines pin tag AND digest (`alpine-3.0.4@sha256:…`). The base
+  # image's rebuilds republish the SAME tag with patched OS packages; a bare
+  # tag would never change, so Dependabot would never notice. With the digest
+  # pinned, a rebuild is a digest bump and shows up as a PR.
+  #
+  # Daily, so a security rebuild reaches ortus within a day. The `fix` prefix
+  # makes the merged bump releasable for release-please (a `chore` would sit
+  # in master until the next human fix/feat), and the group puts all six FROM
+  # lines into one PR → one release. Merging and releasing then run
+  # unattended: dependabot-auto-merge.yml merges the PR, auto-release.yml
+  # merges the release PR when it holds nothing but Dependabot changes.
   - package-ecosystem: docker
     directory: /
     schedule:
-      interval: weekly
-      day: monday
+      interval: daily
     open-pull-requests-limit: 3
+    commit-message:
+      prefix: fix
+      include: scope
     labels:
       - dependencies
       - docker
+    groups:
+      spatialite-base-image:
+        patterns:
+          - "*spatialite-base-image"
 
   - package-ecosystem: gomod
     directory: /

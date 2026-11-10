@@ -1,0 +1,76 @@
+# Release unattended when a release holds nothing but Dependabot changes.
+#
+# A patched base image arrives as a Dependabot PR (`fix(deps)`, see the docker
+# entry in dependabot.yml), dependabot-auto-merge.yml merges it, and
+# release-please opens or updates the release PR. This workflow merges that
+# release PR — but only if every commit since the last release was authored
+# by Dependabot. As soon as a human change is part of the release, the release
+# PR waits for a human merge again, and an auto-merge enabled earlier is
+# switched off.
+#
+# The merge runs with the release GitHub App's token: a GITHUB_TOKEN merge
+# would not trigger release-please (tag + GitHub Release) or docker-release
+# (the images) on master.
+name: Auto-release
+
+# pull_request_target: the release PR is opened by the app, and this workflow
+# needs the app secrets. It never checks out or runs PR code — it only reads
+# the commit list through the API and calls the merge API.
+on:  # zizmor: ignore[dangerous-triggers]
+  pull_request_target:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: auto-release
+  cancel-in-progress: false
+
+jobs:
+  auto-release:
+    runs-on: ubuntu-latest
+    # Only the release-please PR on this repo's own branch.
+    if: >-
+      ${{ github.event.pull_request.user.login == 'release-please-fieldworksdiary[bot]'
+      && github.event.pull_request.head.ref == 'release-please--branches--master'
+      && github.event.pull_request.head.repo.full_name == github.repository }}
+    steps:
+      - name: Mint GitHub App installation token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ secrets.RELEASE_PLEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_PLEASE_APP_KEY }}
+          permission-contents: write      # merge the release PR
+          permission-pull-requests: write # enable/disable auto-merge
+
+      - name: Merge if the release is Dependabot-only
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -euo pipefail
+          last_tag="$(gh release view --json tagName --jq .tagName)"
+          # Authors of the non-merge commits between the last release and the
+          # base branch. Merge commits are skipped: they are made by whoever
+          # merged, the content comes from the PR's own commits. A commit
+          # without a linked GitHub account counts as human.
+          authors="$(gh api "repos/$GH_REPO/compare/${last_tag}...${BASE_REF}" --paginate \
+            --jq '.commits[] | select((.parents | length) == 1) | .author.login // "unknown"' | sort -u)"
+          echo "Commit authors since ${last_tag}:"
+          echo "${authors:-<none>}"
+          if [[ -n "$authors" && "$authors" == "dependabot[bot]" ]]; then
+            echo "Dependabot-only release — enabling auto-merge."
+            gh pr merge --auto --merge "$PR_URL"
+          else
+            echo "Release contains human changes — leaving the merge to a human."
+            # Withdraw only an auto-merge this workflow enabled on an earlier,
+            # Dependabot-only state; one a human switched on stays.
+            enabled_by="$(gh pr view "$PR_URL" --json autoMergeRequest --jq '.autoMergeRequest.enabledBy.login // ""')"
+            if [[ "$enabled_by" == "release-please-fieldworksdiary" || "$enabled_by" == "release-please-fieldworksdiary[bot]" ]]; then
+              gh pr merge --disable-auto "$PR_URL"
+            fi
+          fi
