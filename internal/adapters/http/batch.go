@@ -186,8 +186,8 @@ type batchInputs struct {
 // reprojection (shared by the wgs84 block AND gazetteer enrichment, so reprojection
 // isn't done twice), and any per-item error. Only valid points are collected for
 // QueryBatch — invalid ones never reach the query path and surface as item errors.
-// A failed transform is not a per-item error: the transformer is shared, so it
-// fails the whole batch.
+// An unknown SRID is a per-item error; a failed transform is not: the
+// transformer is shared, so it fails the whole batch.
 func (s *Server) resolveBatchInputs(r *http.Request, req *batchRequest) (batchInputs, error) {
 	n := len(req.Points)
 	in := batchInputs{
@@ -202,6 +202,11 @@ func (s *Server) resolveBatchInputs(r *http.Request, req *batchRequest) (batchIn
 			continue
 		}
 		wgs, ok, err := s.wgs84For(r, c)
+		if invalid := (*domain.ValidationError)(nil); errors.As(err, &invalid) {
+			// An unknown SRID is this point's input error, not the batch's.
+			in.itemErr[i] = invalid.Message
+			continue
+		}
 		if err != nil {
 			return batchInputs{}, err
 		}

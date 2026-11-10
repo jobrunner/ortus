@@ -91,6 +91,9 @@ transformer. If a transformation fails inside the server, `/query`,
 `"message": "Coordinate transformation failed"` — never a `200` that silently lacks
 those sources and blocks. (Up to v2.0.2 they did, which hid a broken transformer.)
 `/health` reports the transformer's self-test as `components.transformer`.
+An SRID the server doesn't know (not in its EPSG table) is the client's mistake,
+not a transform failure: `400` with `"message": "unknown srid …"`, and in a batch an
+error on that point only.
 
 **Gazetteer enrichment (on by default).** When the [gazetteer feature](configuration.md)
 is enabled, the query response additionally carries a `gazetteer` block with the

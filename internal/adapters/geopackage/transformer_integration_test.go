@@ -199,3 +199,26 @@ func TestIntegration_TransformerFailureMetric(t *testing.T) {
 		t.Fatalf("ortus.coordinate.transform.failures = %d, want 1", total)
 	}
 }
+
+// TestIntegration_TransformerIsSupported: only SRIDs spatial_ref_sys defines are
+// supported, so an unknown client SRID is rejected as input before any transform
+// (and never surfaces as a server-side transform failure).
+func TestIntegration_TransformerIsSupported(t *testing.T) {
+	tr := newTestTransformer(t)
+	for _, tc := range []struct {
+		from, to int
+		want     bool
+	}{
+		{domain.SRIDWGS84, 25832, true},
+		{32632, domain.SRIDWGS84, true},
+		{domain.SRIDWebMercator, domain.SRIDWGS84, true},
+		{999999, domain.SRIDWGS84, false},
+		{domain.SRIDWGS84, 999999, false},
+		{0, domain.SRIDWGS84, false},
+		{-1, domain.SRIDWGS84, false},
+	} {
+		if got := tr.IsSupported(tc.from, tc.to); got != tc.want {
+			t.Errorf("IsSupported(%d, %d) = %v, want %v", tc.from, tc.to, got, tc.want)
+		}
+	}
+}

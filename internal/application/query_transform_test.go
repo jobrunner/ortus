@@ -80,3 +80,38 @@ func TestQueryBatchTransformFailurePropagates(t *testing.T) {
 		t.Fatalf("err = %v (out %v), want ErrTransformFailed", err, out)
 	}
 }
+
+// knownSRIDs is a transformer that supports only the listed SRIDs, like the real
+// one does with spatial_ref_sys.
+type knownSRIDs map[int]bool
+
+func (k knownSRIDs) Transform(_ context.Context, coord domain.Coordinate, targetSRID int) (domain.Coordinate, error) {
+	coord.SRID = targetSRID
+	return coord, nil
+}
+func (k knownSRIDs) IsSupported(from, to int) bool { return k[from] && k[to] }
+
+// TestQueryPointUnknownSRIDIsInvalidInput: an SRID the transformer doesn't know
+// is rejected as invalid input before any source is queried — never reported as
+// ErrTransformFailed, which marks a server fault. This is the path MCP takes.
+func TestQueryPointUnknownSRIDIsInvalidInput(t *testing.T) {
+	svc := newQueryServiceWithTransformer(mixedSRIDRegistry(), knownSRIDs{domain.SRIDWGS84: true, 25832: true})
+
+	_, err := svc.QueryPoint(context.Background(), domain.QueryRequest{
+		Coordinate: domain.Coordinate{X: 477114, Y: 5549798, SRID: 999999},
+	})
+	var invalid *domain.ValidationError
+	if !errors.As(err, &invalid) || invalid.Field != "srid" {
+		t.Fatalf("err = %v, want a srid ValidationError", err)
+	}
+	if errors.Is(err, domain.ErrTransformFailed) {
+		t.Fatalf("err = %v, an unknown client SRID must not count as a transform failure", err)
+	}
+
+	resp, err := svc.QueryPoint(context.Background(), domain.QueryRequest{
+		Coordinate: domain.Coordinate{X: 477114, Y: 5549798, SRID: 25832},
+	})
+	if err != nil || len(resp.Results) != 2 {
+		t.Fatalf("known SRID: err = %v, resp %+v; want both sources", err, resp)
+	}
+}

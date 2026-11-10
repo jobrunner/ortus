@@ -688,7 +688,9 @@ components:
       in: query
       description: |
         Spatial Reference ID der Eingabekoordinaten.
-        Standard ist 4326 (WGS84).
+        Standard ist 4326 (WGS84). Ein EPSG-Code, den der Server nicht kennt, ist
+        ein Eingabefehler: 400 mit `"message": "unknown srid …"` (im Batch als
+        Fehler des einzelnen Punkts).
       schema:
         type: integer
         default: 4326
@@ -1325,10 +1327,10 @@ components:
           nullable: true
           description: >-
             Der Abfragepunkt in WGS84 (lon/lat) — die Eingabekoordinate, bei einem
-            projizierten `srid` nach EPSG:4326 reprojiziert. Fehlt nur, wenn der
-            `srid` nicht transformierbar ist (kein Transformer / nicht unterstütztes
-            Paar). Schlägt die Reprojektion selbst fehl, antwortet der Endpunkt mit
-            500 statt den Block wegzulassen. Gedacht zum Weiterrechnen/Speichern in
+            projizierten `srid` nach EPSG:4326 reprojiziert. Fehlt nur, wenn kein
+            Transformer verdrahtet ist; ein unbekannter `srid` ergibt 400. Schlägt die
+            Reprojektion selbst fehl, antwortet der Endpunkt mit 500 statt den Block
+            wegzulassen. Gedacht zum Weiterrechnen/Speichern in
             nachgelagerten Services.
         results:
           type: array
@@ -1377,9 +1379,8 @@ components:
           nullable: true
           description: >-
             Der Abfragepunkt in WGS84 (lon/lat); bei projiziertem `srid` reprojiziert.
-            Wie bei /query: fehlt nur, wenn der `srid` nicht transformierbar ist
-            (kein Transformer / nicht unterstütztes Paar); eine fehlgeschlagene
-            Reprojektion ergibt 500.
+            Wie bei /query: fehlt nur, wenn kein Transformer verdrahtet ist; ein
+            unbekannter `srid` ergibt 400, eine fehlgeschlagene Reprojektion 500.
         results:
           type: array
           items:

@@ -1,7 +1,6 @@
 package http
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -45,20 +44,10 @@ func (s *Server) handleQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Reproject the query point to WGS84 once (see wgs84For): it powers the wgs84
-	// block (a geographic coordinate other services can compute with / store) and
-	// the gazetteer enrichment — the gazetteer dataset is EPSG:4326, so a non-4326
-	// query is reprojected here rather than skipped. Without a transformer both
-	// blocks are omitted; a failed transform fails the request.
-	wgs, ok, err := s.wgs84For(r, req.Coordinate)
+	out, err := s.queryResponseBody(r, req.Coordinate, response, true)
 	if err != nil {
 		s.handleQueryError(w, err)
 		return
-	}
-	out := s.formatQueryResponse(response)
-	if ok {
-		out["wgs84"] = wgs84Block(wgs)
-		s.attachGazetteer(r, wgs, out)
 	}
 	s.writeJSON(w, http.StatusOK, out)
 }
@@ -87,16 +76,11 @@ func (s *Server) handleQuerySource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// The wgs84 block travels on every query response (single-source too), even
-	// though single-source queries don't attach the gazetteer block.
-	wgs, ok, err := s.wgs84For(r, req.Coordinate)
+	// Single-source queries carry the wgs84 block but not the gazetteer block.
+	out, err := s.queryResponseBody(r, req.Coordinate, response, false)
 	if err != nil {
 		s.handleQueryError(w, err)
 		return
-	}
-	out := s.formatQueryResponse(response)
-	if ok {
-		out["wgs84"] = wgs84Block(wgs)
 	}
 	s.writeJSON(w, http.StatusOK, out)
 }
@@ -383,55 +367,6 @@ func (s *Server) formatSource(pkg *domain.Source) map[string]interface{} {
 // used when the client cancels the request mid-query — net/http has no constant
 // for it, and no standard 4xx fits "the caller went away".
 const StatusClientClosedRequest = 499
-
-// handleQueryError maps a domain error to the appropriate HTTP status. The
-// checks use the domain's sentinel base errors (ErrInvalidInput / ErrUnsupported
-// / ErrUnavailable), so the specific errors that wrap them (ErrInvalidCoordinate,
-// ErrInvalidSRID, ErrUnsupportedProjection, StorageError, …) are classified
-// correctly instead of all falling through to 500.
-func (s *Server) handleQueryError(w http.ResponseWriter, err error) {
-	var validationErr *domain.ValidationError
-	var storageErr *domain.StorageError
-	switch {
-	case errors.As(err, &validationErr):
-		s.writeError(w, http.StatusBadRequest, validationErr.Message)
-	case errors.Is(err, domain.ErrSourceNotFound):
-		s.writeError(w, http.StatusNotFound, "Source not found")
-	case errors.Is(err, domain.ErrLayerNotFound):
-		s.writeError(w, http.StatusNotFound, "Layer not found")
-	case errors.Is(err, domain.ErrInvalidInput):
-		// Bad coordinate / SRID / other invalid input.
-		s.writeError(w, http.StatusBadRequest, "Invalid query parameters")
-	case errors.Is(err, domain.ErrUnsupported):
-		// Unsupported projection or source kind.
-		s.writeError(w, http.StatusUnprocessableEntity, "Unsupported query")
-	case errors.As(err, &storageErr), errors.Is(err, domain.ErrUnavailable):
-		s.logger.Error("query unavailable", "error", err)
-		s.writeError(w, http.StatusServiceUnavailable, "Service temporarily unavailable")
-	case errors.Is(err, context.DeadlineExceeded):
-		// The server's query.timeout elapsed — a real "too slow" failure, not empty success.
-		s.logger.Warn("query timed out", "error", err)
-		s.writeError(w, http.StatusGatewayTimeout, "Query timed out")
-	case errors.Is(err, context.Canceled):
-		// Client went away mid-query; nothing useful to send and not a server fault.
-		// net/http has no reason phrase for the non-standard 499, so set the error
-		// label explicitly (writeError would leave "error" empty via StatusText).
-		s.logger.Debug("query canceled by client", "error", err)
-		s.writeJSON(w, StatusClientClosedRequest, map[string]interface{}{
-			"error":   "Client Closed Request",
-			"message": "The request was canceled by the client",
-		})
-	case errors.Is(err, domain.ErrTransformFailed):
-		// The coordinate transformer is shared by every query: if it fails here it
-		// fails for all foreign-SRID sources, so no partial answer is possible.
-		s.logger.Error("coordinate transformation failed", "error", err)
-		s.writeError(w, http.StatusInternalServerError, "Coordinate transformation failed")
-	default:
-		// QueryError / IndexError / unexpected — a server-side failure.
-		s.logger.Error("query error", "error", err)
-		s.writeError(w, http.StatusInternalServerError, "Query failed")
-	}
-}
 
 // writeJSON writes a JSON response.
 func (s *Server) writeJSON(w http.ResponseWriter, status int, data interface{}) {

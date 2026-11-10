@@ -17,7 +17,7 @@
       "internal/adapters/telemetry/ringbuffer.go": 91,
       "internal/app/app.go": 82,
       "internal/application/registry.go": 86,
-      "internal/adapters/http/handlers.go": 69,
+      "internal/adapters/http/handlers.go": 59,
       "internal/config/config.go": 79,
       "internal/application/gazetteer/service.go": 81,
       "_timings_note": "gazetteerSections gained per-section wall-clock timing (a mark() closure + 6 mark() calls) to surface the DEM-derived exposure/elevation enrichment cost that processing_time_ms omits; +1 file complexity (57→58) and +1 function complexity (14→15, = current repo max) for that observability. Sub-functions were not extractable without splitting the section sequence.",

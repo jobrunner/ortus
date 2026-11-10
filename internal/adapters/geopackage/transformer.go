@@ -81,6 +81,10 @@ type RepositoryTransformer struct {
 	db       *sql.DB
 	tracer   output.Tracer
 	failures metric.Int64Counter
+	// srids holds every SRID spatial_ref_sys defines, loaded once at startup
+	// (InitSpatialMetaDataFull is deterministic, so every connection has the
+	// same set). IsSupported answers from it without a query.
+	srids map[int]struct{}
 }
 
 // NewRepositoryTransformer creates a transformer with an in-memory SpatiaLite
@@ -109,7 +113,34 @@ func NewRepositoryTransformer(_ *Repository) (*RepositoryTransformer, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("coordinate transformer self-test: %w", err)
 	}
+	if t.srids, err = loadSRIDs(context.Background(), db); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
 	return t, nil
+}
+
+// loadSRIDs reads the SRIDs the transformer can reproject from and to. The
+// pseudo-SRIDs 0 and -1 ("undefined" cartesian/geographic) are left out: no
+// projection is defined for them.
+func loadSRIDs(ctx context.Context, db *sql.DB) (map[int]struct{}, error) {
+	rows, err := db.QueryContext(ctx, "SELECT srid FROM spatial_ref_sys WHERE srid > 0")
+	if err != nil {
+		return nil, fmt.Errorf("loading transformer SRIDs: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	srids := make(map[int]struct{})
+	for rows.Next() {
+		var srid int
+		if err := rows.Scan(&srid); err != nil {
+			return nil, fmt.Errorf("loading transformer SRIDs: %w", err)
+		}
+		srids[srid] = struct{}{}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("loading transformer SRIDs: %w", err)
+	}
+	return srids, nil
 }
 
 // SetTracer wires a tracer into the repository transformer.
@@ -203,9 +234,13 @@ func (t *RepositoryTransformer) canary(ctx context.Context) error {
 	return nil
 }
 
-// IsSupported checks if a transformation between two SRIDs is supported.
+// IsSupported reports whether both SRIDs are defined in spatial_ref_sys, i.e.
+// whether a transform between them can succeed. A client-supplied SRID that
+// fails this check is invalid input, not a transformer fault.
 func (t *RepositoryTransformer) IsSupported(sourceSRID, targetSRID int) bool {
-	return sourceSRID > 0 && targetSRID > 0
+	_, src := t.srids[sourceSRID]
+	_, dst := t.srids[targetSRID]
+	return src && dst
 }
 
 // Close closes the transformer's database connection.

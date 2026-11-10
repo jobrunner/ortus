@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -119,31 +120,17 @@ func (s *QueryService) QueryPoint(ctx context.Context, req domain.QueryRequest) 
 		Coordinate: req.Coordinate,
 	}
 
-	// Validate coordinate
-	if err := req.Coordinate.Validate(); err != nil {
+	if err := s.validateQuery(req); err != nil {
 		span.RecordError(err)
-		span.SetStatus(output.StatusError, "invalid coordinate")
+		span.SetStatus(output.StatusError, "invalid query")
 		return nil, err
 	}
 
-	// Get all ready sources
-	sourceIDs := s.registry.ReadySourceIDs()
-
-	// Filter by specific source if requested
-	if req.SourceID != "" {
-		found := false
-		for _, id := range sourceIDs {
-			if id == req.SourceID {
-				sourceIDs = []string{req.SourceID}
-				found = true
-				break
-			}
-		}
-		if !found {
-			span.RecordError(domain.ErrSourceNotFound)
-			span.SetStatus(output.StatusError, "source not found")
-			return nil, domain.ErrSourceNotFound
-		}
+	sourceIDs, err := s.selectSources(req.SourceID)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(output.StatusError, "source not found")
+		return nil, err
 	}
 
 	span.SetAttributes(output.Int("ortus.sources.queried", len(sourceIDs)))
@@ -184,6 +171,41 @@ func (s *QueryService) QueryPoint(ctx context.Context, req domain.QueryRequest) 
 	)
 	span.SetStatus(output.StatusOK, "")
 	return response, nil
+}
+
+// validateQuery rejects a request before any source is queried: an invalid
+// coordinate, or an SRID the transformer doesn't know (see checkSRID).
+func (s *QueryService) validateQuery(req domain.QueryRequest) error {
+	if err := req.Coordinate.Validate(); err != nil {
+		return err
+	}
+	return s.checkSRID(req.Coordinate.SRID)
+}
+
+// checkSRID rejects a client SRID the transformer can't reproject. Without this
+// check the first foreign-SRID layer would attempt the transform, fail inside
+// SpatiaLite, and the bad input would come back as a server fault. 0 is the
+// "WGS84 implied" default; without a transformer nothing can be checked (layers
+// in another SRID are skipped, as before).
+func (s *QueryService) checkSRID(srid int) error {
+	if s.transformer == nil || srid == 0 || srid == domain.SRIDWGS84 ||
+		s.transformer.IsSupported(srid, domain.SRIDWGS84) {
+		return nil
+	}
+	return domain.UnknownSRIDError(srid)
+}
+
+// selectSources returns the ready sources a query runs against: all of them, or
+// just sourceID — ErrSourceNotFound when that one isn't ready.
+func (s *QueryService) selectSources(sourceID string) ([]string, error) {
+	ready := s.registry.ReadySourceIDs()
+	if sourceID == "" {
+		return ready, nil
+	}
+	if slices.Contains(ready, sourceID) {
+		return []string{sourceID}, nil
+	}
+	return nil, domain.ErrSourceNotFound
 }
 
 // QueryPointInSource performs a point query in a specific source.
