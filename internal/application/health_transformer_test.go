@@ -74,7 +74,7 @@ func TestHealthDetailsNeverReadyWithFailedTransformer(t *testing.T) {
 	svc.SetTransformerCheck(&flakyTransformerCheck{})
 
 	d := svc.GetHealthDetails(context.Background())
-	if d.Components["transformer"] == "error" && d.Ready {
+	if d.Components["transformer"] != "ok" && d.Ready {
 		t.Fatalf("health = transformer %q with ready=true; a failed probe must not report ready", d.Components["transformer"])
 	}
 }
