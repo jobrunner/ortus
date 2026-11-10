@@ -329,6 +329,11 @@ func (s *QueryService) queryLayer(ctx context.Context, sourceID string, layer *d
 // fault, and swallowing it turned a broken transformer into silently incomplete
 // answers.
 func (s *QueryService) transformCoordinate(ctx context.Context, coord domain.Coordinate, layer *domain.Layer) (domain.Coordinate, bool, error) {
+	if coord.SRID == 0 {
+		// 0 is the "WGS84 implied" default (see checkSRID); EPSG:0 itself is
+		// not transformable.
+		coord.SRID = domain.SRIDWGS84
+	}
 	if coord.SRID == layer.SRID {
 		return coord, true, nil
 	}

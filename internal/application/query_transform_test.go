@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"testing"
@@ -86,6 +87,9 @@ func TestQueryBatchTransformFailurePropagates(t *testing.T) {
 type knownSRIDs map[int]bool
 
 func (k knownSRIDs) Transform(_ context.Context, coord domain.Coordinate, targetSRID int) (domain.Coordinate, error) {
+	if !k[coord.SRID] || !k[targetSRID] {
+		return domain.Coordinate{}, fmt.Errorf("unknown SRID in EPSG:%d -> EPSG:%d", coord.SRID, targetSRID)
+	}
 	coord.SRID = targetSRID
 	return coord, nil
 }
@@ -113,5 +117,19 @@ func TestQueryPointUnknownSRIDIsInvalidInput(t *testing.T) {
 	})
 	if err != nil || len(resp.Results) != 2 {
 		t.Fatalf("known SRID: err = %v, resp %+v; want both sources", err, resp)
+	}
+}
+
+// TestQueryPointSRIDZeroIsWGS84: srid=0 is accepted as "WGS84 implied", so it
+// must be queried as WGS84 — not handed to the transformer as EPSG:0, which
+// would fail and turn an accepted input into a 500.
+func TestQueryPointSRIDZeroIsWGS84(t *testing.T) {
+	svc := newQueryServiceWithTransformer(mixedSRIDRegistry(), knownSRIDs{domain.SRIDWGS84: true, 25832: true})
+
+	resp, err := svc.QueryPoint(context.Background(), domain.QueryRequest{
+		Coordinate: domain.Coordinate{X: 8.68, Y: 50.1, SRID: 0},
+	})
+	if err != nil || len(resp.Results) != 2 {
+		t.Fatalf("srid 0: err = %v, resp %+v; want both sources", err, resp)
 	}
 }

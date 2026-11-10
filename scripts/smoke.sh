@@ -118,7 +118,7 @@ if [[ -n "$EXPECT" ]]; then
 	for s in "${want[@]}"; do
 		for form in lonlat utm mgrs; do
 			[[ -f "$TMP/$form.sources" ]] || continue
-			if ! tr ',' '\n' < "$TMP/$form.sources" | grep -qx "$s"; then bad "$form: erwartete Quelle $s fehlt"; fi
+			if ! tr ',' '\n' < "$TMP/$form.sources" | grep -qxF -- "$s"; then bad "$form: erwartete Quelle $s fehlt"; fi
 		done
 	done
 	(( fails == before )) && ok "erwartete Quellen in allen Antworten: $EXPECT"
