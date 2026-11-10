@@ -421,10 +421,22 @@ jobs:
           file: ${{ matrix.dockerfile }}
           platforms: ${{ matrix.platform }}
           push: false
+          # Each matrix cell builds exactly one platform, so the image can be
+          # loaded into the runner's daemon for the smoke test below.
+          load: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.version.outputs.version }}-${{ steps.variant.outputs.variant }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # Runs the built image against fixtures in EPSG:4326 and EPSG:25832 after a
+      # burst of parallel requests: the coordinate transformer once lost its
+      # SpatiaLite metadata under concurrent load, which only the real runtime
+      # image (base-image SpatiaLite/PROJ, real driver) can show.
+      - name: Smoke test (SRID transforms, gazetteer, health)
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.version.outputs.version }}-${{ steps.variant.outputs.variant }}
+        run: scripts/smoke-image.sh "$IMAGE"
 
   # =============================================================================
   # Docker Security Scan
