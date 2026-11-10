@@ -150,7 +150,10 @@ func (s *HealthService) GetHealthDetails(ctx context.Context) input.HealthDetail
 	components := map[string]string{
 		"storage": "ok",
 	}
-	if status, _ := s.transformerStatus(ctx); status != "" {
+	// One probe decides both fields: probing again through IsReady alone could
+	// pass after this one failed and report transformer=error with ready=true.
+	status, transformerOK := s.transformerStatus(ctx)
+	if status != "" {
 		components["transformer"] = status
 	}
 
@@ -161,7 +164,7 @@ func (s *HealthService) GetHealthDetails(ctx context.Context) input.HealthDetail
 
 	return input.HealthDetails{
 		Healthy:       s.IsHealthy(ctx),
-		Ready:         s.IsReady(ctx),
+		Ready:         transformerOK && s.IsReady(ctx),
 		SourcesLoaded: loaded,
 		SourcesReady:  ready,
 		Components:    components,

@@ -49,3 +49,32 @@ func TestHealthTransformerComponent(t *testing.T) {
 		})
 	}
 }
+
+// flakyTransformerCheck fails its first probe only.
+type flakyTransformerCheck struct{ calls int }
+
+func (f *flakyTransformerCheck) Check(context.Context) error {
+	f.calls++
+	if f.calls == 1 {
+		return errors.New("transient canary failure")
+	}
+	return nil
+}
+
+// TestHealthDetailsNeverReadyWithFailedTransformer: /health must not report
+// components.transformer=error together with ready=true — readiness consumers
+// (load balancer, smoke test) would proceed despite the reported failure. A
+// transient failure on the component probe must therefore also hold back
+// readiness, even if a second probe would pass.
+func TestHealthDetailsNeverReadyWithFailedTransformer(t *testing.T) {
+	registry := newTestRegistry()
+	markLoaded(registry)
+	setSources(registry, map[string]*sourceEntry{"a": readyEntry("a")})
+	svc := NewHealthService(registry, true, output.NoOpTracer{})
+	svc.SetTransformerCheck(&flakyTransformerCheck{})
+
+	d := svc.GetHealthDetails(context.Background())
+	if d.Components["transformer"] == "error" && d.Ready {
+		t.Fatalf("health = transformer %q with ready=true; a failed probe must not report ready", d.Components["transformer"])
+	}
+}
