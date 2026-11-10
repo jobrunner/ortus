@@ -192,8 +192,8 @@ func TestIntegration_PointQuery(t *testing.T) {
 
 ## Container
 
-Base-Image: `ghcr.io/jobrunner/spatialite-base-image` (Multi-Stage: `alpine-dev-3.0.4`
-zum Bauen, `alpine-3.0.4` als Runtime; analog die `ubuntu-*`-Variante in
+Base-Image: `ghcr.io/jobrunner/spatialite-base-image` (Multi-Stage: `alpine-dev-3.0.x`
+zum Bauen, `alpine-3.0.x` als Runtime; analog die `ubuntu-*`-Variante in
 `Dockerfile.ubuntu`). Seit 2.0.0 enthält das Runtime-Image nur noch den
 SpatiaLite-Stack (kein GDAL/Python), und ein monatlicher Rebuild im
 Basisimage-Repo publiziert die Tags mit frischen OS-Patches neu — ortus
@@ -207,10 +207,10 @@ nutzt `busybox wget` statt `curl` für den HEALTHCHECK. Die
 maßgebliche Struktur steht in `Dockerfile` (vereinfacht):
 
 ```dockerfile
-FROM ghcr.io/jobrunner/spatialite-base-image:alpine-dev-3.0.4@sha256:… AS builder
+FROM ghcr.io/jobrunner/spatialite-base-image:alpine-dev-3.0.x@sha256:… AS builder
 # … CGO-Build von ./cmd/ortus …
 
-FROM ghcr.io/jobrunner/spatialite-base-image:alpine-3.0.4@sha256:…
+FROM ghcr.io/jobrunner/spatialite-base-image:alpine-3.0.x@sha256:…
 COPY --from=builder /build/ortus /app/ortus
 USER ortus
 EXPOSE 8080 443
