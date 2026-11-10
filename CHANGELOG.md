@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0](https://github.com/jobrunner/ortus/compare/v2.0.2...v2.1.0) (2026-11-10)
+
+
+### Features
+
+* **health:** report the coordinate transformer's self-test ([c0d67d8](https://github.com/jobrunner/ortus/commit/c0d67d812c44171671b7013278f7164631f7f8d7))
+
+
+### Bug Fixes
+
+* **ci:** fail the smoke test when no source answers at all ([3d65165](https://github.com/jobrunner/ortus/commit/3d65165a8363595c8d861cc6fcd174507e162a96))
+* **deps:** bump brotli and klauspost/compress for GO-2026-6888 / GO-2026-6865 ([49f85fc](https://github.com/jobrunner/ortus/commit/49f85fc773b926dac63db8afdfe678927f5e14ad))
+* **deps:** bump brotli and klauspost/compress for GO-2026-6888 and GO-2026-6865 ([5db2588](https://github.com/jobrunner/ortus/commit/5db258880f96932723d4ba1533c6398785817ba1))
+* **deps:** bump jobrunner/spatialite-base-image ([764bce8](https://github.com/jobrunner/ortus/commit/764bce8d24c2d3ba629d0bc2d06394aafeecbce1))
+* **deps:** bump jobrunner/spatialite-base-image from ubuntu-3.0.4 to ubuntu-3.0.8 in the spatialite-base-image group ([8d2482d](https://github.com/jobrunner/ortus/commit/8d2482d86dc8b3b7c9860e2f30196e9230d2e7db))
+* **gazetteer:** open the gazetteer GeoPackage read-only, check the rank index instead of creating it ([211315f](https://github.com/jobrunner/ortus/commit/211315f6ca2339c56cc121735fb351cc1d489323))
+* **gazetteer:** open the gazetteer GeoPackage read-only, check the rank index instead of creating it ([0b1ae15](https://github.com/jobrunner/ortus/commit/0b1ae15bcd0c738e0fa3aaae0ce85ad76a76e526))
+* **geopackage:** initialize every transformer connection, not just the first ([3bddc9c](https://github.com/jobrunner/ortus/commit/3bddc9c8d633d36c4121bb205c7d56977902f2b5))
+* **health:** never report ready while the transformer probe failed ([9d42e7a](https://github.com/jobrunner/ortus/commit/9d42e7acd78dea3d991be4270f88d5252a3af917))
+* **query:** fail with 500 on transform errors instead of answering incomplete ([10c6a2d](https://github.com/jobrunner/ortus/commit/10c6a2ddf4dd76e92d89fe754cacc20c0aeaeccf))
+* **query:** reject unknown SRIDs as invalid input instead of 500 ([184faad](https://github.com/jobrunner/ortus/commit/184faad8c784e1664b2c201d3d41f4d65eb0ca3e))
+* **query:** treat srid=0 as WGS84 in transforms; match expected smoke sources literally ([778381b](https://github.com/jobrunner/ortus/commit/778381bf9e7d4c6f86a7a247ce4b21139f304042))
+* transformer loses SpatiaLite metadata under load — srid≠4326/mgrs answered incomplete ([fa7e5e2](https://github.com/jobrunner/ortus/commit/fa7e5e2daccc1e65c912df235801ee923007a87c))
+
 ## [2.0.2](https://github.com/jobrunner/ortus/compare/v2.0.1...v2.0.2) (2026-10-29)
 
 
