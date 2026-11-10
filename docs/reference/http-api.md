@@ -81,10 +81,19 @@ GeoPackage ships that metadata.
 `wgs84: { lon, lat }` — the query point in WGS84. For a 4326 query it equals the
 input; for a projected `srid` (e.g. 3857) it is the input **reprojected** to WGS84.
 It gives downstream services a geographic coordinate to compute with / store
-regardless of the input SRID. It is omitted only when the query point can't be
-reprojected — either the `srid` isn't transformable (no transformer / unsupported
-pair) or the reprojection itself fails (best-effort: the core query result still
-returns, and the failure is logged server-side).
+regardless of the input SRID. It is omitted only when the `srid` isn't
+transformable (no transformer / unsupported pair).
+
+**Transform failures are errors, not gaps.** Sources in a different SRID than the
+input, the `wgs84` block and the gazetteer lookup all depend on the coordinate
+transformer. If a transformation fails inside the server, `/query`,
+`/query/{sourceId}` and `/query/batch` answer `500` with
+`"message": "Coordinate transformation failed"` — never a `200` that silently lacks
+those sources and blocks. (Up to v2.0.2 they did, which hid a broken transformer.)
+`/health` reports the transformer's self-test as `components.transformer`.
+An SRID the server doesn't know (not in its EPSG table) is the client's mistake,
+not a transform failure: `400` with `"message": "unknown srid …"`, and in a batch an
+error on that point only.
 
 **Gazetteer enrichment (on by default).** When the [gazetteer feature](configuration.md)
 is enabled, the query response additionally carries a `gazetteer` block with the
@@ -500,9 +509,14 @@ sources_ready, sources: [...], components: {...} }` (HTTP `200` when healthy,
 `"unhealthy"`); `GET /health/ready` returns `{ "status": "ok" }` (or
 `"not ready"`).
 
-**Readiness semantics:** `/health/ready` reports **not ready only during the
-initial load** (sources downloading/indexing), so clients retry while data comes
-online. Once the initial pass completes it reports ready — including with **zero
+**Components:** `components.storage` is always `ok`. `components.transformer`
+(present when a coordinate transformer is wired) is `ok` or `error`: the result of
+a self-test that reprojects a reference point between EPSG:4326 and EPSG:25832.
+
+**Readiness semantics:** `/health/ready` reports **not ready during the initial
+load** (sources downloading/indexing), so clients retry while data comes
+online, and whenever the transformer self-test fails (`components.transformer:
+error`). Once the initial pass completes it reports ready — including with **zero
 sources** ("ready, no data today"). It does **not** flip back to not-ready when
 new sources arrive later via sync. `/health` lists per-source status
 (`loading`/`indexing`/`ready`/`error`). Set `ORTUS_SERVER_READY_WHEN_EMPTY=false`

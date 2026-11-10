@@ -28,7 +28,23 @@ var (
 	ErrUnsupportedSource     = fmt.Errorf("source: %w", ErrUnsupported)
 	ErrRateLimited           = errors.New("rate limit exceeded")
 	ErrInvalidMGRS           = fmt.Errorf("mgrs: %w", ErrInvalidInput)
+	// ErrTransformFailed marks a coordinate reprojection that failed inside the
+	// server. Never a client error: an untransformable SRID is rejected before
+	// any transform runs.
+	ErrTransformFailed = fmt.Errorf("coordinate transformation: %w", ErrInternal)
 )
+
+// UnknownSRIDError reports a client-supplied SRID the coordinate transformer
+// doesn't know. It is invalid input (400), checked before any transform runs, so
+// a bogus SRID never surfaces as ErrTransformFailed (a server fault, 500).
+func UnknownSRIDError(srid int) error {
+	return &ValidationError{
+		Field:      "srid",
+		Value:      srid,
+		Constraint: "known EPSG code",
+		Message:    fmt.Sprintf("unknown srid %d: not a coordinate reference system the server can transform", srid),
+	}
+}
 
 // ValidationError represents a detailed validation error.
 type ValidationError struct {

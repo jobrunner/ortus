@@ -133,7 +133,10 @@ func (s *Server) handleBatchError(w http.ResponseWriter, err error) {
 // documented fallback echo id (the point's 0-based request index) stays correct
 // across chunks.
 func (s *Server) buildBatchChunk(r *http.Request, req *batchRequest, idOffset int) ([]map[string]interface{}, error) {
-	in := s.resolveBatchInputs(r, req)
+	in, err := s.resolveBatchInputs(r, req)
+	if err != nil {
+		return nil, err
+	}
 	sub, err := s.resolveBatchResponses(r.Context(), req, in.valid)
 	if err != nil {
 		return nil, err

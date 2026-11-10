@@ -291,6 +291,7 @@ func TestQueryServiceTransformCoordinate(t *testing.T) {
 		coordSRID   int
 		layerSRID   int
 		wantOK      bool
+		wantErr     bool
 	}{
 		{
 			name:        "same SRID",
@@ -319,6 +320,7 @@ func TestQueryServiceTransformCoordinate(t *testing.T) {
 			coordSRID:   4326,
 			layerSRID:   25832,
 			wantOK:      false,
+			wantErr:     true,
 		},
 	}
 
@@ -329,9 +331,15 @@ func TestQueryServiceTransformCoordinate(t *testing.T) {
 			coord := domain.NewCoordinate(10, 50, tt.coordSRID)
 			layer := &domain.Layer{SRID: tt.layerSRID}
 
-			_, ok := svc.transformCoordinate(context.Background(), coord, layer)
+			_, ok, err := svc.transformCoordinate(context.Background(), coord, layer)
 			if ok != tt.wantOK {
 				t.Errorf("transformCoordinate() ok = %v, want %v", ok, tt.wantOK)
+			}
+			if (err != nil) != tt.wantErr {
+				t.Errorf("transformCoordinate() err = %v, wantErr %v", err, tt.wantErr)
+			}
+			if err != nil && !errors.Is(err, domain.ErrTransformFailed) {
+				t.Errorf("transformCoordinate() err = %v, want ErrTransformFailed", err)
 			}
 		})
 	}

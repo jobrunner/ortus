@@ -5,7 +5,7 @@
 .PHONY: test test-unit test-integration test-coverage test-race test-bench load-test fuzz bench mutation
 .PHONY: load-stack-up load-stack-down load-stack-clean load-serve load-attack
 .PHONY: lint lint-go lint-fix vet
-.PHONY: security-check vuln-check gosec licenses verify-image
+.PHONY: security-check vuln-check gosec licenses verify-image smoke smoke-image
 .PHONY: fmt format fmt-check
 .PHONY: check check-ci verify hooks arch debt debt-guard debt-coverage debt-deadcode
 .PHONY: deps deps-update deps-verify
@@ -186,6 +186,14 @@ gosec: ## Security Scanner (via golangci-lint)
 TAG ?= latest
 verify-image: ## Publiziertes Image vor dem Deploy prüfen: Signatur + Trivy, gibt die Digest-Referenz aus (TAG=2.0.2)
 	scripts/verify-image.sh $(TAG)
+
+smoke: ## Smoke-Test gegen eine laufende Instanz, z. B. nach dem Deploy (URL=https://ortus.fieldworksdiary.org)
+	@test -n "$(URL)" || { echo "URL fehlt: make smoke URL=https://…"; exit 2; }
+	scripts/smoke.sh $(URL)
+
+IMAGE ?= ortus:local
+smoke-image: ## Image mit Test-Fixtures starten und Smoke-Test dagegen fahren (IMAGE=ortus:local)
+	scripts/smoke-image.sh $(IMAGE)
 
 # Allowed dependency licenses (permissive only). First-party packages are
 # ignored (the repo itself isn't classified by go-licenses).

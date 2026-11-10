@@ -56,6 +56,12 @@ paths:
         Koordinatensysteme) oder als `mgrs` (Military Grid Reference System,
         siehe dessen Parameterbeschreibung) angegeben werden.
 
+        Liegt eine Datenquelle in einem anderen Koordinatensystem als die Eingabe,
+        wird der Punkt dafür transformiert. Schlägt diese Transformation serverseitig
+        fehl, antwortet der Endpunkt mit 500 (`Coordinate transformation failed`)
+        statt mit einer unvollständigen Antwort ohne diese Quellen bzw. ohne
+        `wgs84`- und `gazetteer`-Block.
+
         Die Punkt-in-Polygon-Prüfung ist randinklusiv (ST_Covers): ein Punkt, der
         exakt auf der Grenze eines Polygons liegt, gehört zu diesem Polygon. Liegt
         ein Punkt genau auf der Grenze zwischen zwei verschiedenen Regionen, werden
@@ -164,7 +170,10 @@ paths:
                     error: Bad Request
                     message: "invalid lon parameter"
         '500':
-          description: Interner Serverfehler
+          description: >-
+            Interner Serverfehler — auch wenn die Koordinatentransformation
+            fehlschlägt (`Coordinate transformation failed`). Eine Teilantwort
+            ohne die betroffenen Quellen gibt es dann nicht.
           content:
             application/json:
               schema:
@@ -213,7 +222,10 @@ paths:
                 error: Not Found
                 message: Source not found
         '500':
-          description: Interner Serverfehler
+          description: >-
+            Interner Serverfehler — auch wenn die Koordinatentransformation
+            fehlschlägt (`Coordinate transformation failed`). Eine Teilantwort
+            ohne die betroffenen Quellen gibt es dann nicht.
           content:
             application/json:
               schema:
@@ -284,6 +296,16 @@ paths:
             streamen — oder der Request-Body überschreitet die Größenobergrenze
             (unabhängig von der Punktanzahl); in dem Fall weniger Punkte oder
             kleinere Felder pro Punkt senden (Streaming hilft hier nicht).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: >-
+            Interner Serverfehler, z. B. eine fehlgeschlagene
+            Koordinatentransformation (`Coordinate transformation failed`). Sie
+            betrifft alle Punkte gleichermaßen und bricht daher den ganzen Batch
+            ab; im NDJSON-Modus nur, solange noch keine Zeile gesendet wurde.
           content:
             application/json:
               schema:
@@ -586,6 +608,8 @@ paths:
       description: |
         Readiness-Check für Kubernetes.
         Gibt 200 zurück, wenn der Service bereit ist, Anfragen zu verarbeiten, sonst 503.
+        Nicht bereit ist der Service auch, wenn die Selbstprüfung des
+        Koordinaten-Transformers fehlschlägt (siehe `components.transformer` in /health).
       operationId: getReadiness
       servers:
         - url: /
@@ -664,7 +688,10 @@ components:
       in: query
       description: |
         Spatial Reference ID der Eingabekoordinaten.
-        Standard ist 4326 (WGS84).
+        Standard ist 4326 (WGS84). Ein EPSG-Code, den der Server nicht kennt, ist
+        ein Eingabefehler: Die /query-Endpunkte antworten 400 mit
+        `"message": "unknown srid …"` (im Batch als Fehler des einzelnen Punkts),
+        /gazetteer wie bisher 422 (nicht nach WGS84 transformierbar).
       schema:
         type: integer
         default: 4326
@@ -1301,11 +1328,11 @@ components:
           nullable: true
           description: >-
             Der Abfragepunkt in WGS84 (lon/lat) — die Eingabekoordinate, bei einem
-            projizierten `srid` nach EPSG:4326 reprojiziert. Fehlt nur, wenn der
-            Punkt nicht reprojiziert werden kann: entweder ist der `srid` nicht
-            transformierbar (kein Transformer / nicht unterstütztes Paar) oder die
-            Reprojektion selbst schlägt fehl (Best-Effort — die Kernabfrage liefert
-            dennoch). Gedacht zum Weiterrechnen/Speichern in nachgelagerten Services.
+            projizierten `srid` nach EPSG:4326 reprojiziert. Fehlt nur, wenn kein
+            Transformer verdrahtet ist; ein unbekannter `srid` ergibt 400. Schlägt die
+            Reprojektion selbst fehl, antwortet der Endpunkt mit 500 statt den Block
+            wegzulassen. Gedacht zum Weiterrechnen/Speichern in
+            nachgelagerten Services.
         results:
           type: array
           items:
@@ -1353,9 +1380,8 @@ components:
           nullable: true
           description: >-
             Der Abfragepunkt in WGS84 (lon/lat); bei projiziertem `srid` reprojiziert.
-            Wie bei /query Best-Effort: fehlt, wenn der `srid` nicht transformierbar
-            ist (kein Transformer / nicht unterstütztes Paar) oder die Reprojektion
-            selbst fehlschlägt (die Kernabfrage liefert dennoch).
+            Wie bei /query: fehlt nur, wenn kein Transformer verdrahtet ist; ein
+            unbekannter `srid` ergibt 400, eine fehlgeschlagene Reprojektion 500.
         results:
           type: array
           items:
@@ -1595,7 +1621,12 @@ components:
           type: object
           additionalProperties:
             type: string
-          description: Status einzelner Komponenten
+          description: >-
+            Status einzelner Komponenten. `storage` ist immer `ok`. `transformer`
+            (nur wenn ein Koordinaten-Transformer verdrahtet ist) ist `ok` oder
+            `error`; das Ergebnis einer Selbstprüfung, die einen Referenzpunkt
+            zwischen EPSG:4326 und EPSG:25832 transformiert. Bei `error` ist
+            `ready` false.
       required:
         - status
         - ready

@@ -2,6 +2,7 @@ package domain
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -160,5 +161,21 @@ func TestSentinelErrors(t *testing.T) {
 				t.Errorf("%s should wrap %v", tt.name, tt.wantErr)
 			}
 		})
+	}
+}
+
+// TestUnknownSRIDError: an unknown client SRID is invalid input naming the SRID,
+// never a transform failure (that one is a server fault).
+func TestUnknownSRIDError(t *testing.T) {
+	err := UnknownSRIDError(999999)
+	var v *ValidationError
+	if !errors.As(err, &v) || v.Field != "srid" || v.Value != 999999 {
+		t.Fatalf("UnknownSRIDError = %#v, want a srid ValidationError", err)
+	}
+	if !strings.Contains(v.Message, "999999") {
+		t.Errorf("message %q does not name the srid", v.Message)
+	}
+	if !errors.Is(err, ErrInvalidInput) || errors.Is(err, ErrTransformFailed) {
+		t.Errorf("UnknownSRIDError must be ErrInvalidInput and not ErrTransformFailed: %v", err)
 	}
 }

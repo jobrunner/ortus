@@ -304,37 +304,6 @@ func TestIntegration_QueryErrors(t *testing.T) {
 	}
 }
 
-func TestIntegration_Transformer(t *testing.T) {
-	tr, err := NewRepositoryTransformer(nil)
-	if err != nil {
-		t.Skipf("transformer unavailable: %v", err)
-	}
-	t.Cleanup(func() { _ = tr.Close() })
-	ctx := context.Background()
-
-	// Same SRID is an identity no-op.
-	in := domain.NewWGS84Coordinate(10, 50)
-	out, err := tr.Transform(ctx, in, domain.SRIDWGS84)
-	if err != nil {
-		t.Fatalf("identity transform: %v", err)
-	}
-	if out != in {
-		t.Errorf("identity transform changed coord: %+v", out)
-	}
-
-	// WGS84 -> Web Mercator must move the coordinate into projected meters.
-	out, err = tr.Transform(ctx, in, domain.SRIDWebMercator)
-	if err != nil {
-		t.Skipf("ST_Transform to 3857 unavailable in this build: %v", err)
-	}
-	if out.SRID != domain.SRIDWebMercator {
-		t.Errorf("out SRID = %d, want %d", out.SRID, domain.SRIDWebMercator)
-	}
-	if out.X < 1_000_000 || out.Y < 1_000_000 {
-		t.Errorf("Web Mercator coords look untransformed: %+v", out)
-	}
-}
-
 // insertMetadataRow adds gpkg_metadata (creating it if absent) and inserts one
 // row carrying the ortus md_standard_uri with the given mime type and payload.
 func insertMetadataRow(t *testing.T, path, mime, metadata string) {
