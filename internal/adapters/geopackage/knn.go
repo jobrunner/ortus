@@ -61,19 +61,29 @@ func knnStages(maxKM float64) []float64 {
 	return append(stages, maxKM)
 }
 
-// EnsureAttributeIndex creates the attribute index a filtered KNN needs to stay
-// fast on wide radii (see knnFilterIndexMinKM), idempotently, named so
-// filterIndexFor finds it. Call it at startup for the manifest's rank column;
-// on a read-only file the caller may treat the error as a performance warning
-// (queries stay correct on the R-tree plan without it).
-func (g *GazetteerIndex) EnsureAttributeIndex(ctx context.Context, layer, column string) error {
-	stmt := fmt.Sprintf(`CREATE INDEX IF NOT EXISTS %q ON %q (%q)`,
-		attributeIndexName(layer, column), layer, column) //#nosec G201 -- identifiers from the verified manifest, double-quoted; SQLite can't parameterize identifiers
-	_, err := g.db.ExecContext(ctx, stmt)
-	return err
+// HasAttributeIndex reports whether the package ships the attribute index a
+// filtered KNN needs to stay fast on wide radii (see knnFilterIndexMinKM). The
+// gazetteer handle is read-only, so the index can't be created here: it belongs
+// to the package build (AttributeIndexDDL). Without it queries stay correct on
+// the R-tree plan, just slow.
+func (g *GazetteerIndex) HasAttributeIndex(ctx context.Context, layer, column string) (bool, error) {
+	var n int
+	if err := g.db.QueryRowContext(ctx,
+		`SELECT count(*) FROM sqlite_master WHERE type = 'index' AND name = ?`,
+		attributeIndexName(layer, column)).Scan(&n); err != nil {
+		return false, err
+	}
+	return n > 0, nil
 }
 
-// attributeIndexName is the naming contract between EnsureAttributeIndex and
+// AttributeIndexDDL is the statement a package build runs to add the attribute
+// index for layer.column under the name filterIndexFor looks up.
+func AttributeIndexDDL(layer, column string) string {
+	return fmt.Sprintf(`CREATE INDEX IF NOT EXISTS %q ON %q (%q)`,
+		attributeIndexName(layer, column), layer, column)
+}
+
+// attributeIndexName is the naming contract between AttributeIndexDDL and
 // filterIndexFor.
 func attributeIndexName(layer, column string) string {
 	return fmt.Sprintf("idx_ortus_%s_%s", layer, column)
@@ -86,13 +96,10 @@ func (g *GazetteerIndex) filterIndexFor(ctx context.Context, layer string, f *ou
 	if f == nil || len(f.Values) == 0 {
 		return ""
 	}
-	name := attributeIndexName(layer, f.Column)
-	var n int
-	if err := g.db.QueryRowContext(ctx,
-		`SELECT count(*) FROM sqlite_master WHERE type = 'index' AND name = ?`, name).Scan(&n); err != nil || n == 0 {
+	if has, err := g.HasAttributeIndex(ctx, layer, f.Column); err != nil || !has {
 		return ""
 	}
-	return name
+	return attributeIndexName(layer, f.Column)
 }
 
 // QueryKNN returns up to k nearest features within maxKM of p (optionally

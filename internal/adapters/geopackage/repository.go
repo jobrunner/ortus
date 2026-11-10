@@ -77,6 +77,9 @@ type Options struct {
 	JournalMode   string // "" = leave file's mode; e.g. "WAL"
 	MaxOpenConns  int    // 0 = unlimited
 	MaxIdleConns  int    // <=0 = database/sql default
+	// ReadOnly opens the file with mode=ro: writes fail instead of changing the
+	// file, and JournalMode is ignored (switching it rewrites the header).
+	ReadOnly bool
 	// WithGeometry mirrors query.with_geometry: only then do batch queries ask
 	// SQLite to serialize geometry (AsText) — on large polygon layers that
 	// serialization dominates the query cost and is otherwise thrown away.

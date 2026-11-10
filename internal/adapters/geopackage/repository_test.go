@@ -92,3 +92,24 @@ func TestNewRepository(t *testing.T) {
 		t.Error("sources map should be initialized")
 	}
 }
+
+// TestDSNForReadOnly: a read-only open asks SQLite for mode=ro and drops the
+// journal mode, whose PRAGMA would otherwise rewrite the file header.
+func TestDSNForReadOnly(t *testing.T) {
+	tests := []struct {
+		name string
+		opts Options
+		want string
+	}{
+		{"read-write keeps journal mode", Options{JournalMode: "MEMORY"}, "file:g.gpkg?cache=private&_journal_mode=MEMORY"},
+		{"read-only drops journal mode", Options{JournalMode: "PERSIST", ReadOnly: true}, "file:g.gpkg?cache=private&mode=ro"},
+		{"read-only with busy timeout", Options{ReadOnly: true, BusyTimeoutMS: 500}, "file:g.gpkg?cache=private&_busy_timeout=500&mode=ro"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := dsnFor("g.gpkg", tt.opts); got != tt.want {
+				t.Errorf("dsnFor = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
