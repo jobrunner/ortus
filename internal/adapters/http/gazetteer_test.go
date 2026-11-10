@@ -246,17 +246,22 @@ func TestGazetteerEndpointTransformErrorIs5xx(t *testing.T) {
 	}
 }
 
-// TestQueryTransformErrorStillReturnsCore: an internal transform failure on /query
-// omits wgs84 + gazetteer but must NOT fail the core query (still 200).
-func TestQueryTransformErrorStillReturnsCore(t *testing.T) {
+// TestQueryTransformErrorIs5xx: an internal transform failure on /query is a
+// server fault and must fail the request. It used to answer 200 with wgs84,
+// gazetteer and every foreign-SRID source silently missing — a response that
+// looked complete, which is how a broken transformer went unnoticed in
+// production.
+func TestQueryTransformErrorIs5xx(t *testing.T) {
 	tf := fakeTransformer{supported: true, transformErr: errors.New("proj boom")}
 	srv := newGazetteerServerT(t, fakeGazetteer{loc: sampleLocality(), fix: sampleFix()}, tf)
-	rec, body := doGET(t, srv, "/api/v1/query?x=-1876403.675&y=3291468.780&srid=3857")
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200 (transform failure must not sink the query)", rec.Code)
-	}
-	if body["wgs84"] != nil || body["gazetteer"] != nil {
-		t.Errorf("wgs84/gazetteer should be omitted on transform failure; got %v / %v", body["wgs84"], body["gazetteer"])
+	for _, q := range []string{
+		"/api/v1/query?x=-1876403.675&y=3291468.780&srid=3857",
+		"/api/v1/query?mgrs=32UMA7652652069",
+	} {
+		rec, body := doGET(t, srv, q)
+		if rec.Code != http.StatusInternalServerError {
+			t.Errorf("%s: status = %d, want 500 (body %v)", q, rec.Code, body)
+		}
 	}
 }
 

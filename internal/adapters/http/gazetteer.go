@@ -390,7 +390,7 @@ func (s *Server) toWGS84(ctx context.Context, c domain.Coordinate) (domain.Coord
 	}
 	w, err := s.transformer.Transform(ctx, c, domain.SRIDWGS84)
 	if err != nil {
-		return domain.Coordinate{}, fmt.Errorf("reproject SRID %d to WGS84: %w", c.SRID, err)
+		return domain.Coordinate{}, fmt.Errorf("%w: reproject SRID %d to WGS84: %w", domain.ErrTransformFailed, c.SRID, err)
 	}
 	return w, nil
 }

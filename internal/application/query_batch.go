@@ -53,6 +53,13 @@ func (s *QueryService) QueryBatch(ctx context.Context, coords []domain.Coordinat
 				span.SetStatus(output.StatusError, "batch canceled or timed out")
 				return nil, err
 			}
+			if errors.Is(err, domain.ErrTransformFailed) {
+				// The transformer is shared by every point and source: continuing
+				// would silently drop all foreign-SRID layers from the whole batch.
+				span.RecordError(err)
+				span.SetStatus(output.StatusError, "transform failed")
+				return nil, err
+			}
 			s.logger.Warn("batch query failed for source", "source", sid, "error", err)
 		}
 	}
@@ -108,7 +115,7 @@ func (s *QueryService) queryBatchSource(ctx context.Context, sid string, coords 
 	}
 	for li := range pkg.Layers {
 		if err := s.batchLayer(ctx, sid, &pkg.Layers[li], coords, properties, results); err != nil {
-			return err // context error → abort this source (and the batch)
+			return err // context or transform error → abort this source (and the batch)
 		}
 	}
 	// Attribute the source's batch query time amortized per point, so summing the
@@ -130,8 +137,8 @@ func (s *QueryService) queryBatchSource(ctx context.Context, sid string, coords 
 // batchLayer queries one layer set-based for all transformable points and folds
 // the per-point features into results. Points whose SRID can't be transformed to
 // the layer are skipped for this layer (same as queryLayer's ok=false path). A
-// context error (cancellation or the server's query.timeout deadline) is returned
-// so the batch aborts instead of reporting a misleading empty result; any other
+// failed transform, or a context error (cancellation or the server's
+// query.timeout deadline), is returned so the batch aborts instead of reporting a misleading empty result; any other
 // adapter error is isolated (logged, this layer contributes nothing).
 func (s *QueryService) batchLayer(ctx context.Context, sid string, layer *domain.Layer, coords []domain.Coordinate, properties []string, results []domain.QueryResult) error {
 	tc := make([]domain.Coordinate, 0, len(coords))
@@ -147,7 +154,11 @@ func (s *QueryService) batchLayer(ctx context.Context, sid string, layer *domain
 		if len(results[i].Features) >= s.maxFeatures || c.Validate() != nil {
 			continue
 		}
-		if qc, ok := s.transformCoordinate(ctx, c, layer); ok {
+		qc, ok, err := s.transformCoordinate(ctx, c, layer)
+		if err != nil {
+			return err
+		}
+		if ok {
 			tc = append(tc, qc)
 			idxs = append(idxs, i)
 		}

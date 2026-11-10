@@ -8,22 +8,21 @@ import (
 	"github.com/jobrunner/ortus/internal/domain"
 )
 
-// wgs84OrLog reprojects the query coordinate to WGS84 for the response's wgs84 and
-// gazetteer blocks. ok is false when the coordinate can't be used: either the SRID
-// isn't transformable (a client concern — the caller silently omits the blocks) or
-// the transform itself failed (an internal concern — logged here at WARN so it is
-// diagnosable). Only a successful reprojection returns ok=true. Kept out of the
-// handlers file so the /query handlers stay thin.
-func (s *Server) wgs84OrLog(r *http.Request, coord domain.Coordinate) (domain.Coordinate, bool) {
+// wgs84For reprojects the query coordinate to WGS84 for the response's wgs84 and
+// gazetteer blocks. ok is false with a nil error when the SRID isn't
+// transformable (no transformer wired) — the caller omits both blocks. A failed
+// transform is returned as an error (wrapping domain.ErrTransformFailed) and must
+// fail the request: omitting the blocks silently is how a broken transformer
+// went unnoticed. Kept out of the handlers file so the /query handlers stay thin.
+func (s *Server) wgs84For(r *http.Request, coord domain.Coordinate) (domain.Coordinate, bool, error) {
 	wgs, err := s.toWGS84(r.Context(), coord)
 	switch {
 	case err == nil:
-		return wgs, true
+		return wgs, true, nil
 	case errors.Is(err, errNotTransformable):
-		return domain.Coordinate{}, false
+		return domain.Coordinate{}, false, nil
 	default:
-		s.logger.Warn("wgs84 reprojection failed", "srid", coord.SRID, "error", err)
-		return domain.Coordinate{}, false
+		return domain.Coordinate{}, false, err
 	}
 }
 

@@ -28,6 +28,10 @@ var (
 	ErrUnsupportedSource     = fmt.Errorf("source: %w", ErrUnsupported)
 	ErrRateLimited           = errors.New("rate limit exceeded")
 	ErrInvalidMGRS           = fmt.Errorf("mgrs: %w", ErrInvalidInput)
+	// ErrTransformFailed marks a coordinate reprojection that failed inside the
+	// server. Never a client error: an untransformable SRID is rejected before
+	// any transform runs.
+	ErrTransformFailed = fmt.Errorf("coordinate transformation: %w", ErrInternal)
 )
 
 // ValidationError represents a detailed validation error.

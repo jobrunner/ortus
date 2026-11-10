@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -150,6 +151,14 @@ func (s *QueryService) QueryPoint(ctx context.Context, req domain.QueryRequest) 
 	// Query each source
 	for _, sid := range sourceIDs {
 		result, err := s.QueryPointInSource(ctx, sid, req)
+		if errors.Is(err, domain.ErrTransformFailed) {
+			// Not a per-source problem: the transformer is shared, so every other
+			// source in a foreign SRID would be dropped as well. Answering with the
+			// rest would look complete while it isn't — fail the query instead.
+			span.RecordError(err)
+			span.SetStatus(output.StatusError, "transform failed")
+			return nil, err
+		}
 		if err != nil {
 			s.logger.Warn("query failed for source", "source", sid, "error", err)
 			s.queryCount.Add(ctx, 1, metric.WithAttributes(
@@ -210,7 +219,13 @@ func (s *QueryService) QueryPointInSource(ctx context.Context, sourceID string, 
 	// Query each layer
 	maxReached := false
 	for _, layer := range pkg.Layers {
-		if s.queryLayer(ctx, sourceID, &layer, &req, result) {
+		reached, err := s.queryLayer(ctx, sourceID, &layer, &req, result)
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(output.StatusError, "transform failed")
+			return nil, err
+		}
+		if reached {
 			maxReached = true
 			break // max features reached
 		}
@@ -231,8 +246,10 @@ func (s *QueryService) QueryPointInSource(ctx context.Context, sourceID string, 
 	return result, nil
 }
 
-// queryLayer queries a single layer and appends results. Returns true if max features reached.
-func (s *QueryService) queryLayer(ctx context.Context, sourceID string, layer *domain.Layer, req *domain.QueryRequest, result *domain.QueryResult) bool {
+// queryLayer queries a single layer and appends results. Returns true if max
+// features reached. The only error it returns is a failed coordinate transform
+// (ErrTransformFailed); adapter errors stay isolated to the layer.
+func (s *QueryService) queryLayer(ctx context.Context, sourceID string, layer *domain.Layer, req *domain.QueryRequest, result *domain.QueryResult) (bool, error) {
 	ctx, span := s.tracer.Start(ctx, "QueryService.queryLayer",
 		output.WithAttributes(
 			output.String("ortus.source.id", sourceID),
@@ -243,12 +260,16 @@ func (s *QueryService) queryLayer(ctx context.Context, sourceID string, layer *d
 	)
 	defer span.End()
 
-	queryCoord, ok := s.transformCoordinate(ctx, req.Coordinate, layer)
+	queryCoord, ok, err := s.transformCoordinate(ctx, req.Coordinate, layer)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(output.StatusError, "transform failed")
+		return false, err
+	}
 	if !ok {
-		// ok=false covers an unsupported SRID mismatch (no transformer) and a
-		// failed/canceled transform; transformCoordinate logs the specific reason.
+		// No transformer is wired, so a layer in a foreign SRID can't be queried.
 		span.AddEvent("layer skipped (coordinate not transformable)")
-		return false
+		return false, nil
 	}
 
 	features, err := s.registry.Query(ctx, sourceID, layer.Name, queryCoord)
@@ -257,12 +278,12 @@ func (s *QueryService) queryLayer(ctx context.Context, sourceID string, layer *d
 			// Expected when the client aborts the request (e.g. the map UI
 			// cancels the previous in-flight query) — not a server failure.
 			s.logger.Debug("layer query canceled", "source", sourceID, "layer", layer.Name, "error", err)
-			return false
+			return false, nil
 		}
 		s.logger.Warn("layer query failed", "source", sourceID, "layer", layer.Name, "error", err)
 		span.RecordError(err)
 		span.SetStatus(output.StatusError, "layer query failed")
-		return false
+		return false, nil
 	}
 
 	if len(req.Properties) > 0 {
@@ -276,18 +297,23 @@ func (s *QueryService) queryLayer(ctx context.Context, sourceID string, layer *d
 		output.Int("ortus.layer.features.count", len(features)),
 		output.Bool("ortus.max_features_reached", maxReached),
 	)
-	return maxReached
+	return maxReached, nil
 }
 
 // transformCoordinate transforms the coordinate to the layer's SRID if needed.
-func (s *QueryService) transformCoordinate(ctx context.Context, coord domain.Coordinate, layer *domain.Layer) (domain.Coordinate, bool) {
+// ok=false with a nil error means no transformer is wired, so the layer is
+// skipped. A failed transform is returned as ErrTransformFailed (still matching
+// context.Canceled / DeadlineExceeded when that was the cause): it is a server
+// fault, and swallowing it turned a broken transformer into silently incomplete
+// answers.
+func (s *QueryService) transformCoordinate(ctx context.Context, coord domain.Coordinate, layer *domain.Layer) (domain.Coordinate, bool, error) {
 	if coord.SRID == layer.SRID {
-		return coord, true
+		return coord, true, nil
 	}
 
 	if s.transformer == nil {
 		s.logger.Debug("skipping layer due to SRID mismatch", "layer", layer.Name, "layer_srid", layer.SRID, "query_srid", coord.SRID)
-		return coord, false
+		return coord, false, nil
 	}
 
 	ctx, span := s.tracer.Start(ctx, "QueryService.transformCoordinate",
@@ -300,16 +326,14 @@ func (s *QueryService) transformCoordinate(ctx context.Context, coord domain.Coo
 
 	transformed, err := s.transformer.Transform(ctx, coord, layer.SRID)
 	if err != nil {
-		if isCanceled(err) {
-			s.logger.Debug("coordinate transformation canceled", "from_srid", coord.SRID, "to_srid", layer.SRID, "error", err)
-			return coord, false
+		if !isCanceled(err) {
+			s.logger.Error("coordinate transformation failed", "from_srid", coord.SRID, "to_srid", layer.SRID, "error", err)
 		}
-		s.logger.Warn("coordinate transformation failed", "from_srid", coord.SRID, "to_srid", layer.SRID, "error", err)
 		span.RecordError(err)
 		span.SetStatus(output.StatusError, "transform failed")
-		return coord, false
+		return coord, false, fmt.Errorf("%w: EPSG:%d -> EPSG:%d: %w", domain.ErrTransformFailed, coord.SRID, layer.SRID, err)
 	}
-	return transformed, true
+	return transformed, true, nil
 }
 
 // isCanceled reports whether err is a client-side context cancellation — an
