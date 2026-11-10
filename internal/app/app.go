@@ -199,6 +199,7 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (app *App
 		return nil, fmt.Errorf("initializing coordinate transformer: %w", err)
 	}
 	transformer.SetTracer(app.Tracer)
+	transformer.SetMeter(meter)
 	app.Transformer = transformer
 	// If a later init step (TLS, MCP, …) fails, release the transformer so a
 	// failed New doesn't leak its database/sql opener goroutine.
@@ -233,6 +234,7 @@ func New(ctx context.Context, cfg *config.Config, logger *slog.Logger) (app *App
 
 	// Initialize health service
 	app.HealthService = application.NewHealthService(app.Registry, cfg.Server.ReadyWhenEmpty, app.Tracer)
+	app.HealthService.SetTransformerCheck(app.Transformer)
 
 	// Initialize the optional gazetteer (reverse geocode + bearing). No-op unless
 	// gazetteer.enabled; opens its own dedicated GeoPackage separate from the

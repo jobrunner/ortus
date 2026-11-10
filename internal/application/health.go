@@ -17,10 +17,17 @@ type sourceInspector interface {
 	InitialLoadComplete() bool
 }
 
+// transformerChecker is the health-relevant surface of the coordinate
+// transformer: a self-test that proves it still reprojects correctly.
+type transformerChecker interface {
+	Check(ctx context.Context) error
+}
+
 // HealthService provides health check functionality.
 type HealthService struct {
-	registry sourceInspector
-	tracer   output.Tracer
+	registry    sourceInspector
+	tracer      output.Tracer
+	transformer transformerChecker // nil ⇒ no transformer wired, not reported
 	// readyWhenEmpty: when true (default), a fully-loaded service with no ready
 	// source still reports ready ("no data today"). When false, readiness
 	// additionally requires at least one ready source.
@@ -38,6 +45,25 @@ func NewHealthService(registry sourceInspector, readyWhenEmpty bool, tracer outp
 		tracer:         tracer,
 		readyWhenEmpty: readyWhenEmpty,
 	}
+}
+
+// SetTransformerCheck wires the coordinate transformer's self-test into the
+// health report. A failing transformer marks the instance not ready: every query
+// in a foreign SRID (and every wgs84/gazetteer block for one) would fail.
+func (s *HealthService) SetTransformerCheck(c transformerChecker) {
+	s.transformer = c
+}
+
+// transformerStatus runs the transformer self-test. ok is true when no
+// transformer is wired.
+func (s *HealthService) transformerStatus(ctx context.Context) (status string, ok bool) {
+	if s.transformer == nil {
+		return "", true
+	}
+	if err := s.transformer.Check(ctx); err != nil {
+		return "error", false
+	}
+	return "ok", true
 }
 
 // IsHealthy returns true if the service is healthy.
@@ -61,6 +87,11 @@ func (s *HealthService) IsReady(ctx context.Context) bool {
 		return false
 	}
 	span.SetAttributes(output.Int("health.sources_total", len(sources)))
+
+	if _, ok := s.transformerStatus(ctx); !ok {
+		span.SetAttributes(output.Bool("health.ready", false), output.String("health.reason", "transformer"))
+		return false
+	}
 
 	// A usable source means ready, regardless of the load latch — this also
 	// covers sources brought online by sync after the initial pass (or after a
@@ -118,6 +149,9 @@ func (s *HealthService) GetHealthDetails(ctx context.Context) input.HealthDetail
 
 	components := map[string]string{
 		"storage": "ok",
+	}
+	if status, _ := s.transformerStatus(ctx); status != "" {
+		components["transformer"] = status
 	}
 
 	span.SetAttributes(
