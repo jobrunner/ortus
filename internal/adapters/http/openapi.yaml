@@ -689,8 +689,9 @@ components:
       description: |
         Spatial Reference ID der Eingabekoordinaten.
         Standard ist 4326 (WGS84). Ein EPSG-Code, den der Server nicht kennt, ist
-        ein Eingabefehler: 400 mit `"message": "unknown srid …"` (im Batch als
-        Fehler des einzelnen Punkts).
+        ein Eingabefehler: Die /query-Endpunkte antworten 400 mit
+        `"message": "unknown srid …"` (im Batch als Fehler des einzelnen Punkts),
+        /gazetteer wie bisher 422 (nicht nach WGS84 transformierbar).
       schema:
         type: integer
         default: 4326
