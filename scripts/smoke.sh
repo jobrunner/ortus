@@ -99,8 +99,10 @@ for form in lonlat utm mgrs; do
 	jq -r '[.results[].source_id] | sort | join(",")' "$f" > "$TMP/$form.sources"
 done
 
-if [[ -s "$TMP/lonlat.sources" ]]; then
-	ref="$(cat "$TMP/lonlat.sources")"
+# Inhalt prüfen, nicht die Dateigröße: jq schreibt auch für results: [] eine
+# Zeile, und drei leere Listen wären sonst "dieselben Quellen".
+ref="$(cat "$TMP/lonlat.sources" 2>/dev/null || true)"
+if [[ -n "$ref" ]]; then
 	ok "Quellen (lon/lat): $ref"
 	for form in utm mgrs; do
 		[[ -f "$TMP/$form.sources" ]] || continue
