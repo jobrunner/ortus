@@ -368,12 +368,12 @@ func equalStrings(a, b []string) bool {
 // filtered KNN: with a wide radius the R-tree bbox covers a huge share of the
 // layer and SQLite fetches every row in the box before the class filter runs —
 // measured 573 ms vs 4.5 ms per city query (120 km, 422k places, 1.9k cities)
-// on the real dataset. After EnsureAttributeIndex the query must scan the
+// on the real dataset. With the attribute index in the package the query must scan the
 // filter column's index instead (INDEXED BY) for wide radii, while narrow radii
 // keep the R-tree plan. Results must be identical either way.
 func TestGazetteerIndex_FilteredKNNUsesAttributeIndex(t *testing.T) {
 	ctx := context.Background()
-	idx := openFixtureIndex(t, true)
+	idx, path := openFixtureIndexAt(t, true)
 	p := domain.NewWGS84Coordinate(10.05, 50.0)
 	filter := &output.Filter{Column: "place", Values: []any{"city"}}
 
@@ -383,13 +383,8 @@ func TestGazetteerIndex_FilteredKNNUsesAttributeIndex(t *testing.T) {
 		t.Fatalf("QueryKNN before index: %v", err)
 	}
 
-	if err := idx.EnsureAttributeIndex(ctx, "places", "place"); err != nil {
-		t.Fatalf("EnsureAttributeIndex: %v", err)
-	}
-	// Idempotent: a second call must not fail.
-	if err := idx.EnsureAttributeIndex(ctx, "places", "place"); err != nil {
-		t.Fatalf("EnsureAttributeIndex (2nd): %v", err)
-	}
+	// The package build ships the index; the read-only handle picks it up.
+	addAttributeIndex(t, path, "places", "place")
 
 	after, err := idx.QueryKNN(ctx, "places", p, 3, 60, filter)
 	if err != nil {

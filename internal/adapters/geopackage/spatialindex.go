@@ -13,22 +13,6 @@ import (
 	"github.com/jobrunner/ortus/internal/ports/output"
 )
 
-// dsnFor builds the SQLite DSN from the given options. Values are normalized
-// against fixed whitelists before being concatenated, so an invalid or hostile
-// config value cannot break DB open or smuggle extra DSN parameters via '&'.
-// Defaults to a private cache (each connection gets its own — allows true
-// concurrent reads, unlike the legacy shared cache).
-func dsnFor(path string, opts Options) string {
-	params := []string{"cache=" + normalizeCacheMode(opts.CacheMode)}
-	if opts.BusyTimeoutMS > 0 {
-		params = append(params, fmt.Sprintf("_busy_timeout=%d", opts.BusyTimeoutMS))
-	}
-	if jm := normalizeJournalMode(opts.JournalMode); jm != "" {
-		params = append(params, "_journal_mode="+jm)
-	}
-	return fmt.Sprintf("file:%s?%s", path, strings.Join(params, "&"))
-}
-
 // openSpatiaLite opens a SpatiaLite-backed SQLite connection with the configured
 // pool limits and verifies it is reachable. It is the single open path shared by
 // the vector Repository and the GazetteerIndex, so both use the same registered
@@ -60,9 +44,12 @@ type GazetteerIndex struct {
 	db *sql.DB
 }
 
-// OpenGazetteerIndex opens the gazetteer GeoPackage and verifies SpatiaLite is
-// available. Call Close when done.
+// OpenGazetteerIndex opens the gazetteer GeoPackage read-only and verifies
+// SpatiaLite is available. The package is a finished dataset (production mounts
+// it ":ro"); its build owns the schema, indexes included, so ortus never writes
+// to it. Call Close when done.
 func OpenGazetteerIndex(ctx context.Context, path string, opts Options) (*GazetteerIndex, error) {
+	opts.ReadOnly = true
 	db, err := openSpatiaLite(ctx, path, opts)
 	if err != nil {
 		return nil, err

@@ -21,4 +21,8 @@
 # cannot parameterize identifiers — the established pattern; the index is what
 # keeps wide-radius class-filtered KNN off the R-tree full-box plan (573 ms -> <10 ms
 # per city query).
-28
+#
+# 2026-11: -1 — ortus no longer executes that CREATE INDEX (the gazetteer is
+# opened read-only; the package build ships the index). AttributeIndexDDL only
+# formats the statement, so the G201 suppression went away.
+27

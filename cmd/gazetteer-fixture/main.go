@@ -381,7 +381,7 @@ func addAncestors(ctx context.Context, db *sql.DB, start int64, adminSet map[int
 
 // buildFixture extracts the fid sets into a new GeoPackage via ogr2ogr, simplifying
 // polygons, then adds a minimal native spatial_ref_sys so ellipsoidal Distance
-// resolves SRID 4326 without warnings.
+// resolves SRID 4326 without warnings, and the place-rank attribute index.
 func buildFixture(src, dst string, adminFids, placeFids []int64, simplify float64) error {
 	_ = os.Remove(dst)
 	admin := exec.Command("ogr2ogr", "-f", "GPKG", dst, src, "admin_levels",
@@ -397,12 +397,15 @@ func buildFixture(src, dst string, adminFids, placeFids []int64, simplify float6
 	if out, err := places.CombinedOutput(); err != nil {
 		return fmt.Errorf("ogr2ogr places: %v\n%s", err, out)
 	}
-	// Minimal spatial_ref_sys (WGS84 only) so Distance(...,1) resolves cleanly.
+	// Minimal spatial_ref_sys (WGS84 only) so Distance(...,1) resolves cleanly,
+	// and the rank index the real package build ships: ortus opens the gazetteer
+	// read-only and only checks for it.
 	srs := exec.Command("spatialite", dst, `
 		CREATE TABLE IF NOT EXISTS spatial_ref_sys (srid INTEGER PRIMARY KEY, auth_name TEXT, auth_srid INTEGER, ref_sys_name TEXT, proj4text TEXT, srtext TEXT);
-		INSERT OR REPLACE INTO spatial_ref_sys VALUES (4326,'EPSG',4326,'WGS 84','+proj=longlat +datum=WGS84 +no_defs','');`)
+		INSERT OR REPLACE INTO spatial_ref_sys VALUES (4326,'EPSG',4326,'WGS 84','+proj=longlat +datum=WGS84 +no_defs','');
+		`+geopackage.AttributeIndexDDL("places", "place")+";")
 	if out, err := srs.CombinedOutput(); err != nil {
-		return fmt.Errorf("spatial_ref_sys: %v\n%s", err, out)
+		return fmt.Errorf("spatial_ref_sys / attribute index: %v\n%s", err, out)
 	}
 	return nil
 }

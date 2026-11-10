@@ -232,6 +232,13 @@ gazetteer:
 
 - `geopackage_path` and `manifest_path` are **required** when `enabled: true`;
   startup fails fast otherwise.
+- The gazetteer GeoPackage is opened **read-only** (`mode=ro`) and never written —
+  mount it `:ro`. `query.sqlite.journal_mode` does not apply to it. Its build must
+  ship the attribute index on the manifest's `rank_column`
+  (`CREATE INDEX "idx_ortus_places_place" ON "places" ("place")` for the default
+  manifest): without it, wide-radius bearing queries still answer correctly but
+  scan far more rows, and startup logs the warning
+  `gazetteer package lacks the attribute index` with the statement to add.
 - `bearing.salience` picks the anchor-selection strategy. **`composite`** (default)
   scores each candidate by prominence vs proximity —
   `pop_weight·log10(1+population) + capital_scale·capitalBonus + wiki_weight·[wikidata] − decay_per_km·km` —
