@@ -103,7 +103,7 @@ it — so the static gate derives the list instead.
 | `Repository.GetLayers`                 | `internal/adapters/geopackage` | `ortus.layers.count`                                     |
 | `Repository.HasSpatialIndex`           | `internal/adapters/geopackage` | `db.statement`, `ortus.index.exists`                     |
 | `RepositoryTransformer.Transform`      | `internal/adapters/geopackage` | `db.statement`, `ortus.coordinate.{from_srid,to_srid}`   |
-| `Transformer.Transform` / `IsSupported`| `internal/adapters/geopackage` | `db.statement`, `ortus.coordinate.{from,to}_srid`        |
+| `RepositoryTransformer.Check`          | `internal/adapters/geopackage` | — (canary transform; status `Error` when it fails)      |
 | `ObjectStorage.List/Download/...`      | `internal/adapters/storage`    | `storage.system`, `storage.key`                          |
 | `HealthService.IsHealthy`              | `internal/application`         | `health.healthy`                                         |
 | `HealthService.IsReady`                | `internal/application`         | `health.ready`, `health.reason`                          |
@@ -264,3 +264,8 @@ bucket boundaries so `histogram_quantile()` resolves real p50/p95/p99.
 
 Source gauges: `ortus_sources_loaded`, `ortus_sources_ready`,
 `ortus_sources_failed`.
+
+`ortus_coordinate_transform_failures_total{from_srid,to_srid}` counts coordinate
+transformations that failed inside the server (client cancellations excluded).
+It should stay at zero; any increase means queries are failing with
+`Coordinate transformation failed`.

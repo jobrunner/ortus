@@ -75,3 +75,35 @@ by the signature, which signs the index digest):
 docker buildx imagetools inspect ghcr.io/jobrunner/ortus:2.0.2 --format '{{ json .SBOM }}'
 docker buildx imagetools inspect ghcr.io/jobrunner/ortus:2.0.2 --format '{{ json .Provenance }}'
 ```
+
+## Verify after deploying
+
+A clean log right after `docker compose up` doesn't prove much: some failures only
+appear under load. Up to v2.0.2 the coordinate transformer broke after the first
+burst of parallel requests, and from then on every non-WGS84 query came back
+incomplete. The smoke test provokes exactly that and then checks the answers:
+
+```bash
+make smoke URL=https://ortus.example.org
+# or without make:
+scripts/smoke.sh https://ortus.example.org
+```
+
+`scripts/smoke.sh` sends only GET requests (needs `curl` and `jq`):
+
+1. waits until `/health` reports `ready` (up to 35 min by default, because large
+   raster bundles unpack on start; `SMOKE_READY_TIMEOUT` in seconds),
+2. fires a burst of parallel `srid=25832` queries (`SMOKE_BURST`, default 50),
+3. queries one point as `lon/lat`, `x/y/srid=25832` and `mgrs` and requires the
+   `wgs84` block (matching the point), the `gazetteer` block and the **same** sources
+   in all three answers,
+4. checks `/api/v1/gazetteer` with a projected coordinate and
+   `components.transformer` in `/health`.
+
+The default point is Frankfurt am Main. Use `SMOKE_LON`/`SMOKE_LAT`,
+`SMOKE_UTM_X`/`SMOKE_UTM_Y` (EPSG:25832) and `SMOKE_MGRS` for a different one,
+`SMOKE_EXPECT_SOURCES=a,b` to require specific sources, and `SMOKE_GAZETTEER=0` for
+an instance without the gazetteer. Exit code `0` means OK.
+
+CI runs the same script against every freshly built image with small fixtures
+(`make smoke-image IMAGE=…`, `scripts/smoke-image.sh`).
