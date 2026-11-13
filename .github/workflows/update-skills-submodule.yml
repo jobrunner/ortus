@@ -20,11 +20,14 @@ jobs:
   bump:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      # Credentials must persist: `git submodule update --remote` fetches the
+      # private skills repo and the "Open PR" step pushes a branch, both with
+      # this token. workflow_dispatch-only, no untrusted code is checked out.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
           fetch-depth: 0
-          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}  # zizmor: ignore[artipacked]
 
       - name: Bump submodule to latest tracked branch
         id: bump
