@@ -14,9 +14,6 @@ on:
         description: 'Fuzz time per target (e.g. 3m, 10m)'
         default: '3m'
 
-env:
-  GO_VERSION: '1.26.11'
-
 permissions:
   contents: read
 
@@ -32,7 +29,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version-file: go.mod
 
       # The geopackage package links cgo SpatiaLite; install it so the fuzz
       # binary compiles (mirrors the CI Test job).

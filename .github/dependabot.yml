@@ -3,17 +3,17 @@
 #
 # Ecosystems:
 #   1. github-actions — bumps actions/checkout, actions/setup-go, etc.
-#   2. gomod          — bumps Go modules AND the `toolchain` directive in
-#                       go.mod. This is what keeps us off the next round of
-#                       stdlib CVEs without manual work.
+#   2. gomod          — bumps Go modules (not the `toolchain` directive:
+#                       stdlib CVE fixes come from vuln-scan.yml's autofix job).
 #   3. docker         — bumps the FROM tags (spatialite-base-image) in the
 #                       Dockerfiles, so base-image rebuilds with patched
 #                       Alpine/Ubuntu packages actually reach the runtime image.
 #   4. gitsubmodule   — bumps the third_party/claude-skills pin.
 #
-# The CI workflows themselves still pin GO_VERSION explicitly; Dependabot
-# does NOT update that. The vuln-scan workflow runs weekly to alert if it
-# drifts behind the toolchain directive.
+# All workflows read the Go version from go.mod (setup-go go-version-file), so
+# the toolchain directive is the only place it lives. vuln-scan.yml checks
+# master daily and opens a `fix(deps)` PR that raises it when govulncheck
+# reports a reachable stdlib CVE with a fixed Go release.
 
 version: 2
 updates:

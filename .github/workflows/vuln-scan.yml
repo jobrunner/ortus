@@ -1,10 +1,16 @@
-# Weekly vulnerability scans on master. The regular CI Security job runs
+# Scheduled vulnerability scans on master. The regular CI Security job runs
 # on every push and PR; these jobs run on a schedule so newly-disclosed
 # CVEs become visible even when there is no PR activity to trigger them.
 #
-# Two jobs:
-#   - scan (govulncheck)  — Go stdlib + module CVEs reachable from the code
-#   - image-scan (trivy)  — the PUBLISHED ghcr.io images (:latest = Alpine and
+# Three jobs:
+#   - scan (govulncheck, daily) — Go stdlib + module CVEs reachable from the code
+#   - autofix (after scan, on findings) — applies the fixed versions govulncheck
+#     names (scripts/vuln-autofix.sh: Go toolchain directive, `go get`) and
+#     opens a `fix(deps)` PR as the release GitHub App with auto-merge. The
+#     PR's CI is the proof; once it merges, auto-release.yml ships it like a
+#     Dependabot fix. Unattended path for Go CVEs, which Dependabot does not
+#     cover (it never bumped the toolchain directive here).
+#   - image-scan (trivy, weekly) — the PUBLISHED ghcr.io images (:latest = Alpine and
 #     :ubuntu). Catches what
 #     govulncheck cannot: OS packages from the spatialite base image (openssl,
 #     curl, python3, …) and unreachable-but-flagged Go module CVEs. A released
@@ -23,9 +29,11 @@ name: Vuln Scan
 
 on:
   schedule:
-    # Monday 06:00 UTC, after the Go security team's typical Tuesday
-    # release cadence in the previous week.
+    # Daily 06:00 UTC, so a Go security release is picked up within a day.
+    # Two entries only so image-scan can keep its weekly (Monday) cadence:
+    # its findings need a base-image release, not a daily issue comment.
     - cron: '0 6 * * 1'
+    - cron: '0 6 * * 0,2-6'
   workflow_dispatch:
 
 # Least privilege at the workflow level; the two scan jobs add `issues: write`
@@ -40,6 +48,8 @@ jobs:
     permissions:
       contents: read
       issues: write   # to open / comment on the security issue
+    outputs:
+      rc: ${{ steps.vuln.outputs.rc }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -93,7 +103,7 @@ jobs:
             --search "$title in:title" \
             --json number --jq '.[0].number // ""')
 
-          body=$(printf 'govulncheck reports vulnerabilities on master.\n\n```\n%s\n```\n\n## Fix\n\nUsually the right action is to bump the `toolchain` directive in `go.mod` to a Go patch version that fixes the listed CVEs, then update every `GO_VERSION` in `.github/workflows/*.yml` to match. If the Docker image scan flags the same CVEs, the Go in the `-dev` images of `spatialite-base-image` needs the same bump (its rebuild is gated on it).\n' "$(cat vuln-report.txt)")
+          body=$(printf 'govulncheck reports vulnerabilities on master.\n\n```\n%s\n```\n\n## Fix\n\nThe autofix job of this workflow opens a `fix(deps)` PR with the fixed versions (Go `toolchain` directive in `go.mod`, `go get` for modules) and enables auto-merge. If no such PR appears, no fix is released yet, or the PR needs a human (check its CI).\n' "$(cat vuln-report.txt)")
 
           if [ -n "$existing" ]; then
             gh issue comment "$existing" --body "$body"
@@ -117,8 +127,116 @@ jobs:
         if: steps.vuln.outputs.rc == '3'
         run: exit 1
 
+  autofix:
+    name: govulncheck autofix
+    needs: scan
+    # Only when the scan found something (exit 3); a scan error stays a
+    # failed scan job and never turns into a PR.
+    if: ${{ !cancelled() && needs.scan.outputs.rc == '3' }}
+    runs-on: ubuntu-latest
+    # A manual run next to the scheduled one must not race on the PR branch.
+    concurrency:
+      group: vuln-autofix
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    env:
+      PR_BRANCH: security/govulncheck-fix
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Apply fixes
+        id: fix
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          set +e
+          scripts/vuln-autofix.sh "$RUNNER_TEMP/fixes.md"
+          rc=$?
+          set -e
+          case "$rc" in
+            0) echo "changed=true" >> "$GITHUB_OUTPUT" ;;
+            3) echo "changed=false" >> "$GITHUB_OUTPUT" ;;
+            *) echo "::error::vuln-autofix.sh failed (rc=$rc)"; exit "$rc" ;;
+          esac
+
+      # The app token, not GITHUB_TOKEN: a PR opened with GITHUB_TOKEN runs
+      # no CI, and only an app-made merge triggers release-please on master.
+      # Only go.mod/go.sum change, so no `workflows` permission is needed.
+      - name: Mint GitHub App installation token
+        id: app-token
+        if: steps.fix.outputs.changed == 'true'
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ secrets.RELEASE_PLEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_PLEASE_APP_KEY }}
+          permission-contents: write      # push the fix branch
+          permission-pull-requests: write # open the PR, enable auto-merge
+
+      - name: Open or refresh the fix PR
+        if: steps.fix.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          # Commit as the app's bot user, so auto-release.yml recognises the
+          # commit as automated and ships the release unattended.
+          bot="${APP_SLUG}[bot]"
+          bot_id=$(gh api "/users/${bot}" --jq .id)
+          git config user.name "$bot"
+          git config user.email "${bot_id}+${bot}@users.noreply.github.com"
+
+          fixes="$RUNNER_TEMP/fixes.md"
+          if [ "$(wc -l < "$fixes")" -eq 1 ] && grep -q '^- Go toolchain' "$fixes"; then
+            title="fix(deps): bump Go toolchain to $(sed -E 's/.* → (go[0-9.]+).*/\1/' "$fixes")"
+          else
+            title="fix(deps): apply govulncheck fixes"
+          fi
+          git checkout -b "$PR_BRANCH"
+          git commit -a -m "$title" -m "Reachable vulnerabilities reported by govulncheck on master:" -m "$(cat "$fixes")"
+
+          # Unchanged since the last run: leave the open PR (and its CI) alone.
+          if git fetch --quiet origin "$PR_BRANCH" 2>/dev/null \
+            && git diff --quiet FETCH_HEAD HEAD; then
+            echo "Fix PR branch is up to date."
+            exit 0
+          fi
+          git push --force "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" "HEAD:refs/heads/${PR_BRANCH}"
+
+          {
+            echo "Automated fix, opened by \`vuln-scan.yml\` (refreshed against master on every scan while open)."
+            echo
+            echo "govulncheck reports reachable vulnerabilities on master. This PR applies the fixed versions it names:"
+            echo
+            cat "$fixes"
+            echo
+            echo "Auto-merge is on: the PR merges once CI is green, and auto-release.yml then ships the release. **If CI stays red**, the fix needs a human (e.g. an API change in the bumped module)."
+          } > "$RUNNER_TEMP/pr-body.md"
+
+          pr=$(gh pr list --repo "$REPO" --head "$PR_BRANCH" --state open --json url --jq '.[0].url // ""')
+          if [ -n "$pr" ]; then
+            # REST, not `gh pr edit`: that one also queries the deprecated
+            # Projects (classic) API and fails on it.
+            gh api -X PATCH "repos/${REPO}/pulls/${pr##*/}" -f title="$title" \
+              -F body=@"$RUNNER_TEMP/pr-body.md" --silent
+          else
+            pr=$(gh pr create --repo "$REPO" --base master --head "$PR_BRANCH" \
+              --title "$title" --body-file "$RUNNER_TEMP/pr-body.md" --label security)
+          fi
+          gh pr merge "$pr" --repo "$REPO" --auto --merge
+
   image-scan:
     name: trivy (published image, ${{ matrix.tag }})
+    # Weekly: on the Monday schedule and on manual runs.
+    if: github.event_name != 'schedule' || github.event.schedule == '0 6 * * 1'
     runs-on: ubuntu-latest
     permissions:
       contents: read
