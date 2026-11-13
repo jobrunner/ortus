@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.2](https://github.com/jobrunner/ortus/compare/v2.1.1...v2.1.2) (2026-11-13)
+
+
+### Bug Fixes
+
+* **deps:** bump Go toolchain to 1.26.11 ([3edbe43](https://github.com/jobrunner/ortus/commit/3edbe43ef40a28466e39745a906c451c8e364299))
+* **deps:** bump Go toolchain to 1.26.11 and spatialite-base-image to 3.0.15 ([d188121](https://github.com/jobrunner/ortus/commit/d188121e852f4980029915285e9634d2133bc2ae))
+* **deps:** bump jobrunner/spatialite-base-image ([0999e42](https://github.com/jobrunner/ortus/commit/0999e42200376d7c711cb6b7ea7a33be596e6080))
+* **deps:** bump spatialite-base-image to 3.0.15 ([dc6bcca](https://github.com/jobrunner/ortus/commit/dc6bcca77f853ee21af56bfebedf59f0021a6b07))
+
 ## [2.1.1](https://github.com/jobrunner/ortus/compare/v2.1.0...v2.1.1) (2026-11-10)
 
 
