@@ -41,10 +41,12 @@ jobs:
       contents: read
       issues: write   # to open / comment on the security issue
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Go
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           # Pull the toolchain version from go.mod so we always scan
           # against what the build actually uses.
@@ -138,7 +140,7 @@ jobs:
       # bump or `go get`. Unfixed CVEs still show up in the per-PR SARIF scan
       # in the Security tab.
       - name: Run Trivy against ghcr.io image (JSON)
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: 'ghcr.io/${{ github.repository }}:${{ matrix.tag }}'
           format: 'json'

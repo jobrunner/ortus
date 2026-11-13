@@ -30,10 +30,12 @@ jobs:
       issues: write           # open / comment on the security issue on findings
       security-events: write  # upload SARIF to the GitHub Security tab
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.13'
 
@@ -42,10 +44,15 @@ jobs:
 
       - name: Run zizmor
         id: scan
+        # Without a token zizmor silently skips its online audits
+        # (impostor-commit, known-vulnerable-actions, ref-confusion,
+        # stale-action-refs) — exactly the ones that check our SHA pins.
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           # zizmor exits non-zero on findings. We only fail on high-severity
           # findings (template-injection, cache-poisoning etc.); informational
-          # and low findings show up in the SARIF upload but don't gate.
+          # to medium findings land in the SARIF upload but don't gate.
           # Project policy + ignored audits are encoded in .github/zizmor.yml.
           #
           # Exit-code split mirrors vuln-scan.yml:
@@ -57,8 +64,10 @@ jobs:
           # --output flag, so SARIF is emitted on stdout — redirect it to
           # the file. NOTE: with --format sarif zizmor always exits 0
           # (gating is delegated to the code-scanning dashboard), so this
-          # run's exit code can't tell us whether findings exist.
-          zizmor --config .github/zizmor.yml --min-severity=high \
+          # run's exit code can't tell us whether findings exist. No
+          # --min-severity here: the Security tab gets every finding, only
+          # the gating pass below is restricted to high.
+          zizmor --config .github/zizmor.yml \
             --format sarif . > zizmor.sarif 2> zizmor.stderr
           # Authoritative gating pass: the default (plain) format exits 14
           # on findings, 0 when clean, anything else on a real scan error.
@@ -81,7 +90,7 @@ jobs:
       # weeks. A scan error uploads nothing, so it cannot close real alerts.
       - name: Upload SARIF to GitHub Security tab
         if: steps.scan.outputs.rc == '0' || steps.scan.outputs.rc == '14'
-        uses: github/codeql-action/upload-sarif@v4.39.3
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           sarif_file: zizmor.sarif
           category: zizmor
