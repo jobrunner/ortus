@@ -5,9 +5,10 @@
 # For every reachable (symbol-level) finding with a fixed version:
 #   - stdlib  → raise the `toolchain` directive in go.mod to the fixed Go release
 #   - modules → go get <module>@<fixed version>
-# then go mod tidy. Only go.mod/go.sum change: every workflow reads the Go
-# version from go.mod (setup-go go-version-file), and the Docker builds follow
-# the toolchain directive (GOTOOLCHAIN=auto).
+# then go mod tidy, and a re-scan proves the fixes. Only go.mod/go.sum
+# change: every workflow reads the Go version from go.mod (setup-go
+# go-version-file), and the Docker builds follow the toolchain directive
+# (GOTOOLCHAIN=auto).
 #
 # Used by vuln-scan.yml to open the fix PR unattended; runnable locally too.
 # Writes one Markdown list item per applied fix to <summary-file>.
@@ -56,5 +57,16 @@ cut -f1 "$TMP/fixes.tsv" | sort -u | while read -r module; do
     fi
 done
 go mod tidy
+
+# Re-scan: a later go get or the tidy can move a module back below its fix,
+# and the fix PR's ratchet gate would not notice (the finding is on master
+# too). Every finding this run fixed must be gone, or there is no PR.
+govulncheck -format json ./... > "$TMP/rescan.json" || { echo "govulncheck failed on the re-scan" >&2; exit 2; }
+jq -r 'select(.finding) | .finding | select(.trace[0].function != null) | .osv' "$TMP/rescan.json" | sort -u > "$TMP/left.ids"
+cut -f3 "$TMP/fixes.tsv" | sort -u | comm -12 - "$TMP/left.ids" > "$TMP/unfixed.ids"
+if [ -s "$TMP/unfixed.ids" ]; then
+    echo "Still reachable after the fixes: $(paste -sd, - < "$TMP/unfixed.ids")" >&2
+    exit 2
+fi
 
 cat "$SUMMARY"
