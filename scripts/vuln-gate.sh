@@ -35,7 +35,9 @@ BASE_DIR="${1:-}"
 scan() {
     local dir=$1 out=$2
     (
-        cd "$dir"
+        # Explicit exit: scan() runs inside `if`, where errexit is off, and a
+        # failed cd would scan the head twice and pass every finding.
+        cd "$dir" || exit 2
         # Overrides GOTOOLCHAIN=local (setup-go sets it); the go command
         # downloads the declared toolchain if it is not the local one.
         GOTOOLCHAIN=$(go mod edit -json | jq -r '.Toolchain // ("go" + .Go)')

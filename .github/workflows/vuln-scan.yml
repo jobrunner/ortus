@@ -131,8 +131,10 @@ jobs:
     name: govulncheck autofix
     needs: scan
     # Only when the scan found something (exit 3); a scan error stays a
-    # failed scan job and never turns into a PR.
-    if: ${{ !cancelled() && needs.scan.outputs.rc == '3' }}
+    # failed scan job and never turns into a PR. Only on master: a manual
+    # run on another branch would carry that branch's commits into the
+    # auto-merging fix PR.
+    if: ${{ !cancelled() && needs.scan.outputs.rc == '3' && github.ref == 'refs/heads/master' }}
     runs-on: ubuntu-latest
     # A manual run next to the scheduled one must not race on the PR branch.
     concurrency:
