@@ -523,12 +523,11 @@ jobs:
           image-ref: 'ortus:scan'
           format: 'sarif'
           output: 'trivy-results.sarif'
-          severity: 'CRITICAL,HIGH,MEDIUM'
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW'
           # A fresh DB on every run. The default cache restores the DB under
           # a per-day key that only the day's first run writes, and Trivy
           # does not re-download it, so CVEs disclosed later that day stayed
-          # invisible (the base image's scan missed the glibc CVEs on
-          # 2026-11-13 this way). All later scans in this job reuse this DB.
+          # invisible. All later scans in this job reuse this DB.
           cache: 'false'
 
       - name: Upload Trivy scan results to GitHub Security tab
@@ -543,7 +542,7 @@ jobs:
           image-ref: 'ortus:scan-ubuntu'
           format: 'sarif'
           output: 'trivy-results-ubuntu.sarif'
-          severity: 'CRITICAL,HIGH,MEDIUM'
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW'
           cache: 'false'
           skip-setup-trivy: true
         env:
@@ -559,10 +558,9 @@ jobs:
       # Gate reports: every fixable finding, CRITICAL down to LOW (MEDIUM
       # since 2026-10, LOW since 2026-11: a low-rated CVE can still be
       # exploitable in context, and with ignore-unfixed every finding here is
-      # actionable). The SARIF scans above stay at CRITICAL..MEDIUM and
-      # informational — they include unfixed CVEs, and Ubuntu's long tail of
-      # unfixed LOWs would only bury the Security tab in noise; these
-      # passes use ignore-unfixed so CVEs without an upstream/distro fix don't
+      # actionable). The SARIF scans above cover the same severities but are
+      # informational and include unfixed CVEs; these passes use
+      # ignore-unfixed so CVEs without an upstream/distro fix don't
       # block PRs that can't do anything about them. They reuse the DB the
       # first scan downloaded (see the cache note there).
       - name: Trivy gate report
@@ -635,6 +633,8 @@ jobs:
 
       - name: Trivy gate report (base)
         if: steps.base-build.outcome == 'success'
+        # Baseline only: if it fails, the gate falls back to absolute.
+        continue-on-error: true
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: 'ortus:base'
@@ -649,6 +649,8 @@ jobs:
 
       - name: Trivy gate report (base, Ubuntu)
         if: steps.base-build-ubuntu.outcome == 'success'
+        # Baseline only: if it fails, the gate falls back to absolute.
+        continue-on-error: true
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: 'ortus:base-ubuntu'
