@@ -120,10 +120,15 @@ jobs:
       - name: Run tests
         run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
 
+      # Informational only: the gate is the coverage floor below. Codecov
+      # rejects tokenless uploads, so without the CODECOV_TOKEN secret the
+      # upload fails (visible in the step log, not in the check).
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
-          file: ./coverage.out
+          files: ./coverage.out
+          disable_search: true
+          token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
 
       - name: Coverage floors (ratchet)
