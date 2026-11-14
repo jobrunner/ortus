@@ -60,12 +60,14 @@ semver_max() {
         if (pb == "") return -1
         na = split(pa, xa, "."); nb = split(pb, xb, ".")
         n = na < nb ? na : nb
+        # "" x forces string comparison: awk compares numeric-looking split()
+        # fields as numbers, so "1e10" would rank above "1e2".
         for (i = 1; i <= n; i++) {
-            if (xa[i] == xb[i]) continue
+            if ("" xa[i] == "" xb[i]) continue
             if (xa[i] ~ /^[0-9]+$/ && xb[i] ~ /^[0-9]+$/) return xa[i] + 0 < xb[i] + 0 ? -1 : 1
             if (xa[i] ~ /^[0-9]+$/) return -1
             if (xb[i] ~ /^[0-9]+$/) return 1
-            return xa[i] < xb[i] ? -1 : 1
+            return "" xa[i] < "" xb[i] ? -1 : 1
         }
         return na < nb ? -1 : (na > nb ? 1 : 0)
     }
