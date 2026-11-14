@@ -38,13 +38,44 @@ if [ ! -s "$TMP/fixes.tsv" ]; then
     exit 3
 fi
 
+# Highest of the versions on stdin by SemVer precedence (semver.org §11):
+# numeric core, a release above its prereleases, prerelease identifiers
+# numerically if both are numeric, else in ASCII order, numeric below
+# alphanumeric, a shorter list below a longer one with the same prefix.
+# Build metadata (+…) is ignored. sort -V gets prereleases wrong.
+semver_max() {
+    awk '
+    function cmp(a, b,    pa, pb, ca, cb, xa, xb, na, nb, i, n) {
+        sub(/^v/, "", a); sub(/^v/, "", b)
+        sub(/\+.*/, "", a); sub(/\+.*/, "", b)
+        pa = index(a, "-") ? substr(a, index(a, "-") + 1) : ""
+        pb = index(b, "-") ? substr(b, index(b, "-") + 1) : ""
+        if (index(a, "-")) a = substr(a, 1, index(a, "-") - 1)
+        if (index(b, "-")) b = substr(b, 1, index(b, "-") - 1)
+        split(a, ca, "."); split(b, cb, ".")
+        for (i = 1; i <= 3; i++)
+            if (ca[i] + 0 != cb[i] + 0) return ca[i] + 0 < cb[i] + 0 ? -1 : 1
+        if (pa == pb) return 0
+        if (pa == "") return 1
+        if (pb == "") return -1
+        na = split(pa, xa, "."); nb = split(pb, xb, ".")
+        n = na < nb ? na : nb
+        for (i = 1; i <= n; i++) {
+            if (xa[i] == xb[i]) continue
+            if (xa[i] ~ /^[0-9]+$/ && xb[i] ~ /^[0-9]+$/) return xa[i] + 0 < xb[i] + 0 ? -1 : 1
+            if (xa[i] ~ /^[0-9]+$/) return -1
+            if (xb[i] ~ /^[0-9]+$/) return 1
+            return xa[i] < xb[i] ? -1 : 1
+        }
+        return na < nb ? -1 : (na > nb ? 1 : 0)
+    }
+    NF { if (max == "" || cmp($0, max) > 0) max = $0 }
+    END { print max }'
+}
+
 # Highest fixed version per module (several findings may name different ones).
-# Semver puts a release above its prereleases (v1.2.3 > v1.2.3-rc.1), sort -V
-# does not; mapping the prerelease "-" to "~" (which sorts before anything)
-# fixes that.
 cut -f1 "$TMP/fixes.tsv" | sort -u | while read -r module; do
-    target=$(awk -F'\t' -v m="$module" '$1 == m { print $2 }' "$TMP/fixes.tsv" \
-        | sed 's/-/~/' | sort -V | tail -1 | sed 's/~/-/')
+    target=$(awk -F'\t' -v m="$module" '$1 == m { print $2 }' "$TMP/fixes.tsv" | semver_max)
     ids=$(awk -F'\t' -v m="$module" '$1 == m { print $3 }' "$TMP/fixes.tsv" | sort -u | paste -sd, - | sed 's/,/, /g')
     if [ "$module" = "stdlib" ]; then
         current=$(go mod edit -json | jq -r '.Toolchain // ("go" + .Go)')
