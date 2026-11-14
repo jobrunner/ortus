@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.3](https://github.com/jobrunner/ortus/compare/v2.1.2...v2.1.3) (2026-11-14)
+
+
+### Bug Fixes
+
+* **deps:** bump github.com/aws/smithy-go/tracing/smithyoteltracing ([4b8b5b3](https://github.com/jobrunner/ortus/commit/4b8b5b360276e2a68b31af68469c1e14a48c1dde))
+* **deps:** bump github.com/aws/smithy-go/tracing/smithyoteltracing from 1.0.36 to 1.0.37 in the go-minor-patch group ([d33c0e5](https://github.com/jobrunner/ortus/commit/d33c0e514c1b7165f66e2990de5b14f981707840))
+* **deps:** bump the aws-sdk group across 1 directory with 4 updates ([8c0fc89](https://github.com/jobrunner/ortus/commit/8c0fc89e488ab96407800ed352b56bfb924c369f))
+* **deps:** bump the aws-sdk group across 1 directory with 4 updates ([6969708](https://github.com/jobrunner/ortus/commit/6969708f6e3c1af811c8c04ba48983c27f379bbd))
+* **deps:** bump the github-actions group with 3 updates ([5accce6](https://github.com/jobrunner/ortus/commit/5accce6665ae95f93da99026c730ef4278f121c0))
+* **deps:** bump the github-actions group with 3 updates ([7aea034](https://github.com/jobrunner/ortus/commit/7aea0341fb496b2b0b9a77e443c02e9dc2dc5066))
+
 ## [2.1.2](https://github.com/jobrunner/ortus/compare/v2.1.1...v2.1.2) (2026-11-13)
 
 
