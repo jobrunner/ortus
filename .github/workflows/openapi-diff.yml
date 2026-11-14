@@ -20,9 +20,6 @@ on:
 permissions:
   contents: read
 
-env:
-  GO_VERSION: '1.26.11'
-
 jobs:
   breaking:
     name: Breaking-change check
@@ -36,7 +33,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version-file: go.mod
 
       - name: Install oasdiff
         run: go install github.com/oasdiff/oasdiff@latest

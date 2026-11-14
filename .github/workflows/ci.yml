@@ -8,7 +8,6 @@ on:
     branches: [main, master]
 
 env:
-  GO_VERSION: '1.26.11'
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
@@ -82,7 +81,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version-file: go.mod
 
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
@@ -104,7 +103,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version-file: go.mod
 
       # SpatiaLite is required for the GeoPackage integration tests; without it
       # they skip and the core query path is left unexercised (and uncovered).
@@ -149,7 +148,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version-file: go.mod
 
       - name: Install SpatiaLite
         run: |
@@ -180,6 +179,9 @@ jobs:
   # =============================================================================
   # Security Scanning (Go)
   # =============================================================================
+  # On PRs a ratchet: only vulnerabilities the PR adds fail it, pre-existing
+  # ones are listed as a warning (scripts/vuln-gate.sh explains why). On
+  # master it stays absolute.
   security:
     name: Security
     runs-on: ubuntu-latest
@@ -188,15 +190,26 @@ jobs:
         with:
           persist-credentials: false
 
+      # The baseline. A nested module (own go.mod), so the head's ./... skips it.
+      - name: Check out PR base
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+          persist-credentials: false
+
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version-file: go.mod
 
       - name: Run govulncheck
+        env:
+          BASE_DIR: ${{ github.event_name == 'pull_request' && 'base' || '' }}
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest
-          govulncheck ./...
+          scripts/vuln-gate.sh "$BASE_DIR"
 
   # =============================================================================
   # License compliance. Fails if a shipped (cmd/ortus) dependency carries a
@@ -214,7 +227,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version-file: go.mod
 
       - name: Check dependency licenses
         run: |
@@ -277,7 +290,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version-file: go.mod
 
       - name: go.mod tidiness
         run: go mod tidy -diff
@@ -303,7 +316,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version-file: go.mod
 
       - name: Build
         run: go build -v ./cmd/ortus
@@ -510,7 +523,12 @@ jobs:
           image-ref: 'ortus:scan'
           format: 'sarif'
           output: 'trivy-results.sarif'
-          severity: 'CRITICAL,HIGH,MEDIUM'
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW'
+          # A fresh DB on every run. The default cache restores the DB under
+          # a per-day key that only the day's first run writes, and Trivy
+          # does not re-download it, so CVEs disclosed later that day stayed
+          # invisible. All later scans in this job reuse this DB.
+          cache: 'false'
 
       - name: Upload Trivy scan results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
@@ -524,8 +542,11 @@ jobs:
           image-ref: 'ortus:scan-ubuntu'
           format: 'sarif'
           output: 'trivy-results-ubuntu.sarif'
-          severity: 'CRITICAL,HIGH,MEDIUM'
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW'
+          cache: 'false'
           skip-setup-trivy: true
+        env:
+          TRIVY_SKIP_DB_UPDATE: true
 
       - name: Upload Trivy scan results (Ubuntu) to GitHub Security tab
         uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
@@ -534,33 +555,127 @@ jobs:
           sarif_file: 'trivy-results-ubuntu.sarif'
           category: docker-security-ubuntu
 
-      # Gates: fail the job on every fixable finding, CRITICAL down to LOW
-      # (MEDIUM since 2026-10, LOW since 2026-11: a low-rated CVE can still be
+      # Gate reports: every fixable finding, CRITICAL down to LOW (MEDIUM
+      # since 2026-10, LOW since 2026-11: a low-rated CVE can still be
       # exploitable in context, and with ignore-unfixed every finding here is
-      # actionable). The SARIF scans above stay at CRITICAL..MEDIUM and
-      # informational — they include unfixed CVEs, and Ubuntu's long tail of
-      # unfixed LOWs would only bury the Security tab in noise; these
-      # passes use ignore-unfixed so CVEs without an upstream/distro fix don't
-      # block PRs that can't do anything about them. The Trivy DB is cached
-      # from the first scan, so they are cheap. Both gates run even if the
-      # first fails, so one variant's finding never hides the other's.
-      - name: Fail on fixable CRITICAL/HIGH/MEDIUM/LOW vulnerabilities
+      # actionable). The SARIF scans above cover the same severities but are
+      # informational and include unfixed CVEs; these passes use
+      # ignore-unfixed so CVEs without an upstream/distro fix don't
+      # block PRs that can't do anything about them. They reuse the DB the
+      # first scan downloaded (see the cache note there).
+      - name: Trivy gate report
+        if: ${{ !cancelled() }}
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: 'ortus:scan'
-          format: 'table'
+          format: 'json'
+          output: 'gate-head.json'
           severity: 'CRITICAL,HIGH,MEDIUM,LOW'
           ignore-unfixed: true
-          exit-code: '1'
+          cache: 'false'
           skip-setup-trivy: true
+        env:
+          TRIVY_SKIP_DB_UPDATE: true
 
-      - name: Fail on fixable CRITICAL/HIGH/MEDIUM/LOW vulnerabilities (Ubuntu)
+      - name: Trivy gate report (Ubuntu)
         if: ${{ !cancelled() }}
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: 'ortus:scan-ubuntu'
-          format: 'table'
+          format: 'json'
+          output: 'gate-head-ubuntu.json'
           severity: 'CRITICAL,HIGH,MEDIUM,LOW'
           ignore-unfixed: true
-          exit-code: '1'
+          cache: 'false'
           skip-setup-trivy: true
+        env:
+          TRIVY_SKIP_DB_UPDATE: true
+
+      # On PRs the gate is a ratchet: both variants are also built from the
+      # PR's base commit and scanned with the same DB, and only findings the
+      # PR adds fail the job (scripts/trivy-gate.sh explains why). The base is
+      # checked out only now, after the head images are built, so it never
+      # lands in their `COPY . .` context. A failing base build is not this
+      # PR's problem: the gate then falls back to absolute.
+      - name: Check out PR base
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+          persist-credentials: false
+
+      - name: Build base image
+        id: base-build
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: base
+          file: base/Dockerfile
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: ortus:base
+
+      - name: Build base image (Ubuntu)
+        id: base-build-ubuntu
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: base
+          file: base/Dockerfile.ubuntu
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: ortus:base-ubuntu
+
+      - name: Trivy gate report (base)
+        if: steps.base-build.outcome == 'success'
+        # Baseline only: if it fails, the gate falls back to absolute.
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: 'ortus:base'
+          format: 'json'
+          output: 'gate-base.json'
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW'
+          ignore-unfixed: true
+          cache: 'false'
+          skip-setup-trivy: true
+        env:
+          TRIVY_SKIP_DB_UPDATE: true
+
+      - name: Trivy gate report (base, Ubuntu)
+        if: steps.base-build-ubuntu.outcome == 'success'
+        # Baseline only: if it fails, the gate falls back to absolute.
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: 'ortus:base-ubuntu'
+          format: 'json'
+          output: 'gate-base-ubuntu.json'
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW'
+          ignore-unfixed: true
+          cache: 'false'
+          skip-setup-trivy: true
+        env:
+          TRIVY_SKIP_DB_UPDATE: true
+
+      # Both variants are evaluated even if the first fails, so one variant's
+      # finding never hides the other's.
+      - name: Fail on fixable CRITICAL/HIGH/MEDIUM/LOW vulnerabilities
+        if: ${{ !cancelled() }}
+        env:
+          IS_PR: ${{ github.event_name == 'pull_request' }}
+        run: |
+          rc=0
+          if [ "$IS_PR" = true ]; then
+            scripts/trivy-gate.sh alpine gate-head.json gate-base.json || rc=1
+            scripts/trivy-gate.sh ubuntu gate-head-ubuntu.json gate-base-ubuntu.json || rc=1
+          else
+            scripts/trivy-gate.sh alpine gate-head.json || rc=1
+            scripts/trivy-gate.sh ubuntu gate-head-ubuntu.json || rc=1
+          fi
+          exit "$rc"

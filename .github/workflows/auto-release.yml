@@ -1,12 +1,13 @@
-# Release unattended when a release holds nothing but Dependabot changes.
+# Release unattended when a release holds nothing but automated fixes.
 #
 # A patched base image arrives as a Dependabot PR (`fix(deps)`, see the docker
 # entry in dependabot.yml), dependabot-auto-merge.yml merges it, and
-# release-please opens or updates the release PR. This workflow merges that
-# release PR — but only if every commit since the last release was authored
-# by Dependabot. As soon as a human change is part of the release, the release
-# PR waits for a human merge again, and an auto-merge enabled earlier is
-# switched off.
+# release-please opens or updates the release PR. A Go CVE fix arrives the same
+# way as a PR the release app opens from vuln-scan.yml (autofix job). This
+# workflow merges the release PR — but only if every commit since the last
+# release was authored by Dependabot or by the release app's bot user. As soon
+# as a human change is part of the release, the release PR waits for a human
+# merge again, and an auto-merge enabled earlier is switched off.
 #
 # The merge runs with the release GitHub App's token: a GITHUB_TOKEN merge
 # would not trigger release-please (tag + GitHub Release) or docker-release
@@ -45,7 +46,7 @@ jobs:
           permission-contents: write      # merge the release PR
           permission-pull-requests: write # enable/disable auto-merge
 
-      - name: Merge if the release is Dependabot-only
+      - name: Merge if the release is automated-only
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           GH_REPO: ${{ github.repository }}
@@ -62,8 +63,9 @@ jobs:
             --jq '.commits[] | select((.parents | length) == 1) | .author.login // "unknown"' | sort -u)"
           echo "Commit authors since ${last_tag}:"
           echo "${authors:-<none>}"
-          if [[ -n "$authors" && "$authors" == "dependabot[bot]" ]]; then
-            echo "Dependabot-only release — enabling auto-merge."
+          # Every author must be one of the two bots (grep -v leaves nothing).
+          if [[ -n "$authors" ]] && ! grep -qvxF -e 'dependabot[bot]' -e 'release-please-fieldworksdiary[bot]' <<<"$authors"; then
+            echo "Automated-only release — enabling auto-merge."
             gh pr merge --auto --merge "$PR_URL"
           else
             echo "Release contains human changes — leaving the merge to a human."
