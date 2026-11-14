@@ -38,8 +38,12 @@ if [ ! -s "$TMP/fixes.tsv" ]; then
 fi
 
 # Highest fixed version per module (several findings may name different ones).
+# Semver puts a release above its prereleases (v1.2.3 > v1.2.3-rc.1), sort -V
+# does not; mapping the prerelease "-" to "~" (which sorts before anything)
+# fixes that.
 cut -f1 "$TMP/fixes.tsv" | sort -u | while read -r module; do
-    target=$(awk -F'\t' -v m="$module" '$1 == m { print $2 }' "$TMP/fixes.tsv" | sort -V | tail -1)
+    target=$(awk -F'\t' -v m="$module" '$1 == m { print $2 }' "$TMP/fixes.tsv" \
+        | sed 's/-/~/' | sort -V | tail -1 | sed 's/~/-/')
     ids=$(awk -F'\t' -v m="$module" '$1 == m { print $3 }' "$TMP/fixes.tsv" | sort -u | paste -sd, - | sed 's/,/, /g')
     if [ "$module" = "stdlib" ]; then
         current=$(go mod edit -json | jq -r '.Toolchain // ("go" + .Go)')

@@ -15,9 +15,10 @@
 # warning, and the master run stays absolute: that is the alarm, and
 # vuln-scan.yml opens the fix PR.
 #
-# Both trees are scanned with the same Go toolchain (the head's), so stdlib
-# findings only differ through reachability; a toolchain bump clears them
-# from both sides and passes.
+# Each tree is scanned with the Go toolchain its own go.mod declares, so a
+# stdlib finding follows the toolchain: a bump clears it from the head and
+# passes, a downgrade brings it back on the head only and fails. Scanning the
+# base with the head's toolchain would hide a downgrade as pre-existing.
 #
 # If the base scan fails, the gate falls back to absolute: an unknown
 # baseline must not let anything through.
@@ -33,7 +34,14 @@ BASE_DIR="${1:-}"
 # is symbol-level, i.e. reachable, when its innermost frame names a function.
 scan() {
     local dir=$1 out=$2
-    (cd "$dir" && govulncheck -format json ./...) > "$out"
+    (
+        cd "$dir"
+        # Overrides GOTOOLCHAIN=local (setup-go sets it); the go command
+        # downloads the declared toolchain if it is not the local one.
+        GOTOOLCHAIN=$(go mod edit -json | jq -r '.Toolchain // ("go" + .Go)')
+        export GOTOOLCHAIN
+        govulncheck -format json ./...
+    ) > "$out"
 }
 reachable() {
     jq -r 'select(.finding) | .finding | select(.trace[0].function != null) | .osv' "$1" | sort -u
