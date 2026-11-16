@@ -31,8 +31,17 @@ Fehlt eins davon, antworten die Tools „tracing is disabled" oder der Endpunkt
 ist nicht erreichbar. Das liest sich wie ein fehlendes Feature — es ist ein
 fehlendes Flag.
 
+**Erst prüfen, welche Instanz antwortet.** `.mcp.json` zeigt auf die lokale
+Instanz (`127.0.0.1:9091`). Ein gleichnamiger Eintrag `ortus` in
+`~/.claude.json` (Scope „local") hat Vorrang und kann auf einen entfernten
+Server zeigen — dann messen die nativen Tools unbemerkt dort. Erkennbar an
+`list_sources`: stimmen die Quellen nicht mit dem lokalen Datenverzeichnis
+überein, ist es die falsche Instanz. `claude mcp get ortus` zeigt die wirksame
+Adresse.
+
 **Ohne native MCP-Tools** (z. B. weil die Session vor `.mcp.json` startete):
-`make trace-summary` ruft dasselbe Tool über JSON-RPC auf. Kein Ersatz-Skript
+`make trace-summary` ruft dasselbe Tool über JSON-RPC auf (anderer Endpunkt als
+der Gazetteer: `TRACE_NAME=/features/`, Gruppierung: `TRACE_GROUP=ortus.layer.name`). Kein Ersatz-Skript
 schreiben — der Servercode ist derselbe, die Zahlen sind vergleichbar.
 
 ## Gates, die nicht umgangen werden
