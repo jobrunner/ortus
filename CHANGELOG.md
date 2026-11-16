@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0](https://github.com/jobrunner/ortus/compare/v2.1.3...v2.2.0) (2026-11-16)
+
+
+### Features
+
+* **api:** serve a feature's full outline as GeoJSON for map clients ([24cf573](https://github.com/jobrunner/ortus/commit/24cf57334d60422a2463a0f69a61cb847f4d0e4d))
+
+
+### Bug Fixes
+
+* **api:** assemble tiled features by orig_id only, never by matching attributes ([4322444](https://github.com/jobrunner/ortus/commit/4322444a810465ea1320b5287d8d50bc8048a52e))
+* **api:** expect generated columns in the feature outline row ([752a63f](https://github.com/jobrunner/ortus/commit/752a63f8141ed180edd3bdf8275196a88f5bca64))
+* **api:** match fragments case-sensitively and accept any integer feature id ([9140a7b](https://github.com/jobrunner/ortus/commit/9140a7b02b44c7997cc442b6c39a8c91d53c5122))
+* **mcp:** name the query_point fields get_feature_geometry is fed from ([d9c182b](https://github.com/jobrunner/ortus/commit/d9c182b7edf09d91b35c35138c66466aebae3ed2))
+
 ## [2.1.3](https://github.com/jobrunner/ortus/compare/v2.1.2...v2.1.3) (2026-11-14)
 
 
