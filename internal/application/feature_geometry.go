@@ -76,17 +76,10 @@ func (s *QueryService) FeatureGeometry(ctx context.Context, ref domain.FeatureRe
 }
 
 // featureLayer resolves and validates what a feature reference points at: a
-// ready vector source, one of its polygon layers, a positive id and a target
-// SRID the server can project to.
+// ready vector source, one of its polygon layers and a target SRID the server
+// can project to. The id is not judged here: an integer primary key may hold any
+// signed 64-bit value, so whether a feature exists is for the lookup to say.
 func (s *QueryService) featureLayer(ctx context.Context, ref domain.FeatureRef, targetSRID int) (*domain.Source, *domain.Layer, error) {
-	if ref.ID <= 0 {
-		return nil, nil, &domain.ValidationError{
-			Field:      "feature_id",
-			Value:      ref.ID,
-			Constraint: "positive integer",
-			Message:    "feature id must be a positive integer",
-		}
-	}
 	if err := s.checkSRID(targetSRID); err != nil {
 		return nil, nil, err
 	}

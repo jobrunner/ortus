@@ -125,7 +125,9 @@ func quoteIdent(name string) string {
 // primary key.
 //
 // IS (not =) compares the attributes so that NULL matches NULL, as the Go-side
-// dedup key does. The comparison stays inside SQL on purpose: round-tripping the
+// dedup key does — and with an explicit binary collation for the same reason: a
+// column declared COLLATE NOCASE would otherwise treat "Moor" and "moor" as one
+// feature here while a point query reports them as two. The comparison stays inside SQL on purpose: round-tripping the
 // values through Go would re-encode them (go-sqlite3 parses DATE/DATETIME columns
 // into time.Time) and no longer match the stored bytes.
 func buildFeatureQuery(layer *domain.Layer, columns []string, idColumn string) string {
@@ -138,7 +140,7 @@ func buildFeatureQuery(layer *domain.Layer, columns []string, idColumn string) s
 		case origIDColumn:
 			hasOrigID = true
 		}
-		sameAttrs = append(sameAttrs, fmt.Sprintf("t.%[1]s IS a.%[1]s", quoteIdent(c)))
+		sameAttrs = append(sameAttrs, fmt.Sprintf("t.%[1]s IS a.%[1]s COLLATE BINARY", quoteIdent(c)))
 	}
 
 	fidCol := quoteIdent(idColumn)

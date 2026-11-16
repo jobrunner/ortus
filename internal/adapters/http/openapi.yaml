@@ -598,7 +598,6 @@ paths:
           schema:
             type: integer
             format: int64
-            minimum: 1
           example: 42
         - name: srid
           in: query
@@ -639,7 +638,7 @@ paths:
                   url: https://creativecommons.org/licenses/by/4.0/
                   attribution: © Beispiel-Datenanbieter
         '400':
-          description: Ungültige Feature-ID oder unbekanntes bzw. ungültiges `srid`
+          description: Feature-ID ist keine Ganzzahl, oder unbekanntes bzw. ungültiges `srid`
           content:
             application/json:
               schema:

@@ -40,8 +40,8 @@ func (s *Server) handleGetFeature(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 
 	fid, err := strconv.ParseInt(vars["featureId"], 10, 64)
-	if err != nil || fid <= 0 {
-		s.writeError(w, http.StatusBadRequest, "Invalid feature id: must be a positive integer")
+	if err != nil {
+		s.writeError(w, http.StatusBadRequest, "Invalid feature id: must be an integer")
 		return
 	}
 	srid := domain.SRIDWGS84

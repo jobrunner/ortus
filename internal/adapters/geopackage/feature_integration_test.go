@@ -24,7 +24,9 @@ import (
 //
 // "keyed" has an integer primary key that is not called fid (as a package
 // exported from a scratch SpatiaLite table has), "nokey" has no primary key at
-// all and so nothing to address a feature by.
+// all and so nothing to address a feature by. "nocase" holds two adjoining
+// features whose names differ only in case, in a COLLATE NOCASE column, keyed 0
+// and -5.
 func buildParksGPKG(t *testing.T, path string) {
 	t.Helper()
 
@@ -59,12 +61,15 @@ func buildParksGPKG(t *testing.T, path string) {
 		{`CREATE TABLE parks (fid INTEGER PRIMARY KEY AUTOINCREMENT, orig_id INTEGER, tile INTEGER, name TEXT, geom BLOB)`, nil},
 		{`CREATE TABLE keyed ("rowid" INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, geom BLOB)`, nil},
 		{`CREATE TABLE nokey (name TEXT, geom BLOB)`, nil},
+		{`CREATE TABLE nocase (fid INTEGER PRIMARY KEY, name TEXT COLLATE NOCASE, geom BLOB)`, nil},
 		{`INSERT INTO gpkg_contents VALUES ('parks','features','parks','tiled parks',0,0,6,2,4326)`, nil},
 		{`INSERT INTO gpkg_contents VALUES ('keyed','features','keyed','key not called fid',0,0,2,1,4326)`, nil},
 		{`INSERT INTO gpkg_contents VALUES ('nokey','features','nokey','no primary key',0,0,1,1,4326)`, nil},
+		{`INSERT INTO gpkg_contents VALUES ('nocase','features','nocase','case-insensitive column',0,0,2,1,4326)`, nil},
 		{`INSERT INTO gpkg_geometry_columns VALUES ('parks','geom','MULTIPOLYGON',4326,0,0)`, nil},
 		{`INSERT INTO gpkg_geometry_columns VALUES ('keyed','geom','POLYGON',4326,0,0)`, nil},
 		{`INSERT INTO gpkg_geometry_columns VALUES ('nokey','geom','POLYGON',4326,0,0)`, nil},
+		{`INSERT INTO gpkg_geometry_columns VALUES ('nocase','geom','POLYGON',4326,0,0)`, nil},
 		{`INSERT INTO parks (orig_id, tile, name, geom) VALUES (7, 1, 'moor', ` + geomExpr + `)`,
 			[]any{"POLYGON((0 0, 1 0, 1 2, 0 2, 0 0))"}},
 		{`INSERT INTO parks (orig_id, tile, name, geom) VALUES (7, 2, 'moor', ` + geomExpr + `)`,
@@ -74,6 +79,11 @@ func buildParksGPKG(t *testing.T, path string) {
 		{`INSERT INTO keyed (name, geom) VALUES ('strip', ` + geomExpr + `)`,
 			[]any{"POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))"}},
 		{`INSERT INTO keyed (name, geom) VALUES ('strip', ` + geomExpr + `)`,
+			[]any{"POLYGON((1 0, 2 0, 2 1, 1 1, 1 0))"}},
+		// Keys 0 and -5: SQLite accepts any signed 64-bit integer as a key.
+		{`INSERT INTO nocase (fid, name, geom) VALUES (0, 'Moor', ` + geomExpr + `)`,
+			[]any{"POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))"}},
+		{`INSERT INTO nocase (fid, name, geom) VALUES (-5, 'moor', ` + geomExpr + `)`,
 			[]any{"POLYGON((1 0, 2 0, 2 1, 1 1, 1 0))"}},
 		{`INSERT INTO nokey (name, geom) VALUES ('x', ` + geomExpr + `)`,
 			[]any{"POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))"}},
@@ -147,6 +157,10 @@ func TestIntegration_ReadFeature(t *testing.T) {
 		{"null orig_id falls back to attributes", parks, "parks", "parks", 3, "solo", 1, 1},
 		// The key column is called rowid; the fragments share their attributes.
 		{"key column not called fid", parks, "parks", "keyed", 2, "strip", 2, 1},
+		// "Moor" and "moor" are two features, whatever the column's collation —
+		// and zero and negative keys are as addressable as any other.
+		{"case differs in a NOCASE column", parks, "parks", "nocase", 0, "Moor", 1, 1},
+		{"negative key", parks, "parks", "nocase", -5, "moor", 1, 1},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -344,7 +358,7 @@ func TestIntegration_QueryReturnsPrimaryKeyAsID(t *testing.T) {
 // if there is one, is the id.
 func TestIntegration_OpenReadsFeatureIDColumn(t *testing.T) {
 	parks := newParksRepo(t)
-	want := map[string]string{"parks": "fid", "keyed": "rowid", "nokey": ""}
+	want := map[string]string{"parks": "fid", "keyed": "rowid", "nokey": "", "nocase": "fid"}
 
 	layers, err := parks.GetLayers(context.Background(), "parks")
 	if err != nil {

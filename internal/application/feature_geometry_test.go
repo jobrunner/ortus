@@ -167,8 +167,6 @@ func TestFeatureGeometryErrors(t *testing.T) {
 			func(err error) bool { return errors.Is(err, domain.ErrLayerNotFound) }},
 		{"point layer", domain.FeatureRef{SourceID: "parks", Layer: "huts", ID: 1}, nil, nil,
 			func(err error) bool { return errors.Is(err, domain.ErrUnsupported) }},
-		{"non-positive id", domain.FeatureRef{SourceID: "parks", Layer: "areas", ID: 0}, nil, nil,
-			func(err error) bool { return errors.As(err, &validation) }},
 		{"unknown srid", domain.FeatureRef{SourceID: "parks", Layer: "areas", ID: 1, SRID: 999999}, nil, nil,
 			func(err error) bool { return errors.As(err, &validation) }},
 		{"unknown feature", domain.FeatureRef{SourceID: "parks", Layer: "areas", ID: 1}, domain.ErrFeatureNotFound, nil,

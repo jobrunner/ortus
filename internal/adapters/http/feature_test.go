@@ -121,7 +121,7 @@ func TestGetFeatureErrors(t *testing.T) {
 		want int
 	}{
 		{"non-numeric id", "/api/v1/sources/ffh/layers/areas/features/abc", nil, http.StatusBadRequest},
-		{"zero id", "/api/v1/sources/ffh/layers/areas/features/0", nil, http.StatusBadRequest},
+		{"id out of range", "/api/v1/sources/ffh/layers/areas/features/9223372036854775808", nil, http.StatusBadRequest},
 		{"non-numeric srid", "/api/v1/sources/ffh/layers/areas/features/1?srid=wgs84", nil, http.StatusBadRequest},
 		{"negative srid", "/api/v1/sources/ffh/layers/areas/features/1?srid=-1", nil, http.StatusBadRequest},
 		{"unknown srid", "/api/v1/sources/ffh/layers/areas/features/1?srid=999999",
@@ -151,6 +151,21 @@ func TestGetFeatureErrors(t *testing.T) {
 				t.Errorf("error body has no message: %s", rec.Body)
 			}
 		})
+	}
+}
+
+// An integer primary key may be zero or negative; whether such a feature exists
+// is the lookup's answer, not the handler's.
+func TestGetFeatureAcceptsAnySignedID(t *testing.T) {
+	for _, id := range []int64{0, -5} {
+		svc := &featureQueryService{result: sampleFeatureGeometry()}
+		srv := newSpyServer(t, &svc.spyQueryService, nil)
+		srv.queryService = svc
+
+		rec, _ := doGET(t, srv, fmt.Sprintf("/api/v1/sources/ffh/layers/areas/features/%d", id))
+		if rec.Code != http.StatusOK || svc.got.ID != id {
+			t.Errorf("id %d: status = %d, asked for %d", id, rec.Code, svc.got.ID)
+		}
 	}
 }
 

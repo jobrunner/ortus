@@ -554,7 +554,7 @@ simplified, so a large area can be several megabytes; the request is bound by
 
 | Status | Meaning |
 |---|---|
-| 400 | `featureId` is not a positive integer, or `srid` is not a known EPSG code |
+| 400 | `featureId` is not an integer, or `srid` is not a known EPSG code |
 | 404 | source, layer or feature not found |
 | 422 | raster source, non-polygon layer, or layer without an integer primary key |
 | 500 | reprojection or query failed |
