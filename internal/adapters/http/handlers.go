@@ -318,6 +318,7 @@ func (s *Server) formatQueryResponse(resp *domain.QueryResponse) map[string]inte
 			"feature_count": r.FeatureCount(),
 			"query_time_ms": r.QueryTime.Milliseconds(),
 		}
+		setKind(results[i], r.Kind)
 
 		if !r.License.IsEmpty() {
 			results[i]["license"] = map[string]interface{}{
@@ -353,6 +354,7 @@ func (s *Server) formatSource(pkg *domain.Source) map[string]interface{} {
 		"loaded_at":    pkg.LoadedAt,
 		"last_queried": pkg.LastQueried,
 	}
+	setKind(out, pkg.Kind)
 	if !pkg.License.IsEmpty() {
 		out["license"] = map[string]interface{}{
 			"name":        pkg.License.Name,

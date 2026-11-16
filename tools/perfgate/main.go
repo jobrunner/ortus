@@ -81,7 +81,8 @@ func main() {
 		timeSlack  = flag.Float64("time-slack", 3.0, "multiplier applied to committed duration ceilings")
 		summarize  = flag.Bool("summarize", false, "only read and print the current span summary; drive no requests and check no budgets")
 		sinceMin   = flag.Float64("since-min", 15, "with -summarize: how many minutes back to aggregate")
-		groupBy    = flag.String("group-by", "", "override the baseline's group_by attribute (analysis aid, e.g. spatial.chain.from_fid)")
+		groupBy    = flag.String("group-by", "", "with -summarize: override the baseline's group_by attribute (e.g. spatial.chain.from_fid)")
+		nameFilter = flag.String("name-contains", "", "with -summarize: aggregate traces whose root span name contains this instead of the baseline's endpoint (e.g. /features/)")
 	)
 	flag.Parse()
 
@@ -89,13 +90,8 @@ func main() {
 	if err != nil {
 		fatal("baseline: %v", err)
 	}
-	// An override only makes sense while analyzing: a gate run must use the
-	// grouping its budgets were written against, or the budgets would not match.
-	if *groupBy != "" {
-		if !*summarize {
-			fatal("-group-by only applies with -summarize; a gate run must use the baseline's grouping")
-		}
-		bl.GroupBy = *groupBy
+	if err := applyOverrides(bl, *summarize, *groupBy, *nameFilter); err != nil {
+		fatal("%v", err)
 	}
 
 	if *summarize {
@@ -115,7 +111,7 @@ func runSummarize(bl *Baseline, mcpURL string, sinceMin float64) {
 	if err != nil {
 		fatal("reading spans over MCP: %v", err)
 	}
-	report(bl, summary, nil)
+	reportSummary(bl, summary)
 }
 
 // runGate drives the committed request set, reads the resulting spans back and
@@ -321,20 +317,7 @@ func check(bl *Baseline, s input.SpanSummary, countSlack, timeSlack float64) []v
 func report(bl *Baseline, s input.SpanSummary, violations []violation) {
 	fmt.Printf("perfgate: %d Traces, Request-p50 %.0f ms, p95 %.0f ms (Budget-p95 %.0f ms)\n",
 		s.Traces, s.RootP50MS, s.RootP95MS, bl.MaxRootP95MS)
-	// "Aufr./Trace" and the trace count are shown together on purpose: per_trace
-	// divides by the traces that reach the span, so without the count next to it
-	// the number reads as an average over all requests and misleads.
-	fmt.Printf("%-42s %11s %7s %9s %9s\n", "Span", "Aufr./Trace", "Traces", "p95 ms", "Summe ms")
-	for _, st := range s.Spans {
-		label := st.Name
-		if st.Group != "" {
-			label += " [" + st.Group + "]"
-		}
-		if len(label) > 42 {
-			label = label[:39] + "..."
-		}
-		fmt.Printf("%-42s %11.1f %7d %9.1f %9.1f\n", label, st.PerTrace, st.Traces, st.P95MS, st.TotalMS)
-	}
+	printSpans(s)
 	if len(violations) == 0 {
 		fmt.Println("\n✅ perfgate ok — alle Span-Budgets eingehalten.")
 		return

@@ -95,6 +95,7 @@ func (l *License) String() string {
 type QueryResult struct {
 	SourceID    string        // source identifier
 	SourceName  string        // source display name
+	Kind        SourceKind    // Backing source kind (vector or raster)
 	Features    []Feature     // Found features
 	License     License       // License information
 	Attribution string        // Attribution text

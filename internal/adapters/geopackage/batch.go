@@ -204,7 +204,7 @@ func scanBatchRows(rows *sql.Rows, layer *domain.Layer, out [][]domain.Feature, 
 		if idx < 0 || int(idx) >= len(out) {
 			continue // defensive: json_each key out of range shouldn't happen
 		}
-		out[idx] = append(out[idx], buildFeature(featCols, vals[1:], layer.Name, layer.GeometryColumn, wktLast))
+		out[idx] = append(out[idx], buildFeature(featCols, vals[1:], layer.Name, layer.GeometryColumn, layer.IDColumn, wktLast))
 	}
 	return rows.Err()
 }

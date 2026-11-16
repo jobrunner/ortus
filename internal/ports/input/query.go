@@ -24,6 +24,12 @@ type QueryService interface {
 	// source/layer for all points). sources (optional) restricts to those source
 	// ids; properties (optional) filters returned feature properties.
 	QueryBatch(ctx context.Context, coords []domain.Coordinate, sources []string, properties []string) ([]*domain.QueryResponse, error)
+
+	// FeatureGeometry returns the complete outline of one feature a point query
+	// found — as a GeoJSON MultiPolygon in ref.SRID (WGS84 when 0) — with its
+	// bounding box and the license of its package. Only polygon layers of vector
+	// sources are served; anything else is domain.ErrUnsupported.
+	FeatureGeometry(ctx context.Context, ref domain.FeatureRef) (*domain.FeatureGeometry, error)
 }
 
 // SourceRegistry defines the primary port for source management.

@@ -574,6 +574,10 @@ func (r *Repository) readLayers(ctx context.Context, db *sql.DB) ([]domain.Layer
 			}
 		}
 
+		// The key a feature is addressed by; without one, features of this
+		// layer simply have no redeemable id.
+		l.IDColumn = primaryKeyColumn(ctx, db, l.Name)
+
 		// Count features
 		countQuery := fmt.Sprintf("SELECT COUNT(*) FROM %s", l.Name) //#nosec G201 -- table name from trusted database source
 		var count int64
@@ -785,7 +789,7 @@ func (r *Repository) executePointQuery(ctx context.Context, db *sql.DB, layer *d
 
 	var features []domain.Feature
 	for rows.Next() {
-		feature, err := scanFeature(rows, columns, layer.Name, layer.GeometryColumn, true)
+		feature, err := scanFeature(rows, columns, layer.Name, layer.GeometryColumn, layer.IDColumn, true)
 		if err != nil {
 			span.RecordError(err)
 			span.SetStatus(output.StatusError, "scan failed")
@@ -823,9 +827,9 @@ func (r *Repository) executePointQuery(ctx context.Context, db *sql.DB, layer *d
 // fragments of a single feature; two distinct features that happen to share a
 // border are kept because their properties differ.
 //
-// The fid is excluded from the key because scanFeature routes the GeoPackage
-// feature-id column ("fid", the ogr convention) into Feature.ID rather than
-// Properties; geometry is excluded because each fragment carries a different
+// The fid is excluded from the key because scanFeature routes the layer's
+// feature-id column (its integer primary key, "fid" by ogr convention) into
+// Feature.ID rather than Properties; geometry is excluded because each fragment carries a different
 // piece. Since the SQL has no ORDER BY, the input row order is not guaranteed, so
 // the representative kept per key is chosen by betterRepresentative (smallest
 // non-zero fid, falling back to smallest geometry WKT when the layer has no fid),
@@ -900,7 +904,7 @@ func featurePropertyKey(f domain.Feature) string {
 }
 
 // scanFeature scans a row into a Feature.
-func scanFeature(rows *sql.Rows, columns []string, layerName, geomColumn string, wktLast bool) (domain.Feature, error) {
+func scanFeature(rows *sql.Rows, columns []string, layerName, geomColumn, idColumn string, wktLast bool) (domain.Feature, error) {
 	// Create scan destinations
 	values := make([]interface{}, len(columns))
 	valuePtrs := make([]interface{}, len(columns))
@@ -912,10 +916,16 @@ func scanFeature(rows *sql.Rows, columns []string, layerName, geomColumn string,
 		return domain.Feature{}, err
 	}
 
-	return buildFeature(columns, values, layerName, geomColumn, wktLast), nil
+	return buildFeature(columns, values, layerName, geomColumn, idColumn, wktLast), nil
 }
 
 // buildFeature maps a scanned row into a domain.Feature.
+//
+// idColumn is the column whose value becomes Feature.ID instead of an attribute:
+// the layer's integer primary key (domain.Layer.IDColumn), whatever its name — a
+// package exported from a scratch SpatiaLite table keys its rows "rowid", and
+// reporting that as an attribute left the feature without an id a client could
+// redeem. Empty falls back to the "fid" convention.
 //
 // wktLast says whether the query appended an AsText(geometry) column. It is an
 // explicit argument rather than a guess because the two cases are
@@ -927,7 +937,8 @@ func scanFeature(rows *sql.Rows, columns []string, layerName, geomColumn string,
 //
 // Split out from scanFeature so the batch query can scan a leading per-point
 // index column itself and reuse this mapping.
-func buildFeature(columns []string, values []interface{}, layerName, geomColumn string, wktLast bool) domain.Feature {
+func buildFeature(columns []string, values []interface{}, layerName, geomColumn, idColumn string, wktLast bool) domain.Feature {
+	idColumn = idColumnOrDefault(idColumn)
 	feature := domain.Feature{
 		LayerName:  layerName,
 		Properties: make(map[string]interface{}),
@@ -935,7 +946,7 @@ func buildFeature(columns []string, values []interface{}, layerName, geomColumn 
 
 	for i, col := range columns {
 		switch col {
-		case "fid":
+		case idColumn:
 			if v, ok := values[i].(int64); ok {
 				feature.ID = v
 			}

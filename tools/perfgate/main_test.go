@@ -264,3 +264,69 @@ func captureStdout(t *testing.T, fn func()) string {
 	os.Stdout = orig
 	return <-done
 }
+
+// The baseline describes one endpoint; -name-contains lets a summary look at any
+// other one without a throwaway baseline file.
+func TestSummaryOverridesReplaceFilterAndGrouping(t *testing.T) {
+	bl := &Baseline{Endpoint: "/api/v1/gazetteer", GroupBy: "spatial.layer", MaxRootP95MS: 70}
+
+	if err := applyOverrides(bl, true, "ortus.layer.name", "features"); err != nil {
+		t.Fatalf("applyOverrides: %v", err)
+	}
+	if bl.Endpoint != "features" || bl.GroupBy != "ortus.layer.name" {
+		t.Errorf("filter = %q, group_by = %q", bl.Endpoint, bl.GroupBy)
+	}
+
+	// Empty overrides keep the baseline's own values.
+	bl = &Baseline{Endpoint: "/api/v1/gazetteer", GroupBy: "spatial.layer"}
+	if err := applyOverrides(bl, true, "", ""); err != nil {
+		t.Fatalf("applyOverrides: %v", err)
+	}
+	if bl.Endpoint != "/api/v1/gazetteer" || bl.GroupBy != "spatial.layer" {
+		t.Errorf("filter = %q, group_by = %q, want the baseline's", bl.Endpoint, bl.GroupBy)
+	}
+}
+
+// A gate run must measure exactly what its budgets were written against.
+func TestOverridesAreRejectedOutsideSummarize(t *testing.T) {
+	for name, args := range map[string][2]string{
+		"group-by":      {"ortus.layer.name", ""},
+		"name-contains": {"", "features"},
+	} {
+		bl := &Baseline{Endpoint: "/api/v1/gazetteer", GroupBy: "spatial.layer"}
+		if err := applyOverrides(bl, false, args[0], args[1]); err == nil {
+			t.Errorf("%s: want an error for a gate run", name)
+		}
+		if bl.Endpoint != "/api/v1/gazetteer" || bl.GroupBy != "spatial.layer" {
+			t.Errorf("%s: baseline was changed: %+v", name, bl)
+		}
+	}
+}
+
+// A summary checks nothing, so it must not claim budgets were met — least of
+// all the gazetteer's budgets for some other endpoint.
+func TestSummaryReportClaimsNoBudgets(t *testing.T) {
+	out := captureStdout(t, func() {
+		reportSummary(&Baseline{Endpoint: "features", MaxRootP95MS: 70}, summary(2300, stat("q", "regions", 1, 2000)))
+	})
+	if !strings.Contains(out, "q [regions]") || !strings.Contains(out, "Traces") {
+		t.Errorf("summary must list the spans with their trace count:\n%s", out)
+	}
+	if !strings.Contains(out, `"features"`) {
+		t.Errorf("summary must name the filter it used:\n%s", out)
+	}
+	if strings.Contains(out, "Budget") || strings.Contains(out, "perfgate ok") {
+		t.Errorf("summary must not talk about budgets:\n%s", out)
+	}
+}
+
+// No traces usually means the filter matched nothing or the wrong instance
+// answered; say so instead of printing an empty table.
+func TestSummaryReportExplainsAnEmptyResult(t *testing.T) {
+	out := captureStdout(t, func() {
+		reportSummary(&Baseline{Endpoint: "features"}, input.SpanSummary{})
+	})
+	if !strings.Contains(out, "Keine Traces") {
+		t.Errorf("an empty summary must be explained:\n%s", out)
+	}
+}

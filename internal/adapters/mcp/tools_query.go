@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -17,6 +18,7 @@ func registerQueryTools(srv *mcp.Server, deps Deps, logger *slog.Logger) {
 	addListSources(srv, deps, logger)
 	addGetSource(srv, deps, logger)
 	addGetSourceLayers(srv, deps, logger)
+	addGetFeatureGeometry(srv, deps, logger)
 	if deps.Gazetteer != nil {
 		addGazetteer(srv, deps, logger)
 	}
@@ -213,5 +215,70 @@ func addGetSourceLayers(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 			Layers:   out,
 			Count:    len(out),
 		}, nil
+	})
+}
+
+// ---- get_feature_geometry -------------------------------------------------
+
+type getFeatureGeometryIn struct {
+	SourceID  string `json:"source_id" jsonschema:"id of the vector source ('SourceID' of an entry in a query_point result's 'Results')"`
+	Layer     string `json:"layer" jsonschema:"layer name ('LayerName' of a feature in a query_point result)"`
+	FeatureID int64  `json:"feature_id" jsonschema:"feature id ('ID' of a feature in a query_point result)"`
+	SRID      int    `json:"srid,omitempty" jsonschema:"EPSG code for geometry and bbox; defaults to 4326 (WGS84) when omitted"`
+}
+
+// featureGeometryOut is the GeoJSON Feature GET
+// /api/v1/sources/{id}/layers/{layer}/features/{fid} returns.
+type featureGeometryOut struct {
+	Type       string         `json:"type"`
+	ID         int64          `json:"id"`
+	BBox       []float64      `json:"bbox" jsonschema:"[min_x, min_y, max_x, max_y] in the returned srid"`
+	Geometry   map[string]any `json:"geometry" jsonschema:"GeoJSON MultiPolygon in the returned srid"`
+	Properties map[string]any `json:"properties"`
+	SourceID   string         `json:"source_id"`
+	Layer      string         `json:"layer"`
+	SRID       int            `json:"srid"`
+	License    *licenseOut    `json:"license,omitempty"`
+}
+
+func addGetFeatureGeometry(srv *mcp.Server, deps Deps, _ *slog.Logger) {
+	mcp.AddTool(srv, &mcp.Tool{
+		Name: "get_feature_geometry",
+		Description: "Fetch the complete outline of one feature a point query found, as a GeoJSON " +
+			"Feature: MultiPolygon geometry, bounding box and the license of its package, " +
+			"reprojected to 'srid' (default 4326). A query_point result names the feature: " +
+			"Results[].SourceID, and per feature LayerName and ID. For sources tiled with ST_Subdivide all fragments of the " +
+			"feature are unioned. Polygon layers of vector sources only — raster sources and " +
+			"gazetteer features are not served. Large areas return large geometries. " +
+			"Equivalent to GET /api/v1/sources/{id}/layers/{layer}/features/{fid}.",
+	}, func(ctx toolCtx, _ *callRequest, in getFeatureGeometryIn) (*callResult, *featureGeometryOut, error) {
+		if strings.TrimSpace(in.SourceID) == "" || strings.TrimSpace(in.Layer) == "" {
+			return nil, nil, fmt.Errorf("source_id and layer are required")
+		}
+		fg, err := deps.QueryService.FeatureGeometry(ctx, domain.FeatureRef{
+			SourceID: in.SourceID, Layer: in.Layer, ID: in.FeatureID, SRID: in.SRID,
+		})
+		if err != nil {
+			return nil, nil, err
+		}
+		out := &featureGeometryOut{
+			Type:       "Feature",
+			ID:         fg.ID,
+			BBox:       []float64{fg.Extent.MinX, fg.Extent.MinY, fg.Extent.MaxX, fg.Extent.MaxY},
+			Properties: fg.Properties,
+			SourceID:   fg.SourceID,
+			Layer:      fg.Layer,
+			SRID:       fg.Extent.SRID,
+		}
+		if err := json.Unmarshal(fg.GeoJSON, &out.Geometry); err != nil {
+			return nil, nil, fmt.Errorf("decoding geometry: %w", err)
+		}
+		if out.Properties == nil {
+			out.Properties = map[string]any{}
+		}
+		if !fg.License.IsEmpty() {
+			out.License = &licenseOut{Name: fg.License.Name, URL: fg.License.URL, Attribution: fg.License.Attribution}
+		}
+		return nil, out, nil
 	})
 }

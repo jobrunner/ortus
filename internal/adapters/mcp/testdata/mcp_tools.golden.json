@@ -1,5 +1,35 @@
 [
   {
+    "name": "get_feature_geometry",
+    "input_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "feature_id": {
+          "description": "feature id ('ID' of a feature in a query_point result)",
+          "type": "integer"
+        },
+        "layer": {
+          "description": "layer name ('LayerName' of a feature in a query_point result)",
+          "type": "string"
+        },
+        "source_id": {
+          "description": "id of the vector source ('SourceID' of an entry in a query_point result's 'Results')",
+          "type": "string"
+        },
+        "srid": {
+          "description": "EPSG code for geometry and bbox; defaults to 4326 (WGS84) when omitted",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "source_id",
+        "layer",
+        "feature_id"
+      ],
+      "type": "object"
+    }
+  },
+  {
     "name": "get_source",
     "input_schema": {
       "additionalProperties": false,

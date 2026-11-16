@@ -74,6 +74,17 @@ paths:
         Fragments (nach Deduplizierung) und entspricht nicht zwingend der
         Feature-ID einer ungekachelten Quelle — Kacheln bleibt eine optionale
         Packaging-Entscheidung.
+
+        Die `id` eines Features ist der Wert des ganzzahligen Primärschlüssels
+        seines Layers, unabhängig vom Spaltennamen (`fid`, `rowid`, …); die
+        Schlüsselspalte erscheint nicht unter `properties`. Hat ein Layer keinen
+        solchen Schlüssel und keine Spalte `fid`, ist die `id` 0.
+
+        Das vollständige Gesamtpolygon eines Treffers liefert
+        `GET /sources/{sourceId}/layers/{layer}/features/{featureId}`: Dort sind
+        `source_id`, `layer` und `id` aus dieser Antwort einlösbar, auch wenn die
+        `id` nur ein Fragment bezeichnet. `kind` am Ergebnis sagt, ob die Quelle
+        dafür in Frage kommt (`vector`).
       operationId: queryAllSources
       parameters:
         - $ref: '#/components/parameters/LonParam'
@@ -525,6 +536,139 @@ paths:
                 $ref: '#/components/schemas/Error'
         '500':
           description: Interner Serverfehler
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /sources/{sourceId}/layers/{layer}/features/{featureId}:
+    get:
+      tags:
+        - Sources
+      summary: Geometrie eines Features abrufen
+      description: |
+        Liefert ein einzelnes Feature einer Vektor-Datenquelle als GeoJSON-Feature:
+        die vollständige Umrissgeometrie (immer `MultiPolygon`), die Bounding Box
+        und die Lizenz des Pakets — alles, was ein Client braucht, um ein über
+        `/query` gefundenes Feature (z. B. ein Schutzgebiet) auf einer Karte zu
+        zeichnen.
+
+        `sourceId`, `layer` und `featureId` sind die Werte `source_id`, `layer`
+        und `id` aus der Antwort von `/query` bzw. `/query/batch`.
+
+        Die `id` ist der Wert des ganzzahligen Primärschlüssels des Layers, egal
+        wie die Spalte heißt (üblich ist `fid`; Pakete, die aus einer
+        SpatiaLite-Tabelle exportiert wurden, nennen sie `rowid`).
+
+        **Gekachelte Quellen.** Bei per ST_Subdivide gekachelten Paketen bezeichnet
+        die `id` nur ein Fragment. Der Endpunkt sucht alle Fragmente desselben
+        Features und vereinigt sie (ST_Union), sodass die Kachelnähte nicht als
+        Linien erscheinen. Zusammengehörig sind die Zeilen mit derselben
+        `orig_id`; jedes Fragment eines Features liefert dieselbe Geometrie. Die
+        Vereinigung wird pro Anfrage berechnet; es wird nichts gespeichert.
+
+        Ein Layer ohne Spalte `orig_id` gilt als ungekachelt: Die adressierte
+        Zeile ist das Feature. Zeilen werden nie allein wegen gleicher Attribute
+        zusammengefasst. Ein gekacheltes Paket muss deshalb `orig_id` (mit Index)
+        mitführen — das stellt der Paketbau sicher (Skill `build-ortus-package`,
+        `check-package.py`), nicht der Dienst.
+
+        **Projektion.** Geometrie und `bbox` werden in das mit `srid` gewählte
+        Koordinatensystem umprojiziert (Standard EPSG:4326). Die `bbox` wird aus
+        der umprojizierten Geometrie berechnet. Bei einem anderen SRID als 4326
+        weicht die Antwort bewusst von RFC 7946 ab; das Feld `srid` weist das
+        Koordinatensystem aus.
+
+        **Einschränkungen.** Nur Polygon-Layer von Vektor-Datenquellen. Raster-
+        Datenquellen (`kind: raster`) sowie Punkt- und Linien-Layer antworten mit
+        422, ebenso Layer ohne ganzzahligen Primärschlüssel. Gazetteer-Features sind über diesen
+        Endpunkt nicht abrufbar. Die Geometrie wird nicht vereinfacht; für große
+        Gebiete kann die Antwort mehrere Megabyte groß sein.
+      operationId: getFeatureGeometry
+      parameters:
+        - $ref: '#/components/parameters/SourceIdParam'
+        - name: layer
+          in: path
+          required: true
+          description: Name des Layers (`layer` aus der Query-Antwort)
+          schema:
+            type: string
+          example: districts
+        - name: featureId
+          in: path
+          required: true
+          description: ID des Features (`id` aus der Query-Antwort)
+          schema:
+            type: integer
+            format: int64
+          example: 42
+        - name: srid
+          in: query
+          required: false
+          description: >-
+            EPSG-Code des Koordinatensystems für Geometrie und Bounding Box.
+          schema:
+            type: integer
+            minimum: 1
+            default: 4326
+          example: 4326
+      responses:
+        '200':
+          description: Das Feature als GeoJSON-Feature
+          content:
+            application/geo+json:
+              schema:
+                $ref: '#/components/schemas/FeatureGeometry'
+              example:
+                type: Feature
+                id: 42
+                bbox: [13.088, 52.338, 13.761, 52.675]
+                geometry:
+                  type: MultiPolygon
+                  coordinates:
+                    - - - [13.088, 52.338]
+                        - [13.761, 52.338]
+                        - [13.761, 52.675]
+                        - [13.088, 52.675]
+                        - [13.088, 52.338]
+                properties:
+                  name: Mitte
+                source_id: districts
+                layer: districts
+                srid: 4326
+                license:
+                  name: CC BY 4.0
+                  url: https://creativecommons.org/licenses/by/4.0/
+                  attribution: © Beispiel-Datenanbieter
+        '400':
+          description: Feature-ID ist keine Ganzzahl, oder unbekanntes bzw. ungültiges `srid`
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Datenquelle, Layer oder Feature nicht gefunden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: >-
+            Die Datenquelle oder der Layer hat keine abrufbaren Polygon-Features
+            (Raster-Datenquelle, Punkt- oder Linien-Layer, Layer ohne
+            ganzzahligen Primärschlüssel)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Interner Serverfehler, z. B. fehlgeschlagene Umprojektion
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '504':
+          description: Zeitüberschreitung (`query.timeout`)
           content:
             application/json:
               schema:
@@ -1282,6 +1426,87 @@ components:
           type: string
           description: Attributionstext
 
+    SourceKind:
+      type: string
+      enum: [vector, raster]
+      description: >-
+        Art der Datenquelle: `vector` (GeoPackage) oder `raster` (GeoTIFF-Bundle).
+        Nur Vektor-Datenquellen haben Features, deren Geometrie über
+        `/sources/{sourceId}/layers/{layer}/features/{featureId}` abrufbar ist.
+
+    FeatureGeometry:
+      type: object
+      description: >-
+        GeoJSON-Feature (RFC 7946) mit der vollständigen Umrissgeometrie eines
+        Features. `source_id`, `layer`, `srid` und `license` sind zusätzliche
+        Member ("foreign members").
+      properties:
+        type:
+          type: string
+          enum: [Feature]
+        id:
+          type: integer
+          format: int64
+          description: Die angefragte Feature-ID
+        bbox:
+          type: array
+          description: Bounding Box der Geometrie als [min_x, min_y, max_x, max_y] im Koordinatensystem `srid`
+          items:
+            type: number
+            format: double
+          minItems: 4
+          maxItems: 4
+        geometry:
+          type: object
+          description: GeoJSON-Geometrie, immer ein MultiPolygon, im Koordinatensystem `srid`
+          properties:
+            type:
+              type: string
+              enum: [MultiPolygon]
+            coordinates:
+              type: array
+              description: Polygone → Ringe → Positionen [x, y]
+              items:
+                type: array
+                items:
+                  type: array
+                  items:
+                    type: array
+                    items:
+                      type: number
+                      format: double
+          required:
+            - type
+            - coordinates
+        properties:
+          type: object
+          additionalProperties: true
+          description: >-
+            Attribute des Features (bei gekachelten Quellen die des adressierten
+            Fragments); leeres Objekt, wenn es keine gibt
+        source_id:
+          type: string
+          description: ID der Datenquelle
+        layer:
+          type: string
+          description: Name des Layers
+        srid:
+          type: integer
+          description: EPSG-Code von `geometry` und `bbox`
+        license:
+          allOf:
+            - $ref: '#/components/schemas/License'
+          description: Lizenz/Attribution des Pakets; fehlt, wenn das Paket keine mitführt
+      required:
+        - type
+        - id
+        - bbox
+        - geometry
+        - properties
+        - source_id
+        - layer
+        - srid
+
     QueryResult:
       type: object
       description: Abfrageergebnis für eine einzelne Datenquelle
@@ -1292,6 +1517,8 @@ components:
         source_name:
           type: string
           description: Name der Datenquelle
+        kind:
+          $ref: '#/components/schemas/SourceKind'
         features:
           type: array
           items:
@@ -1494,6 +1721,8 @@ components:
         name:
           type: string
           description: Anzeigename
+        kind:
+          $ref: '#/components/schemas/SourceKind'
         path:
           type: string
           description: Dateipfad

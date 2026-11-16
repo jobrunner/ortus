@@ -340,7 +340,7 @@ func (g *GazetteerIndex) runFeatureQuery(ctx context.Context, layer, geom string
 	}
 	var features []domain.Feature
 	for rows.Next() {
-		f, err := scanFeature(rows, columns, layer, geom, wktLast)
+		f, err := scanFeature(rows, columns, layer, geom, defaultFeatureIDColumn, wktLast)
 		if err != nil {
 			return nil, err
 		}

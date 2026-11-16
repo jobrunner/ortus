@@ -106,3 +106,31 @@ const (
 	// sampled per pixel rather than queried by geometry containment.
 	GeomRaster GeometryType = "RASTER"
 )
+
+// FeatureRef addresses one feature of a vector source: the source_id, layer and
+// id a point query returned. SRID is the projection the geometry is wanted in
+// (0 means WGS84).
+type FeatureRef struct {
+	SourceID string
+	Layer    string
+	ID       int64
+	SRID     int
+}
+
+// FeatureGeometry is the complete outline of one feature, ready for a map
+// client: the geometry as a GeoJSON geometry object (always a MultiPolygon), its
+// bounding box, the feature's attributes and the license of the package it comes
+// from. Geometry and Extent are in Extent.SRID.
+//
+// For a package tiled with ST_Subdivide the geometry is the union of all
+// fragments of the feature (the rows sharing its orig_id), not just the fragment
+// the id addresses.
+type FeatureGeometry struct {
+	SourceID   string
+	Layer      string
+	ID         int64
+	Properties map[string]interface{}
+	GeoJSON    []byte
+	Extent     Extent
+	License    License
+}

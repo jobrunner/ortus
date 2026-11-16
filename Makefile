@@ -269,8 +269,15 @@ PERF_MCP  ?= http://127.0.0.1:9091/mcp
 perf-gate: ## Performance-Gate gegen perf/baseline.json (PERF_BASE=… PERF_MCP=…)
 	@$(GO) run ./tools/perfgate -base $(PERF_BASE) -mcp $(PERF_MCP) -baseline perf/baseline.json
 
-trace-summary: ## Span-Zusammenfassung einer laufenden Instanz über MCP lesen (Analyse, kein Gate)
-	@$(GO) run ./tools/perfgate -mcp $(PERF_MCP) -baseline perf/baseline.json -summarize
+# TRACE_NAME wählt die Traces über einen Teil des Root-Span-Namens (Standard: der
+# Endpunkt der Baseline), TRACE_GROUP das Attribut, nach dem Spans geteilt werden.
+#   make trace-summary TRACE_NAME=/features/ TRACE_GROUP=ortus.layer.name
+TRACE_NAME  ?=
+TRACE_GROUP ?=
+
+trace-summary: ## Span-Zusammenfassung einer laufenden Instanz über MCP lesen (TRACE_NAME=… TRACE_GROUP=…; Analyse, kein Gate)
+	@$(GO) run ./tools/perfgate -mcp $(PERF_MCP) -baseline perf/baseline.json -summarize \
+		$(if $(TRACE_NAME),-name-contains '$(TRACE_NAME)') $(if $(TRACE_GROUP),-group-by '$(TRACE_GROUP)')
 
 perf-gate-update: ## Performance-Baseline bewusst neu schreiben (Review erforderlich!)
 	@$(GO) run ./tools/perfgate -base $(PERF_BASE) -mcp $(PERF_MCP) -baseline perf/baseline.json -update

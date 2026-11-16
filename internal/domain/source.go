@@ -64,6 +64,7 @@ type Layer struct {
 	Name           string  // Layer name from gpkg_contents.table_name
 	Description    string  // Layer description
 	GeometryColumn string  // Name of the geometry column
+	IDColumn       string  // Integer primary key column a feature is addressed by ("" if none)
 	GeometryType   string  // Geometry type (POINT, POLYGON, etc.)
 	SRID           int     // Spatial Reference ID
 	HasIndex       bool    // Has spatial index?
