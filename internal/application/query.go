@@ -27,12 +27,16 @@ type sourceQuerier interface {
 	// when the adapter supports it, else a per-point loop), one result slice per
 	// input coordinate in order.
 	QueryPoints(ctx context.Context, sourceID, layer string, coords []domain.Coordinate) ([][]domain.Feature, error)
+	// ReadFeature loads one feature by fid with its complete outline;
+	// domain.ErrUnsupported when the source's adapter has no features to address.
+	ReadFeature(ctx context.Context, sourceID, layer string, fid int64) (domain.Feature, error)
 }
 
 // QueryService handles point queries across registered sources.
 type QueryService struct {
 	registry      sourceQuerier
 	transformer   output.CoordinateTransformer
+	projector     output.GeometryProjector // nil when the transformer can't project geometries
 	tracer        output.Tracer
 	queryCount    metric.Int64Counter
 	queryDuration metric.Float64Histogram
@@ -78,9 +82,14 @@ func NewQueryService(
 		metric.WithUnit("s"),
 	)
 
+	// Projecting whole geometries is an extra capability of the transformer
+	// (the SpatiaLite one has it); without it FeatureGeometry is unsupported.
+	projector, _ := transformer.(output.GeometryProjector)
+
 	return &QueryService{
 		registry:      registry,
 		transformer:   transformer,
+		projector:     projector,
 		tracer:        tracer,
 		queryCount:    queryCount,
 		queryDuration: queryDuration,
@@ -230,6 +239,7 @@ func (s *QueryService) QueryPointInSource(ctx context.Context, sourceID string, 
 	result := &domain.QueryResult{
 		SourceID:   pkg.ID,
 		SourceName: pkg.Name,
+		Kind:       pkg.Kind,
 		License:    pkg.License,
 	}
 

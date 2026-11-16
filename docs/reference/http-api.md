@@ -62,6 +62,7 @@ curl "http://localhost:8080/api/v1/query?mgrs=32U+NA+01234+56789"
     {
       "source_id": "districts",
       "source_name": "districts.gpkg",
+      "kind": "vector",
       "features": [
         { "id": 42, "layer": "districts", "properties": { "name": "Mitte", "population": 384172 } }
       ],
@@ -75,7 +76,15 @@ curl "http://localhost:8080/api/v1/query?mgrs=32U+NA+01234+56789"
 ```
 
 Each result carries its source's `license` (name/url/attribution) when the
-GeoPackage ships that metadata.
+GeoPackage ships that metadata, and its `kind` (`vector` or `raster`).
+
+A feature's `id` is the value of its layer's integer primary key, whatever the
+column is called (`fid`, `rowid`, …); the key column is not listed under
+`properties`. A layer with neither such a key nor a `fid` column reports `id: 0`.
+
+To draw a hit on a map, redeem a vector result's `source_id` and a feature's
+`layer` and `id` at the [feature geometry endpoint](#feature-geometry) for the
+complete outline, bounding box and license.
 
 **`wgs84` block.** Alongside the echoed input `coordinate`, a query response carries
 `wgs84: { lon, lat }` — the query point in WGS84. For a 4326 query it equals the
@@ -433,18 +442,20 @@ aspect is unreliable — see
 GET /api/v1/sources                      # list all sources
 GET /api/v1/sources/{sourceId}           # source details
 GET /api/v1/sources/{sourceId}/layers    # layers of a source
+GET /api/v1/sources/{sourceId}/layers/{layer}/features/{featureId}   # outline of one feature
 ```
 
 `GET /api/v1/sources` returns `{ sources: [...], count }` — plus a `gazetteer`
 block when a gazetteer package is loaded — each source with
-`id`, `name`, `path`, `size`, `layer_count`, `indexed`, `ready`, `loaded_at`,
+`id`, `name`, `kind` (`vector` for a GeoPackage, `raster` for a GeoTIFF bundle),
+`path`, `size`, `layer_count`, `indexed`, `ready`, `loaded_at`,
 `last_queried`, and `license` (name/url/attribution) when the package carries
 one — omitted otherwise:
 
 ```json
 {
   "sources": [
-    { "id": "districts", "name": "districts.gpkg", "path": "districts.gpkg",
+    { "id": "districts", "name": "districts.gpkg", "kind": "vector", "path": "districts.gpkg",
       "size": 1048576, "layer_count": 1, "indexed": true, "ready": true,
       "loaded_at": "2026-07-06T12:00:00Z", "last_queried": "2026-07-06T12:05:00Z",
       "license": { "name": "CC-BY-4.0", "url": "https://creativecommons.org/licenses/by/4.0/",
@@ -476,6 +487,78 @@ wrapped). `GET /api/v1/sources/{sourceId}/layers` returns
 `{ source_id, layers: [...], count }`, each layer with `name`, `description`,
 `geometry_type`, `geometry_column`, `srid`, `has_index`, `feature_count`, and an
 optional `extent` (`min_x`/`min_y`/`max_x`/`max_y`).
+
+### Feature geometry
+
+```text
+GET /api/v1/sources/{sourceId}/layers/{layer}/features/{featureId}
+GET /api/v1/sources/{sourceId}/layers/{layer}/features/{featureId}?srid={srid}
+```
+
+Returns one feature as a GeoJSON Feature (`Content-Type: application/geo+json`):
+its complete outline, its bounding box and the license of its package — what a
+map client needs to draw a feature that a [query](#query-endpoints) found, such
+as the boundary of a protected area. `sourceId`, `layer` and `featureId` are the
+`source_id`, `layer` and `id` of a query result.
+
+The `id` is the value of the layer's integer primary key, whatever the column
+is called (usually `fid`; a package exported from a SpatiaLite table calls it
+`rowid`).
+
+**Parameters**
+
+- `srid` — EPSG code the geometry and `bbox` are returned in (default 4326)
+
+```bash
+curl "http://localhost:8080/api/v1/sources/districts/layers/districts/features/42"
+curl "http://localhost:8080/api/v1/sources/districts/layers/districts/features/42?srid=25832"
+```
+
+```json
+{
+  "type": "Feature",
+  "id": 42,
+  "bbox": [13.088, 52.338, 13.761, 52.675],
+  "geometry": { "type": "MultiPolygon", "coordinates": [[[[13.088, 52.338], [13.761, 52.338], [13.761, 52.675], [13.088, 52.675], [13.088, 52.338]]]] },
+  "properties": { "name": "Mitte" },
+  "source_id": "districts",
+  "layer": "districts",
+  "srid": 4326,
+  "license": { "name": "CC-BY-4.0", "url": "https://creativecommons.org/licenses/by/4.0/",
+    "attribution": "© Example Data Provider" }
+}
+```
+
+- `geometry` is always a `MultiPolygon`. Coordinates carry 7 decimals.
+- `bbox` is `[min_x, min_y, max_x, max_y]`, computed from the reprojected
+  geometry (not from reprojected corners of the stored box).
+- `source_id`, `layer`, `srid` and `license` are foreign members in the sense of
+  RFC 7946. `license` is omitted when the package carries none.
+- With an `srid` other than 4326 the response deliberately departs from
+  RFC 7946, which knows WGS84 only; `srid` names the coordinate system.
+
+**Tiled sources.** In a package tiled with `ST_Subdivide` an `id` addresses one
+fragment of a feature. The endpoint finds all fragments of that feature and
+unions them, so the tile seams do not show up as lines on the map; every
+fragment's `id` yields the same geometry. Fragments are matched through the
+`orig_id` column when the layer has it and the addressed row carries a value,
+otherwise through identical attributes — the rule the query deduplication uses.
+`properties` are those of the addressed row. The union is computed per request;
+nothing is written or cached.
+
+**Limits.** Only polygon layers of vector sources. A raster source
+(`kind: raster`), a point or line layer, or a layer without an integer primary
+key answers 422. Gazetteer features are not served here. The geometry is not
+simplified, so a large area can be several megabytes; the request is bound by
+`query.timeout`.
+
+| Status | Meaning |
+|---|---|
+| 400 | `featureId` is not a positive integer, or `srid` is not a known EPSG code |
+| 404 | source, layer or feature not found |
+| 422 | raster source, non-polygon layer, or layer without an integer primary key |
+| 500 | reprojection or query failed |
+| 504 | `query.timeout` elapsed |
 
 ## Sync endpoint
 

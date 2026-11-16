@@ -44,3 +44,16 @@ type BatchQuerier interface {
 	// the QueryPoint contract.
 	QueryPoints(ctx context.Context, sourceID string, layer string, coords []domain.Coordinate) ([][]domain.Feature, error)
 }
+
+// FeatureReader is an OPTIONAL capability a SpatialSource may also implement to
+// load one feature by its id, with its complete geometry. Only vector adapters
+// have features to address; the registry type-asserts for it and reports
+// domain.ErrUnsupported for a source (e.g. raster) that does not implement it.
+type FeatureReader interface {
+	// ReadFeature returns the feature with the given fid of a polygon layer. Its
+	// Geometry.WKB holds the complete outline as a WKB MultiPolygon in the layer's
+	// SRID (Geometry.SRID): when the package was tiled with ST_Subdivide, all
+	// fragments of the feature are unioned, not just the addressed one. A missing
+	// fid is domain.ErrFeatureNotFound.
+	ReadFeature(ctx context.Context, sourceID string, layer string, fid int64) (domain.Feature, error)
+}

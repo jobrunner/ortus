@@ -248,6 +248,7 @@ func (s *Server) setupRoutes() *mux.Router {
 	api.HandleFunc("/sources", s.handleListSources).Methods(http.MethodGet)
 	api.HandleFunc("/sources/{sourceId}", s.handleGetSource).Methods(http.MethodGet)
 	api.HandleFunc("/sources/{sourceId}/layers", s.handleGetLayers).Methods(http.MethodGet)
+	api.HandleFunc("/sources/{sourceId}/layers/{layer}/features/{featureId}", s.handleGetFeature).Methods(http.MethodGet)
 
 	// Sync endpoint (only if sync service is configured)
 	if s.syncService != nil {

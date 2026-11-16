@@ -52,6 +52,10 @@ func (s *spyQueryService) QueryBatch(_ context.Context, coords []domain.Coordina
 	return out, nil
 }
 
+func (s *spyQueryService) FeatureGeometry(_ context.Context, _ domain.FeatureRef) (*domain.FeatureGeometry, error) {
+	return nil, nil
+}
+
 // newSpyServer builds a Server whose query service is the spy, with an optional
 // gazetteer so the with-sources / with-gazetteer independence is observable.
 func newSpyServer(t *testing.T, spy *spyQueryService, gaz input.Gazetteer) *Server {

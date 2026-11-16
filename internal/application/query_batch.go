@@ -111,7 +111,7 @@ func (s *QueryService) queryBatchSource(ctx context.Context, sid string, coords 
 	start := time.Now()
 	results := make([]domain.QueryResult, len(coords))
 	for i := range results {
-		results[i] = domain.QueryResult{SourceID: pkg.ID, SourceName: pkg.Name, License: pkg.License}
+		results[i] = domain.QueryResult{SourceID: pkg.ID, SourceName: pkg.Name, Kind: pkg.Kind, License: pkg.License}
 	}
 	for li := range pkg.Layers {
 		if err := s.batchLayer(ctx, sid, &pkg.Layers[li], coords, properties, results); err != nil {

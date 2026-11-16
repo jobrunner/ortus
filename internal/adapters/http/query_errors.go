@@ -21,6 +21,7 @@ var clientQueryErrors = []struct {
 }{
 	{domain.ErrSourceNotFound, http.StatusNotFound, "Source not found"},
 	{domain.ErrLayerNotFound, http.StatusNotFound, "Layer not found"},
+	{domain.ErrFeatureNotFound, http.StatusNotFound, "Feature not found"},
 	// Bad coordinate / SRID / other invalid input.
 	{domain.ErrInvalidInput, http.StatusBadRequest, "Invalid query parameters"},
 	// Unsupported projection or source kind.
