@@ -5,15 +5,15 @@
       "additionalProperties": false,
       "properties": {
         "feature_id": {
-          "description": "feature id ('id' of a feature in a query_point result)",
+          "description": "feature id ('ID' of a feature in a query_point result)",
           "type": "integer"
         },
         "layer": {
-          "description": "layer name ('layer' of a feature in a query_point result)",
+          "description": "layer name ('LayerName' of a feature in a query_point result)",
           "type": "string"
         },
         "source_id": {
-          "description": "id of the vector source ('source_id' of a query_point result)",
+          "description": "id of the vector source ('SourceID' of an entry in a query_point result's 'Results')",
           "type": "string"
         },
         "srid": {

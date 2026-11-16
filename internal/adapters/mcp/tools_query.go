@@ -221,9 +221,9 @@ func addGetSourceLayers(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 // ---- get_feature_geometry -------------------------------------------------
 
 type getFeatureGeometryIn struct {
-	SourceID  string `json:"source_id" jsonschema:"id of the vector source ('source_id' of a query_point result)"`
-	Layer     string `json:"layer" jsonschema:"layer name ('layer' of a feature in a query_point result)"`
-	FeatureID int64  `json:"feature_id" jsonschema:"feature id ('id' of a feature in a query_point result)"`
+	SourceID  string `json:"source_id" jsonschema:"id of the vector source ('SourceID' of an entry in a query_point result's 'Results')"`
+	Layer     string `json:"layer" jsonschema:"layer name ('LayerName' of a feature in a query_point result)"`
+	FeatureID int64  `json:"feature_id" jsonschema:"feature id ('ID' of a feature in a query_point result)"`
 	SRID      int    `json:"srid,omitempty" jsonschema:"EPSG code for geometry and bbox; defaults to 4326 (WGS84) when omitted"`
 }
 
@@ -246,8 +246,8 @@ func addGetFeatureGeometry(srv *mcp.Server, deps Deps, _ *slog.Logger) {
 		Name: "get_feature_geometry",
 		Description: "Fetch the complete outline of one feature a point query found, as a GeoJSON " +
 			"Feature: MultiPolygon geometry, bounding box and the license of its package, " +
-			"reprojected to 'srid' (default 4326). Pass source_id, layer and id from a " +
-			"query_point result. For sources tiled with ST_Subdivide all fragments of the " +
+			"reprojected to 'srid' (default 4326). A query_point result names the feature: " +
+			"Results[].SourceID, and per feature LayerName and ID. For sources tiled with ST_Subdivide all fragments of the " +
 			"feature are unioned. Polygon layers of vector sources only — raster sources and " +
 			"gazetteer features are not served. Large areas return large geometries. " +
 			"Equivalent to GET /api/v1/sources/{id}/layers/{layer}/features/{fid}.",
