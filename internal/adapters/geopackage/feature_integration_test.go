@@ -502,3 +502,136 @@ func TestIntegration_FeatureQueryUsesOrigIDIndex(t *testing.T) {
 		}
 	}
 }
+
+// fixtureDB returns the open connection and the regions layer of the fixture.
+func fixtureDB(t *testing.T) (*sql.DB, *domain.Layer) {
+	t.Helper()
+	repo, src := newFixtureRepo(t)
+	repo.mu.RLock()
+	db := repo.connections[src.ID]
+	repo.mu.RUnlock()
+	layer, ok := src.GetLayer("regions")
+	if !ok {
+		t.Fatal("regions layer missing")
+	}
+	return db, layer
+}
+
+// Every way the outline statement can fail must come back as a QueryError that
+// names the layer and keeps the cause — the HTTP layer turns that into a 500
+// (or a 499/504 for a canceled or timed-out request), never into "not found".
+func TestIntegration_ScanFeatureOutlineFailures(t *testing.T) {
+	db, layer := fixtureDB(t)
+	ctx := context.Background()
+	columns := []string{"fid", "name", "pop", "geom"}
+
+	tests := []struct {
+		name  string
+		query string
+	}{
+		// Rejected when the statement is prepared.
+		{"statement does not compile", `SELECT nope FROM missing WHERE fid = ?`},
+		// Compiles, fails while producing the first row (integer overflow). The
+		// driver reports that from the query call, not from the iteration.
+		{"statement fails while running", `SELECT abs(-9223372036854775807 - ?)`},
+		// Runs, but the row has not the shape the layer's columns announce.
+		{"row has an unexpected shape", `SELECT ? AS only_one_column`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := scanFeatureOutline(ctx, db, tt.query, layer, columns, "fid", 1)
+			var qe *domain.QueryError
+			if !errors.As(err, &qe) || qe.Layer != "regions" || qe.Err == nil {
+				t.Fatalf("err = %v, want a QueryError for layer regions with a cause", err)
+			}
+			if errors.Is(err, domain.ErrFeatureNotFound) {
+				t.Errorf("err = %v, must not read as feature not found", err)
+			}
+		})
+	}
+}
+
+func TestIntegration_ScanValues(t *testing.T) {
+	db, _ := fixtureDB(t)
+	rows, err := db.QueryContext(context.Background(), `SELECT 7, 'x', NULL`)
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	defer func() { _ = rows.Close() }()
+	if !rows.Next() {
+		t.Fatal("no row")
+	}
+
+	if _, err := scanValues(rows, 2); err == nil {
+		t.Error("want an error when the row has more columns than asked for")
+	}
+	values, err := scanValues(rows, 3)
+	if err != nil {
+		t.Fatalf("scanValues: %v", err)
+	}
+	if values[0] != int64(7) || values[1] != "x" || values[2] != nil {
+		t.Errorf("values = %#v, want [7 x <nil>]", values)
+	}
+}
+
+func TestIntegration_ForEachRow(t *testing.T) {
+	db, _ := fixtureDB(t)
+	ctx := context.Background()
+	query := func() *sql.Rows {
+		rows, err := db.QueryContext(ctx, `SELECT fid, name FROM regions ORDER BY fid LIMIT 3`)
+		if err != nil {
+			t.Fatalf("query: %v", err)
+		}
+		t.Cleanup(func() { _ = rows.Close() })
+		return rows
+	}
+
+	var names []string
+	if err := forEachRow(query(), 2, func(row []interface{}) { names = append(names, row[1].(string)) }); err != nil {
+		t.Fatalf("forEachRow: %v", err)
+	}
+	if strings.Join(names, ",") != "west,east,tiled" {
+		t.Errorf("names = %v, want [west east tiled]", names)
+	}
+
+	// A row of another shape stops the iteration instead of being half-read.
+	calls := 0
+	if err := forEachRow(query(), 5, func([]interface{}) { calls++ }); err == nil || calls != 0 {
+		t.Errorf("err = %v after %d call(s), want an error before the first call", err, calls)
+	}
+}
+
+// No row can mean two things, and they must not be confused: the feature does
+// not exist (a 404), or reading failed (a server error that keeps its cause).
+func TestNoRowError(t *testing.T) {
+	if err := noRowError(nil, "regions"); !errors.Is(err, domain.ErrFeatureNotFound) {
+		t.Errorf("err = %v, want ErrFeatureNotFound", err)
+	}
+
+	err := noRowError(context.DeadlineExceeded, "regions")
+	var qe *domain.QueryError
+	if !errors.As(err, &qe) || qe.Layer != "regions" || !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("err = %v, want a QueryError for regions wrapping the cause", err)
+	}
+	if errors.Is(err, domain.ErrFeatureNotFound) {
+		t.Errorf("err = %v, must not read as feature not found", err)
+	}
+}
+
+// A layer whose table cannot be inspected has no known key — the load must not
+// fail over it, the layer just has no addressable features.
+func TestIntegration_PrimaryKeyColumn(t *testing.T) {
+	db, _ := fixtureDB(t)
+
+	if got := primaryKeyColumn(context.Background(), db, "regions"); got != "fid" {
+		t.Errorf("primaryKeyColumn = %q, want fid", got)
+	}
+	if got := primaryKeyColumn(context.Background(), db, "no_such_table"); got != "" {
+		t.Errorf("primaryKeyColumn of a missing table = %q, want empty", got)
+	}
+	canceled, cancel := context.WithCancel(context.Background())
+	cancel()
+	if got := primaryKeyColumn(canceled, db, "regions"); got != "" {
+		t.Errorf("primaryKeyColumn on a canceled context = %q, want empty", got)
+	}
+}

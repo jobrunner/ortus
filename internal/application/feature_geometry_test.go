@@ -258,3 +258,25 @@ func TestRegistryReadFeatureUnknownSource(t *testing.T) {
 		t.Fatalf("err = %v, want ErrSourceNotFound", err)
 	}
 }
+
+// vanishingSources lists a source as ready and then fails to return it — what
+// the service sees when a source is unloaded between the two calls (the watcher
+// removes sources while requests are running).
+type vanishingSources struct{ *SourceRegistry }
+
+func (v vanishingSources) ReadySourceIDs() []string { return []string{"parks"} }
+
+func (v vanishingSources) GetSource(context.Context, string) (*domain.Source, error) {
+	return nil, domain.ErrSourceNotFound
+}
+
+func TestFeatureGeometrySourceUnloadedMidRequest(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	svc := NewQueryService(vanishingSources{featureRegistry(&featureRepository{})}, &projectingTransformer{},
+		testMeter(), output.NoOpTracer{}, logger, QueryServiceConfig{})
+
+	_, err := svc.FeatureGeometry(context.Background(), domain.FeatureRef{SourceID: "parks", Layer: "areas", ID: 1})
+	if !errors.Is(err, domain.ErrSourceNotFound) {
+		t.Fatalf("err = %v, want ErrSourceNotFound", err)
+	}
+}

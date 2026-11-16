@@ -73,13 +73,49 @@ func (r *Repository) ReadFeature(ctx context.Context, sourceID, layerName string
 		output.String("ortus.feature.id_column", idColumn),
 	)
 
-	feature, err := scanFeatureOutline(ctx, db, query, layer, idColumn, fid)
+	feature, err := scanFeatureOutline(ctx, db, query, layer, columns, idColumn, fid)
 	if err != nil {
 		return domain.Feature{}, fail(err, "query failed")
 	}
 	span.SetAttributes(output.Int("ortus.geometry.wkb_bytes", len(feature.Geometry.WKB)))
 	span.SetStatus(output.StatusOK, "")
 	return feature, nil
+}
+
+// scanValues reads the current row into n untyped values. It fails when the row
+// does not have exactly n columns.
+func scanValues(rows *sql.Rows, n int) ([]interface{}, error) {
+	values := make([]interface{}, n)
+	ptrs := make([]interface{}, n)
+	for i := range values {
+		ptrs[i] = &values[i]
+	}
+	if err := rows.Scan(ptrs...); err != nil {
+		return nil, err
+	}
+	return values, nil
+}
+
+// forEachRow calls fn with the n values of every remaining row and reports the
+// first scan or iteration error.
+func forEachRow(rows *sql.Rows, n int, fn func(row []interface{})) error {
+	for rows.Next() {
+		row, err := scanValues(rows, n)
+		if err != nil {
+			return err
+		}
+		fn(row)
+	}
+	return rows.Err()
+}
+
+// noRowError says why a statement that should yield one row yielded none: the
+// iteration failed (err), or the feature does not exist.
+func noRowError(err error, layer string) error {
+	if err != nil {
+		return &domain.QueryError{Layer: layer, Err: err}
+	}
+	return domain.ErrFeatureNotFound
 }
 
 // tableColumnNames returns the column names of a table in declaration order, and
@@ -95,12 +131,10 @@ func tableColumnNames(ctx context.Context, db *sql.DB, table string) (cols []str
 	}
 	defer func() { _ = rows.Close() }()
 	keyColumns := 0
-	for rows.Next() {
-		var name, typ string
-		var pk int
-		if err := rows.Scan(&name, &typ, &pk); err != nil {
-			return nil, "", err
-		}
+	err = forEachRow(rows, 3, func(row []interface{}) {
+		name, _ := row[0].(string)
+		typ, _ := row[1].(string)
+		pk, _ := row[2].(int64)
 		cols = append(cols, name)
 		if pk > 0 {
 			keyColumns++
@@ -108,11 +142,11 @@ func tableColumnNames(ctx context.Context, db *sql.DB, table string) (cols []str
 				idColumn = name
 			}
 		}
-	}
+	})
 	if keyColumns != 1 {
 		idColumn = ""
 	}
-	return cols, idColumn, rows.Err()
+	return cols, idColumn, err
 }
 
 // defaultFeatureIDColumn is the feature-id column by ogr convention, used when a
@@ -180,37 +214,25 @@ func buildFeatureQuery(layer *domain.Layer, columns []string, idColumn string) s
 }
 
 // scanFeatureOutline runs the buildFeatureQuery statement and maps its single
-// row: the layer's own columns become the feature, the trailing column its
-// outline.
-func scanFeatureOutline(ctx context.Context, db *sql.DB, query string, layer *domain.Layer, idColumn string, fid int64) (domain.Feature, error) {
+// row: the layer's own columns (in declaration order, as `a.*` yields them)
+// become the feature, the trailing column its outline.
+func scanFeatureOutline(ctx context.Context, db *sql.DB, query string, layer *domain.Layer, columns []string, idColumn string, fid int64) (domain.Feature, error) {
 	rows, err := db.QueryContext(ctx, query, fid)
 	if err != nil {
 		return domain.Feature{}, &domain.QueryError{Layer: layer.Name, Err: err}
 	}
 	defer func() { _ = rows.Close() }()
 
-	columns, err := rows.Columns()
-	if err != nil {
-		return domain.Feature{}, err
-	}
 	if !rows.Next() {
-		if err := rows.Err(); err != nil {
-			return domain.Feature{}, &domain.QueryError{Layer: layer.Name, Err: err}
-		}
-		return domain.Feature{}, domain.ErrFeatureNotFound
+		return domain.Feature{}, noRowError(rows.Err(), layer.Name)
 	}
 
-	values := make([]interface{}, len(columns))
-	ptrs := make([]interface{}, len(columns))
-	for i := range values {
-		ptrs[i] = &values[i]
+	last := len(columns)
+	values, err := scanValues(rows, last+1)
+	if err != nil {
+		return domain.Feature{}, &domain.QueryError{Layer: layer.Name, Err: err}
 	}
-	if err := rows.Scan(ptrs...); err != nil {
-		return domain.Feature{}, err
-	}
-
-	last := len(columns) - 1
-	feature := buildFeature(columns[:last], values[:last], layer.Name, layer.GeometryColumn, idColumn, false)
+	feature := buildFeature(columns, values[:last], layer.Name, layer.GeometryColumn, idColumn, false)
 	wkb, _ := values[last].([]byte)
 	if len(wkb) == 0 {
 		// NULL: the row has no geometry, or the union is not polygonal.
