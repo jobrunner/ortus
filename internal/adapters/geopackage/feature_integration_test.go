@@ -29,7 +29,7 @@ import (
 // all and so nothing to address a feature by. "nocase" holds two adjoining
 // features whose names differ only in case, in a COLLATE NOCASE column, keyed 0
 // and -5. "huts" is a point layer and "blank" a polygon layer whose only row has
-// no geometry.
+// no geometry. "derived" has a generated column.
 func buildParksGPKG(t *testing.T, path string) {
 	t.Helper()
 
@@ -64,6 +64,10 @@ func buildParksGPKG(t *testing.T, path string) {
 		{`CREATE TABLE parks (fid INTEGER PRIMARY KEY AUTOINCREMENT, orig_id INTEGER, tile INTEGER, name TEXT, geom BLOB)`, nil},
 		{`CREATE TABLE keyed ("rowid" INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, geom BLOB)`, nil},
 		{`CREATE TABLE nokey (name TEXT, geom BLOB)`, nil},
+		{`CREATE TABLE derived (fid INTEGER PRIMARY KEY, name TEXT,
+			label TEXT GENERATED ALWAYS AS (upper(name)) VIRTUAL, geom BLOB)`, nil},
+		{`INSERT INTO gpkg_contents VALUES ('derived','features','derived','generated column',0,0,1,1,4326)`, nil},
+		{`INSERT INTO gpkg_geometry_columns VALUES ('derived','geom','POLYGON',4326,0,0)`, nil},
 		{`CREATE TABLE huts (fid INTEGER PRIMARY KEY, name TEXT, geom BLOB)`, nil},
 		{`CREATE TABLE blank (fid INTEGER PRIMARY KEY, name TEXT, geom BLOB)`, nil},
 		{`CREATE TABLE nocase (fid INTEGER PRIMARY KEY, name TEXT COLLATE NOCASE, geom BLOB)`, nil},
@@ -99,6 +103,8 @@ func buildParksGPKG(t *testing.T, path string) {
 			[]any{"POLYGON((1 0, 2 0, 2 1, 1 1, 1 0))"}},
 		{`INSERT INTO parks (orig_id, tile, name, geom) VALUES (NULL, 1, 'solo', ` + geomExpr + `)`,
 			[]any{"POLYGON((8 0, 9 0, 9 1, 8 1, 8 0))"}},
+		{`INSERT INTO derived (name, geom) VALUES ('fen', ` + geomExpr + `)`,
+			[]any{"POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))"}},
 		{`INSERT INTO nokey (name, geom) VALUES ('x', ` + geomExpr + `)`,
 			[]any{"POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))"}},
 	}
@@ -375,6 +381,7 @@ func TestIntegration_OpenReadsFeatureIDColumn(t *testing.T) {
 	parks := newParksRepo(t)
 	want := map[string]string{
 		"parks": "fid", "keyed": "rowid", "nokey": "", "nocase": "fid", "huts": "fid", "blank": "fid",
+		"derived": "fid",
 	}
 
 	layers, err := parks.GetLayers(context.Background(), "parks")
@@ -633,5 +640,34 @@ func TestIntegration_PrimaryKeyColumn(t *testing.T) {
 	cancel()
 	if got := primaryKeyColumn(canceled, db, "regions"); got != "" {
 		t.Errorf("primaryKeyColumn on a canceled context = %q, want empty", got)
+	}
+}
+
+// A generated column is part of `SELECT *`, so it is a property a point query
+// returns — and the outline statement, which selects `a.*` too, must expect it.
+// pragma_table_info leaves generated columns out; reading the columns from it
+// made the row one value longer than announced and the lookup fail.
+func TestIntegration_ReadFeatureWithGeneratedColumn(t *testing.T) {
+	parks := newParksRepo(t)
+	ctx := context.Background()
+
+	f, err := parks.ReadFeature(ctx, "parks", "derived", 1)
+	if err != nil {
+		t.Fatalf("ReadFeature: %v", err)
+	}
+	if f.Properties["name"] != "fen" || f.Properties["label"] != "FEN" {
+		t.Errorf("properties = %v, want name=fen and the generated label=FEN", f.Properties)
+	}
+	if len(f.Geometry.WKB) == 0 {
+		t.Error("no outline")
+	}
+
+	// The point query and the lookup agree on what the feature's properties are.
+	hits, err := parks.QueryPoint(ctx, "parks", "derived", domain.NewWGS84Coordinate(0.5, 0.5))
+	if err != nil || len(hits) != 1 {
+		t.Fatalf("QueryPoint: %v, %d hit(s)", err, len(hits))
+	}
+	if hits[0].Properties["label"] != f.Properties["label"] || hits[0].ID != f.ID {
+		t.Errorf("query hit %+v disagrees with the looked-up feature %+v", hits[0], f)
 	}
 }

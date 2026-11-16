@@ -118,14 +118,18 @@ func noRowError(err error, layer string) error {
 	return domain.ErrFeatureNotFound
 }
 
-// tableColumnNames returns the column names of a table in declaration order, and
+// tableColumnNames returns the column names of a table as `SELECT *` yields them
+// (declaration order, generated columns included), and
 // the name of its integer primary key — empty when the table has none or a
 // composite one. The key is usually "fid" (the ogr default), but a feature is
 // addressed by it whatever its name: packages exported from a scratch SpatiaLite
 // table (the ST_Subdivide recipe) key their rows "rowid". An INTEGER PRIMARY KEY
 // is SQLite's rowid alias, so looking a row up by it is a direct B-tree seek.
 func tableColumnNames(ctx context.Context, db *sql.DB, table string) (cols []string, idColumn string, err error) {
-	rows, err := db.QueryContext(ctx, `SELECT name, type, pk FROM pragma_table_info(?)`, table)
+	// table_xinfo, not table_info: the latter leaves out generated columns, which
+	// `SELECT *` does return. hidden = 1 marks the truly hidden columns of a
+	// virtual table, which `*` omits as well.
+	rows, err := db.QueryContext(ctx, `SELECT name, type, pk FROM pragma_table_xinfo(?) WHERE hidden <> 1`, table)
 	if err != nil {
 		return nil, "", err
 	}
