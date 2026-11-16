@@ -94,3 +94,13 @@ func formatFeatureGeometry(fg *domain.FeatureGeometry) featureGeometryResponse {
 	}
 	return out
 }
+
+// setKind adds the source kind (vector | raster) to a source or query-result
+// object, so a client can tell which sources have feature geometries to fetch.
+// A source without a kind (never produced by the adapters) omits the field
+// rather than reporting an empty one.
+func setKind(out map[string]interface{}, kind domain.SourceKind) {
+	if kind != "" {
+		out["kind"] = string(kind)
+	}
+}

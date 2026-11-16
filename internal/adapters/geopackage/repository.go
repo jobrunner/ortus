@@ -576,9 +576,7 @@ func (r *Repository) readLayers(ctx context.Context, db *sql.DB) ([]domain.Layer
 
 		// The key a feature is addressed by; without one, features of this
 		// layer simply have no redeemable id.
-		if _, idColumn, err := tableColumnNames(ctx, db, l.Name); err == nil {
-			l.IDColumn = idColumn
-		}
+		l.IDColumn = primaryKeyColumn(ctx, db, l.Name)
 
 		// Count features
 		countQuery := fmt.Sprintf("SELECT COUNT(*) FROM %s", l.Name) //#nosec G201 -- table name from trusted database source
@@ -921,10 +919,6 @@ func scanFeature(rows *sql.Rows, columns []string, layerName, geomColumn, idColu
 	return buildFeature(columns, values, layerName, geomColumn, idColumn, wktLast), nil
 }
 
-// defaultFeatureIDColumn is the feature-id column by ogr convention, used when a
-// layer's primary key is not known.
-const defaultFeatureIDColumn = "fid"
-
 // buildFeature maps a scanned row into a domain.Feature.
 //
 // idColumn is the column whose value becomes Feature.ID instead of an attribute:
@@ -944,9 +938,7 @@ const defaultFeatureIDColumn = "fid"
 // Split out from scanFeature so the batch query can scan a leading per-point
 // index column itself and reuse this mapping.
 func buildFeature(columns []string, values []interface{}, layerName, geomColumn, idColumn string, wktLast bool) domain.Feature {
-	if idColumn == "" {
-		idColumn = defaultFeatureIDColumn
-	}
+	idColumn = idColumnOrDefault(idColumn)
 	feature := domain.Feature{
 		LayerName:  layerName,
 		Properties: make(map[string]interface{}),

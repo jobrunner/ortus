@@ -82,3 +82,39 @@ func TestGetFeatureGeometryToolErrors(t *testing.T) {
 		}
 	}
 }
+
+// A feature without attributes or license still yields a well-formed GeoJSON
+// Feature: an empty properties object, no license member.
+func TestGetFeatureGeometryToolWithoutPropertiesAndLicense(t *testing.T) {
+	deps, _ := diagDeps(t)
+	deps.QueryService = &featureQueryService{QueryService: deps.QueryService, result: &domain.FeatureGeometry{
+		SourceID: "ffh", Layer: "areas", ID: 1,
+		GeoJSON: []byte(`{"type":"MultiPolygon","coordinates":[]}`),
+		Extent:  domain.Extent{SRID: 4326},
+	}}
+	out := toolJSON(t, callTool(t, serveDeps(t, deps), "get_feature_geometry", map[string]any{
+		"source_id": "ffh", "layer": "areas", "feature_id": 1,
+	}))
+
+	if props, ok := out["properties"].(map[string]any); !ok || len(props) != 0 {
+		t.Errorf("properties = %v, want {}", out["properties"])
+	}
+	if _, has := out["license"]; has {
+		t.Errorf("license present: %v", out["license"])
+	}
+}
+
+// A geometry the projector delivered broken is reported as a tool error rather
+// than passed on as an empty geometry.
+func TestGetFeatureGeometryToolRejectsBrokenGeometry(t *testing.T) {
+	deps, _ := diagDeps(t)
+	deps.QueryService = &featureQueryService{QueryService: deps.QueryService, result: &domain.FeatureGeometry{
+		SourceID: "ffh", Layer: "areas", ID: 1, GeoJSON: []byte(`{"type":`),
+	}}
+	res := callTool(t, serveDeps(t, deps), "get_feature_geometry", map[string]any{
+		"source_id": "ffh", "layer": "areas", "feature_id": 1,
+	})
+	if !res.IsError {
+		t.Errorf("want a tool error, got %+v", res.Content)
+	}
+}

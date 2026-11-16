@@ -26,7 +26,8 @@ import (
 // exported from a scratch SpatiaLite table has), "nokey" has no primary key at
 // all and so nothing to address a feature by. "nocase" holds two adjoining
 // features whose names differ only in case, in a COLLATE NOCASE column, keyed 0
-// and -5.
+// and -5. "huts" is a point layer and "blank" a polygon layer whose only row has
+// no geometry.
 func buildParksGPKG(t *testing.T, path string) {
 	t.Helper()
 
@@ -61,14 +62,22 @@ func buildParksGPKG(t *testing.T, path string) {
 		{`CREATE TABLE parks (fid INTEGER PRIMARY KEY AUTOINCREMENT, orig_id INTEGER, tile INTEGER, name TEXT, geom BLOB)`, nil},
 		{`CREATE TABLE keyed ("rowid" INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, geom BLOB)`, nil},
 		{`CREATE TABLE nokey (name TEXT, geom BLOB)`, nil},
+		{`CREATE TABLE huts (fid INTEGER PRIMARY KEY, name TEXT, geom BLOB)`, nil},
+		{`CREATE TABLE blank (fid INTEGER PRIMARY KEY, name TEXT, geom BLOB)`, nil},
 		{`CREATE TABLE nocase (fid INTEGER PRIMARY KEY, name TEXT COLLATE NOCASE, geom BLOB)`, nil},
 		{`INSERT INTO gpkg_contents VALUES ('parks','features','parks','tiled parks',0,0,6,2,4326)`, nil},
 		{`INSERT INTO gpkg_contents VALUES ('keyed','features','keyed','key not called fid',0,0,2,1,4326)`, nil},
 		{`INSERT INTO gpkg_contents VALUES ('nokey','features','nokey','no primary key',0,0,1,1,4326)`, nil},
+		{`INSERT INTO gpkg_contents VALUES ('huts','features','huts','point layer',0,0,1,1,4326)`, nil},
+		{`INSERT INTO gpkg_contents VALUES ('blank','features','blank','row without geometry',0,0,1,1,4326)`, nil},
 		{`INSERT INTO gpkg_contents VALUES ('nocase','features','nocase','case-insensitive column',0,0,2,1,4326)`, nil},
 		{`INSERT INTO gpkg_geometry_columns VALUES ('parks','geom','MULTIPOLYGON',4326,0,0)`, nil},
 		{`INSERT INTO gpkg_geometry_columns VALUES ('keyed','geom','POLYGON',4326,0,0)`, nil},
 		{`INSERT INTO gpkg_geometry_columns VALUES ('nokey','geom','POLYGON',4326,0,0)`, nil},
+		{`INSERT INTO gpkg_geometry_columns VALUES ('huts','geom','POINT',4326,0,0)`, nil},
+		{`INSERT INTO gpkg_geometry_columns VALUES ('blank','geom','POLYGON',4326,0,0)`, nil},
+		{`INSERT INTO huts (name, geom) VALUES ('hut', NULL)`, nil},
+		{`INSERT INTO blank (name, geom) VALUES ('nothing', NULL)`, nil},
 		{`INSERT INTO gpkg_geometry_columns VALUES ('nocase','geom','POLYGON',4326,0,0)`, nil},
 		{`INSERT INTO parks (orig_id, tile, name, geom) VALUES (7, 1, 'moor', ` + geomExpr + `)`,
 			[]any{"POLYGON((0 0, 1 0, 1 2, 0 2, 0 0))"}},
@@ -214,6 +223,7 @@ func TestIntegration_ReadFeatureErrors(t *testing.T) {
 		{"unknown layer", regions, "regions", "nope", 1, domain.ErrLayerNotFound},
 		{"unknown fid", regions, "regions", "regions", 999, domain.ErrFeatureNotFound},
 		{"layer without primary key", parks, "parks", "nokey", 1, domain.ErrUnsupported},
+		{"point layer", parks, "parks", "huts", 1, domain.ErrUnsupported},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -358,7 +368,9 @@ func TestIntegration_QueryReturnsPrimaryKeyAsID(t *testing.T) {
 // if there is one, is the id.
 func TestIntegration_OpenReadsFeatureIDColumn(t *testing.T) {
 	parks := newParksRepo(t)
-	want := map[string]string{"parks": "fid", "keyed": "rowid", "nokey": "", "nocase": "fid"}
+	want := map[string]string{
+		"parks": "fid", "keyed": "rowid", "nokey": "", "nocase": "fid", "huts": "fid", "blank": "fid",
+	}
 
 	layers, err := parks.GetLayers(context.Background(), "parks")
 	if err != nil {
@@ -368,5 +380,68 @@ func TestIntegration_OpenReadsFeatureIDColumn(t *testing.T) {
 		if got, known := want[l.Name]; !known || l.IDColumn != got {
 			t.Errorf("layer %q: IDColumn = %q, want %q", l.Name, l.IDColumn, got)
 		}
+	}
+}
+
+// A row without geometry has no outline to return. That is a fault of the data,
+// reported as a query error naming the layer — not an empty geometry, and not
+// "feature not found", since the feature exists.
+func TestIntegration_ReadFeatureWithoutGeometry(t *testing.T) {
+	parks := newParksRepo(t)
+
+	_, err := parks.ReadFeature(context.Background(), "parks", "blank", 1)
+	var qe *domain.QueryError
+	if !errors.As(err, &qe) || qe.Layer != "blank" {
+		t.Fatalf("err = %v, want a QueryError for layer blank", err)
+	}
+	if errors.Is(err, domain.ErrFeatureNotFound) {
+		t.Errorf("err = %v, must not read as feature not found", err)
+	}
+}
+
+// A canceled request must surface as a canceled context, so the HTTP layer
+// answers 499 instead of blaming the server.
+func TestIntegration_ReadFeatureCanceled(t *testing.T) {
+	regions, _ := newFixtureRepo(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := regions.ReadFeature(ctx, "regions", "regions", 1)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, want context.Canceled", err)
+	}
+}
+
+func TestIntegration_ProjectGeometryFailures(t *testing.T) {
+	regions, _ := newFixtureRepo(t)
+	f, err := regions.ReadFeature(context.Background(), "regions", "regions", 1)
+	if err != nil {
+		t.Fatalf("ReadFeature: %v", err)
+	}
+
+	t.Run("canceled", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		if _, _, err := newTestTransformer(t).ProjectGeometry(ctx, f.Geometry.WKB, 4326, 3857); !errors.Is(err, context.Canceled) {
+			t.Fatalf("err = %v, want context.Canceled", err)
+		}
+	})
+
+	t.Run("no database", func(t *testing.T) {
+		tr := &RepositoryTransformer{}
+		tr.SetTracer(nil)
+		tr.SetMeter(nil)
+		if _, _, err := tr.ProjectGeometry(context.Background(), f.Geometry.WKB, 4326, 3857); err == nil {
+			t.Fatal("want an error from a transformer without a database")
+		}
+	})
+}
+
+func TestIDColumnOrDefault(t *testing.T) {
+	if got := idColumnOrDefault(""); got != "fid" {
+		t.Errorf(`idColumnOrDefault("") = %q, want fid`, got)
+	}
+	if got := idColumnOrDefault("rowid"); got != "rowid" {
+		t.Errorf(`idColumnOrDefault("rowid") = %q, want rowid`, got)
 	}
 }

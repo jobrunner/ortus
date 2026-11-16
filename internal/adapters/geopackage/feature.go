@@ -114,6 +114,29 @@ func tableColumnNames(ctx context.Context, db *sql.DB, table string) (cols []str
 	return cols, idColumn, rows.Err()
 }
 
+// defaultFeatureIDColumn is the feature-id column by ogr convention, used when a
+// layer's primary key is not known.
+const defaultFeatureIDColumn = "fid"
+
+// idColumnOrDefault returns the column whose value is a feature's id: the
+// layer's primary key, or the "fid" convention for a layer without one.
+func idColumnOrDefault(idColumn string) string {
+	if idColumn == "" {
+		return defaultFeatureIDColumn
+	}
+	return idColumn
+}
+
+// primaryKeyColumn returns the layer's integer primary key column, empty when it
+// has none (or the table cannot be inspected).
+func primaryKeyColumn(ctx context.Context, db *sql.DB, table string) string {
+	_, idColumn, err := tableColumnNames(ctx, db, table)
+	if err != nil {
+		return ""
+	}
+	return idColumn
+}
+
 // quoteIdent quotes an SQL identifier, doubling embedded quotes.
 func quoteIdent(name string) string {
 	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`

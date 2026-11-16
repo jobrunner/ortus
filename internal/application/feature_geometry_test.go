@@ -3,9 +3,13 @@ package application
 import (
 	"context"
 	"errors"
+	"io"
+	"log/slog"
 	"testing"
+	"time"
 
 	"github.com/jobrunner/ortus/internal/domain"
+	"github.com/jobrunner/ortus/internal/ports/output"
 )
 
 // featureRepository is a mockRepository that also offers the optional
@@ -200,5 +204,57 @@ func TestFeatureGeometryWithoutProjector(t *testing.T) {
 	_, err := svc.FeatureGeometry(context.Background(), domain.FeatureRef{SourceID: "parks", Layer: "areas", ID: 1})
 	if !errors.Is(err, domain.ErrUnsupported) {
 		t.Fatalf("err = %v, want ErrUnsupported", err)
+	}
+}
+
+// The configured query timeout bounds the lookup, as it bounds point queries —
+// unless the caller already set a deadline of its own.
+func TestFeatureGeometryAppliesQueryTimeout(t *testing.T) {
+	var seen []bool
+	repo := &deadlineRepository{featureRepository: featureRepository{
+		feature: domain.Feature{Geometry: domain.Geometry{WKB: []byte{1}, SRID: 25832}},
+	}, seen: &seen}
+	registry := featureRegistry(&repo.featureRepository)
+	registry.mu.Lock()
+	registry.sources["parks"].Repo = repo
+	registry.mu.Unlock()
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	ref := domain.FeatureRef{SourceID: "parks", Layer: "areas", ID: 1}
+
+	bounded := NewQueryService(registry, &projectingTransformer{}, testMeter(), output.NoOpTracer{}, logger,
+		QueryServiceConfig{QueryTimeout: time.Minute})
+	if _, err := bounded.FeatureGeometry(context.Background(), ref); err != nil {
+		t.Fatalf("FeatureGeometry: %v", err)
+	}
+	unbounded := NewQueryService(registry, &projectingTransformer{}, testMeter(), output.NoOpTracer{}, logger,
+		QueryServiceConfig{})
+	if _, err := unbounded.FeatureGeometry(context.Background(), ref); err != nil {
+		t.Fatalf("FeatureGeometry: %v", err)
+	}
+
+	if len(seen) != 2 || !seen[0] || seen[1] {
+		t.Errorf("deadline seen by the adapter = %v, want [true false]", seen)
+	}
+}
+
+// deadlineRepository records whether each ReadFeature call carried a deadline.
+type deadlineRepository struct {
+	featureRepository
+	seen *[]bool
+}
+
+func (m *deadlineRepository) ReadFeature(ctx context.Context, source, layer string, fid int64) (domain.Feature, error) {
+	_, has := ctx.Deadline()
+	*m.seen = append(*m.seen, has)
+	return m.featureRepository.ReadFeature(ctx, source, layer, fid)
+}
+
+// The registry is also reachable without the service's checks: an unknown
+// source must not panic on a missing entry.
+func TestRegistryReadFeatureUnknownSource(t *testing.T) {
+	_, err := featureRegistry(&featureRepository{}).ReadFeature(context.Background(), "nope", "areas", 1)
+	if !errors.Is(err, domain.ErrSourceNotFound) {
+		t.Fatalf("err = %v, want ErrSourceNotFound", err)
 	}
 }
