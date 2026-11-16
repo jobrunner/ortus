@@ -53,7 +53,8 @@ type FeatureReader interface {
 	// ReadFeature returns the feature with the given fid of a polygon layer. Its
 	// Geometry.WKB holds the complete outline as a WKB MultiPolygon in the layer's
 	// SRID (Geometry.SRID): when the package was tiled with ST_Subdivide, all
-	// fragments of the feature are unioned, not just the addressed one. A missing
+	// fragments of the feature (the rows sharing its orig_id) are unioned, not
+	// just the addressed one. A missing
 	// fid is domain.ErrFeatureNotFound.
 	ReadFeature(ctx context.Context, sourceID string, layer string, fid int64) (domain.Feature, error)
 }

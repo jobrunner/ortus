@@ -538,13 +538,17 @@ curl "http://localhost:8080/api/v1/sources/districts/layers/districts/features/4
   RFC 7946, which knows WGS84 only; `srid` names the coordinate system.
 
 **Tiled sources.** In a package tiled with `ST_Subdivide` an `id` addresses one
-fragment of a feature. The endpoint finds all fragments of that feature and
-unions them, so the tile seams do not show up as lines on the map; every
-fragment's `id` yields the same geometry. Fragments are matched through the
-`orig_id` column when the layer has it and the addressed row carries a value,
-otherwise through identical attributes — the rule the query deduplication uses.
+fragment of a feature. The endpoint finds all fragments of that feature — the
+rows sharing its `orig_id` — and unions them, so the tile seams do not show up
+as lines on the map; every fragment's `id` yields the same geometry.
 `properties` are those of the addressed row. The union is computed per request;
 nothing is written or cached.
+
+A layer without an `orig_id` column counts as untiled: the addressed row is the
+feature. Rows are never merged merely because their attributes match. A tiled
+package therefore has to carry `orig_id` (with an index); the package build
+guarantees that (`build-ortus-package` skill, `check-package.py`), not the
+server.
 
 **Limits.** Only polygon layers of vector sources. A raster source
 (`kind: raster`), a point or line layer, or a layer without an integer primary

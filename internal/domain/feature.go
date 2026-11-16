@@ -123,7 +123,8 @@ type FeatureRef struct {
 // from. Geometry and Extent are in Extent.SRID.
 //
 // For a package tiled with ST_Subdivide the geometry is the union of all
-// fragments of the feature, not just the fragment the id addresses.
+// fragments of the feature (the rows sharing its orig_id), not just the fragment
+// the id addresses.
 type FeatureGeometry struct {
 	SourceID   string
 	Layer      string

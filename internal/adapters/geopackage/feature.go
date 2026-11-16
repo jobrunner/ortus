@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/jobrunner/ortus/internal/domain"
@@ -19,11 +20,11 @@ const origIDColumn = "orig_id"
 //
 // A package tiled with ST_Subdivide stores a feature as several fragment rows,
 // and the fid a point query returns addresses just one of them. The fragments
-// are found through orig_id when the layer has that column and the addressed row
-// carries a value; otherwise through identical attributes, the same identity
-// dedupFeaturesByProperties uses. They are unioned (not merely collected) so the
-// cut edges between tiles do not show up as lines on a map. Nothing is written:
-// the union is computed per call.
+// are the rows sharing the addressed row's orig_id; a layer without that column
+// is not tiled as far as ortus is concerned, and the row is the feature. The
+// fragments are unioned (not merely collected) so the cut edges between tiles do
+// not show up as lines on a map. Nothing is written: the union is computed per
+// call.
 func (r *Repository) ReadFeature(ctx context.Context, sourceID, layerName string, fid int64) (domain.Feature, error) {
 	ctx, span := r.tracer.Start(ctx, "Repository.ReadFeature",
 		output.WithSpanKind(output.SpanKindClient),
@@ -147,34 +148,23 @@ func quoteIdent(name string) string {
 // the same feature, as a WKB MultiPolygon. idColumn is the layer's integer
 // primary key.
 //
-// IS (not =) compares the attributes so that NULL matches NULL, as the Go-side
-// dedup key does — and with an explicit binary collation for the same reason: a
-// column declared COLLATE NOCASE would otherwise treat "Moor" and "moor" as one
-// feature here while a point query reports them as two. The comparison stays inside SQL on purpose: round-tripping the
-// values through Go would re-encode them (go-sqlite3 parses DATE/DATETIME columns
-// into time.Time) and no longer match the stored bytes.
+// Rows belong together only through orig_id. Matching by identical attributes
+// instead would be a guess: on an untiled layer whose features share their
+// attributes (two forest parcels with nothing but landuse='forest') it unions
+// unrelated features into one outline. A layer without orig_id is therefore
+// served row by row, and tiling a package without carrying orig_id is a
+// packaging fault the build-ortus-package checks catch — not something to paper
+// over here.
+//
+// Both sides of the OR are indexable (orig_id by the index the package ships,
+// the key by the table itself), so SQLite resolves the fragments by lookup
+// rather than by scanning the layer; the second term also keeps the addressed
+// row when its orig_id is NULL.
 func buildFeatureQuery(layer *domain.Layer, columns []string, idColumn string) string {
-	sameAttrs := make([]string, 0, len(columns))
-	hasOrigID := false
-	for _, c := range columns {
-		switch c {
-		case idColumn, layer.GeometryColumn:
-			continue
-		case origIDColumn:
-			hasOrigID = true
-		}
-		sameAttrs = append(sameAttrs, fmt.Sprintf("t.%[1]s IS a.%[1]s COLLATE BINARY", quoteIdent(c)))
-	}
-
 	fidCol := quoteIdent(idColumn)
-	// Without any attribute there is nothing that identifies sibling fragments.
 	siblings := fmt.Sprintf("t.%[1]s = a.%[1]s", fidCol)
-	if len(sameAttrs) > 0 {
-		siblings = strings.Join(sameAttrs, " AND ")
-	}
-	if hasOrigID {
-		orig := quoteIdent(origIDColumn)
-		siblings = fmt.Sprintf("t.%[1]s = a.%[1]s OR (a.%[1]s IS NULL AND %[2]s)", orig, siblings)
+	if slices.Contains(columns, origIDColumn) {
+		siblings = fmt.Sprintf("t.%[1]s = a.%[1]s OR %[2]s", quoteIdent(origIDColumn), siblings)
 	}
 
 	table := quoteIdent(layer.Name)

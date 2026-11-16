@@ -7,6 +7,7 @@ import (
 	"errors"
 	"math"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/jobrunner/ortus/internal/domain"
@@ -21,6 +22,7 @@ import (
 //	fid 1: orig_id=7    tile=1 name="moor"  (0,0)-(1,2)
 //	fid 2: orig_id=7    tile=2 name="moor"  (1,0)-(2,2)
 //	fid 3: orig_id=NULL tile=1 name="solo"  (5,0)-(6,1)
+//	fid 4: orig_id=NULL tile=1 name="solo"  (8,0)-(9,1)   same attributes as fid 3
 //
 // "keyed" has an integer primary key that is not called fid (as a package
 // exported from a scratch SpatiaLite table has), "nokey" has no primary key at
@@ -65,6 +67,7 @@ func buildParksGPKG(t *testing.T, path string) {
 		{`CREATE TABLE huts (fid INTEGER PRIMARY KEY, name TEXT, geom BLOB)`, nil},
 		{`CREATE TABLE blank (fid INTEGER PRIMARY KEY, name TEXT, geom BLOB)`, nil},
 		{`CREATE TABLE nocase (fid INTEGER PRIMARY KEY, name TEXT COLLATE NOCASE, geom BLOB)`, nil},
+		{`CREATE INDEX idx_parks_orig_id ON parks (orig_id)`, nil},
 		{`INSERT INTO gpkg_contents VALUES ('parks','features','parks','tiled parks',0,0,6,2,4326)`, nil},
 		{`INSERT INTO gpkg_contents VALUES ('keyed','features','keyed','key not called fid',0,0,2,1,4326)`, nil},
 		{`INSERT INTO gpkg_contents VALUES ('nokey','features','nokey','no primary key',0,0,1,1,4326)`, nil},
@@ -94,6 +97,8 @@ func buildParksGPKG(t *testing.T, path string) {
 			[]any{"POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))"}},
 		{`INSERT INTO nocase (fid, name, geom) VALUES (-5, 'moor', ` + geomExpr + `)`,
 			[]any{"POLYGON((1 0, 2 0, 2 1, 1 1, 1 0))"}},
+		{`INSERT INTO parks (orig_id, tile, name, geom) VALUES (NULL, 1, 'solo', ` + geomExpr + `)`,
+			[]any{"POLYGON((8 0, 9 0, 9 1, 8 1, 8 0))"}},
 		{`INSERT INTO nokey (name, geom) VALUES ('x', ` + geomExpr + `)`,
 			[]any{"POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))"}},
 	}
@@ -156,19 +161,19 @@ func TestIntegration_ReadFeature(t *testing.T) {
 		wantParts int
 	}{
 		{"untiled feature", regions, "regions", "regions", 1, "west", 16, 1},
-		// fid 3 and 4 are fragments with identical attributes and no orig_id.
-		{"fragments grouped by attributes", regions, "regions", "regions", 3, "tiled", 8, 1},
-		{"second fragment yields the same feature", regions, "regions", "regions", 4, "tiled", 8, 1},
+		// fid 3 and 4 share all attributes, but the layer has no orig_id: nothing
+		// says they are one feature, so each is served on its own.
+		{"same attributes without orig_id stay apart", regions, "regions", "regions", 3, "tiled", 4, 1},
+		{"each such row is its own feature", regions, "regions", "regions", 4, "tiled", 4, 1},
 		// borderA touches borderB but has different attributes.
 		{"neighbor with other attributes stays apart", regions, "regions", "regions", 5, "borderA", 4, 1},
 		// tile differs between the fragments, orig_id ties them together.
 		{"fragments grouped by orig_id", parks, "parks", "parks", 1, "moor", 4, 1},
-		{"null orig_id falls back to attributes", parks, "parks", "parks", 3, "solo", 1, 1},
-		// The key column is called rowid; the fragments share their attributes.
-		{"key column not called fid", parks, "parks", "keyed", 2, "strip", 2, 1},
-		// "Moor" and "moor" are two features, whatever the column's collation —
-		// and zero and negative keys are as addressable as any other.
-		{"case differs in a NOCASE column", parks, "parks", "nocase", 0, "Moor", 1, 1},
+		{"both fragments yield the same feature", parks, "parks", "parks", 2, "moor", 4, 1},
+		{"null orig_id is the row itself", parks, "parks", "parks", 3, "solo", 1, 1},
+		{"key column not called fid", parks, "parks", "keyed", 2, "strip", 1, 1},
+		// Zero and negative keys are as addressable as any other.
+		{"zero key", parks, "parks", "nocase", 0, "Moor", 1, 1},
 		{"negative key", parks, "parks", "nocase", -5, "moor", 1, 1},
 	}
 	for _, tt := range tests {
@@ -256,7 +261,7 @@ func TestIntegration_ProjectGeometry(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ProjectGeometry: %v", err)
 		}
-		want := domain.Extent{MinX: 12, MinY: 0, MaxX: 14, MaxY: 4, SRID: 4326}
+		want := domain.Extent{MinX: 12, MinY: 0, MaxX: 13, MaxY: 4, SRID: 4326}
 		if ext != want {
 			t.Errorf("extent = %+v, want %+v", ext, want)
 		}
@@ -279,7 +284,7 @@ func TestIntegration_ProjectGeometry(t *testing.T) {
 		rad := math.Pi / 180
 		want := domain.Extent{
 			MinX: r * 12 * rad, MinY: 0,
-			MaxX: r * 14 * rad, MaxY: r * math.Log(math.Tan(math.Pi/4+4*rad/2)),
+			MaxX: r * 13 * rad, MaxY: r * math.Log(math.Tan(math.Pi/4+4*rad/2)),
 			SRID: 3857,
 		}
 		if ext.SRID != want.SRID ||
@@ -308,9 +313,9 @@ func TestIntegration_ProjectGeometry(t *testing.T) {
 		}
 		// The UTM edges are not meridians/parallels, so the box only matches
 		// to the precision of the corner coordinates.
-		if math.Abs(ext.MinX-12) > 1e-6 || math.Abs(ext.MaxX-14) > 1e-6 ||
+		if math.Abs(ext.MinX-12) > 1e-6 || math.Abs(ext.MaxX-13) > 1e-6 ||
 			math.Abs(ext.MinY-0) > 1e-6 || math.Abs(ext.MaxY-4) > 1e-6 {
-			t.Errorf("extent = %+v, want (12,0)-(14,4)", ext)
+			t.Errorf("extent = %+v, want (12,0)-(13,4)", ext)
 		}
 	})
 
@@ -443,5 +448,57 @@ func TestIDColumnOrDefault(t *testing.T) {
 	}
 	if got := idColumnOrDefault("rowid"); got != "rowid" {
 		t.Errorf(`idColumnOrDefault("rowid") = %q, want rowid`, got)
+	}
+}
+
+// The fragments of a feature must be found by lookup, not by scanning the layer:
+// a tiled package holds hundreds of thousands of rows (Natura 2000: 689k), and a
+// scan per request is what the orig_id index the package ships is there to
+// avoid. Pin the plan, so a rewrite of the statement that defeats the index
+// (the earlier attribute fallback did) fails here instead of in production.
+func TestIntegration_FeatureQueryUsesOrigIDIndex(t *testing.T) {
+	parks := newParksRepo(t)
+	ctx := context.Background()
+
+	parks.mu.RLock()
+	db := parks.connections["parks"]
+	src := parks.sources["parks"]
+	parks.mu.RUnlock()
+	layer, ok := src.GetLayer("parks")
+	if !ok {
+		t.Fatal("parks layer missing")
+	}
+	columns, idColumn, err := tableColumnNames(ctx, db, layer.Name)
+	if err != nil {
+		t.Fatalf("tableColumnNames: %v", err)
+	}
+
+	rows, err := db.QueryContext(ctx, "EXPLAIN QUERY PLAN "+buildFeatureQuery(layer, columns, idColumn), 1)
+	if err != nil {
+		t.Fatalf("EXPLAIN QUERY PLAN: %v", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var plan []string
+	for rows.Next() {
+		var id, parent, notused int
+		var detail string
+		if err := rows.Scan(&id, &parent, &notused, &detail); err != nil {
+			t.Fatalf("scan plan row: %v", err)
+		}
+		plan = append(plan, detail)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("plan rows: %v", err)
+	}
+
+	full := strings.Join(plan, "\n")
+	if !strings.Contains(full, "idx_parks_orig_id") {
+		t.Errorf("plan does not use the orig_id index:\n%s", full)
+	}
+	for _, step := range plan {
+		if strings.HasPrefix(step, "SCAN") {
+			t.Errorf("plan scans a table (%q); full plan:\n%s", step, full)
+		}
 	}
 }

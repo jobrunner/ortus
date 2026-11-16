@@ -563,12 +563,15 @@ paths:
         **Gekachelte Quellen.** Bei per ST_Subdivide gekachelten Paketen bezeichnet
         die `id` nur ein Fragment. Der Endpunkt sucht alle Fragmente desselben
         Features und vereinigt sie (ST_Union), sodass die Kachelnähte nicht als
-        Linien erscheinen. Zusammengehörige Fragmente werden über die Spalte
-        `orig_id` erkannt, sofern der Layer sie hat und sie beim adressierten
-        Fragment gesetzt ist; sonst über identische Attribute (dieselbe Regel wie
-        die Deduplizierung in `/query`). Jedes Fragment eines Features liefert
-        dieselbe Geometrie. Die Vereinigung wird pro Anfrage berechnet; es wird
-        nichts gespeichert.
+        Linien erscheinen. Zusammengehörig sind die Zeilen mit derselben
+        `orig_id`; jedes Fragment eines Features liefert dieselbe Geometrie. Die
+        Vereinigung wird pro Anfrage berechnet; es wird nichts gespeichert.
+
+        Ein Layer ohne Spalte `orig_id` gilt als ungekachelt: Die adressierte
+        Zeile ist das Feature. Zeilen werden nie allein wegen gleicher Attribute
+        zusammengefasst. Ein gekacheltes Paket muss deshalb `orig_id` (mit Index)
+        mitführen — das stellt der Paketbau sicher (Skill `build-ortus-package`,
+        `check-package.py`), nicht der Dienst.
 
         **Projektion.** Geometrie und `bbox` werden in das mit `srid` gewählte
         Koordinatensystem umprojiziert (Standard EPSG:4326). Die `bbox` wird aus
