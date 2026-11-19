@@ -349,6 +349,110 @@ func TestTiledLayerIntegerLatitude(t *testing.T) {
 	}
 }
 
+// TestTiledPixelIsPointRim covers point-registered tiles laid out like the
+// Copernicus DEM: pixel centers on the 0.25° grid starting at the cell's
+// whole-degree NW corner, so each tile's footprint is shifted half a pixel
+// north-west of its grid cell. A point in the half-pixel rim along a cell's south
+// or east edge is nearest to a center of the NEIGHBORING tile; routing by the
+// grid cell alone lands outside the tile it picked and reported no data there.
+func TestTiledPixelIsPointRim(t *testing.T) {
+	dir := t.TempDir()
+	// Values are tag*100 + row*10 + col; tags: N47_E010=1, N48_E010=2, N47_E011=3.
+	zipPath := buildTiledBundleFrom(t, dir, "dem", tiledManifest, map[string]string{
+		"N47_E010.tif": "testdata/point-n47-e010.cog.tif",
+		"N48_E010.tif": "testdata/point-n48-e010.cog.tif",
+		"N47_E011.tif": "testdata/point-n47-e011.cog.tif",
+	})
+
+	repo := NewRepository(t.TempDir())
+	t.Cleanup(func() { _ = repo.Close(context.Background(), "dem") })
+	if _, err := repo.Open(context.Background(), zipPath); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	cases := []struct {
+		name     string
+		lon, lat float64
+		want     float64
+	}{
+		{"nearest center inside the cell", 10.2, 47.8, 111},
+		{"whole-degree corner is the first center", 10.0, 48.0, 100},
+		{"rim below N48 → N47's top row", 10.2, 48.1, 101},
+		{"rim east of E010 → E011's west column", 10.9, 47.5, 320},
+	}
+	for _, c := range cases {
+		got, err := repo.QueryPoint(context.Background(), "dem", "elevation", wgs84c(c.lon, c.lat))
+		if err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		if len(got) != 1 || got[0].Properties["meters"] != c.want {
+			t.Errorf("%s: QueryPoint(%g,%g) = %+v, want meters %g", c.name, c.lon, c.lat, got, c.want)
+		}
+		if covered, err := repo.CoverageAt("dem", "elevation", wgs84c(c.lon, c.lat)); err != nil || !covered {
+			t.Errorf("%s: CoverageAt(%g,%g) = (%v,%v), want true", c.name, c.lon, c.lat, covered, err)
+		}
+	}
+
+	// The rim along an edge with NO neighboring tile is beyond the DEM: its
+	// nearest center (lat 47.0) belongs to the absent N46 tile.
+	if got, err := repo.QueryPoint(context.Background(), "dem", "elevation", wgs84c(10.2, 47.1)); err != nil || len(got) != 0 {
+		t.Errorf("rim toward an absent tile: QueryPoint = (%+v,%v), want no feature", got, err)
+	}
+	if covered, err := repo.CoverageAt("dem", "elevation", wgs84c(10.2, 47.1)); err != nil || covered {
+		t.Errorf("rim toward an absent tile: CoverageAt = (%v,%v), want false", covered, err)
+	}
+}
+
+// TestTiledPixelIsPointNeighborEdgeCases covers the two rims the direction of exit
+// alone gets wrong.
+//
+// Mixed resolution: Copernicus widens the longitude spacing at 50°/60°/70° N, so a
+// coarser tile's rim ends short of the finer tile's below. A point can then leave
+// the coarse tile to the south-east and still belong to the tile straight south.
+// Here N48_E010 has 0.5° columns (rim to 10.75), N47_E010 0.25° (rim to 10.875).
+//
+// Antimeridian: E179's east rim continues as W180's west rim, at lon -180.
+func TestTiledPixelIsPointNeighborEdgeCases(t *testing.T) {
+	dir := t.TempDir()
+	// Tags: N47_E010=1, N47_E011=3, coarse N48_E010=4, N47_E179=5, N47_W180=6.
+	zipPath := buildTiledBundleFrom(t, dir, "dem", tiledManifest, map[string]string{
+		"N47_E010.tif": "testdata/point-n47-e010.cog.tif",
+		"N47_E011.tif": "testdata/point-n47-e011.cog.tif",
+		"N48_E010.tif": "testdata/point-n48-e010-coarse.cog.tif",
+		"N47_E179.tif": "testdata/point-n47-e179.cog.tif",
+		"N47_W180.tif": "testdata/point-n47-w180.cog.tif",
+	})
+
+	repo := NewRepository(t.TempDir())
+	t.Cleanup(func() { _ = repo.Close(context.Background(), "dem") })
+	if _, err := repo.Open(context.Background(), zipPath); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	cases := []struct {
+		name     string
+		lon, lat float64
+		want     float64
+	}{
+		{"exits the coarse tile SE, held by the tile straight south", 10.8, 48.1, 103},
+		{"E179's east rim → W180's west column", 179.9, 47.5, 620},
+		{"W180's west rim from the other side", -179.95, 47.5, 620},
+		{"exact +180° is the same meridian as -180°", 180, 47.5, 620},
+	}
+	for _, c := range cases {
+		got, err := repo.QueryPoint(context.Background(), "dem", "elevation", wgs84c(c.lon, c.lat))
+		if err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		if len(got) != 1 || got[0].Properties["meters"] != c.want {
+			t.Errorf("%s: QueryPoint(%g,%g) = %+v, want meters %g", c.name, c.lon, c.lat, got, c.want)
+		}
+		if covered, err := repo.CoverageAt("dem", "elevation", wgs84c(c.lon, c.lat)); err != nil || !covered {
+			t.Errorf("%s: CoverageAt(%g,%g) = (%v,%v), want true", c.name, c.lon, c.lat, covered, err)
+		}
+	}
+}
+
 // buildTiledBundleFrom is buildTiledBundle with a distinct COG per tile, for
 // tests where it matters which tile a point was routed to.
 func buildTiledBundleFrom(t *testing.T, dir, id, manifestYAML string, tiles map[string]string) string {

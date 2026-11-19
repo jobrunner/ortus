@@ -168,7 +168,9 @@ func newTileset(dir string, spec tilesSpec, band int, nodata *float64, outputPro
 }
 
 // cellFor returns the SW-corner grid cell (lat, lon integer degrees) containing
-// the coordinate, snapped to the grid spacing.
+// the coordinate, snapped to the grid spacing. It is locate's first guess: exact
+// for area-registered tiles, while point-registered ones may hand the point on
+// to a neighbor.
 //
 // The two axes close on opposite edges because they must agree with gocog's
 // PixelFromPoint: it counts columns east from the west edge and rows south from

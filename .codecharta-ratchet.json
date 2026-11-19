@@ -11,7 +11,7 @@
     "_builtup_gate_note": "application/gazetteer/bearing.go 72→73 and application/gazetteer/service.go 69→74: optional built-up gate for the 'in <place>' decision. bearing.go gains one branch — the 'in' path only runs when builtUpAllows(p) holds. service.go gains SetBuiltUpSampler wiring plus builtUpAllows, which short-circuits to distance-only when no sampler is wired or the point has no built-up coverage, otherwise requires the sampled built-up value to meet the configured minimum (suppresses 'in <village>' on fields/parks within a place's radius), and fails CLOSED on a sampler error (review-requested: an unhealthy raster must not silently re-open an unverified 'in'). Sampler + adapter live in new files (ports/output/builtup.go, adapters/raster/builtup.go, app/builtup.go); per-function caps unchanged. internal/app/app.go ratcheted 83→82 (map re-measure).",
     "_mountains_note": "New gazetteer 'mountains' block (smallest containing range + single-mountain per landform, mirroring islands): application/gazetteer/service.go 0→68 baselined (Mountains + smallestByLandform + mountainFrom + moreSpecific), http/gazetteer.go 0→57 baselined (addMountains + formatMountains + formatMountain). Per-function: gazetteerSections 13→14 and the MCP gazetteer handler 13→14 (one new optional block each, same inline pattern as islands/elevation); the mountains block was extracted to addMountains to keep gazetteerSections at +1 rather than +2.",
     "baseline": {
-      "internal/adapters/raster/repository.go": 162,
+      "internal/adapters/raster/repository.go": 155,
       "internal/adapters/geopackage/repository.go": 117,
       "cmd/gazetteer-fixture/main.go": 103,
       "internal/adapters/telemetry/ringbuffer.go": 91,

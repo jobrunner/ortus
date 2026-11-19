@@ -624,49 +624,37 @@ func (r *Repository) CoverageAt(sourceID, layerName string, coord domain.Coordin
 	}
 
 	if ts := layer.tiles; ts != nil {
-		latDeg, lonDeg := ts.cellFor(coord.X, coord.Y)
-		name := tileFileName(ts.pattern, latDeg, lonDeg)
-		if !ts.present(name) {
-			return false, nil
-		}
-		key := [2]int{latDeg, lonDeg}
-		ot, err := ts.acquire(key, name)
+		hit, found, err := ts.locate(coord.X, coord.Y)
 		if err != nil {
 			return false, &domain.QueryError{SourceID: sourceID, Layer: layerName, Err: err}
 		}
-		defer ts.release(key)
-		px, py := ot.cog.PixelFromPoint(orb.Point{coord.X, coord.Y}, 0)
-		return px >= 0 && py >= 0 && px < ot.cog.Width() && py < ot.cog.Height(), nil
+		if found {
+			ts.release(hit.key)
+		}
+		return found, nil
 	}
 
 	px, py := layer.cog.PixelFromPoint(orb.Point{coord.X, coord.Y}, 0)
 	return px >= 0 && py >= 0 && px < layer.cog.Width() && py < layer.cog.Height(), nil
 }
 
-// queryTiled samples a multi-tile continuous layer: it routes the point to its
-// grid cell, opens (via the LRU) the tile covering it, and decodes the sample. A
-// point over a missing tile or outside the tile extent yields no feature, not an
-// error. That absence alone does not say WHICH of the two it was — CoverageAt
-// answers that, and for a DEM the difference is water versus unknown.
+// queryTiled samples a multi-tile continuous layer: it routes the point to the
+// tile holding it (see tileset.locate), opens it via the LRU, and decodes the
+// sample. A point no present tile holds yields no feature, not an error. That
+// absence alone does not say WHICH of the two it was — CoverageAt answers that,
+// and for a DEM the difference is water versus unknown.
 func (r *Repository) queryTiled(sourceID, layerName string, coord domain.Coordinate, ts *tileset, span output.Span) ([]domain.Feature, error) {
-	latDeg, lonDeg := ts.cellFor(coord.X, coord.Y)
-	name := tileFileName(ts.pattern, latDeg, lonDeg)
-	if !ts.present(name) {
-		return nil, nil // no tile for this cell — outside coverage (see CoverageAt)
-	}
-	key := [2]int{latDeg, lonDeg}
-	ot, err := ts.acquire(key, name)
+	hit, found, err := ts.locate(coord.X, coord.Y)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(output.StatusError, "tile open failed")
 		return nil, &domain.QueryError{SourceID: sourceID, Layer: layerName, Err: err}
 	}
-	defer ts.release(key) // keep the tile pinned (uncloseable) until the read is done
-
-	px, py := ot.cog.PixelFromPoint(orb.Point{coord.X, coord.Y}, 0)
-	if px < 0 || py < 0 || px >= ot.cog.Width() || py >= ot.cog.Height() {
-		return nil, nil // outside this tile's extent — no data
+	if !found {
+		return nil, nil // no tile holds this point — outside coverage (see CoverageAt)
 	}
+	defer ts.release(hit.key) // keep the tile pinned (uncloseable) until the read is done
+	ot, px, py := hit.tile, hit.px, hit.py
 	// Serialize reads on this tile's stateful reader; sampleAt also serves the pixel
 	// from a small cached decoded window, so a request's ~10 clustered DEM samples
 	// (elevation + 3×3 exposure) decode the covering block once, not ten times.
