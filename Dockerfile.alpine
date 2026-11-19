@@ -11,7 +11,7 @@ ARG BUILD_DATE=unknown
 # =============================================================================
 # Build stage - dev image includes Go 1.24.4 and all build tools
 # =============================================================================
-FROM ghcr.io/jobrunner/spatialite-base-image:alpine-dev-3.0.16@sha256:4805d5d63b8cd82045d92c1ea616e5f8cdc4efc1445d7d9bdea7893e7ac9d7a5 AS builder
+FROM ghcr.io/jobrunner/spatialite-base-image:alpine-dev-3.0.17@sha256:3b0e74e3882ae02628bc6394ac3bd822fafb95c601ae9184653a9ab600a1c605 AS builder
 
 # Re-declare ARGs after FROM
 ARG VERSION
@@ -44,7 +44,7 @@ RUN CGO_ENABLED=1 go build \
 # =============================================================================
 # Runtime stage - minimal runtime image (SAME VERSION!)
 # =============================================================================
-FROM ghcr.io/jobrunner/spatialite-base-image:alpine-3.0.16@sha256:b0330328428d86d2571540511d66ae833e3acc917f72e973e05c52290d5cee41
+FROM ghcr.io/jobrunner/spatialite-base-image:alpine-3.0.17@sha256:30a4401912431b98789a3bfacf32867c9dd00885f9eff643fd86a1c756bde71a
 
 USER root
 
