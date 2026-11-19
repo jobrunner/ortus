@@ -253,7 +253,7 @@ layers:
 // absent returns no feature (sea-level convention).
 func TestTiledLayerRouting(t *testing.T) {
 	dir := t.TempDir()
-	// The point (lon 20, lat 20) routes to cell N20_E020.
+	// The point (lon 20.5, lat 20.5) routes to cell N20_E020.
 	zipPath := buildTiledBundle(t, dir, "dem", tiledManifest, []string{"N20_E020.tif"})
 
 	repo := NewRepository(t.TempDir())
@@ -262,8 +262,8 @@ func TestTiledLayerRouting(t *testing.T) {
 		t.Fatalf("Open: %v", err)
 	}
 
-	// Present tile → the global fixture's west square (value 100) at (20,20).
-	got, err := repo.QueryPoint(context.Background(), "dem", "elevation", wgs84c(20, 20))
+	// Present tile → the global fixture's west square (value 100) at (20.5,20.5).
+	got, err := repo.QueryPoint(context.Background(), "dem", "elevation", wgs84c(20.5, 20.5))
 	if err != nil {
 		t.Fatalf("present-tile query: %v", err)
 	}
@@ -272,7 +272,7 @@ func TestTiledLayerRouting(t *testing.T) {
 	}
 
 	// Absent tile (N20_E080) → no feature.
-	none, err := repo.QueryPoint(context.Background(), "dem", "elevation", wgs84c(80, 20))
+	none, err := repo.QueryPoint(context.Background(), "dem", "elevation", wgs84c(80.5, 20.5))
 	if err != nil {
 		t.Fatalf("absent-tile query: %v", err)
 	}
@@ -284,10 +284,10 @@ func TestTiledLayerRouting(t *testing.T) {
 	// DEM is where the difference is real: an absent tile is the coverage edge,
 	// while a nodata pixel inside a present tile is water the DEM surveyed.
 	// CoverageAt is what tells them apart.
-	if covered, err := repo.CoverageAt("dem", "elevation", wgs84c(80, 20)); err != nil || covered {
+	if covered, err := repo.CoverageAt("dem", "elevation", wgs84c(80.5, 20.5)); err != nil || covered {
 		t.Errorf("CoverageAt(absent tile) = (%v,%v), want false — this is the DEM's edge, not sea", covered, err)
 	}
-	if covered, err := repo.CoverageAt("dem", "elevation", wgs84c(20, 20)); err != nil || !covered {
+	if covered, err := repo.CoverageAt("dem", "elevation", wgs84c(20.5, 20.5)); err != nil || !covered {
 		t.Errorf("CoverageAt(present tile) = (%v,%v), want true", covered, err)
 	}
 
@@ -296,12 +296,91 @@ func TestTiledLayerRouting(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewElevationSource: %v", err)
 	}
-	if _, cov, err := es.ElevationAt(context.Background(), wgs84c(80, 20)); err != nil || cov != output.ElevationUnknown {
+	if _, cov, err := es.ElevationAt(context.Background(), wgs84c(80.5, 20.5)); err != nil || cov != output.ElevationUnknown {
 		t.Errorf("ElevationAt(absent tile) coverage = %v (err %v), want unknown — NOT sea level", cov, err)
 	}
-	if _, cov, err := es.ElevationAt(context.Background(), wgs84c(20, 20)); err != nil || cov != output.ElevationMeasured {
+	if _, cov, err := es.ElevationAt(context.Background(), wgs84c(20.5, 20.5)); err != nil || cov != output.ElevationMeasured {
 		t.Errorf("ElevationAt(present tile) coverage = %v (err %v), want measured", cov, err)
 	}
+}
+
+// TestTiledLayerIntegerLatitude pins the cell routing on a whole-degree latitude.
+// gocog spans a tile over [south, north] and computes its row as
+// floor((north-lat)/res), so the north edge is row 0 and the south edge is one
+// past the last row. A point on lat 48.0 therefore lies in N47 (its top row), not
+// N48 — routing it to N48 read past the image and reported the DEM as absent
+// along every whole-degree parallel. Longitude has no such edge: the west edge is
+// column 0 of the tile the floor already picks.
+func TestTiledLayerIntegerLatitude(t *testing.T) {
+	dir := t.TempDir()
+	// N47_E010: top row 111, rest 222. N48_E010: all 333. Exact 1° cell bounds.
+	zipPath := buildTiledBundleFrom(t, dir, "dem", tiledManifest, map[string]string{
+		"N47_E010.tif": "testdata/tile-n47-e010.cog.tif",
+		"N48_E010.tif": "testdata/tile-n48-e010.cog.tif",
+	})
+
+	repo := NewRepository(t.TempDir())
+	t.Cleanup(func() { _ = repo.Close(context.Background(), "dem") })
+	if _, err := repo.Open(context.Background(), zipPath); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	cases := []struct {
+		name     string
+		lon, lat float64
+		want     float64
+	}{
+		{"whole-degree latitude → top row of the cell below", 10.5, 48.0, 111},
+		{"just north of it → bottom of the cell above", 10.5, 48.0001, 333},
+		{"just south of it → still the top row below", 10.5, 47.9999, 111},
+		{"whole-degree longitude → west column of its own cell", 10.0, 47.5, 222},
+	}
+	for _, c := range cases {
+		got, err := repo.QueryPoint(context.Background(), "dem", "elevation", wgs84c(c.lon, c.lat))
+		if err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		if len(got) != 1 || got[0].Properties["meters"] != c.want {
+			t.Errorf("%s: QueryPoint(%g,%g) = %+v, want meters %g", c.name, c.lon, c.lat, got, c.want)
+		}
+		if covered, err := repo.CoverageAt("dem", "elevation", wgs84c(c.lon, c.lat)); err != nil || !covered {
+			t.Errorf("%s: CoverageAt(%g,%g) = (%v,%v), want true", c.name, c.lon, c.lat, covered, err)
+		}
+	}
+}
+
+// buildTiledBundleFrom is buildTiledBundle with a distinct COG per tile, for
+// tests where it matters which tile a point was routed to.
+func buildTiledBundleFrom(t *testing.T, dir, id, manifestYAML string, tiles map[string]string) string {
+	t.Helper()
+	zipPath := filepath.Join(dir, id+".zip")
+	zf, err := os.Create(zipPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = zf.Close() }()
+	zw := zip.NewWriter(zf)
+	write := func(name string, data []byte) {
+		w, werr := zw.Create(name)
+		if werr != nil {
+			t.Fatal(werr)
+		}
+		if _, werr := w.Write(data); werr != nil {
+			t.Fatal(werr)
+		}
+	}
+	write(manifestName, []byte(manifestYAML))
+	for name, src := range tiles {
+		data, err := os.ReadFile(src)
+		if err != nil {
+			t.Fatalf("read tile fixture %s: %v", src, err)
+		}
+		write("tiles/"+name, data)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return zipPath
 }
 
 // TestTileWindowCacheReuse verifies the per-handle decoded-window cache: a cluster
@@ -386,7 +465,7 @@ func TestTiledConcurrentQueries(t *testing.T) {
 		p domain.Coordinate
 		m float64
 	}
-	cases := []want{{wgs84c(20, 20), 100}, {wgs84c(80, 20), 200}}
+	cases := []want{{wgs84c(20.5, 20.5), 100}, {wgs84c(80.5, 20.5), 200}}
 	for _, c := range cases { // sequential sanity
 		feats, err := repo.QueryPoint(context.Background(), "dem", "elevation", c.p)
 		if err != nil || len(feats) != 1 || feats[0].Properties["meters"] != c.m {

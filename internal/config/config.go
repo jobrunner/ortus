@@ -300,7 +300,7 @@ type GazetteerElevationConfig struct {
 	AccuracyM             float64 `mapstructure:"accuracy_m"`               // vertical accuracy constant (dataset LE90), used when no accuracy_layer
 	AccuracyBasis         string  `mapstructure:"accuracy_basis"`           // basis for the constant, e.g. "GLO-30 LE90 (absolute)"
 	PerPointAccuracyBasis string  `mapstructure:"per_point_accuracy_basis"` // basis when accuracy_layer is set, e.g. "Copernicus HEM (per-pixel 1σ)"
-	HorizontalM           float64 `mapstructure:"horizontal_accuracy_m"`    // horizontal accuracy (LE90)
+	HorizontalM           float64 `mapstructure:"horizontal_accuracy_m"`    // horizontal accuracy (CE90)
 	SurfaceModel          string  `mapstructure:"surface_model"`            // e.g. "DSM"
 }
 

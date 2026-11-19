@@ -178,7 +178,7 @@ gazetteer:
     accuracy_m: 4.0           # vertical accuracy constant (dataset LE90); used when accuracy_layer is unset
     accuracy_basis: "GLO-30 LE90 (absolute)"
     per_point_accuracy_basis: "Copernicus HEM (per-pixel 1σ)"  # basis reported when accuracy_layer is set
-    horizontal_accuracy_m: 6.0
+    horizontal_accuracy_m: 6.0   # CE90
     surface_model: DSM        # GLO-30 is a surface model (incl. vegetation/buildings)
 
 # OpenTelemetry tracing configuration.
