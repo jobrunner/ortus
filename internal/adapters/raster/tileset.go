@@ -210,6 +210,7 @@ type tileHit struct {
 // found=false means no present tile holds the point.
 func (t *tileset) locate(lon, lat float64) (hit tileHit, found bool, err error) {
 	latDeg, lonDeg := t.cellFor(lon, lat)
+	lonDeg, lon = wrapLon(lonDeg, lon) // +180° is the -180° meridian: cell W180, not E180
 	hit, found, dir, err := t.probe(latDeg, lonDeg, lon, lat)
 	if err != nil || found {
 		return hit, found, err

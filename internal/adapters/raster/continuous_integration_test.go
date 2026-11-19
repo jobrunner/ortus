@@ -437,6 +437,7 @@ func TestTiledPixelIsPointNeighborEdgeCases(t *testing.T) {
 		{"exits the coarse tile SE, held by the tile straight south", 10.8, 48.1, 103},
 		{"E179's east rim → W180's west column", 179.9, 47.5, 620},
 		{"W180's west rim from the other side", -179.95, 47.5, 620},
+		{"exact +180° is the same meridian as -180°", 180, 47.5, 620},
 	}
 	for _, c := range cases {
 		got, err := repo.QueryPoint(context.Background(), "dem", "elevation", wgs84c(c.lon, c.lat))
