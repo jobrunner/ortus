@@ -144,3 +144,11 @@ bundle manifest adds on top.
 The Go reader ortus uses (`tingold/gocog`, see [ADR-0013](../explanation/decisions/0013-cog-reader-library.md))
 reads LZW/uncompressed tiles correctly but currently fails on GDAL's `DEFLATE` tiles. LZW
 stays lossless and compressed.
+
+**Pixel registration is honored.** A COG tagged `AREA_OR_POINT=Point` (GeoTIFF
+`PixelIsPoint`, e.g. the Copernicus DEM) ties its georeference to pixel *centers*;
+ortus shifts it by half a pixel exactly as GDAL does, so a query samples the pixel whose
+center is nearest — the same value `gdallocationinfo` returns. Keep the tag the source
+data carries; do not strip it during conversion. For a `tiles:` layer of such COGs, each
+tile's footprint reaches half a pixel past its grid cell, and a point in that rim is read
+from the neighboring tile.
