@@ -35,7 +35,8 @@ func TestCellFor(t *testing.T) {
 	}{
 		{10.3, 49.7, 49, 10},
 		{9.999, 49.001, 49, 9},
-		{10.0, 50.0, 50, 10},   // exact corner belongs to that cell
+		{10.0, 50.0, 49, 10},   // whole-degree lat is the cell below's top row; whole-degree lon its own west column
+		{10.5, -1.0, -2, 10},   // same on the southern hemisphere
 		{-0.5, -0.5, -1, -1},   // just SW of the origin
 		{-24.2, 71.9, 71, -25}, // NW quadrant
 	}

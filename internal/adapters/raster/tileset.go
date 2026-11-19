@@ -169,9 +169,16 @@ func newTileset(dir string, spec tilesSpec, band int, nodata *float64, outputPro
 
 // cellFor returns the SW-corner grid cell (lat, lon integer degrees) containing
 // the coordinate, snapped to the grid spacing.
+//
+// The two axes close on opposite edges because they must agree with gocog's
+// PixelFromPoint: it counts columns east from the west edge and rows south from
+// the north edge, so a tile owns its west and north edges but not its east and
+// south ones. Longitude therefore floors, while latitude ceils minus one cell: a
+// point on a whole-degree parallel is the top row of the cell below, and flooring
+// it into the cell above would read one row past that tile's last.
 func (t *tileset) cellFor(lon, lat float64) (latDeg, lonDeg int) {
 	g := float64(t.gridDeg)
-	latDeg = int(math.Floor(lat/g)) * t.gridDeg
+	latDeg = (int(math.Ceil(lat/g)) - 1) * t.gridDeg
 	lonDeg = int(math.Floor(lon/g)) * t.gridDeg
 	return latDeg, lonDeg
 }
