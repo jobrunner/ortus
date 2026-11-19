@@ -200,33 +200,59 @@ type tileHit struct {
 // its outer pixel centers ON the cell edges, so its footprint is shifted half a
 // pixel and a point in the rim along one edge belongs to the neighboring tile.
 // locate therefore tries the cell's tile first and, if the point falls outside
-// it, the neighbor in the direction it fell out. When the cell has no tile, the
-// direction is unknown and every present neighbor is tried — rare, and only at
-// the coverage edge. found=false means no present tile holds the point.
+// it, the neighbors — the one in the direction it fell out first, since that is
+// almost always the answer. The rest still matter: where adjacent tiles differ in
+// longitude spacing (Copernicus widens it at 50°/60°/70° N) a coarse tile's rim
+// ends short of the finer one's, so a point can leave the coarse tile to the
+// south-east and yet belong to the tile straight south. When the cell has no
+// tile, there is no direction and all neighbors are tried. Misses are rare and
+// sit on tile edges, so the extra probes cost nothing on the common path.
+// found=false means no present tile holds the point.
 func (t *tileset) locate(lon, lat float64) (hit tileHit, found bool, err error) {
 	latDeg, lonDeg := t.cellFor(lon, lat)
 	hit, found, dir, err := t.probe(latDeg, lonDeg, lon, lat)
 	if err != nil || found {
 		return hit, found, err
 	}
-	neighbors := [][2]int{dir}
-	if dir == ([2]int{}) { // cell has no tile
-		neighbors = neighbors[:0]
-		for dLat := -1; dLat <= 1; dLat++ {
-			for dLon := -1; dLon <= 1; dLon++ {
-				if dLat != 0 || dLon != 0 {
-					neighbors = append(neighbors, [2]int{dLat, dLon})
-				}
-			}
-		}
-	}
-	for _, d := range neighbors {
-		hit, found, _, err = t.probe(latDeg+d[0]*t.gridDeg, lonDeg+d[1]*t.gridDeg, lon, lat)
+	for _, d := range neighborOrder(dir) {
+		nLonDeg, qLon := wrapLon(lonDeg+d[1]*t.gridDeg, lon)
+		hit, found, _, err = t.probe(latDeg+d[0]*t.gridDeg, nLonDeg, qLon, lat)
 		if err != nil || found {
 			return hit, found, err
 		}
 	}
 	return tileHit{}, false, nil
+}
+
+// neighborOrder lists the eight adjacent cell steps ({dLat, dLon}), first one
+// first unless it is zero.
+func neighborOrder(first [2]int) [][2]int {
+	steps := make([][2]int, 0, 8)
+	if first != ([2]int{}) {
+		steps = append(steps, first)
+	}
+	for dLat := -1; dLat <= 1; dLat++ {
+		for dLon := -1; dLon <= 1; dLon++ {
+			if d := [2]int{dLat, dLon}; d != ([2]int{}) && d != first {
+				steps = append(steps, d)
+			}
+		}
+	}
+	return steps
+}
+
+// wrapLon folds a neighbor cell's longitude into [-180, 180) across the
+// antimeridian and turns the query longitude by the same 360°, so E179's east
+// rim continues into W180 (whose rim reaches below -180) rather than a
+// nonexistent E180.
+func wrapLon(lonDeg int, lon float64) (cellLon int, queryLon float64) {
+	switch {
+	case lonDeg >= 180:
+		return lonDeg - 360, lon - 360
+	case lonDeg < -180:
+		return lonDeg + 360, lon + 360
+	}
+	return lonDeg, lon
 }
 
 // probe checks whether the tile of one cell holds (lon, lat). On a hit the tile
