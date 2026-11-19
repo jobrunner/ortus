@@ -155,11 +155,12 @@ raster:
   bundle when it is unpacked. The default (8 GiB) protects the host from a
   corrupt/hostile archive. Raise it for large **trusted** bundles such as
   continental DEM tile sets — e.g. the West-Palearctic elevation bundle unpacks
-  to ~40 GiB, so set `40`–`64` there. A bundle that exceeds the cap fails to load
+  to ~28 GiB (DEM + HEM tiles), so set `40` there to leave headroom for growth.
+  A bundle that exceeds the cap fails to load
   with a clear error rather than filling the disk.
 - `raster.extract_cache_dir` turns on a **persistent, content-addressed
   extraction cache**. When empty (default) a bundle is unpacked into an OS temp
-  dir on **every** start — for the ~48 GB DEM that is minutes of unzip each
+  dir on **every** start — for the ~29 GB DEM that is minutes of unzip each
   restart. Point this at a **durable, mounted volume** (Hetzner Cloud Volume in
   prod, a Docker named volume in dev) and a bundle is unpacked **once** into
   `<dir>/<id>@<fingerprint>` and reused across restarts **and** image updates.
@@ -167,7 +168,8 @@ raster:
   CRC + size — cheap, no decompression), so a re-extract happens **only** when
   the archive content actually changes (a tile added or modified). The DEM `.zip`
   stays read-only; the cache dir must be writable and sized for the *unpacked*
-  data (~2–3× the zip). Sizing still respects `max_bundle_extract_gib`.
+  data — about the zip's own size for COG bundles, whose tiles are already
+  compressed. Sizing still respects `max_bundle_extract_gib`.
 - `raster.extract_cache_prune` (default `false`) deletes older
   `<id>@<fingerprint>` dirs after a new fingerprint loads, to bound disk use.
   **Leave it off if container starts can overlap** (a rolling update where the
@@ -214,12 +216,13 @@ gazetteer:
     layer: elevation            # continuous elevation layer id in that bundle
     accuracy_layer: accuracy    # optional per-point accuracy layer (e.g. HEM); "" = off
     tile_cache_size: 64         # open-tile LRU bound for multi-tile DEMs
-    vertical_datum: EGM2008
-    accuracy_m: 4.0             # vertical accuracy constant (used when accuracy_layer is unset)
-    accuracy_basis: "GLO-30 LE90 (absolute)"
-    per_point_accuracy_basis: "Copernicus HEM (per-pixel 1σ)"
-    horizontal_accuracy_m: 6.0
-    surface_model: DSM
+    # Response metadata — no dataset defaults (see below); values for Copernicus GLO-30:
+    vertical_datum: EGM2008     # default EGM2008
+    accuracy_m: 4.0             # default 0; fallback where no per-point accuracy exists
+    accuracy_basis: "GLO-30 LE90 (absolute)"                  # default ""
+    per_point_accuracy_basis: "Copernicus HEM (per-pixel 1σ)" # default ""
+    horizontal_accuracy_m: 6.0  # default 0; GLO-30 spec: < 6 m CE90
+    surface_model: DSM          # default ""
   builtup:                        # optional: refine the "in <place>" bearing decision
     bundle_path: /data/gazetteer/ghs-builtup-westpalearctic.zip   # gazetteer-owned built-up raster; "" = gate off
     layer: builtup                # continuous built-up layer id in that bundle
@@ -282,9 +285,15 @@ gazetteer:
   startup continues and the DEM-derived features (`elevation` **and** `exposure`)
   simply stay silent (`null`) until the path is valid. `layer` is its continuous
   layer (default `elevation`); an optional `accuracy_layer` (e.g. a Copernicus
-  Height Error Mask) supplies a *per-point* vertical accuracy, else the `accuracy_m`
-  constant is reported. `accuracy_basis`/`per_point_accuracy_basis`,
-  `horizontal_accuracy_m`, `vertical_datum` and `surface_model` are surfaced verbatim.
+  Height Error Mask) supplies a *per-point* vertical accuracy; wherever it has no
+  value — no `accuracy_layer`, or a HEM void (water, and some steep terrain such
+  as the Zugspitze summit) — the `accuracy_m` constant is reported instead.
+  `accuracy_basis`/`per_point_accuracy_basis`, `horizontal_accuracy_m`,
+  `vertical_datum` and `surface_model` are surfaced verbatim. Apart from
+  `vertical_datum` (`EGM2008`) they have **no dataset defaults** — ortus does not
+  know which DEM a bundle holds — so a deployment that leaves them unset reports
+  `accuracy_m: 0`, `horizontal_accuracy_m: 0` and empty strings. Set them for the
+  DEM you ship (values for Copernicus GLO-30 above).
   The DEM's own license (from its bundle manifest) is reported separately from the
   gazetteer dataset license. **Ops:** keep the DEM `.zip` in the gazetteer folder,
   **not** in `storage.local_path` — otherwise it also loads as a normal pool source

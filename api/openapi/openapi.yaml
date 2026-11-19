@@ -1205,7 +1205,7 @@ components:
             horizontal_accuracy_m:
               type: number
               format: double
-              description: Horizontale Genauigkeit in Metern (LE90).
+              description: Horizontale Genauigkeit in Metern (CE90, kreisförmig).
             vertical_datum:
               type: string
               description: Vertikaler Bezug, z. B. "EGM2008".
