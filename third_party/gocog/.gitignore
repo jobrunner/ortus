@@ -9,3 +9,4 @@ coverage.txt
 *.swo
 *~
 *.tif
+!testdata/*.tif

@@ -427,8 +427,19 @@ func (gtr *GeoTIFFReader) determineCRS() string {
 	return ""
 }
 
-// pixelToGeo converts pixel coordinates to geographic coordinates
+// pixelToGeo converts pixel-corner coordinates (0,0 = the top-left corner of the
+// first pixel) to geographic coordinates.
 func (gtr *GeoTIFFReader) pixelToGeo(pixelX, pixelY float64) (float64, float64) {
+	// A PixelIsPoint raster ties raster-space (0,0) to the CENTER of the first
+	// pixel, so its corner sits half a pixel up-left of the tiepoint. Without the
+	// shift every geo↔pixel conversion lands half a pixel off — a sampler then
+	// picks the pixel north-west of the nearest one. GDAL applies the same shift
+	// (unless GTIFF_POINT_GEO_IGNORE); Copernicus DEM tiles are PixelIsPoint.
+	if gtr.isPixelIsPoint() {
+		pixelX -= 0.5
+		pixelY -= 0.5
+	}
+
 	// Use ModelTransformation if available (affine transformation matrix)
 	if gtr.hasTransformation() {
 		return gtr.transformPixel(pixelX, pixelY)
@@ -445,6 +456,13 @@ func (gtr *GeoTIFFReader) pixelToGeo(pixelX, pixelY float64) (float64, float64) 
 	}
 
 	return 0, 0
+}
+
+// isPixelIsPoint reports whether the GTRasterTypeGeoKey declares PixelIsPoint.
+// An absent key means PixelIsArea, the GeoTIFF default.
+func (gtr *GeoTIFFReader) isPixelIsPoint() bool {
+	v, ok := gtr.metadata.GeoKeys[GTRasterTypeGeoKey].(uint16)
+	return ok && v == GTRasterTypePixelIsPoint
 }
 
 // hasTransformation checks if ModelTransformation is available
