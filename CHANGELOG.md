@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.2](https://github.com/jobrunner/ortus/compare/v2.2.1...v2.2.2) (2026-11-20)
+
+
+### Bug Fixes
+
+* **deps:** bump jobrunner/spatialite-base-image ([7e7fb29](https://github.com/jobrunner/ortus/commit/7e7fb29a1c6ae9b7134382d4a9b183bfe8d68c02))
+* **deps:** bump jobrunner/spatialite-base-image ([fc47cc4](https://github.com/jobrunner/ortus/commit/fc47cc4ef675c427d10c5828676fb3a3b0b5fcb8))
+* **deps:** bump jobrunner/spatialite-base-image from ubuntu-3.0.16 to ubuntu-3.0.17 in the spatialite-base-image group ([8e3745a](https://github.com/jobrunner/ortus/commit/8e3745a2356cb2100d5cace1d655b5b7acc65007))
+* **deps:** bump jobrunner/spatialite-base-image from ubuntu-3.0.17 to ubuntu-3.0.18 in the spatialite-base-image group ([77fcd90](https://github.com/jobrunner/ortus/commit/77fcd90ba0a147a625412536093df5208e5aa840))
+* **gocog:** honor PixelIsPoint raster registration ([e51477d](https://github.com/jobrunner/ortus/commit/e51477d634ae6e9f334d6d9af803256157aee5e6))
+* **gocog:** honor PixelIsPoint raster registration ([50abc91](https://github.com/jobrunner/ortus/commit/50abc91839a5cd3f30e8c76afb807ca2a308fa34))
+* **raster:** read the half-pixel tile rim from the neighboring tile ([7413782](https://github.com/jobrunner/ortus/commit/741378210316cc728cb267fac1ccb07255d656f8))
+* **raster:** route +180° longitude to the W180 tile ([2481c88](https://github.com/jobrunner/ortus/commit/2481c88071b3da13ea5f8cebe5778d31177f7837))
+* **raster:** route whole-degree latitudes to the tile below ([0a24af8](https://github.com/jobrunner/ortus/commit/0a24af863e6b372a17d76005bb11800f90135886))
+* **raster:** route whole-degree latitudes to the tile below ([780cdc6](https://github.com/jobrunner/ortus/commit/780cdc6f3e5b4730bb7c7e0c810b02ce43c4def0))
+* **raster:** try every neighbor tile and wrap at the antimeridian ([1662332](https://github.com/jobrunner/ortus/commit/1662332a2f26d0fa82d41e73260319ed744fcf6c))
+
 ## [2.2.1](https://github.com/jobrunner/ortus/compare/v2.2.0...v2.2.1) (2026-11-17)
 
 
