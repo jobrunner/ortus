@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.2](https://github.com/jobrunner/ortus/compare/v2.2.1...v2.2.2) (2026-11-27)
+
+
+### Bug Fixes
+
+* **deps:** bump jobrunner/spatialite-base-image ([2dc1c7d](https://github.com/jobrunner/ortus/commit/2dc1c7de9b44a0af5617515aa4f12e4463e80d2f))
+* **deps:** bump jobrunner/spatialite-base-image ([b252b52](https://github.com/jobrunner/ortus/commit/b252b5243cac965364b303d1cc578a2702abdf01))
+* **deps:** bump jobrunner/spatialite-base-image ([7e7fb29](https://github.com/jobrunner/ortus/commit/7e7fb29a1c6ae9b7134382d4a9b183bfe8d68c02))
+* **deps:** bump jobrunner/spatialite-base-image ([fc47cc4](https://github.com/jobrunner/ortus/commit/fc47cc4ef675c427d10c5828676fb3a3b0b5fcb8))
+* **deps:** bump jobrunner/spatialite-base-image from ubuntu-3.0.16 to ubuntu-3.0.17 in the spatialite-base-image group ([8e3745a](https://github.com/jobrunner/ortus/commit/8e3745a2356cb2100d5cace1d655b5b7acc65007))
+* **deps:** bump jobrunner/spatialite-base-image from ubuntu-3.0.17 to ubuntu-3.0.18 in the spatialite-base-image group ([77fcd90](https://github.com/jobrunner/ortus/commit/77fcd90ba0a147a625412536093df5208e5aa840))
+* **deps:** bump jobrunner/spatialite-base-image from ubuntu-3.0.18 to ubuntu-3.0.19 in the spatialite-base-image group ([67b49e7](https://github.com/jobrunner/ortus/commit/67b49e73299be55807502126ce0e3ec45008fc8d))
+* **deps:** bump jobrunner/spatialite-base-image from ubuntu-3.0.19 to ubuntu-3.0.20 in the spatialite-base-image group ([901e26c](https://github.com/jobrunner/ortus/commit/901e26cd1b3aad645e715106eed11ed4834af71b))
+* **deps:** bump the aws-sdk group with 3 updates ([ad0c835](https://github.com/jobrunner/ortus/commit/ad0c83540640d8d93c65fd0206e54ccfc73c2d71))
+* **deps:** bump the aws-sdk group with 3 updates ([e1a3fdc](https://github.com/jobrunner/ortus/commit/e1a3fdcf0e65d1ac8d2526ae4c8f6b8c0bbdfbfb))
+* **deps:** bump the github-actions group with 5 updates ([e587ce4](https://github.com/jobrunner/ortus/commit/e587ce48bef8b19513b344f23270cb7268c0031d))
+* **deps:** bump the github-actions group with 5 updates ([a885f8a](https://github.com/jobrunner/ortus/commit/a885f8aaaea42a35eb1381810bde8abbcd2c1bd4))
+* **gocog:** honor PixelIsPoint raster registration ([e51477d](https://github.com/jobrunner/ortus/commit/e51477d634ae6e9f334d6d9af803256157aee5e6))
+* **gocog:** honor PixelIsPoint raster registration ([50abc91](https://github.com/jobrunner/ortus/commit/50abc91839a5cd3f30e8c76afb807ca2a308fa34))
+* **raster:** read the half-pixel tile rim from the neighboring tile ([7413782](https://github.com/jobrunner/ortus/commit/741378210316cc728cb267fac1ccb07255d656f8))
+* **raster:** route +180° longitude to the W180 tile ([2481c88](https://github.com/jobrunner/ortus/commit/2481c88071b3da13ea5f8cebe5778d31177f7837))
+* **raster:** route whole-degree latitudes to the tile below ([0a24af8](https://github.com/jobrunner/ortus/commit/0a24af863e6b372a17d76005bb11800f90135886))
+* **raster:** route whole-degree latitudes to the tile below ([780cdc6](https://github.com/jobrunner/ortus/commit/780cdc6f3e5b4730bb7c7e0c810b02ce43c4def0))
+* **raster:** try every neighbor tile and wrap at the antimeridian ([1662332](https://github.com/jobrunner/ortus/commit/1662332a2f26d0fa82d41e73260319ed744fcf6c))
+
 ## [2.2.1](https://github.com/jobrunner/ortus/compare/v2.2.0...v2.2.1) (2026-11-17)
 
 
